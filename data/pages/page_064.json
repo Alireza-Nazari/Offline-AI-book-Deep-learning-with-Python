@@ -1,0 +1,338 @@
+{
+ "page_id": "page_064",
+ "pdf_page": 64,
+ "printed_page": "40",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-fable-5-1",
+  "generated_at": "2026-11-03T03:56:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction. The page is pure prose: a four-step numbered training loop (steps 1-3 in element e03, step 4 and the following six paragraphs merged into element e04). No figures, listings, or displayed equations; the only inline formula is z = x + y."
+ },
+ "overview": {
+  "title": "The training loop and the naive way to update a weight",
+  "chapter": "2 The mathematical building blocks of neural networks",
+  "section": "2.4 The engine of neural networks: Gradient-based optimization",
+  "subsection": "",
+  "main_topic": "The four-step training loop, why updating the weights (step 4) is the hard part, the inefficiency of per-coefficient trial-and-error, and the motivation for gradient descent via differentiability",
+  "central_idea": "Training is a loop of draw batch, forward pass, compute loss, update weights; the update step cannot be done by trying values for each weight one at a time, but because every operation in the model is differentiable, the gradient tells you how to move all weights at once in a loss-decreasing direction.",
+  "importance": "This page is the hinge of section 2.4: it states the training loop that every later chapter relies on, exposes the exact problem (how to update billions of weights cheaply) and names the solution (gradient descent). Everything on pages 65-74 (derivatives, gradients, SGD, backpropagation) elaborates what is motivated here.",
+  "learning_objectives": [
+   "State the four steps of the training loop and identify which step is computationally hard",
+   "Explain the naive per-coefficient probing scheme and compute, from its numbers, which direction a weight should move",
+   "Explain why per-coefficient probing is prohibitively expensive (two forward passes per weight)",
+   "Explain what differentiable means intuitively and why a composition of differentiable functions is still differentiable",
+   "Describe what the gradient of the loss with respect to the weights is used for"
+  ],
+  "prerequisites": [
+   "The layer formula output = relu(matmul(input, W) + b) and the meaning of W and b as trainable weights (p.63)",
+   "Tensor operations such as matmul and element-wise addition (section 2.3, p.52-62)",
+   "The notions of training loop, batch, loss, and optimizer from the first MNIST example (p.41-44)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page completes the description of the training loop begun on p.63. Training repeats four steps: (1) draw a batch of training samples `x` and targets `y_true`; (2) run the model on `x` (the **forward pass**) to get predictions `y_pred`; (3) compute the loss, a measure of the mismatch between `y_pred` and `y_true`; (4) update all weights so the loss on this batch decreases slightly. Repeating this drives the training loss down: the model has \"learned\" the mapping from inputs to targets.\n\nThe authors then rank the steps by difficulty. Step 1 is I/O code; steps 2 and 3 are a handful of tensor operations already covered in section 2.3. Step 4 is the difficult one: for a single weight coefficient, how do you know whether it should go up or down, and by how much?\n\nA **naive solution** is described: freeze every weight except one, and try different values for it. Worked numbers: with the coefficient at 0.3 the batch loss is 0.5; at 0.35 the loss rises to 0.6; at 0.25 it falls to 0.4. So moving the coefficient by -0.05 helps. But this must be repeated for every coefficient, costing two expensive forward passes per weight, and models have thousands to billions of weights. Hence the approach is \"horribly inefficient\".\n\nThe better approach is **gradient descent**, \"the optimization technique that powers modern neural networks\". Its gist: every function used in a model (`matmul`, `+`, ...) transforms its input smoothly and continuously. For `z = x + y`, a small change in `y` gives a small change in `z`, and the direction of the change is predictable. Such functions are **differentiable**, and chaining differentiable functions yields a differentiable function. In particular, the function mapping the model's coefficients to the batch loss is differentiable, so a mathematical operator called the **gradient** describes how the loss varies as the coefficients move in different directions. With the gradient you can move all coefficients at once, in a single update, in a direction that decreases the loss.\n\nThe page closes by telling readers who already know derivatives and gradients that they may skip the next two subsections (2.4.1 and 2.4.2).",
+ "paragraphs": [
+  {
+   "ref": "p064_e03",
+   "excerpt": "Draw a batch of training samples x and corresponding targets y_true.",
+   "what_it_says": "The first three steps of the training loop: draw a batch `x` with targets `y_true`; run the model on `x` (the forward pass) to obtain `y_pred`; compute the loss, a measure of the mismatch between `y_pred` and `y_true`.",
+   "what_it_means": "Each iteration works on a small batch rather than the whole dataset. The forward pass is just the layer formula from p.63 applied layer by layer; the loss collapses the batch of predictions and targets into a single scalar number that says how wrong the model currently is.",
+   "why_it_matters": "This is the loop that `fit()` ran on p.44, now spelled out. Every training procedure in the book, from the from-scratch loop on p.79-81 to custom training steps in later chapters, is an instance of these steps.",
+   "technical_idea": "Forward pass: y_pred = model(x), a composition of tensor operations. Loss: a scalar function loss(y_pred, y_true), e.g. categorical cross-entropy for MNIST.",
+   "terminology": [
+    {"term": "forward pass", "meaning": "Running the model on a batch of inputs to produce predictions."},
+    {"term": "loss", "meaning": "A scalar measuring the mismatch between predictions y_pred and targets y_true on the batch."}
+   ],
+   "connections": ["p.63: the layer formula output = relu(matmul(input, W) + b) is what the forward pass evaluates", "p.68: the same list is restated with step 4 split into the backward pass and the parameter move"]
+  },
+  {
+   "ref": "p064_e04",
+   "excerpt": "y_pred and y_true. 4 Update all weights of the model in",
+   "what_it_says": "Step 4 is to update all weights so the batch loss decreases slightly. Repeating the loop yields a model with low training loss that has 'learned' to map inputs to targets. Steps 1-3 are easy (I/O code and a few tensor operations); step 4 is hard: for one weight, should it increase or decrease, and by how much? The naive fix is to freeze all other weights and probe values of this one (0.3 gives loss 0.5, 0.35 gives 0.6, 0.25 gives 0.4, so a step of -0.05 helps), repeated for every coefficient. That costs two forward passes per weight for thousands to billions of weights, so it is horribly inefficient. Gradient descent is the better approach: model operations such as `matmul` and `+` are smooth and continuous (for `z = x + y`, a small change in `y` produces a small, direction-predictable change in `z`), i.e. differentiable; chains of differentiable functions are differentiable; so the coefficients-to-loss function is differentiable and its gradient tells how the loss varies in every coefficient direction, allowing all coefficients to be moved at once in a loss-decreasing direction. Readers who know derivatives and gradients may skip the next two sections.",
+   "what_it_means": "The paragraph makes three moves. First, it reframes learning as 'reduce the loss a little, many times'. Second, it shows that even an obviously correct method (probe each weight) fails on cost: with n weights you would pay 2n forward passes per update, and n is enormous. Third, it identifies the mathematical property that rescues us: differentiability. Because the loss depends smoothly on the weights, a local linear picture (the gradient) is valid, and that picture is computed once per batch for all weights together instead of once per weight.",
+   "why_it_matters": "The naive probing is actually a finite-difference estimate of a derivative (note, not in the book: (0.6 - 0.4) / (0.35 - 0.25) = 2 is the estimated slope of loss with respect to that weight), so the page is secretly already doing calculus, one coordinate at a time. Gradient descent and backpropagation (p.70) are what make the same information available for every weight at roughly the cost of one forward pass plus one backward pass.",
+   "technical_idea": "Let L(W) be the batch loss as a function of all weights W. Differentiability of each layer operation plus the chain rule implies L is differentiable, so near the current W we have L(W + dW) ≈ L(W) + ∇L(W)·dW. Choosing dW opposite to ∇L(W) decreases L for a small enough step. Probing one coordinate at a time estimates one component of ∇L per pair of forward passes; the gradient delivers all components together.",
+   "terminology": [
+    {"term": "differentiable", "meaning": "A function whose output changes smoothly and predictably with small changes of its input, so it has a derivative (local slope) everywhere."},
+    {"term": "gradient", "meaning": "The operator that, for a function of many inputs (all the weights), describes how the output (the loss) changes as you move in each input direction."},
+    {"term": "gradient descent", "meaning": "The optimization technique that moves the weights in the direction opposite to the gradient to decrease the loss; it powers modern neural networks."},
+    {"term": "coefficient", "meaning": "A single scalar entry of a weight tensor such as W or b."}
+   ],
+   "connections": ["p.65: subsection 2.4.1 defines the derivative of a 1-D function as the slope of its local linear approximation", "p.66: subsection 2.4.2 extends the derivative to tensor-valued inputs, the gradient", "p.68: step 4 becomes 'compute the gradient (backward pass) and move the parameters a little in the opposite direction', W -= learning_rate * gradient", "p.70: backpropagation is how the gradient of a chain of operations is computed via the chain rule", "p.76: five epochs of MNIST training are 2,345 gradient updates of this loop"]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "training_loop",
+   "name": "Training loop",
+   "definition": "The repeated four-step procedure: draw a batch (x, y_true), run the forward pass to get y_pred, compute the loss between y_pred and y_true, update all weights to slightly reduce that loss.",
+   "intuition": "Rather than solving for the best weights in one shot, the model is nudged a tiny bit toward lower loss on one batch at a time; thousands of nudges add up to a trained model.",
+   "technical": "Each iteration processes one mini-batch. Steps 2 and 3 are compositions of tensor operations (section 2.3); step 4 requires knowing, for each weight, the direction and magnitude of change that lowers the loss. On p.68 step 4 is refined into a backward pass (gradient computation) and an update W -= learning_rate * gradient.",
+   "significance": "This is the engine behind fit() in Keras and behind every model in the book; the from-scratch reimplementation on p.77-81 makes each step explicit.",
+   "example": "On MNIST (p.76), 5 epochs with batches of 128 samples means 469 iterations per epoch and 2,345 iterations in total, each one running the four steps.",
+   "misconception": "The loop does not make the loss zero; it ends with a loss that is 'very low' on training data, and (as chapter 5 will show) low training loss is not the same as good generalization.",
+   "related": ["forward_pass", "loss_function", "gradient_descent", "backpropagation", "optimizer"],
+   "source": "book"
+  },
+  {
+   "id": "forward_pass",
+   "name": "Forward pass",
+   "definition": "Running the model on a batch of inputs x to obtain predictions y_pred.",
+   "intuition": "Data flows forward through the layers, each applying its transformation, until the output layer produces predictions.",
+   "technical": "For the two-layer MNIST model this is relu(matmul(x, W1) + b1) followed by softmax(matmul(h, W2) + b2) (p.63 gives the general layer formula). It is 'merely the application of a handful of tensor operations'.",
+   "significance": "It is cheap relative to what the naive update would require, but still expensive enough that paying two forward passes per weight is out of the question.",
+   "example": "Probing a weight at 0.3, 0.35 and 0.25 required three forward passes on the same batch, producing losses 0.5, 0.6 and 0.4.",
+   "misconception": "The forward pass is not training by itself; it only produces predictions. Learning happens in step 4, which needs the backward pass introduced on p.68.",
+   "related": ["training_loop", "backpropagation"],
+   "source": "book"
+  },
+  {
+   "id": "gradient_descent",
+   "name": "Gradient descent",
+   "definition": "The optimization technique that uses the gradient of the loss with respect to the model's coefficients to move all coefficients at once in a direction that decreases the loss.",
+   "intuition": "Instead of asking each weight separately 'up or down?', you compute one object, the gradient, that answers the question for all weights simultaneously, then take a small step against it.",
+   "technical": "Requires the coefficients-to-loss function to be differentiable, which holds because every model operation (matmul, +, relu, ...) is differentiable and compositions of differentiable functions are differentiable. The exact update rule, W -= learning_rate * gradient, and the variants (mini-batch SGD, true SGD, batch GD) are on p.68.",
+   "significance": "The authors call it 'the optimization technique that powers modern neural networks'; it is what makes training models with billions of weights feasible.",
+   "example": "In the probing example the loss rises with the weight (slope about +2 per unit), so gradient descent would decrease that weight, matching the -0.05 move the authors found by trial and error.",
+   "misconception": "Gradient descent is not guaranteed to find the global minimum, only to decrease the loss locally for a small enough step (p.68 discusses local minima and learning-rate size).",
+   "related": ["gradient", "differentiability", "sgd", "learning_rate", "backpropagation"],
+   "source": "book"
+  },
+  {
+   "id": "differentiability",
+   "name": "Differentiability",
+   "definition": "The property of a function that transforms its input in a smooth and continuous way, so that a small change of the input produces a small change of the output whose direction can be inferred.",
+   "intuition": "For z = x + y, nudging y up a little nudges z up a little by the same amount; there are no jumps or kinks that would make the response unpredictable.",
+   "technical": "A function is differentiable if it admits a local linear approximation (a derivative) at every point; p.65 formalizes this as epsilon_y ≈ a * epsilon_x. The composition of differentiable functions is differentiable (this is the content of the chain rule, p.70).",
+   "significance": "Differentiability of every tensor operation is the single mathematical fact that makes gradient-based learning possible (restated on p.83).",
+   "example": "matmul and + are differentiable; relu is differentiable everywhere except at exactly 0, which in practice does not stop gradient descent (note: this detail is beyond the book's text on this page).",
+   "misconception": "'Continuous' and 'differentiable' are not identical: the page says smooth and continuous; p.65 separates the two ideas (continuity gives small-change-in, small-change-out; smoothness gives the local linear approximation).",
+   "related": ["gradient", "derivative", "gradient_descent"],
+   "source": "book"
+  },
+  {
+   "id": "gradient",
+   "name": "Gradient",
+   "definition": "A mathematical operator describing how the loss varies as you move the model's coefficients in different directions.",
+   "intuition": "It is the multi-dimensional version of a slope: one number per coefficient saying how fast the loss would change if only that coefficient moved.",
+   "technical": "For a scalar loss L of weight tensor W, the gradient grad(L)(W) is a tensor with the same shape as W whose entries are the partial derivatives of L with respect to each coefficient (p.66). The naive probing estimates one such entry per weight by finite differences.",
+   "significance": "Computing the gradient once gives the update direction for all coefficients, replacing 2n forward passes with one forward and one backward pass.",
+   "example": "For the probed coefficient, a finite-difference estimate of the gradient component is (0.6 - 0.4) / 0.10 = 2, positive, so the loss decreases when the weight decreases.",
+   "misconception": "The gradient is not the direction to move; it is the direction of steepest increase of the loss. You move against it (p.68).",
+   "related": ["gradient_descent", "differentiability", "backpropagation"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Differentiability of a simple operation: z = x + y",
+   "latex": "z = x + y, \\qquad \\frac{\\partial z}{\\partial y} = 1 \\;\\Rightarrow\\; \\Delta z \\approx \\Delta y",
+   "source_text": "if you look at z = x + y, for instance, a small change in y only results in a small change in z, and if you know the direction of the change in y, you can infer the direction of the change in z",
+   "variables": [
+    {"symbol": "x, y", "meaning": "Inputs of the addition operation (scalars or tensors added element-wise)."},
+    {"symbol": "z", "meaning": "Output of the operation."},
+    {"symbol": "\\partial z / \\partial y", "meaning": "Partial derivative of z with respect to y: how z responds to a small change of y with x held fixed (equal to 1 for addition)."},
+    {"symbol": "\\Delta y, \\Delta z", "meaning": "A small change in y and the resulting change in z."}
+   ],
+   "operations": "Addition; the partial derivative is a constant 1, so the change in output equals the change in input in both size and sign.",
+   "purpose": "The authors use the simplest tensor operation to illustrate what 'smooth and continuous' means: small, predictable response to small input changes.",
+   "interpretation": "Knowing the direction of the change in y (up or down) tells you the direction of the change in z. Every operation used in a model (matmul, +, relu, ...) has this property, and chaining them preserves it.",
+   "intuition": "There are no cliffs or jumps: if you push y up by a hair, z rises by a hair, never leaps or drops.",
+   "numerical_example": "With x = 2 and y = 3, z = 5. Increase y by 0.01: z = 5.01, a change of +0.01, same direction and same size. (Partial derivative formula is an added explanation, not printed in the book.)",
+   "source": "book",
+   "book_ref": "p.64"
+  },
+  {
+   "id": "m2",
+   "title": "The naive probing as a finite-difference slope estimate (not in the book)",
+   "latex": "\\frac{\\Delta L}{\\Delta w} \\approx \\frac{L(w+h) - L(w-h)}{2h} = \\frac{0.6 - 0.4}{2 \\times 0.05} = 2",
+   "source_text": "initial value 0.3, loss 0.5; at 0.35 the loss increases to 0.6; at 0.25 the loss falls to 0.4; updating the coefficient by -0.05 would contribute to minimizing the loss",
+   "variables": [
+    {"symbol": "L", "meaning": "Batch loss, viewed as a function of the single unfrozen coefficient."},
+    {"symbol": "w", "meaning": "Current value of the coefficient, 0.3."},
+    {"symbol": "h", "meaning": "Probe step, 0.05."},
+    {"symbol": "\\Delta L / \\Delta w", "meaning": "Estimated rate of change of the loss with respect to the coefficient (the finite-difference derivative)."}
+   ],
+   "operations": "Two forward passes at w + h and w - h, a subtraction, and a division by 2h.",
+   "purpose": "Beyond the book: shows that the authors' trial-and-error scheme is exactly a numerical derivative. The sign (+2) says the loss rises with w, so w should decrease, which is the -0.05 move the authors pick.",
+   "interpretation": "A positive slope means decrease the weight; a negative slope means increase it. The magnitude (2) says the loss changes about twice as fast as the weight.",
+   "intuition": "You are feeling the ground under one foot to find which way is downhill; the gradient (p.66) will do this for every foot at once.",
+   "numerical_example": "The three probed points (0.25, 0.4), (0.3, 0.5), (0.35, 0.6) lie on a line of slope 2. Moving by -0.05 (to 0.25) lowers the loss from 0.5 to 0.4, i.e. by about slope x step = 2 x 0.05 = 0.1.",
+   "source": "ai_explanation",
+   "book_ref": "p.64"
+  }
+ ],
+ "code": [],
+ "deeper": [
+  {
+   "title": "Counting the cost of the naive approach",
+   "kind": "numerical",
+   "body": "The page says the naive scheme needs two forward passes per coefficient. Make that concrete with the MNIST model of chapter 2: its Dense(512) layer has 784 x 512 + 512 = 401,920 parameters and the Dense(10) layer has 512 x 10 + 10 = 5,130, so about 407,050 weights in total. Probing each one costs 2 x 407,050 = 814,100 forward passes **for a single update of the weights on a single batch**. Training for 5 epochs on p.76 performs 2,345 updates, so the naive method would require about 1.9 billion forward passes. Gradient descent with backpropagation instead costs roughly one forward pass plus one backward pass (about two to three times the forward cost) per update, i.e. a few thousand forward-pass equivalents for the whole training run. The ratio is on the order of 400,000 to 1, which is why the authors call probing 'horribly inefficient'. For a model with billions of parameters the ratio is correspondingly larger.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why chaining preserves differentiability",
+   "kind": "breakdown",
+   "body": "The page asserts that if you chain differentiable functions, the result is differentiable. Intuitively: a small input change produces a small, predictable change in the first function's output; that small change is a small input change for the second function, which again responds smoothly; and so on down the chain. Each stage multiplies the change by its local slope, so the end-to-end response is the product of the slopes. This is the chain rule, which the book states on p.70 as the basis of backpropagation. The model's coefficients-to-loss function is such a chain: weights enter matmul, then +, then relu, then the next layer, then the loss function, so the loss varies smoothly with every weight.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Hill walking in the fog",
+   "kind": "analogy",
+   "body": "Imagine standing on a hillside in thick fog and wanting to get downhill. The naive method is to take a step east, read your altimeter, step back, take a step west, read it again, and repeat this for every one of a million compass directions before deciding where to go. The gradient is a tilt sensor under your feet that reads the slope in every direction at once; gradient descent is simply 'step in the direction the sensor says is steepest downhill'. The 'all at once in a single update' phrase on the page is the point: one sensor reading replaces millions of test steps.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "The four-step training loop",
+   "why": "The page opens with the numbered steps 1-4; this flow shows them as the loop they form, with the hard step (4) highlighted.",
+   "mermaid": "flowchart TD\n  A[\"1. Draw batch x, y_true\"] --> B[\"2. Forward pass: y_pred = model(x)\"]\n  B --> C[\"3. Loss = mismatch(y_pred, y_true)\"]\n  C --> D[\"4. Update all weights to slightly reduce the loss (the hard step)\"]\n  D -->|next batch| A\n  style D fill:#f9d5d5,stroke:#c0392b,color:#000"
+  },
+  {
+   "id": "v2",
+   "type": "chart",
+   "title": "The naive probing numbers from the page",
+   "why": "The text probes one coefficient at 0.25, 0.3 and 0.35 and gets losses 0.4, 0.5 and 0.6; plotting them shows the loss rising with the weight, so the weight should decrease.",
+   "chart": {
+    "type": "line",
+    "data": {
+     "labels": [0.25, 0.3, 0.35],
+     "datasets": [{"label": "Batch loss", "data": [0.4, 0.5, 0.6], "borderColor": "#c0392b", "backgroundColor": "#c0392b", "tension": 0, "pointRadius": 6}]
+    },
+    "options": {
+     "scales": {
+      "x": {"title": {"display": true, "text": "Value of the single unfrozen coefficient"}},
+      "y": {"title": {"display": true, "text": "Loss on the batch"}, "min": 0.3, "max": 0.7}
+     },
+     "plugins": {"title": {"display": true, "text": "Slope ≈ +2: loss rises with the weight, so move it by -0.05"}}
+    }
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Step 4 (updating the weights) is just as easy as the other steps because it is 'only' subtracting something from W.",
+   "correction": "The page singles out step 4 as 'the difficult part': the hard question is how to compute, for each of thousands to billions of weights, whether it should increase or decrease and by how much. The subtraction is easy once the gradient is known; obtaining the gradient is the substance of sections 2.4.1-2.4.4."
+  },
+  {
+   "claim": "The naive probing approach is wrong.",
+   "correction": "It is not wrong, it is inefficient. It does find the right direction (the authors' -0.05 move is correct), but it needs two forward passes per coefficient per update, which is unaffordable for real models."
+  },
+  {
+   "claim": "Gradient descent updates weights one at a time.",
+   "correction": "The page stresses the opposite: the gradient lets you move the coefficients 'all at once in a single update, rather than one at a time'."
+  },
+  {
+   "claim": "Training ends with zero loss.",
+   "correction": "The authors say you end up with 'a very low loss on its training data', not zero, and p.68 will note that gradient descent may stop in a local minimum."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 63, "note": "Section 2.4 opens: the layer formula, W and b as trainable weights, random initialization, and the start of the numbered training loop."},
+   {"page": 44, "note": "The first MNIST example called fit(), which ran exactly this loop over 5 epochs with batches of 128."},
+   {"page": 52, "note": "Section 2.3 introduced the tensor operations (matmul, +, relu) that steps 2 and 3 are made of."}
+  ],
+  "later": [
+   {"page": 65, "note": "2.4.1 defines the derivative as the slope of the local linear approximation of a smooth function."},
+   {"page": 66, "note": "2.4.2 generalizes the derivative to tensor inputs, the gradient, and shows how to use it to update W."},
+   {"page": 68, "note": "The training loop is restated with step 4 split into the backward pass and the move W -= learning_rate * gradient; mini-batch SGD, true SGD and batch GD are compared."},
+   {"page": 70, "note": "2.4.4 backpropagation: how the gradient of a chain of operations is computed with the chain rule."},
+   {"page": 79, "note": "Listing 2.9 implements a single training step from scratch: predictions, loss, gradient, update."},
+   {"page": 83, "note": "Chapter summary restates that all tensor operations being differentiable is what makes the whole learning process possible."}
+  ],
+  "prerequisites": [
+   {"page": 63, "note": "Meaning of weights W and b and of the loss as the quantity to reduce."},
+   {"page": 56, "note": "The tensor product (matmul) used in the layer formula."}
+  ],
+  "related_math": [
+   {"page": 65, "note": "epsilon_y = a * epsilon_x, the 1-D derivative that formalizes 'small change in, small change out'."},
+   {"page": 66, "note": "grad(loss_value, W0), the gradient of the loss with respect to the weight tensor."}
+  ],
+  "related_code": [
+   {"page": 79, "note": "Listing 2.9, one training step: the code version of steps 1-4."}
+  ],
+  "related_figures": [
+   {"page": 68, "note": "Figure 2.18, gradient descent along a 1-D loss curve, visualizes what the probing example does by hand."}
+  ]
+ },
+ "takeaways": [
+  "Training is a loop: draw a batch, forward pass to get y_pred, compute the loss against y_true, update all weights to lower the loss a little.",
+  "Steps 1-3 are I/O plus a few tensor operations; step 4, deciding how each weight should change, is the hard part.",
+  "Probing each coefficient separately (0.3 -> loss 0.5, 0.35 -> 0.6, 0.25 -> 0.4, so move by -0.05) works but costs two forward passes per weight, which is hopeless for thousands to billions of weights.",
+  "All model operations (matmul, +, ...) are differentiable: small input changes give small, direction-predictable output changes, and chains of such functions stay differentiable.",
+  "Therefore the coefficients-to-loss function has a gradient, which describes how the loss varies in every coefficient direction and lets gradient descent update all weights at once."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "short",
+   "question": "List the four steps of the training loop as stated on this page.",
+   "options": [],
+   "answer": "1) Draw a batch of training samples x and targets y_true; 2) run the model on x (forward pass) to get predictions y_pred; 3) compute the loss, the mismatch between y_pred and y_true; 4) update all weights of the model in a way that slightly reduces the loss on this batch.",
+   "explanation": "These are the numbered steps at the top of the page. On p.68 step 4 is refined into computing the gradient (backward pass) and moving the parameters against it.",
+   "page_refs": [64, 68]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "In the naive probing example, the coefficient is 0.3 with loss 0.5; at 0.35 the loss is 0.6 and at 0.25 it is 0.4. What update do the authors conclude would help?",
+   "options": ["+0.05", "-0.05", "+0.10", "No change, the loss is already minimal"],
+   "answer": "-0.05",
+   "explanation": "Lowering the coefficient to 0.25 reduced the loss from 0.5 to 0.4, so moving by -0.05 contributes to minimizing the loss. +0.05 raised the loss to 0.6; +0.10 was never tested and goes the wrong way; the loss is clearly not minimal since a lower value was found.",
+   "page_refs": [64]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why do the authors call the per-coefficient probing approach 'horribly inefficient'?",
+   "options": [],
+   "answer": "Because it requires two forward passes (each expensive) for every individual coefficient, and models have at least a few thousand and potentially billions of coefficients, so a single weight update would cost on the order of 2n forward passes.",
+   "explanation": "The cost scales linearly with the number of weights and each unit of cost is a full forward pass. Gradient descent instead obtains the update direction for all weights from one gradient computation.",
+   "page_refs": [64]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "What property of the model's operations (such as matmul and +) is the key enabler of gradient descent according to this page?",
+   "options": ["They are linear", "They are differentiable (smooth and continuous)", "They are invertible", "They are computed on GPUs"],
+   "answer": "They are differentiable (smooth and continuous)",
+   "explanation": "The page says the functions transform their input in a smooth and continuous way, i.e. they are differentiable, and chains of them remain differentiable, so the loss has a gradient with respect to the coefficients. Linearity is false (relu is not linear) and not required; invertibility and hardware are irrelevant to the argument.",
+   "page_refs": [64]
+  },
+  {
+   "id": "q5",
+   "type": "math",
+   "question": "Using the three probed points on the page, estimate the rate of change of the loss with respect to the coefficient and state what it implies for the update direction.",
+   "options": [],
+   "answer": "Slope ≈ (0.6 - 0.4) / (0.35 - 0.25) = 0.2 / 0.1 = 2 (positive), so the loss increases with the coefficient and the coefficient should be decreased.",
+   "explanation": "This central finite difference is the numerical version of the derivative introduced on p.65. A positive slope means the loss goes up as the weight goes up, hence gradient descent moves the weight down, matching the -0.05 conclusion in the text. (The formula is an added explanation; the book only gives the three loss values.)",
+   "page_refs": [64, 65]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "What does the gradient let you do that the naive method cannot do efficiently?",
+   "options": [],
+   "answer": "It describes how the loss varies as you move the coefficients in different directions, so you can move all coefficients at once in a single update in a direction that decreases the loss, instead of probing them one at a time.",
+   "explanation": "The page's closing argument: because the coefficients-to-loss function is differentiable, its gradient is available, and a single gradient gives the update for every weight simultaneously.",
+   "page_refs": [64]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you explain, using z = x + y, what it means for a function to be differentiable, and why chaining such functions keeps the result differentiable?",
+   "options": [],
+   "answer": "You should be able to say: a small change in y produces a small change in z whose direction is predictable (for addition, the same direction and size); and in a chain each stage passes a small, predictable change to the next, so the whole chain responds smoothly, which is why the coefficients-to-loss function is differentiable.",
+   "explanation": "If this is unclear, read subsections 2.4.1 (p.65) on derivatives and 2.4.4 (p.70) on the chain rule, which the page explicitly says you may skip only if you already know these ideas.",
+   "page_refs": [64, 65, 70]
+  }
+ ]
+}

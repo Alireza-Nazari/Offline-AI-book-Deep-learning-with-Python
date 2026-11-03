@@ -1,0 +1,137 @@
+{
+ "page_id": "page_387",
+ "pdf_page": 387,
+ "printed_page": "363",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:56:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Text/figure mismatch: the text says the 1D convnet achieves 'a validation MAE of about 2.9 degrees', but in Figure 13.4 the validation MAE curve never drops below about 3.05 °C (range ≈ 3.05–3.24 across the 10 epochs). Either the figure comes from a different run than the quoted number, or '2.9' is an approximation. The qualitative conclusion (worse than the dense model and the baseline) holds either way."
+  ],
+  "extraction_quality": "Clean. The continuation of the convnet code, the Figure 13.4 caption and the first paragraph and bullet were extracted correctly; the bullet is cut mid-sentence by the page break and continues on p.388. Curve values are read approximately from the plot (±0.03)."
+ },
+ "overview": {
+  "title": "The 1D convnet's training and its disappointing results",
+  "chapter": "13 Timeseries forecasting",
+  "section": "13.2 A temperature forecasting example",
+  "subsection": "13.2.4 Let’s try a 1D convolutional model",
+  "main_topic": "Completing and training the Conv1D forecaster, Figure 13.4's MAE curves, and the start of the diagnosis of why it does worse than the dense model",
+  "central_idea": "The 1D convnet (Conv1D/MaxPooling1D stack with GlobalAveragePooling1D and a Dense(1) head) does even worse than the dense model: validation MAE around 2.9–3.1 °C, far from the 2.44 °C baseline. The first reason given is that weather data doesn't really satisfy the translation invariance assumption.",
+  "importance": "It shows that an architecture prior can hurt when it doesn't match the data, the counterpart to p.386's advice to use priors. The failure of both dense and conv models sets up recurrent networks in section 13.3 (p.388).",
+  "learning_objectives": [
+   "Read the rest of the convnet code and trace its shapes from (120, 14) to (1,).",
+   "Explain the role of GlobalAveragePooling1D and why it discards temporal position.",
+   "Interpret Figure 13.4 and compare it with Figure 13.3 and the baseline.",
+   "State the first reason the convnet fails: weather data is not translation invariant at all timescales."
+  ],
+  "prerequisites": [
+   "Start of the convnet and the translation invariance assumption (p.386)",
+   "The dense model's training routine (p.385)",
+   "Baseline MAE 2.44 °C (p.384)",
+   "Global average pooling from the image chapters"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes the convnet begun on p.386. After the first `Conv1D(8, 24)` and `MaxPooling1D(2)`, the model adds `Conv1D(8, 12, activation=\"relu\")`, a second `MaxPooling1D(2)` and `Conv1D(8, 6, activation=\"relu\")`. The kernel size halves with each pooling, so each conv still spans roughly 24 hours. A `GlobalAveragePooling1D()` then averages each of the 8 feature maps over time, and `Dense(1)` produces the temperature. Training mirrors the dense model exactly: a `ModelCheckpoint(\"jena_conv.keras\", save_best_only=True)`, `compile(optimizer=\"adam\", loss=\"mse\", metrics=[\"mae\"])`, 10 epochs with validation, reload of the best checkpoint and a printed test MAE.\n\n**Figure 13.4** plots training and validation MAE. Training MAE falls from about 3.67 °C at epoch 1 to about 2.38 °C at epoch 10. Validation MAE is flat and noisy, between roughly 3.05 and 3.24 °C. This is far worse than both the dense model (≈ 2.55 °C at best, Figure 13.3) and the commonsense baseline (2.44 °C).\n\nThe text says this model performs *even worse than the densely connected one*, reaching only *about 2.9 degrees* of validation MAE, and asks what went wrong. It gives two reasons. The first starts on this page: **weather data doesn't quite respect the translation invariance assumption**. There are daily cycles, but morning data follows different properties than evening or night data (the sentence continues on p.388, which also gives the second reason: order matters, and pooling destroys order information).",
+ "paragraphs": [
+  {
+   "ref": "p387_e05",
+   "excerpt": "As it turns out, this model performs even worse than the densely",
+   "what_it_says": "The convnet does even worse than the dense model, reaching only about 2.9 °C validation MAE, far from the commonsense baseline. The authors announce two explanations.",
+   "what_it_means": "The convnet has about 3,900 parameters, roughly 7× fewer than the dense model, and its strong prior turns out to be the wrong one. In Figure 13.4 its validation MAE sits around 3.05–3.1 °C, about 0.6 °C (25%) worse than persistence. Because training MAE keeps falling to about 2.4 while validation stays flat, the model is learning features that don't transfer.",
+   "why_it_matters": "It is a direct demonstration of p.386's claim: priors are powerful, but only when they match the data. Adding structure is not automatically better than a plain MLP.",
+   "terminology": [
+    {"term": "Commonsense baseline", "meaning": "Persistence forecast, 2.44 °C validation MAE (p.384)."}
+   ],
+   "connections": [
+    "p.385: dense model's Figure 13.3 for comparison",
+    "p.384: baseline MAE",
+    "p.388: second reason and transition to RNNs"
+   ]
+  },
+  {
+   "ref": "p387_e06",
+   "excerpt": "First, weather data doesn’t quite respect the translation invariance assumption. While the",
+   "what_it_says": "The first reason: weather data doesn't really satisfy translation invariance. It has daily cycles, but data from a morning has different properties than data from an evening or the middle of the night (the sentence continues on p.388: weather data is only translation invariant at a very specific timescale).",
+   "what_it_means": "A convolution applies the same filter at every position and so treats a pattern identically wherever it occurs. But a temperature rise means different things at 8 a.m. (normal warming) and at 2 a.m. (perhaps a warm front). A Conv1D window doesn't know the time of day it is looking at, and global average pooling then erases the position completely. Invariance holds only at the scale of whole days, a full cycle apart, and not for shifts of a few hours.",
+   "why_it_matters": "It identifies a mismatch between prior and data, so you can predict when convnets will struggle on timeseries: when the absolute or relative position in the window carries information.",
+   "technical_idea": "Beyond the book: adding explicit time-of-day features (e.g. sin/cos of hour) or using causal convolutions without global pooling are common ways to reintroduce position information.",
+   "terminology": [
+    {"term": "Translation invariance", "meaning": "The assumption that a window's statistics don't depend on its location (p.386)."},
+    {"term": "Timescale", "meaning": "The size of shift for which invariance would hold; here only shifts of exactly a day."}
+   ],
+   "connections": [
+    "p.386: definition of the translation invariance assumption",
+    "p.388: continuation of this bullet and the second reason (order matters)"
+   ]
+  }
+ ],
+ "concepts": [
+  {"id": "global_average_pooling", "name": "GlobalAveragePooling1D", "definition": "Averages each feature channel over the entire time axis, producing one value per channel.", "intuition": "'How strongly did each detector fire on average over the window?', with no record of *when*.", "technical": "(batch, 13, 8) → (batch, 8); no parameters.", "significance": "It makes the model insensitive to the position of patterns, which destroys the recency information that matters for forecasting (p.388).", "example": "A spike in filter 3 at the last step and the same spike at the first step give the same pooled value.", "misconception": "That pooling only removes redundancy; here it removes crucial order information.", "related": ["pooling", "convolution", "translation_invariance"], "source": "book"},
+  {"id": "convolution", "name": "Stacked Conv1D with shrinking kernels", "definition": "Conv1D layers with kernel sizes 24, 12, 6 interleaved with MaxPooling1D(2).", "intuition": "Each level looks at about one day of (progressively coarser) data.", "technical": "Shapes (120,14)→(97,8)→(48,8)→(37,8)→(18,8)→(13,8); parameters 2,696 + 776 + 392.", "significance": "A deliberately chosen prior tied to the daily cycle.", "example": "Conv1D(8, 12) after one pooling: 12 steps × 2 h ≈ 24 h.", "misconception": "That matching kernel size to the cycle guarantees good results.", "related": ["pooling", "architecture_prior"], "source": "book"},
+  {"id": "translation_invariance", "name": "Violated translation invariance", "definition": "The condition in which a pattern's meaning depends on where (or when) it appears.", "intuition": "Morning, evening and night behave differently.", "technical": "Convolution's weight sharing assumes stationarity of local statistics across positions; weather is stationary only under 24-hour shifts.", "significance": "The first reason the convnet fails.", "example": "A 2 °C drop between 6 p.m. and 7 p.m. is normal; between 9 a.m. and 10 a.m. it signals a change in weather.", "misconception": "That daily periodicity implies invariance to arbitrary shifts.", "related": ["convolution", "architecture_prior"], "source": "book"},
+  {"id": "overfitting", "name": "Diverging train/validation curves", "definition": "Training error improving while validation error stagnates or worsens.", "intuition": "The model learns training-period specifics.", "technical": "Figure 13.4: train MAE 3.67 → 2.38, val MAE ~3.05–3.24 with no trend.", "significance": "The convnet's training MAE ends below the baseline, but that says nothing about generalization.", "example": "Epoch 10: train ≈ 2.38, val ≈ 3.08.", "misconception": "That a training MAE below 2.44 means the baseline was beaten.", "related": ["validation_set"], "source": "inference"}
+ ],
+ "math": [
+  {"id": "m1", "title": "Shape and parameter trace of the full convnet", "latex": "\\begin{aligned} &(120,14) \\xrightarrow{\\text{Conv1D}(8,24)} (97,8) \\xrightarrow{\\text{MaxPool}(2)} (48,8) \\xrightarrow{\\text{Conv1D}(8,12)} (37,8) \\\\ &\\xrightarrow{\\text{MaxPool}(2)} (18,8) \\xrightarrow{\\text{Conv1D}(8,6)} (13,8) \\xrightarrow{\\text{GAP}} (8) \\xrightarrow{\\text{Dense}(1)} (1) \\end{aligned}", "source_text": "x = layers.Conv1D(8, 12, activation=\"relu\")(x) ... x = layers.GlobalAveragePooling1D()(x) outputs = layers.Dense(1)(x)", "variables": [{"symbol": "(T, C)", "meaning": "(timesteps, channels) per sample"}, {"symbol": "GAP", "meaning": "GlobalAveragePooling1D"}], "operations": "Valid conv: T − k + 1; pooling: ⌊T/2⌋; GAP averages over T.", "purpose": "Shows how the sequence is compressed and where temporal position is lost.", "interpretation": "The final 8 numbers are time-averaged pattern strengths; nothing records whether a pattern was recent or 4 days old.", "intuition": "Successively coarser views of the 5-day window, finally summarized without timestamps.", "numerical_example": "Parameters: 24·14·8+8 = 2,696; 12·8·8+8 = 776; 6·8·8+8 = 392; 8+1 = 9; total 3,873.", "source": "ai_explanation", "book_ref": "p.386–387"},
+  {"id": "m2", "title": "Global average pooling", "latex": "g_f = \\frac{1}{T}\\sum_{t=1}^{T} h_{t,f}", "source_text": "x = layers.GlobalAveragePooling1D()(x)", "variables": [{"symbol": "h_{t,f}", "meaning": "Activation of filter f at step t of the last conv layer"}, {"symbol": "T", "meaning": "Number of steps (13)"}, {"symbol": "g_f", "meaning": "Pooled value for filter f"}], "operations": "Mean over time per channel.", "purpose": "Reduces the sequence to a fixed-size vector for the Dense head.", "interpretation": "Permuting the time steps of h leaves g unchanged, so order information is gone.", "intuition": "An average doesn't care about the order of its terms.", "source": "ai_explanation", "book_ref": "p.387"}
+ ],
+ "code": [
+  {"id": "c1", "listing": null, "title": "Rest of the 1D convnet, training and evaluation", "original_code": "x = layers.Conv1D(8, 12, activation=\"relu\")(x)\nx = layers.MaxPooling1D(2)(x)\nx = layers.Conv1D(8, 6, activation=\"relu\")(x)\nx = layers.GlobalAveragePooling1D()(x)\noutputs = layers.Dense(1)(x)\nmodel = keras.Model(inputs, outputs)\n\ncallbacks = [\n    keras.callbacks.ModelCheckpoint(\"jena_conv.keras\", save_best_only=True)\n]\nmodel.compile(optimizer=\"adam\", loss=\"mse\", metrics=[\"mae\"])\nhistory = model.fit(\n    train_dataset,\n    epochs=10,\n    validation_data=val_dataset,\n    callbacks=callbacks,\n)\n\nmodel = keras.models.load_model(\"jena_conv.keras\")\nprint(f\"Test MAE: {model.evaluate(test_dataset)[1]:.2f}\")", "language": "python", "what_it_does": "Continues the convnet from p.386 (whose first lines define `inputs`, the first Conv1D(8, 24) and MaxPooling1D(2)). It adds two more conv layers with shrinking kernels, global average pooling and a linear Dense(1) output, then trains and evaluates exactly like the dense model of Listing 13.10.", "line_explanations": [{"lines": "1", "explanation": "8 filters, kernel 12 (≈ 24 h at 2-hour resolution after the first pooling); (48,8) → (37,8)."}, {"lines": "2", "explanation": "Second downsampling; (37,8) → (18,8)."}, {"lines": "3", "explanation": "8 filters, kernel 6 (≈ 24 h at 4-hour resolution); (18,8) → (13,8)."}, {"lines": "4", "explanation": "Averages over the 13 remaining steps; (13,8) → (8,). Temporal position is discarded."}, {"lines": "5-6", "explanation": "Linear regression head and Model creation."}, {"lines": "8-10", "explanation": "Checkpoint the best model to jena_conv.keras."}, {"lines": "11", "explanation": "Same compile settings as the dense model: Adam, MSE loss, MAE metric."}, {"lines": "12-17", "explanation": "Train for 10 epochs with validation and the checkpoint callback."}, {"lines": "19-20", "explanation": "Reload the best checkpoint and print its test MAE."}], "inputs_outputs": "Input (batch, 120, 14) → output (batch, 1); side effects: jena_conv.keras on disk, printed test MAE.", "algorithm": "Hierarchical 1D convolutional feature extraction + global pooling + linear regression, trained with Adam on MSE.", "theory_link": "Encodes the translation-invariance prior; the global pooling makes the prediction insensitive to when patterns occurred.", "parameters": [{"name": "kernel sizes 24/12/6", "role": "Each covers about one day at the current resolution"}, {"name": "filters = 8", "role": "Small capacity per layer"}, {"name": "GlobalAveragePooling1D", "role": "Collapses time to a fixed-size vector"}], "pitfalls": ["Keeping the training routine identical makes the comparison with the dense model fair; changing epochs or optimizer would mix architecture effects with training effects.", "Replacing GlobalAveragePooling1D with Flatten would keep position information. That might help, but it would no longer be a purely translation-invariant model (beyond the book)."], "illustrative_code": "# AI-written: count parameters per layer\nfor layer in model.layers:\n    print(layer.name, layer.count_params())\n# conv1d 2696, conv1d_1 776, conv1d_2 392, dense 9"}
+ ],
+ "deeper": [
+  {"title": "Figure 13.4 values and comparison", "kind": "numerical", "body": "Approximate values read from Figure 13.4:\n\n| epoch | train MAE | val MAE |\n|---|---|---|\n| 1 | 3.67 | 3.16 |\n| 2 | 2.97 | 3.06 |\n| 3 | 2.79 | 3.09 |\n| 4 | 2.69 | 3.05 |\n| 5 | 2.62 | 3.05 |\n| 7 | 2.50 | 3.09 |\n| 8 | 2.45 | 3.24 |\n| 10 | 2.38 | 3.08 |\n\nBest validation: convnet ≈ 3.05 (the text says ≈ 2.9), dense ≈ 2.55, baseline 2.44. Ranking: baseline < dense < convnet.", "source": "inference"},
+  {"title": "Why position matters for a 24-hour-ahead forecast", "kind": "breakdown", "body": "The target is the temperature 24 hours after the **last** timestep of the window. The last few hours carry the most information about it: the current temperature alone gives the 2.44 °C baseline. After global average pooling, the model can't tell a pattern at the end of the window from one at the start. It can't even reliably recover 'the current temperature'. The persistence solution is therefore hard to express with this architecture, which explains why it does worse than the dense model, whose flatten layer keeps every position separate. (Inference connecting p.387–388.)", "source": "inference"},
+  {"title": "Analogy: reading a diary by word counts", "kind": "analogy", "body": "Forecasting tomorrow from a week's diary using only the counts of words like 'rain' or 'cold', without knowing which day they were written, throws away what matters most: what happened *yesterday*.", "source": "analogy"}
+ ],
+ "visualizations": [
+  {"id": "v1", "type": "chart", "title": "Figure 13.4 reconstructed, with dense-model and baseline references", "why": "The page's figure shows the convnet's MAE curves; overlaying the baseline (2.44 °C) and the dense model's validation curve (Figure 13.3) makes 'even worse than the densely connected one' visible.", "chart": {"type": "line", "data": {"labels": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "datasets": [{"label": "Conv training MAE (approx.)", "data": [3.67, 2.97, 2.79, 2.69, 2.62, 2.56, 2.50, 2.45, 2.41, 2.38], "borderColor": "#d62728", "borderDash": [6, 4], "fill": false}, {"label": "Conv validation MAE (approx.)", "data": [3.16, 3.06, 3.09, 3.05, 3.05, 3.08, 3.09, 3.24, 3.15, 3.08], "borderColor": "#1f4fbf", "fill": false}, {"label": "Dense validation MAE (Fig. 13.3, approx.)", "data": [2.57, 2.57, 2.55, 2.59, 2.63, 2.66, 2.67, 2.68, 2.73, 2.69], "borderColor": "#2ca02c", "fill": false}, {"label": "Baseline val MAE (2.44)", "data": [2.44, 2.44, 2.44, 2.44, 2.44, 2.44, 2.44, 2.44, 2.44, 2.44], "borderColor": "#888888", "borderDash": [2, 2], "pointRadius": 0, "fill": false}]}, "options": {"scales": {"x": {"title": {"display": true, "text": "Epoch"}}, "y": {"title": {"display": true, "text": "MAE (°C)"}, "min": 2.3, "max": 3.8}}}}},
+  {"id": "v2", "type": "widget", "title": "Max pooling along a sequence", "why": "The convnet halves the sequence twice with MaxPooling1D(2); pooling, followed by global averaging, is what erases fine order information, the problem the page starts to diagnose.", "widget": "pooling", "params": {"input": [[1, 3, 2, 5, 4, 0, 6, 2]], "size": 2, "stride": 2, "mode": "max"}}
+ ],
+ "misconceptions": [
+  {"claim": "A model with a sensible prior (daily-cycle kernels) must beat an unstructured MLP.", "correction": "The convnet does worse than the dense model because its translation-invariance prior doesn't fit weather data."},
+  {"claim": "The convnet's training MAE of ~2.38 beats the 2.44 baseline, so it works.", "correction": "Only validation/test performance counts, and validation MAE stays around 3.0 °C."},
+  {"claim": "Periodic data is translation invariant.", "correction": "Weather is invariant only for shifts of a full cycle; morning, evening and night behave differently."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 386, "note": "First layers of this convnet and the translation invariance assumption."},
+   {"page": 385, "note": "Identical training routine and Figure 13.3 for the dense model."},
+   {"page": 384, "note": "Baseline validation MAE 2.44 °C."}
+  ],
+  "later": [
+   {"page": 388, "note": "Rest of the first reason; second reason (order matters, pooling destroys it); section 13.3 introduces RNNs and the LSTM beats the baseline (2.39 °C)."},
+   {"page": 389, "note": "Why the LSTM does better than the dense model and the convnet."}
+  ],
+  "prerequisites": [
+   {"page": 386, "note": "Conv1D, MaxPooling1D and translation invariance."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 385, "note": "Same compile/fit/load/evaluate pattern for the dense model."}
+  ],
+  "related_figures": [
+   {"page": 385, "note": "Figure 13.3, dense model curves."},
+   {"page": 389, "note": "Figure 13.5, LSTM curves."}
+  ]
+ },
+ "takeaways": [
+  "The convnet stacks Conv1D(8, 24/12/6) with MaxPooling1D(2), then GlobalAveragePooling1D and Dense(1), about 3.9k parameters.",
+  "Training is identical to the dense model (Adam, MSE, MAE metric, 10 epochs, best checkpoint).",
+  "Result: validation MAE ≈ 2.9–3.1 °C, worse than both the dense model and the 2.44 °C baseline.",
+  "Reason 1: weather data isn't translation invariant except at the daily timescale; morning and night differ.",
+  "A prior helps only when it matches the data; a mismatched prior can be worse than none."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "Which layer in the convnet completely removes information about when a pattern occurred?", "options": ["Conv1D(8, 12)", "MaxPooling1D(2)", "GlobalAveragePooling1D", "Dense(1)"], "answer": "GlobalAveragePooling1D", "explanation": "It averages each channel over all timesteps, which is permutation-invariant. MaxPooling1D(2) only coarsens resolution locally. Conv1D keeps positions. Dense(1) operates after the time axis is gone.", "page_refs": [387, 388]},
+  {"id": "q2", "type": "short", "question": "What validation MAE does the text report for the convnet, and how does it compare with the dense model and the baseline?", "options": [], "answer": "About 2.9 °C, worse than the dense model (~2.55 °C best) and far from the 2.44 °C baseline.", "explanation": "Stated in the paragraph after Figure 13.4; note the figure's curve actually stays around 3.05 °C or higher.", "page_refs": [387, 385, 384]},
+  {"id": "q3", "type": "conceptual", "question": "Explain the first reason the authors give for the convnet's failure.", "options": [], "answer": "Weather data doesn't respect the translation invariance assumption: although it has daily cycles, morning data behaves differently from evening or night data, so the same pattern has different meaning at different positions.", "explanation": "Convolutions share weights across positions, which assumes position doesn't change meaning.", "page_refs": [387, 386]},
+  {"id": "q4", "type": "math", "question": "Trace the time dimension from 120 through Conv1D(24) → MaxPool(2) → Conv1D(12) → MaxPool(2) → Conv1D(6), with valid padding.", "options": [], "answer": "120 → 97 → 48 → 37 → 18 → 13.", "explanation": "Conv: T−k+1; pool: ⌊T/2⌋. 120−23=97; ⌊97/2⌋=48; 48−11=37; ⌊37/2⌋=18; 18−5=13.", "page_refs": [386, 387]},
+  {"id": "q5", "type": "mcq", "question": "Why do kernel sizes shrink from 24 to 12 to 6?", "options": ["To reduce overfitting by using fewer parameters", "Because each MaxPooling1D halves the resolution, so smaller kernels still cover about 24 hours", "Because later layers need fewer features", "It is required by Keras"], "answer": "Because each MaxPooling1D halves the resolution, so smaller kernels still cover about 24 hours", "explanation": "p.386 says the window is reduced as the sequences are downsampled. Parameter count and filter count aren't the reason (filters stay at 8), and Keras imposes no such rule.", "page_refs": [386, 387]},
+  {"id": "q6", "type": "conceptual", "question": "Figure 13.4 shows training MAE ending around 2.38, below the baseline. Why doesn't that mean the convnet beat the baseline?", "options": [], "answer": "Training MAE measures fit to data the model was trained on; the baseline comparison must use validation/test data, where the convnet is around 3.0 °C.", "explanation": "The flat validation curve and falling training curve show that what was learned doesn't generalize.", "page_refs": [387]},
+  {"id": "q7", "type": "self", "question": "Before reading p.388, can you guess the second reason the convnet fails, based on the architecture?", "options": [], "answer": "Order matters: recent data is much more informative, and pooling (especially global average pooling) destroys order information.", "explanation": "Self-check; p.388 confirms this as the second reason.", "page_refs": [387, 388]}
+ ]
+}

@@ -1,0 +1,377 @@
+{
+ "pdf_page": 540,
+ "printed_page": "516",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:40:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. 'train_ step()' in e03 is a line-break artifact of `train_step()`. The printed text has a minor typo, 'autencoder' (for 'autoencoder'). Listing 17.4 continues on p.541 (body of compute_loss)."
+ },
+ "overview": {
+  "title": "A VAE model with a custom compute_loss() method",
+  "chapter": "17 Image generation",
+  "section": "17.1 Deep learning for image generation",
+  "subsection": "17.1.3 Implementing a VAE with Keras",
+  "main_topic": "Customizing training for a self-supervised model by overriding compute_loss() instead of train_step(), and the first half of the VAE model class",
+  "central_idea": "Because a VAE is not ordinary supervised learning, its loss must be computed from the input and the latent parameters. Rather than writing a backend-specific train_step(), you can override compute_loss(x, y, y_pred, sample_weight, training), which the built-in train_step() calls, and keep the code backend-agnostic.",
+  "importance": "This shows a general, lightweight Keras pattern for any custom loss that needs more than (y, y_pred): override compute_loss(). It is simpler than the train_step() approach of chapter 7 and works on TensorFlow, JAX and PyTorch unchanged.",
+  "learning_objectives": [
+   "Explain why an autoencoder is self-supervised",
+   "Compare overriding train_step() with overriding compute_loss()",
+   "Describe each argument of compute_loss() and what it holds in the VAE",
+   "Explain why compute_loss() can stay backend-agnostic",
+   "Read the constructor and call() of the VAE class"
+  ],
+  "prerequisites": [
+   "Subclassing keras.Model and custom train_step (chapter 7)",
+   "Keras metrics such as keras.metrics.Mean",
+   "Encoder, Sampler and decoder (p.537-539)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The VAE model itself is the book's **first example of a model that isn't doing supervised learning**. An autoencoder is **self-supervised**, because it uses its inputs as targets. When you depart from classic supervised learning, the usual approach is to subclass `Model` and write a custom `train_step()` (chapter 7). The drawback is that `train_step()` has to be **backend specific**: `GradientTape` with TensorFlow, `loss.backward()` with PyTorch, and so on.\n\nA simpler option is to override **`compute_loss()`** and keep the default `train_step()`. `compute_loss()` is \"the key bit of differentiable logic called by the built-in `train_step()`\". Because it never touches gradients directly, it is easy to keep **backend agnostic**.\n\nIts signature is `compute_loss(x, y, y_pred, sample_weight=None, training=True)`:\n\n- `x`: the model's input;\n- `y`: the target, which is `None` here because the dataset has only inputs;\n- `y_pred`: the output of `call()`, which for the VAE is the latent parameters, not an image.\n\nA supervised model would compute the loss from `y` and `y_pred`. The VAE instead uses `x` and a `reconstruction` derived from `y_pred`. The method must **return a scalar** loss to minimize, and it can also **update metric state**, which the VAE does.\n\n**Listing 17.4** starts the `VAE(keras.Model)` class. The constructor stores `encoder`, `decoder` and a new `Sampler()`, and creates two `keras.metrics.Mean` trackers, `\"reconstruction_loss\"` and `\"kl_loss\"`, to **track the loss averages over each epoch** (callout). `call(self, inputs)` returns only `self.encoder(inputs)`, that is `[z_mean, z_log_var]`. The page ends with the `compute_loss` signature; its body is on p.541. The authors stress that the class works with all backends with no code changes.",
+ "paragraphs": [
+  {
+   "ref": "p540_e03",
+   "excerpt": "Now, let’s create the VAE model itself. This is your first example of a model",
+   "what_it_says": "The VAE is the first non-supervised model in the book; an autoencoder is self-supervised because its inputs are its targets. Custom training logic is usually written by subclassing Model and overriding train_step() (chapter 7), but that code is backend specific (GradientTape vs loss.backward()). Overriding compute_loss() and keeping the default train_step() is simpler, and since compute_loss() does not handle gradients it stays backend agnostic.",
+   "what_it_means": "Keras's default `train_step()` does roughly: run the forward pass, call `compute_loss()`, compute gradients with the active backend, apply them with the optimizer and update metrics. Only the gradient part differs across backends. If you override just the loss computation, Keras's own backend-specific `train_step()` keeps doing the gradient work.",
+   "why_it_matters": "This is the recommended Keras 3 pattern whenever your loss needs internals of the forward pass (here the latent parameters) but the optimization itself is standard. A full train_step() override is only needed for unusual update logic, such as the GAN or multiple optimizers.",
+   "technical_idea": "Beyond the book: the hook is called with `training=True` during fit and `training=False` during evaluate, so you can make the loss phase-dependent.",
+   "terminology": [
+    {
+     "term": "self-supervised learning",
+     "meaning": "Supervised-style training where the targets are derived from the inputs themselves, such as reconstructing the input."
+    },
+    {
+     "term": "train_step()",
+     "meaning": "The Model method run on each batch by fit(): forward pass, loss, gradients, update, metrics."
+    },
+    {
+     "term": "backend agnostic",
+     "meaning": "Code that runs unchanged on TensorFlow, JAX or PyTorch under Keras 3."
+    }
+   ],
+   "connections": [
+    "Chapter 7: custom train_step() workflow",
+    "p.541: compute_loss body"
+   ]
+  },
+  {
+   "ref": "p540_e04",
+   "excerpt": "Its signature is as follows:",
+   "what_it_says": "Introduces the signature `compute_loss(x, y, y_pred, sample_weight=None, training=True)`.",
+   "what_it_means": "These are the values the built-in train_step() passes on each batch. `sample_weight` and `training` have defaults, so most overrides only use the first three.",
+   "why_it_matters": "Your override must accept the same arguments, as the VAE's does at the bottom of the page.",
+   "connections": [
+    "p.541: the override uses x and y_pred only"
+   ]
+  },
+  {
+   "ref": "p540_e06",
+   "excerpt": "where x is the model’s input; y is the model’s target (in our case",
+   "what_it_says": "`x` is the input; `y` is the target (None here, since the dataset has no targets); `y_pred` is the output of `call()`. A supervised workflow would use `y` and `y_pred`. Here, the loss uses `x` and the `reconstruction` derived from `y_pred`, which contains the latent parameters.",
+   "what_it_means": "In the VAE, `y_pred` is not a prediction of the target. It is `[z_mean, z_log_var]`, because `call()` only runs the encoder. The sampler and decoder run inside `compute_loss()`, which gives the loss access to the mean and log-variance needed for the KL term as well as to the reconstruction.",
+   "why_it_matters": "This explains the unusual design in which `call()` returns encoder outputs instead of images.",
+   "connections": [
+    "p.541: `z_mean, z_log_var = y_pred` and `reconstruction = self.decoder(self.sampler(...))`"
+   ]
+  },
+  {
+   "ref": "p540_e07",
+   "excerpt": "The method must return a scalar, the loss value to be minimized",
+   "what_it_says": "compute_loss() must return a scalar loss and can also update metric state, which the VAE does. The VAE with a custom compute_loss() works with all backends with no code changes.",
+   "what_it_means": "The scalar is what the default train_step() differentiates. Metric trackers updated here are reported by fit() in its progress bar, provided they are exposed through the model's metrics. (Beyond the book: Keras automatically tracks metric objects assigned as attributes.)",
+   "why_it_matters": "Logging the reconstruction and KL terms separately lets you see the balance between the two losses during training.",
+   "connections": [
+    "p.541: update_state calls on the two trackers"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "compute_loss_override",
+   "name": "Overriding Model.compute_loss()",
+   "definition": "Customizing training by redefining the method that computes the scalar loss from (x, y, y_pred), while keeping Keras's built-in train_step().",
+   "intuition": "Change what the model is graded on, not how the grading is turned into weight updates.",
+   "technical": "Signature: compute_loss(x, y, y_pred, sample_weight=None, training=True) -> scalar. Called inside the backend-specific default train_step(), which handles gradients.",
+   "significance": "Backend-agnostic custom training; less code than train_step().",
+   "example": "The VAE computes reconstruction + KL from x and y_pred = [z_mean, z_log_var].",
+   "misconception": "You do not need to pass loss= to compile() when overriding compute_loss (p.541).",
+   "related": [
+    "keras_model",
+    "loss_function"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "self_supervised_learning",
+   "name": "Self-supervised learning",
+   "definition": "Learning where targets come from the inputs themselves.",
+   "intuition": "The data supplies its own answer key.",
+   "technical": "Autoencoders minimize a distance between x and decoder(encoder(x)); y is None in fit().",
+   "significance": "Makes it possible to learn from unlabeled data.",
+   "example": "The VAE trained on MNIST images without labels.",
+   "misconception": "It is not unsupervised in the sense of having no loss; it is supervised with automatically generated targets.",
+   "related": [
+    "vae"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "keras_metrics_mean",
+   "name": "keras.metrics.Mean tracker",
+   "definition": "A stateful metric that keeps a running average of the values passed to update_state().",
+   "intuition": "A running tally that resets each epoch.",
+   "technical": "Created in __init__; updated in compute_loss; reset by fit at epoch start.",
+   "significance": "Reports the reconstruction and KL losses per epoch.",
+   "example": "self.kl_loss_tracker = keras.metrics.Mean(name='kl_loss')",
+   "misconception": "Metrics do not affect gradients; only the returned loss does.",
+   "related": [
+    "keras_model"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "compute_loss() signature",
+   "original_code": "compute_loss(x, y, y_pred, sample_weight=None, training=True)",
+   "language": "python",
+   "what_it_does": "Shows the arguments Keras passes to compute_loss on each training batch.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "x: input batch; y: targets (None here); y_pred: output of call(); sample_weight: optional per-sample weights; training: whether in training mode."
+    }
+   ],
+   "inputs_outputs": "Returns a scalar loss tensor.",
+   "algorithm": "Called by the default train_step() between the forward pass and the gradient computation.",
+   "theory_link": "The hook for any loss that does not fit the loss(y_true, y_pred) mold.",
+   "parameters": [
+    {
+     "name": "y_pred",
+     "role": "Whatever call() returns; for the VAE, [z_mean, z_log_var]."
+    }
+   ],
+   "pitfalls": [
+    "An override must accept all arguments, even unused ones."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "17.4",
+   "title": "VAE model with custom compute_loss() method (first part)",
+   "original_code": "class VAE(keras.Model):\n    def __init__(self, encoder, decoder, **kwargs):\n        super().__init__(**kwargs)\n        self.encoder = encoder\n        self.decoder = decoder\n        self.sampler = Sampler()\n        self.reconstruction_loss_tracker = keras.metrics.Mean(\n            name=\"reconstruction_loss\"\n        )\n        self.kl_loss_tracker = keras.metrics.Mean(name=\"kl_loss\")\n    def call(self, inputs):\n        return self.encoder(inputs)\n    def compute_loss(self, x, y, y_pred, sample_weight=None, training=True):",
+   "language": "python",
+   "what_it_does": "Defines a subclassed Model that holds the encoder, decoder and a Sampler, creates two Mean metrics, and makes call() return the encoder's outputs. The compute_loss body continues on p.541.",
+   "line_explanations": [
+    {
+     "lines": "1-3",
+     "explanation": "Subclasses keras.Model and forwards kwargs (such as name) to the base constructor."
+    },
+    {
+     "lines": "4-5",
+     "explanation": "Stores the encoder and decoder models as attributes, so their weights become the VAE's weights."
+    },
+    {
+     "lines": "6",
+     "explanation": "Creates the Sampler layer from Listing 17.2."
+    },
+    {
+     "lines": "7-10",
+     "explanation": "Two Mean metrics that track the reconstruction and KL loss averages over each epoch (callout)."
+    },
+    {
+     "lines": "11-12",
+     "explanation": "call() runs only the encoder and returns [z_mean, z_log_var], which becomes y_pred in compute_loss."
+    },
+    {
+     "lines": "13",
+     "explanation": "Overrides compute_loss with the standard signature; the body is on p.541."
+    }
+   ],
+   "inputs_outputs": "Constructor inputs: encoder and decoder models. call(): images (N, 28, 28, 1) -> [z_mean, z_log_var], each (N, 2).",
+   "algorithm": "Default fit loop with a custom loss hook.",
+   "theory_link": "Combines the three components of p.537 into one trainable object; the losses of p.536 are computed in compute_loss.",
+   "parameters": [
+    {
+     "name": "encoder / decoder",
+     "role": "Submodels from Listings 17.1 and 17.3."
+    }
+   ],
+   "pitfalls": [
+    "Calling vae(x) does not give reconstructions; it gives latent parameters. Use vae.decoder(vae.sampler(*vae(x))) for that.",
+    "Because the default train_step() is kept, no GradientTape or loss.backward() appears anywhere."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "What the default train_step() does around compute_loss()",
+   "kind": "step_by_step",
+   "source": "ai_explanation",
+   "body": "For each batch `(x, y, sample_weight)` with backend-specific gradient recording:\n1. `y_pred = self(x, training=True)` runs your `call()`.\n2. `loss = self.compute_loss(x, y, y_pred, sample_weight, training=True)`.\n3. Gradients of `loss` with respect to trainable weights (GradientTape / `jax.grad` / `loss.backward()`).\n4. `optimizer.apply(grads, weights)`.\n5. Return metric results.\n\nBy overriding step 2 only, you inherit steps 1 and 3-5 on every backend."
+  },
+  {
+   "title": "Why put sampling and decoding in compute_loss and not in call?",
+   "kind": "alternative",
+   "source": "inference",
+   "body": "If call() returned only the reconstruction, compute_loss would no longer see z_mean and z_log_var, which the KL term needs. Returning the latent parameters from call() and finishing the forward pass in compute_loss gives the loss access to everything. An alternative would be for call() to return all three tensors."
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Where compute_loss sits in fit()",
+   "why": "Shows the split the page describes: backend-specific gradients in the built-in train_step(), backend-agnostic loss in your compute_loss().",
+   "mermaid": "flowchart TD\n  B[batch x, y=None] --> C[\"call(x) -> encoder -> y_pred = z_mean, z_log_var\"]\n  C --> L[\"compute_loss(x, y, y_pred): your override\"]\n  L --> G[\"gradients: built-in, backend specific\"]\n  G --> O[optimizer update]\n  L --> M[update reconstruction_loss / kl_loss trackers]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Custom training logic always requires overriding train_step().",
+   "correction": "If only the loss changes, overriding compute_loss() is enough and stays backend agnostic."
+  },
+  {
+   "claim": "y_pred in compute_loss is always a prediction of y.",
+   "correction": "It is whatever call() returns; in the VAE it is the latent parameters."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 538,
+    "note": "Sampler layer used in the constructor"
+   },
+   {
+    "page": 537,
+    "note": "Encoder"
+   },
+   {
+    "page": 539,
+    "note": "Decoder"
+   }
+  ],
+  "later": [
+   {
+    "page": 541,
+    "note": "compute_loss body, compile and fit"
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 536,
+    "note": "The two VAE losses"
+   }
+  ],
+  "related_math": [
+   {
+    "page": 541,
+    "note": "KL and reconstruction formulas"
+   }
+  ],
+  "related_code": [
+   {
+    "page": 541,
+    "note": "Rest of Listing 17.4"
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "An autoencoder is self-supervised: its inputs are its targets.",
+  "Overriding train_step() works but is backend specific; overriding compute_loss() is simpler and backend agnostic.",
+  "compute_loss(x, y, y_pred, sample_weight=None, training=True) must return a scalar and may update metrics.",
+  "In the VAE, call() returns [z_mean, z_log_var], so y_pred holds latent parameters and y is None.",
+  "Two keras.metrics.Mean trackers report reconstruction and KL loss averages per epoch."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What is the main advantage of overriding compute_loss() instead of train_step()?",
+   "options": [
+    "It trains faster",
+    "It stays backend agnostic because it doesn't manipulate gradients",
+    "It allows using multiple optimizers",
+    "It removes the need for a decoder"
+   ],
+   "answer": "It stays backend agnostic because it doesn't manipulate gradients",
+   "explanation": "The page says exactly this. Speed is not claimed, multiple optimizers would actually need train_step(), and the decoder is unrelated.",
+   "page_refs": [
+    540
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "In the VAE's compute_loss, what are y and y_pred?",
+   "options": [],
+   "answer": "y is None (no targets); y_pred is the output of call(), [z_mean, z_log_var].",
+   "explanation": "Stated in the paragraph after the signature.",
+   "page_refs": [
+    540,
+    541
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why is an autoencoder called self-supervised rather than supervised?",
+   "options": [],
+   "answer": "It does have a loss with targets, but the targets are the inputs themselves, so no external labels are needed.",
+   "explanation": "The page defines it as using its inputs as targets.",
+   "page_refs": [
+    540
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "Which backend-specific mechanism does the page give as an example of what a custom train_step() would need with PyTorch?",
+   "options": [
+    "GradientTape",
+    "jax.grad",
+    "loss.backward()",
+    "tf.function"
+   ],
+   "answer": "loss.backward()",
+   "explanation": "GradientTape is the TensorFlow example; jax.grad and tf.function are not named on the page.",
+   "page_refs": [
+    540
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "Why does VAE.call() return only the encoder's output?",
+   "options": [],
+   "answer": "So that y_pred passed to compute_loss contains z_mean and z_log_var, which the KL term needs; compute_loss then runs the sampler and decoder itself to get the reconstruction.",
+   "explanation": "This is an inference from the listing and p.541.",
+   "page_refs": [
+    540,
+    541
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "self",
+   "question": "Can you describe, step by step, what Keras's built-in train_step() does and where your compute_loss() is called?",
+   "options": [],
+   "answer": "Forward pass via call(), then compute_loss(), then backend-specific gradients, optimizer update and metric results.",
+   "explanation": "Recall chapter 7's custom train_step() to check yourself.",
+   "page_refs": [
+    540
+   ]
+  }
+ ],
+ "page_id": "page_540",
+ "book_id": "dlwp3"
+}

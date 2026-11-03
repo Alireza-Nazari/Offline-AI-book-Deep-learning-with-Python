@@ -1,0 +1,523 @@
+{
+ "page_id": "page_460",
+ "pdf_page": 460,
+ "printed_page": "436",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T10:00:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. Two code elements: Listing 15.13 (e04) and its printed output (e06), both match the page image. Blank lines inside the listing were restored from the image."
+ },
+ "overview": {
+  "title": "Generating translations with the seq2seq RNN (Listing 15.13)",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.2 Sequence-to-sequence learning",
+  "subsection": "15.2.2 Sequence-to-sequence learning with RNNs",
+  "main_topic": "The autoregressive inference loop that turns the trained GRU encoder-decoder into an English-to-Spanish translator, with five sample translations and the authors' verdict on their quality",
+  "central_idea": "At inference time the decoder has no ground-truth Spanish sentence, so the translation is built one token at a time. The model starts from \"[start]\", predicts a distribution over the 15,000-word Spanish vocabulary, keeps the most likely word, appends it to the partial sentence and feeds the result back in. The loop stops at \"[end]\" or after `sequence_length` steps. The outputs are plausible for short sentences but show clear mistakes.",
+  "importance": "This page closes the loop from training (teacher forcing, p.459) to actual use (free-running generation). It shows concretely why the 65% next-token accuracy is not the same as translation quality. The same generation pattern is reused for the Transformer (p.477) and for the mini-GPT in chapter 16 (p.502).",
+  "learning_objectives": [
+   "Trace Listing 15.13 line by line and state the shape of every tensor it creates",
+   "Explain why the prediction for the next token is read at index `i` of the output sequence",
+   "Recognize that `np.argmax` makes this greedy decoding, not random sampling",
+   "Explain why runs differ (random initialization and data shuffling)",
+   "Diagnose the error types in the sample translations: unknown tokens, word order and hallucinated content"
+  ],
+  "prerequisites": [
+   "The two `TextVectorization` tokenizers with `sequence_length = 20` (Spanish uses 21) from Listing 15.9 (p.455)",
+   "The seq2seq GRU model `seq2seq_rnn` (Listings 15.11-15.12, pp.458-459)",
+   "The offset-by-one targets of the language-model setup (pp.449-451, p.456)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "This page is Listing 15.13, the inference code for the RNN translator trained on p.459, followed by sample output.\n\n**Setup.** `spanish_tokenizer.get_vocabulary()` returns the list of Spanish tokens in index order. `spa_index_lookup` inverts it into a dict `{index: token}` so predicted integers can be turned back into words (detokenization).\n\n**The loop (`generate_translation`).**\n1. Tokenize the English sentence once: `english_tokenizer([input_sentence])` gives a `(1, 20)` integer tensor.\n2. Start the target string as `\"[start]\"`.\n3. For `i` in `0 … sequence_length-1`: re-tokenize the *whole* partial Spanish string, run `seq2seq_rnn.predict` on both inputs, and take `next_token_predictions[0, i, :]`. That is the softmax distribution over 15,000 Spanish tokens at position `i`, the position of the last token written so far. Its `argmax` is the next word. Append it with a space, and stop if it is `\"[end]\"`.\n\nThe driver code picks five random English test sentences and prints each source sentence and its translation.\n\n**Output.** The authors note that results vary between runs because the weights depend on random initialization and on random shuffling of the training data. Their run produced, for example:\n- \"You know that.\" → `tú lo sabes` (correct)\n- \"I think they're happy.\" → `yo creo que son felices` (correct)\n- \"I will tell you tomorrow.\" → `te lo voy mañana a decir` (right words, wrong order)\n- \"Thanks.\" \"You're welcome.\" → `gracias tú [UNK]` (half right, then an out-of-vocabulary token)\n- \"The prisoner was set free yesterday.\" → `el plan fue ayer a un atasco` (\"the plan was yesterday to a traffic jam\", fluent-looking nonsense)\n\nThe verdict: the model \"works decently well for a toy model, although it still makes many basic mistakes.\"",
+ "paragraphs": [
+  {
+   "ref": "p460_e05",
+   "excerpt": "The exact translations will vary from run to run, as the final",
+   "what_it_says": "The translations you get will differ from the printed ones, because the final weights depend on random weight initialization and on the random shuffling of the training data. The block that follows is one particular run.",
+   "what_it_means": "Training a neural network is a stochastic process. Two training runs with identical code start from different random weights and see mini-batches in a different order, so they end in different minima of the loss. Greedy decoding then amplifies small differences: if one early word differs, every later word is conditioned on a different prefix, and the sentence can diverge completely.",
+   "why_it_matters": "Readers should not treat a mismatch with the book as a bug. It is also a reminder that a single qualitative sample is weak evidence about model quality. That is one reason the authors pointed to corpus-level metrics such as BLEU on p.459.",
+   "technical_idea": "Sources of run-to-run variance: weight initializers (e.g. Glorot uniform for Dense/GRU kernels), dataset shuffling in `tf.data`, dropout masks during training, and non-deterministic GPU kernels. Inference itself is deterministic here because `argmax` involves no randomness. Only `random.choice` in the driver code is random.",
+   "terminology": [
+    {
+     "term": "Random initialization",
+     "meaning": "Setting the starting weights by drawing from a random distribution, so that units start out different from each other."
+    },
+    {
+     "term": "Shuffling",
+     "meaning": "Randomizing the order of training examples each epoch, which changes the sequence of gradient updates."
+    }
+   ],
+   "connections": [
+    "p.459: the model was trained for 15 epochs and reached 65% next-token validation accuracy.",
+    "p.477: the same kind of sample output is produced with the Transformer for comparison."
+   ]
+  },
+  {
+   "ref": "p460_e07",
+   "excerpt": "Our model works decently well for a toy model, although it still",
+   "what_it_says": "The authors judge the translator as decent for a toy model but note that it still makes many basic mistakes.",
+   "what_it_means": "In the five samples, the short, common sentences are translated perfectly. The longer or rarer ones show three typical failure types. (1) **Word order**: \"te lo voy mañana a decir\" puts *mañana* inside the periphrastic future *voy a decir*. (2) **Vocabulary gaps**: `[UNK]` appears because the model predicted the out-of-vocabulary token. (3) **Hallucination**: \"el plan fue ayer a un atasco\" keeps the time word *ayer* (yesterday) but invents content unrelated to a prisoner being freed. The output is also lowercase and has no punctuation, because the Spanish standardization in Listing 15.9 stripped punctuation (p.455).",
+   "why_it_matters": "The page sets up the next page's critique (p.461). The source sentence must be squeezed into one encoder state vector, and RNNs forget over long spans. Those limitations motivate attention and the Transformer.",
+   "technical_idea": "Greedy decoding commits to the single best token at each step and never revisits it. Beam search (not used in the book here) keeps several candidate prefixes and often fixes word-order errors like the one in the fourth example.",
+   "terminology": [
+    {
+     "term": "[UNK]",
+     "meaning": "The out-of-vocabulary token of `TextVectorization` (index 1). The model can predict it like any other token."
+    },
+    {
+     "term": "Toy model",
+     "meaning": "A small model trained on a modest dataset (here with 15,000-token vocabularies and sentences capped at 20 tokens), meant for teaching."
+    }
+   ],
+   "connections": [
+    "p.461: the authors list the fundamental limitations of RNN seq2seq models.",
+    "p.455: punctuation stripping and the `[start]`/`[end]` tokens are defined in Listing 15.9."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "autoregressive_generation",
+   "name": "Autoregressive generation (decoding loop)",
+   "definition": "Producing a sequence one token at a time, where each new token is predicted from the source and from all tokens generated so far, then appended and fed back as input.",
+   "intuition": "Like writing a sentence word by word, rereading what you have written before choosing the next word.",
+   "technical": "The model defines $p(y_{t+1} \\mid y_{\\le t}, x)$. Generation starts with $y_0 = \\texttt{[start]}$ and repeats $y_{t+1} = \\text{choose}(p(\\cdot \\mid y_{\\le t}, x))$ until \\texttt{[end]} or a maximum length. In Listing 15.13 the whole prefix is re-encoded on every step.",
+   "significance": "This is how every sequence-generating model in the book is used: the Shakespeare character model (p.451), this translator, the Transformer translator (p.477) and the mini-GPT (p.502).",
+   "example": "Step 0: input \"[start]\" → predicts \"tú\". Step 1: input \"[start] tú\" → predicts \"lo\". Step 2 → \"sabes\". Step 3 → \"[end]\".",
+   "misconception": "That the model produces the whole translation in one forward pass. During training it scores all positions in parallel (teacher forcing), but at inference each token needs its own forward pass.",
+   "related": [
+    "language_model",
+    "greedy_decoding",
+    "teacher_forcing",
+    "seq2seq"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "greedy_decoding",
+   "name": "Greedy decoding",
+   "definition": "Choosing the single highest-probability token at every generation step (`np.argmax`).",
+   "intuition": "Always take the locally best word, never reconsider.",
+   "technical": "$\\hat y_{t+1} = \\arg\\max_{v \\in V} p(v \\mid \\hat y_{\\le t}, x)$. It is deterministic, and it does not maximize the probability of the whole sequence, $\\prod_t p(y_t \\mid y_{<t}, x)$. Beam search approximates that maximum better, and random sampling with a temperature adds diversity.",
+   "significance": "The variable is named `sampled_token_index`, but nothing is sampled. Knowing this explains why calling the function twice on the same sentence gives the same output.",
+   "example": "If the predicted distribution at a step is {\"voy\": 0.41, \"diré\": 0.38, …}, greedy picks \"voy\", even if \"diré\" would have led to a more probable complete sentence.",
+   "misconception": "That greedy decoding finds the most likely translation. It only finds the sequence of locally most likely tokens.",
+   "related": [
+    "autoregressive_generation",
+    "softmax",
+    "beam_search"
+   ],
+   "source": "inference"
+  },
+  {
+   "id": "detokenization",
+   "name": "Detokenization (index → token lookup)",
+   "definition": "Mapping predicted integer ids back to string tokens with the inverse of the vocabulary.",
+   "intuition": "The tokenizer is a dictionary from words to numbers. To read the model's output you need the dictionary in the other direction.",
+   "technical": "`get_vocabulary()` returns a list whose position $k$ holds the token with id $k$ (0 = \"\" padding, 1 = \"[UNK]\"). `dict(zip(range(len(spa_vocab)), spa_vocab))` builds `{k: token}`. A plain list lookup `spa_vocab[k]` would work too.",
+   "significance": "Every text generator needs this reverse mapping. It was introduced for the character model (p.451) and is reused here.",
+   "example": "If `spa_vocab[7] == \"que\"`, then `spa_index_lookup[7]` returns \"que\".",
+   "misconception": "That the tokenizer can invert itself automatically. `TextVectorization` has no built-in inverse, so you build the lookup yourself.",
+   "related": [
+    "tokenization",
+    "vocabulary"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "exposure_bias",
+   "name": "Train/inference mismatch (exposure bias)",
+   "definition": "During training the decoder always sees the correct previous tokens. At inference it sees its own, possibly wrong, predictions.",
+   "intuition": "A student who only ever practiced with the teacher correcting each word must now speak alone, and one slip can derail the rest of the sentence.",
+   "technical": "Training maximizes $\\sum_t \\log p(y_t^* \\mid y_{<t}^*, x)$ on gold prefixes. Inference conditions on $\\hat y_{<t}$. Errors compound because the model never saw its own mistakes during training.",
+   "significance": "Explains why 65% next-token accuracy (p.459) does not mean 65% of words are right in generated translations, and why the third sample goes off the rails.",
+   "example": "Once \"el plan\" is emitted for \"The prisoner\", all later words are conditioned on a subject about a plan, and the sentence drifts further.",
+   "misconception": "That high teacher-forced accuracy guarantees good free-running output.",
+   "related": [
+    "teacher_forcing",
+    "autoregressive_generation"
+   ],
+   "source": "ai_explanation"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Greedy choice of the next token",
+   "latex": "\\hat y_{i+1} = \\arg\\max_{v \\in \\{0,\\dots,14999\\}} P\\left[0,\\, i,\\, v\\right], \\qquad P = \\operatorname{seq2seq\\_rnn}\\big(x,\\ \\texttt{[start]}\\,\\hat y_1\\cdots\\hat y_i\\big)",
+   "source_text": "sampled_token_index = np.argmax(next_token_predictions[0, i, :])",
+   "variables": [
+    {
+     "symbol": "P",
+     "meaning": "`next_token_predictions`, shape (1, 21, 15000): one softmax distribution over the Spanish vocabulary for each target position"
+    },
+    {
+     "symbol": "x",
+     "meaning": "The tokenized English sentence, shape (1, 20)"
+    },
+    {
+     "symbol": "i",
+     "meaning": "Loop index = position of the last token currently in the partial translation (position 0 holds [start])"
+    },
+    {
+     "symbol": "v",
+     "meaning": "A candidate token id in the 15,000-token Spanish vocabulary"
+    },
+    {
+     "symbol": "\\hat y_{i+1}",
+     "meaning": "The chosen next token id"
+    }
+   ],
+   "operations": "A forward pass yields probabilities at every position. Index 0 selects the single batch element, index `i` selects the position whose output predicts the next token, and `argmax` returns the index of the largest probability.",
+   "purpose": "Turn the model's distribution into a single concrete word to append.",
+   "interpretation": "Because targets were shifted by one during training (output at position i is trained to predict token i+1), reading position i gives the prediction for the word after the current prefix.",
+   "intuition": "The decoder's output at a position answers: 'given everything up to here, what comes next?'",
+   "numerical_example": "Step `i = 2` for \"You know that.\": the prefix is `[start] tú lo` (positions 0, 1, 2). `P[0, 2, :]` peaks at the id of \"sabes\", so `\"sabes\"` is appended. At `i = 3`, `P[0, 3, :]` peaks at `[end]` and the loop breaks.",
+   "source": "book",
+   "book_ref": "p.460"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "15.13",
+   "title": "Generating translations with a seq2seq RNN",
+   "original_code": "import numpy as np\n\nspa_vocab = spanish_tokenizer.get_vocabulary()\nspa_index_lookup = dict(zip(range(len(spa_vocab)), spa_vocab))\n\ndef generate_translation(input_sentence):\n    tokenized_input_sentence = english_tokenizer([input_sentence])\n    decoded_sentence = \"[start]\"\n    for i in range(sequence_length):\n        tokenized_target_sentence = spanish_tokenizer([decoded_sentence])\n        inputs = [tokenized_input_sentence, tokenized_target_sentence]\n        next_token_predictions = seq2seq_rnn.predict(inputs, verbose=0)\n        sampled_token_index = np.argmax(next_token_predictions[0, i, :])\n        sampled_token = spa_index_lookup[sampled_token_index]\n        decoded_sentence += \" \" + sampled_token\n        if sampled_token == \"[end]\":\n            break\n    return decoded_sentence\n\ntest_eng_texts = [pair[0] for pair in test_pairs]\nfor _ in range(5):\n    input_sentence = random.choice(test_eng_texts)\n    print(\"-\")\n    print(input_sentence)\n    print(generate_translation(input_sentence))",
+   "language": "python",
+   "what_it_does": "Builds an index→word lookup for the Spanish vocabulary, defines a greedy autoregressive decoding function for the trained `seq2seq_rnn`, and prints translations of five random English test sentences.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "NumPy is needed for `np.argmax`."
+    },
+    {
+     "lines": "3-4",
+     "explanation": "`get_vocabulary()` returns the token list in id order (\"\" at 0, \"[UNK]\" at 1, then tokens by frequency). The dict maps id → token for detokenization."
+    },
+    {
+     "lines": "6-7",
+     "explanation": "The English sentence is tokenized once. Wrapping it in a list gives a batch of one, so the result has shape (1, 20) because `output_sequence_length=20` (p.455)."
+    },
+    {
+     "lines": "8",
+     "explanation": "The partial translation begins with the start token the model saw at the beginning of every training target."
+    },
+    {
+     "lines": "9",
+     "explanation": "At most `sequence_length` (20) decoding steps, matching the maximum target length used in training."
+    },
+    {
+     "lines": "10",
+     "explanation": "The *whole* string decoded so far is re-tokenized every iteration. The Spanish tokenizer pads to 21 tokens (`sequence_length + 1`), and the model's `spanish` input accepts variable length."
+    },
+    {
+     "lines": "11-12",
+     "explanation": "Both inputs go through the full model: the encoder re-reads the English sentence and the decoder GRU re-reads the whole prefix. `verbose=0` silences the progress bar. Output shape: (1, 21, 15000)."
+    },
+    {
+     "lines": "13",
+     "explanation": "Reads the distribution at position `i` (the last real token of the prefix) and takes the most likely id. Despite the variable name, this is greedy decoding, not sampling."
+    },
+    {
+     "lines": "14-15",
+     "explanation": "Converts the id back to a word and appends it with a space, so the next re-tokenization splits it correctly."
+    },
+    {
+     "lines": "16-17",
+     "explanation": "Stops as soon as the end token is produced. Note that \"[end]\" is still appended, which is why it appears in the printed output."
+    },
+    {
+     "lines": "18",
+     "explanation": "Returns the string including the `[start]` and `[end]` markers."
+    },
+    {
+     "lines": "20",
+     "explanation": "Collects the English side of each `(english, spanish)` test pair."
+    },
+    {
+     "lines": "21-25",
+     "explanation": "Five times: pick a random English test sentence (`random` was imported earlier in the chapter), print a separator, the source and the translation."
+    }
+   ],
+   "inputs_outputs": "Input: a raw English string. Output: a Spanish string of the form `\"[start] w1 w2 … [end]\"`, lowercase, without punctuation (or without `[end]` if 20 steps elapse first).",
+   "algorithm": "Greedy autoregressive decoding: prefix ← [start]; repeat up to N times: P ← model(source, prefix); t ← argmax P[last position]; prefix ← prefix + t; stop if t = [end].",
+   "theory_link": "The decoder is a conditional language model $p(y_{t+1} \\mid y_{\\le t}, x)$ whose initial GRU state is the encoder's summary of $x$ (figure 15.2, p.457). Generation chains the conditional predictions, exactly as in the character-level Shakespeare generator (p.451).",
+   "parameters": [
+    {
+     "name": "sequence_length",
+     "role": "Maximum number of decoding steps (20); also the English padding length."
+    },
+    {
+     "name": "verbose=0",
+     "role": "Suppresses Keras's per-call progress output inside the loop."
+    },
+    {
+     "name": "range(5)",
+     "role": "Number of random test sentences to translate."
+    }
+   ],
+   "pitfalls": [
+    "Cost grows quadratically with length: step i reprocesses the full source and i+1 target tokens, so N steps cost O(N²) token-steps instead of O(N). The authors call this out on p.461.",
+    "If the model predicts index 0 (the padding token \"\"), an empty string plus a space is appended and decoding continues. It does not stop.",
+    "`[UNK]` is lowercased to `[unk]` by `custom_standardization` when re-tokenized. It still maps to the OOV id, so the loop works, but the prefix fed back is not literally what was printed.",
+    "`random.choice` makes the selection of test sentences differ between runs even with a fixed model.",
+    "`model.predict` in a Python loop carries per-call overhead. For speed, calling the model directly (`seq2seq_rnn(inputs, training=False)`) is usually faster for single small batches."
+   ],
+   "illustrative_code": "# AI-written sketch (not from the book): the same greedy loop, but it stops on\n# the padding token too and returns the sentence without the special markers.\ndef generate_translation_clean(input_sentence, max_len=sequence_length):\n    src = english_tokenizer([input_sentence])\n    decoded = \"[start]\"\n    for i in range(max_len):\n        tgt = spanish_tokenizer([decoded])          # shape (1, 21)\n        probs = seq2seq_rnn.predict([src, tgt], verbose=0)  # (1, 21, 15000)\n        idx = int(np.argmax(probs[0, i, :]))         # greedy choice at position i\n        token = spa_index_lookup[idx]\n        if token in (\"[end]\", \"\"):                  # \"\" is the padding token (index 0)\n            break\n        decoded += \" \" + token\n    return decoded.replace(\"[start]\", \"\").strip()"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Sample output of Listing 15.13",
+   "original_code": "-\nYou know that.\n[start] tú lo sabes [end]\n-\n\"Thanks.\" \"You're welcome.\"\n[start] gracias tú [UNK] [end]\n-\nThe prisoner was set free yesterday.\n[start] el plan fue ayer a un atasco [end]\n-\nI will tell you tomorrow.\n[start] te lo voy mañana a decir [end]\n-\nI think they're happy.\n[start] yo creo que son felices [end]",
+   "language": "text",
+   "what_it_does": "Shows five English test sentences and the model's greedy translations from one training run.",
+   "line_explanations": [
+    {
+     "lines": "1-3",
+     "explanation": "\"You know that.\" → \"tú lo sabes\": correct (informal *tú*)."
+    },
+    {
+     "lines": "4-6",
+     "explanation": "\"Thanks.\" \"You're welcome.\" → \"gracias tú [UNK]\": *gracias* is right. The reply (*de nada*) is missed, and the model emits the out-of-vocabulary token."
+    },
+    {
+     "lines": "7-9",
+     "explanation": "\"The prisoner was set free yesterday.\" → \"el plan fue ayer a un atasco\" (\"the plan was yesterday to a traffic jam\"): only *fue* and *ayer* relate to the source. The rest is hallucinated. A correct translation would be *el prisionero fue liberado ayer*."
+    },
+    {
+     "lines": "10-12",
+     "explanation": "\"I will tell you tomorrow.\" → \"te lo voy mañana a decir\": right words, wrong order. It should be *te lo voy a decir mañana* (or *te lo diré mañana*)."
+    },
+    {
+     "lines": "13-15",
+     "explanation": "\"I think they're happy.\" → \"yo creo que son felices\": correct."
+    }
+   ],
+   "inputs_outputs": "Printed console output: a separator `-`, the English sentence, then the generated Spanish with markers.",
+   "algorithm": "N/A (output listing).",
+   "theory_link": "Short, frequent sentence patterns are learned well. Rarer content words and longer-range reordering expose the limits of compressing a sentence into one GRU state (p.461).",
+   "parameters": [],
+   "pitfalls": [
+    "Do not expect to reproduce these exact sentences, since training is stochastic (p.460, e05)."
+   ],
+   "illustrative_code": null
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why read position i and not the last position of the output?",
+   "kind": "step_by_step",
+   "body": "The Spanish tokenizer always pads to 21 tokens. When the prefix is `[start] tú lo` (3 tokens), positions 3-20 are padding zeros. The decoder GRU still produces outputs there, but they are meaningless for our purpose. The output at position 2, the last real token, is the one trained to predict the next word, because targets were the inputs shifted by one (p.456). Since the prefix after `i` iterations has exactly `i+1` tokens, its last index is `i`. That is why the code reads `next_token_predictions[0, i, :]` instead of `[0, -1, :]`.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Greedy vs. beam search vs. sampling",
+   "kind": "alternative",
+   "body": "- **Greedy** (this listing): deterministic, cheap, and can lock in early mistakes.\n- **Beam search** with width $k$: keep the $k$ best prefixes by cumulative log-probability $\\sum_t \\log p(y_t \\mid y_{<t}, x)$, expand each, and keep the top $k$ again. This was standard for neural machine translation, typically with $k \\approx 4$-$10$.\n- **Sampling with temperature** (used for Shakespeare and in chapter 16): draw $y_{t+1} \\sim \\operatorname{softmax}(z/T)$. It gives more diverse output, but for translation diversity is usually undesirable.\n\nBeyond the book: for the fourth sample a beam search would likely recover *te lo voy a decir mañana*, because that word order has a higher total probability even if *mañana* was locally preferred after *voy*.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Counting the wasted work",
+   "kind": "numerical",
+   "body": "For a 6-word translation (+[start] and [end]), the loop runs 7 times. Each call encodes the 20 English positions and decodes all 21 Spanish positions, which is 41 RNN steps. The total is 7 × 41 = 287 RNN steps. With caching (encode once, then advance the decoder GRU one step at a time from the cached state) you need 20 + 7 = 27 steps, more than 10× less. This is the inefficiency the authors point out at the top of p.461.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "The decoding loop of Listing 15.13",
+   "why": "Shows the control flow of `generate_translation`: re-tokenize the prefix, predict, take the argmax at position i, append, and stop on [end].",
+   "mermaid": "flowchart TD\n  A[\"English sentence\"] --> B[\"english_tokenizer -> (1, 20) ids\"]\n  S[\"decoded = '[start]'\"] --> C[\"spanish_tokenizer(decoded) -> (1, 21) ids\"]\n  B --> D[\"seq2seq_rnn.predict -> (1, 21, 15000) probs\"]\n  C --> D\n  D --> E[\"argmax of probs[0, i, :]\"]\n  E --> F[\"spa_index_lookup -> word\"]\n  F --> G[\"decoded += ' ' + word\"]\n  G --> H{\"word == '[end]' or i == 19?\"}\n  H -- no, i += 1 --> C\n  H -- yes --> R[\"return decoded\"]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "`sampled_token_index` means the next token is randomly sampled.",
+   "correction": "It is chosen with `np.argmax`, i.e. greedy decoding. The same input always gives the same translation from a given trained model."
+  },
+  {
+   "claim": "The model processes only the newest token at each step.",
+   "correction": "Listing 15.13 re-runs the full encoder and the full decoder on the entire prefix each iteration. Only caching the GRU state (p.461) would avoid that."
+  },
+  {
+   "claim": "Different outputs from the book mean your code is wrong.",
+   "correction": "Weights depend on random initialization and data shuffling (e05), so translations legitimately vary from run to run."
+  },
+  {
+   "claim": "The 65% validation accuracy means about 65% of words in these generated translations are correct.",
+   "correction": "That accuracy was measured with gold prefixes (teacher forcing). In free-running generation, errors compound (p.459)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 459,
+    "note": "Training of `seq2seq_rnn` (65% next-token accuracy) and the description of this inference procedure."
+   },
+   {
+    "page": 457,
+    "note": "Figure 15.2: the encoder's final state initializes the decoder RNN."
+   },
+   {
+    "page": 455,
+    "note": "Listing 15.9: the tokenizers, `sequence_length = 20`, and punctuation stripping, which explains the lowercase, unpunctuated output."
+   },
+   {
+    "page": 451,
+    "note": "Listing 15.8: the same token-at-a-time generation loop for the Shakespeare character model."
+   }
+  ],
+  "later": [
+   {
+    "page": 461,
+    "note": "Why this loop is inefficient and the fundamental limits of RNN seq2seq, which lead to the Transformer."
+   },
+   {
+    "page": 477,
+    "note": "Listing 15.19 reuses this generation code with the Transformer translator."
+   },
+   {
+    "page": 502,
+    "note": "Chapter 16 applies the same next-token generation to a mini-GPT."
+   },
+   {
+    "page": 504,
+    "note": "Cached generation: the efficient version of this loop for Transformers."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 456,
+    "note": "Offset-by-one targets: why the output at position i predicts token i+1."
+   },
+   {
+    "page": 458,
+    "note": "The seq2seq encoder (Bidirectional GRU) and decoder (GRU + Dense softmax)."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 451,
+    "note": "Character-level generation loop (Listing 15.8)."
+   },
+   {
+    "page": 477,
+    "note": "Listing 15.19: Transformer translation generation."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 457,
+    "note": "Figure 15.2: sequence-to-sequence RNN."
+   }
+  ]
+ },
+ "takeaways": [
+  "Inference builds the translation one token at a time, starting from \"[start]\" and stopping at \"[end]\" or after 20 steps.",
+  "The next-token distribution is read at index `i`, the last real position of the prefix, because training targets were shifted by one.",
+  "`np.argmax` makes this greedy decoding. It is deterministic despite the name `sampled_token`.",
+  "The loop is simple but wasteful: it re-encodes the source and the whole prefix every step.",
+  "Short common sentences come out right, but the samples show word-order errors, [UNK] tokens and hallucinated content: decent for a toy model, far from production quality."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In Listing 15.13, why is the prediction taken from `next_token_predictions[0, i, :]`?",
+   "options": [
+    "Position i is the last real token of the current prefix, and its output was trained to predict the following token",
+    "Position i always contains the [end] token",
+    "The model only outputs i positions at step i",
+    "Index i selects the i-th example in the batch"
+   ],
+   "answer": "Position i is the last real token of the current prefix, and its output was trained to predict the following token",
+   "explanation": "After i iterations the prefix has i+1 tokens (indices 0…i). Targets were offset by one in training, so the output at index i predicts token i+1. [end] is not at position i. The model always outputs 21 positions because of padding. The batch index is the first axis (0), not i.",
+   "page_refs": [
+    460,
+    456
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "conceptual",
+   "question": "The variable is called `sampled_token_index`. Is the token actually sampled? What would change if it were?",
+   "options": [],
+   "answer": "No. `np.argmax` picks the most likely token deterministically (greedy decoding). Sampling would draw from the softmax distribution (e.g. `np.random.choice(15000, p=probs)`), so repeated calls could give different translations, and sometimes worse ones.",
+   "explanation": "Greedy decoding has no randomness. Sampling, as used for text generation elsewhere in the book, adds diversity, which is rarely wanted in translation.",
+   "page_refs": [
+    460
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "Give the two sources of run-to-run variation that the authors name for the translations.",
+   "options": [],
+   "answer": "The random initialization of the weights and the random shuffling of the input data during training.",
+   "explanation": "Stated directly in the paragraph after the listing (e05).",
+   "page_refs": [
+    460
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "math",
+   "question": "Suppose a translation ends after 8 decoding steps. With Listing 15.13, how many decoder positions are processed in total, given that the Spanish input is always padded to 21 tokens? How many would a cached RNN decoder process?",
+   "options": [],
+   "answer": "8 × 21 = 168 decoder positions (plus 8 × 20 = 160 encoder positions). A cached decoder needs 8 positions (plus one 20-step encoding).",
+   "explanation": "Each `predict` call reprocesses the full padded target and source. Caching the GRU state lets each step process only the new token (p.461).",
+   "page_refs": [
+    460,
+    461
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Which error type does the output \"te lo voy mañana a decir\" for \"I will tell you tomorrow.\" illustrate?",
+   "options": [
+    "Word-order error",
+    "Out-of-vocabulary token",
+    "Hallucinated content",
+    "Premature [end] token"
+   ],
+   "answer": "Word-order error",
+   "explanation": "All words of the correct translation *te lo voy a decir mañana* are present, but *mañana* sits inside the periphrasis *voy a decir*. There is no [UNK] here, nothing is invented, and the sentence is complete.",
+   "page_refs": [
+    460
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Why does the model output contain no capital letters or punctuation even though the English input does?",
+   "options": [],
+   "answer": "The Spanish tokenizer was built with `custom_standardization`, which lowercases text and strips punctuation (including ¿) except the square brackets. The model therefore only knows lowercase, unpunctuated tokens.",
+   "explanation": "See Listing 15.9 on p.455. The authors note that a non-toy model would keep punctuation as tokens.",
+   "page_refs": [
+    455,
+    460
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Without looking, can you write the generation loop yourself, including where to read the prediction and when to stop?",
+   "options": [],
+   "answer": "Self-check: tokenize the source once; prefix='[start]'; loop up to 20 times: tokenize prefix, predict, argmax at index i, look up the word, append, break on '[end]'.",
+   "explanation": "If you could not place index `i` correctly, revisit the offset-by-one targets (p.456).",
+   "page_refs": [
+    460
+   ]
+  }
+ ]
+}

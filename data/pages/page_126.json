@@ -1,0 +1,435 @@
+{
+  "page_id": "page_126",
+  "pdf_page": 126,
+  "printed_page": "102",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:14:31Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean extraction; all four code snippets and both margin callouts match the page image. The output of the final print() call appears on the next page (p.127)."
+  },
+  "overview": {
+    "title": "evaluate(), inference, and predict()",
+    "chapter": "3 Introduction to TensorFlow, PyTorch, JAX, and Keras",
+    "section": "3.6 Introduction to Keras",
+    "subsection": "3.6.8 Inference: Using a model after training",
+    "main_topic": "Finishing the validation discussion with model.evaluate(), then introducing inference: calling the model directly versus using model.predict().",
+    "central_idea": "Validation data must stay strictly unseen during training; after training, evaluate() computes batched loss and metrics on it, and predict() is the batched, memory-safe way to run inference, whereas calling the model directly processes everything at once.",
+    "importance": "These three entry points (fit, evaluate, predict) form the complete everyday Keras workflow. Knowing what each returns, and why batching matters for memory, prevents both subtle evaluation errors (leakage) and practical failures (out-of-memory errors on large inference jobs).",
+    "learning_objectives": [
+      "Explain why any overlap between training and validation data invalidates validation loss and metrics.",
+      "Use model.evaluate() and interpret its return value (a list of scalars, or a single scalar when no metrics are configured).",
+      "Define inference and distinguish model(x) (__call__) from model.predict(x).",
+      "State what each inference path accepts and returns (backend tensor vs NumPy array; Dataset support).",
+      "Explain why batched prediction avoids GPU memory exhaustion."
+    ],
+    "prerequisites": [
+      "The compile() step: optimizer, loss, metrics (p.121-123)",
+      "fit() and the History object (p.124)",
+      "validation_data and the train/validation split of Listing 3.35 (p.125)",
+      "Mini-batches and batch size (chapter 2)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "This page closes subsection 3.6.7 on validation and opens 3.6.8, the last subsection of the Keras introduction.\n\n**Keep validation data separate.** The sentence carried over from p.125 insists that training and validation data be *strictly* separate. The whole point of validation is to measure whether what the model learns is useful on **new** data; if the model has seen any validation sample during training, the validation loss and metrics are flawed (optimistically biased).\n\n**`evaluate()`.** To compute validation loss and metrics after training, call\n`model.evaluate(val_inputs, val_targets, batch_size=128)`. It iterates over the data in batches of `batch_size` and returns a list of scalars: the first entry is the loss, the following entries are the metrics configured in `compile()`. If the model has no metrics, a single scalar (the loss) is returned rather than a list.\n\n**Inference.** Using a trained model to make predictions on new data is called *inference*. The naive way is to call the model like a function, `model(new_inputs)`, which (per the callout) takes a NumPy array or a backend tensor and returns a tensor of the current backend. The drawback: it processes all of `new_inputs` at once, which may need more memory than your GPU has.\n\n**`predict()`.** The better way is `model.predict(new_inputs, batch_size=128)`: it iterates in small batches, returns a **NumPy array**, and, unlike `__call__()`, also accepts TensorFlow `Dataset` objects. As an example, the authors run `predict()` on the validation inputs of the linear model trained earlier (Listing 3.35, p.125) and print the first 10 predictions, which are scalar scores, one per input sample. The printed output appears on the next page (p.127).",
+  "paragraphs": [
+    {
+      "ref": "p126_e03",
+      "excerpt": "data strictly separate: the purpose of validation is to monitor whether",
+      "what_it_says": "This completes the sentence begun on p.125 (\"it's essential to keep the training data and validation data strictly separate\"). Validation exists to monitor whether what the model learns is useful on new data; if any validation data was seen during training, the validation loss and metrics are flawed.",
+      "what_it_means": "Validation is a proxy for future, unseen data. A sample that the model trained on is no longer 'unseen', so the model's error on it tends to be lower than its error on genuinely new data. Mixing even a few such samples into the validation set shifts the measured numbers in the optimistic direction, and you lose the ability to detect overfitting.",
+      "why_it_matters": "Every decision you take later (when to stop training, which architecture to keep, which hyperparameters work) is driven by validation numbers. If they are contaminated, those decisions are made on false information. The book returns to this in depth in chapter 5 (information leaks, p.173).",
+      "technical_idea": "Validation loss is an estimate of expected loss on the data distribution. The estimate is only (approximately) unbiased if the validation samples are independent of the fitted parameters; training on them breaks that independence.",
+      "terminology": [
+        {"term": "validation data", "meaning": "A held-out subset of the available data that the model never trains on, used to compute loss and metrics as a stand-in for new data."},
+        {"term": "validation loss", "meaning": "The value of the loss function computed on the validation data (defined on p.125)."}
+      ],
+      "connections": [
+        "p.125: the sentence starts there, right after Listing 3.35 splits off 30% of shuffled data as validation data.",
+        "p.173: chapter 5 explains how even indirect information leaks (tuning on validation scores) bias evaluation, motivating a separate test set."
+      ]
+    },
+    {
+      "ref": "p126_e04",
+      "excerpt": "If you want to compute the validation loss and metrics after",
+      "what_it_says": "To get validation loss and metrics after training is complete, call the model's evaluate method.",
+      "what_it_means": "fit(..., validation_data=...) reports validation numbers at the end of every epoch while training; evaluate() is the stand-alone call you use once training is finished (or on any other labeled dataset, e.g. a test set).",
+      "why_it_matters": "It decouples evaluation from training: you can evaluate a reloaded model, evaluate on several datasets, or produce the final number for a report without retraining.",
+      "terminology": [
+        {"term": "evaluate()", "meaning": "Keras Model method that runs the forward pass on labeled data in batches and returns loss and metric values, without updating weights."}
+      ],
+      "connections": [
+        "p.125: validation_data in fit() computes the same quantities during training."
+      ]
+    },
+    {
+      "ref": "p126_e06",
+      "excerpt": "evaluate() will iterate in batches (of size batch_size) over the data",
+      "what_it_says": "evaluate() loops over the data in batches of batch_size and returns a list of scalars: first the validation loss, then the validation metrics. If the model has no metrics, only the loss is returned, as a single value rather than a list.",
+      "what_it_means": "The return type depends on how the model was compiled. For the model of Listing 3.35 (loss = MeanSquaredError, metrics = [BinaryAccuracy]) you get a two-element list `[mse, binary_accuracy]`. A model compiled with only a loss returns a plain float. Batching here is purely about memory and speed; no gradients are computed and no weights change.",
+      "why_it_matters": "Code that unpacks the result (e.g. `loss, acc = model.evaluate(...)`) must match the compile configuration; otherwise you get an unpacking error or silently misread values. The order follows the order of the metrics list given to compile().",
+      "technical_idea": "Per-batch loss values are aggregated into a dataset-level value (a sample-weighted mean for losses like MSE); metrics such as BinaryAccuracy are stateful and accumulate counts over all batches, so the result equals what a single pass over the full dataset would give, independent of batch size (up to floating-point effects).",
+      "terminology": [
+        {"term": "batch_size", "meaning": "Number of samples processed together in one forward pass."},
+        {"term": "scalar", "meaning": "A single number (rank-0 value)."}
+      ],
+      "connections": [
+        "p.122: metrics are specified in compile() and, unlike the loss, need not be differentiable.",
+        "p.124: fit() returns a History whose keys are the same loss/metric names."
+      ]
+    },
+    {
+      "ref": "p126_e09",
+      "excerpt": "Once you’ve trained your model, you’re going to want to use it",
+      "what_it_says": "After training, you use the model to predict on new data; this is called inference. A naive approach is to `__call__()` the model directly: `predictions = model(new_inputs)`. The margin note says this takes a NumPy array or a backend tensor and returns a tensor for your current backend.",
+      "what_it_means": "A Keras model is a callable object, just like a layer (p.116 onward). Calling it runs the forward pass and gives you outputs in the native tensor type of whichever backend is active: a tf.Tensor under TensorFlow, a torch.Tensor under PyTorch, a jax.Array under JAX.",
+      "why_it_matters": "Inference is what the model is ultimately for: deployment, scoring, decision-making. Knowing what type comes back matters if you continue processing the output with backend operations (you get a backend tensor) or with NumPy (you need predict(), or a conversion).",
+      "technical_idea": "`model(x)` is equivalent to invoking `Model.__call__`, which wraps `call()`; it is the same mechanism used inside training loops, so it is differentiable and can be used inside custom training steps (chapter 7).",
+      "terminology": [
+        {"term": "inference", "meaning": "Using an already trained model to compute predictions on new inputs; no weights are updated."},
+        {"term": "__call__()", "meaning": "Python's special method that makes an object callable as `obj(...)`; for Keras models it runs the forward pass."}
+      ],
+      "connections": [
+        "p.116: layers are callable objects; models built from layers are callable in the same way.",
+        "p.248: in custom training loops (chapter 7), the model is called directly on each batch."
+      ]
+    },
+    {
+      "ref": "p126_e11",
+      "excerpt": "However, this will process all inputs in new_inputs at once, which",
+      "what_it_says": "Calling the model processes every input in new_inputs in one go, which may be infeasible for large data; in particular, it may need more memory than your GPU has.",
+      "what_it_means": "A single forward pass allocates activations for every sample simultaneously. Memory grows linearly with the number of samples, so a million-image array that would fit fine in host RAM can exhaust a GPU's few gigabytes once intermediate activations are materialised.",
+      "why_it_matters": "This is the practical reason predict() exists. Out-of-memory errors at inference time are a common failure when people move from toy data to real datasets.",
+      "connections": [
+        "p.124: fit() also processes data in mini-batches for the same reason (and for stochastic gradient descent)."
+      ]
+    },
+    {
+      "ref": "p126_e12",
+      "excerpt": "A better way to do inference is to use the predict() method.",
+      "what_it_says": "predict() iterates over the data in small batches and returns a NumPy array of predictions; unlike __call__(), it can also process TensorFlow Dataset objects. The callout: takes a NumPy array or a Dataset and returns a NumPy array.",
+      "what_it_means": "predict() is the inference counterpart of fit() and evaluate(): a managed loop over batches that concatenates per-batch outputs into one NumPy array. Because the result is NumPy regardless of backend, downstream code is backend-agnostic.",
+      "why_it_matters": "It makes inference on large or streaming datasets safe and simple, and gives a uniform output type. It is the method you will use in chapter 4 to generate predictions on new reviews, newswires and houses.",
+      "technical_idea": "Peak memory is bounded by roughly batch_size samples' worth of activations rather than the full dataset, at the cost of a Python-level loop and a final concatenation on the host.",
+      "terminology": [
+        {"term": "predict()", "meaning": "Keras Model method for batched inference returning a NumPy array."},
+        {"term": "Dataset", "meaning": "tf.data.Dataset, TensorFlow's streaming input-pipeline object; usable with Keras fit/evaluate/predict on any backend."}
+      ],
+      "connections": [
+        "p.139: chapter 4 (\"Using a trained model to generate predictions on new data\", printed p.115) uses predict() on the trained IMDb model."
+      ]
+    },
+    {
+      "ref": "p126_e14",
+      "excerpt": "For instance, if we use predict() on some of our validation data",
+      "what_it_says": "Running predict() on validation data with the linear model trained earlier yields scalar scores, one per input sample, corresponding to the model's prediction.",
+      "what_it_means": "The model is `keras.Sequential([keras.layers.Dense(1)])` (Listing 3.35): one output unit with no activation, so each prediction is an unbounded real number. Since it was trained with MSE against targets 0 and 1, scores near 0 indicate one class and near 1 the other; BinaryAccuracy thresholds them at 0.5. The predictions array has shape (num_samples, 1); `predictions[:10]` prints the first ten rows (output on p.127).",
+      "why_it_matters": "It connects the abstract API to a concrete model you already trained, and shows that predictions are raw model outputs: interpreting them as class labels is a separate step (thresholding).",
+      "connections": [
+        "p.125: Listing 3.35 defines this linear model and the val_inputs used here.",
+        "p.93: the underlying two-class synthetic point dataset was introduced with the pure-TensorFlow linear classifier."
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "validation_set",
+      "name": "Validation set (strict separation)",
+      "definition": "Data held out from training and used only to measure loss and metrics, as an estimate of performance on new data.",
+      "intuition": "It is the practice exam you never studied from; scores on it say something about the real exam only if you have not seen its questions.",
+      "technical": "Validation loss approximates expected loss on the data distribution only when the validation samples did not influence the trained weights. Any training exposure biases the estimate downward.",
+      "significance": "Drives early stopping, model selection and hyperparameter tuning; contaminated validation data corrupts all of these.",
+      "example": "Listing 3.35 (p.125) shuffles the data, takes 30% as val_inputs/val_targets, and trains only on the remaining 70%.",
+      "misconception": "\"A small overlap does not matter.\" Any overlap makes the numbers optimistic, and the effect is largest for exactly the models you worry about most: those that memorise.",
+      "related": ["overfitting", "data_split", "test_set"],
+      "source": "book"
+    },
+    {
+      "id": "model_evaluate",
+      "name": "model.evaluate()",
+      "definition": "Keras method that computes the loss and compiled metrics on given inputs and targets, iterating in batches, without updating weights.",
+      "intuition": "A read-only pass that grades the model.",
+      "technical": "Returns a list `[loss, metric_1, ..., metric_k]` in the order the metrics were given to compile(); if there are no metrics, returns the loss alone as a scalar.",
+      "significance": "Standard way to report final validation or test performance after training.",
+      "example": "For the Listing 3.35 model, `model.evaluate(val_inputs, val_targets, batch_size=128)` returns `[mse_value, binary_accuracy_value]`.",
+      "misconception": "\"evaluate() always returns a list.\" With no metrics it returns a single scalar.",
+      "related": ["validation_set", "keras_model", "loss_function"],
+      "source": "book"
+    },
+    {
+      "id": "inference",
+      "name": "Inference",
+      "definition": "Using a trained model to make predictions on new data.",
+      "intuition": "Training is learning; inference is applying what was learned.",
+      "technical": "Only the forward pass is executed; no loss, gradients or weight updates are involved. Layers such as dropout and batch normalization switch to inference behaviour.",
+      "significance": "This is the phase that delivers value in deployment, and its cost (latency, memory) often dominates in production.",
+      "example": "Scoring each of the validation points with the trained linear classifier.",
+      "misconception": "\"Inference needs the targets.\" It does not; only inputs are passed (contrast with evaluate()).",
+      "related": ["model_predict", "keras_model"],
+      "source": "book"
+    },
+    {
+      "id": "model_predict",
+      "name": "model.predict()",
+      "definition": "Keras method that runs batched inference and returns a NumPy array.",
+      "intuition": "Feeding a long queue of inputs through the model a handful at a time, then stacking the answers.",
+      "technical": "Accepts NumPy arrays or tf.data Datasets; processes `batch_size` samples per forward pass; concatenates outputs into one NumPy array whose first axis is the sample axis.",
+      "significance": "Memory-safe, backend-independent inference API.",
+      "example": "`predictions = model.predict(val_inputs, batch_size=128)` followed by `print(predictions[:10])`.",
+      "misconception": "\"predict() and model(x) are identical.\" They compute the same values, but differ in batching, accepted input types and return type.",
+      "related": ["inference", "model_call", "batch_size"],
+      "source": "book"
+    },
+    {
+      "id": "model_call",
+      "name": "Calling a model directly (__call__)",
+      "definition": "Running `model(x)` to get outputs as a backend tensor in one forward pass.",
+      "intuition": "Using the model like an ordinary function.",
+      "technical": "Takes a NumPy array or backend tensor, returns a tensor of the current backend (TensorFlow, PyTorch or JAX). Processes all inputs at once.",
+      "significance": "The right tool for small inputs and for use inside custom training/inference code where you want backend tensors (and differentiability).",
+      "example": "`predictions = model(new_inputs)`",
+      "misconception": "\"It is always worse than predict().\" For a small batch it is faster (no loop overhead) and keeps you in backend tensor land.",
+      "related": ["model_predict", "keras_layer"],
+      "source": "book"
+    }
+  ],
+  "math": [],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Evaluating on validation data",
+      "original_code": "loss_and_metrics = model.evaluate(val_inputs, val_targets, batch_size=128)",
+      "language": "python",
+      "what_it_does": "Computes the loss and compiled metrics of the trained model on the validation set, 128 samples at a time.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Runs a batched forward pass over val_inputs, compares with val_targets using the compiled loss (MeanSquaredError) and metrics (BinaryAccuracy), and stores the result list in loss_and_metrics."}
+      ],
+      "inputs_outputs": "Inputs: val_inputs (NumPy array of shape (num_val, 2) for the synthetic 2-D points) and val_targets (shape (num_val, 1)). Output: a list [loss, binary_accuracy] for the Listing 3.35 model; a single scalar if no metrics were compiled.",
+      "algorithm": "For each batch: forward pass -> per-batch loss -> update metric states. At the end: aggregate loss over all samples and read the metric results.",
+      "theory_link": "Estimates generalisation performance on held-out data; no gradients are computed.",
+      "parameters": [
+        {"name": "val_inputs", "role": "Held-out input samples."},
+        {"name": "val_targets", "role": "Ground-truth targets for those samples."},
+        {"name": "batch_size", "role": "Samples per forward pass; affects memory and speed, not the result."}
+      ],
+      "pitfalls": [
+        "Unpacking assumptions: `loss, acc = model.evaluate(...)` fails if no metrics were compiled.",
+        "Evaluating on data that was used for training gives inflated numbers."
+      ],
+      "illustrative_code": "# AI-written illustration (not from the book)\nloss, acc = model.evaluate(val_inputs, val_targets, batch_size=128)\nprint(f\"val MSE = {loss:.4f}, val accuracy = {acc:.3f}\")\n\n# With return_dict=True Keras returns a dict keyed by name instead\nresults = model.evaluate(val_inputs, val_targets, return_dict=True)\nprint(results)  # e.g. {'binary_accuracy': ..., 'loss': ...}"
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Naive inference by calling the model",
+      "original_code": "predictions = model(new_inputs)",
+      "language": "python",
+      "what_it_does": "Runs one forward pass on all of new_inputs. Callout: takes a NumPy array or a tensor for your current backend and returns a tensor for your current backend.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Invokes Model.__call__ on the whole input array; the output is a tf.Tensor, torch.Tensor or jax.Array depending on the backend."}
+      ],
+      "inputs_outputs": "Input: NumPy array or backend tensor of shape (N, ...). Output: backend tensor of shape (N, units).",
+      "algorithm": "Single forward pass, no batching.",
+      "theory_link": "Same forward computation used during training; memory scales with N.",
+      "parameters": [
+        {"name": "new_inputs", "role": "All samples to predict on, processed together."}
+      ],
+      "pitfalls": [
+        "Large N can exceed GPU memory.",
+        "The output is a backend tensor, not NumPy; under PyTorch on GPU you need to move it to CPU before NumPy conversion."
+      ]
+    },
+    {
+      "id": "c3",
+      "listing": null,
+      "title": "Batched inference with predict()",
+      "original_code": "predictions = model.predict(new_inputs, batch_size=128)",
+      "language": "python",
+      "what_it_does": "Runs inference in batches of 128 and returns a NumPy array. Callout: takes a NumPy array or a Dataset and returns a NumPy array.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Splits new_inputs into chunks of 128, runs the forward pass on each, concatenates the outputs into one NumPy array."}
+      ],
+      "inputs_outputs": "Input: NumPy array or tf.data.Dataset. Output: NumPy array of shape (N, units).",
+      "algorithm": "Loop over batches -> forward pass -> collect -> concatenate.",
+      "theory_link": "Bounds peak memory by batch size; numerically identical to the unbatched forward pass for models whose inference behaviour is per-sample.",
+      "parameters": [
+        {"name": "new_inputs", "role": "Samples to predict on."},
+        {"name": "batch_size", "role": "Samples per forward pass (Keras default is 32 if omitted)."}
+      ],
+      "pitfalls": [
+        "If a Dataset is passed, it should already be batched; batch_size is then not used.",
+        "For a handful of samples in a tight loop, predict() has more overhead than model(x)."
+      ]
+    },
+    {
+      "id": "c4",
+      "listing": null,
+      "title": "Predicting on validation data with the linear model",
+      "original_code": ">>> predictions = model.predict(val_inputs, batch_size=128)\n>>> print(predictions[:10])",
+      "language": "python",
+      "what_it_does": "Scores every validation sample with the linear Dense(1) model of Listing 3.35 and prints the first ten predictions. The printed output is shown at the top of the next page (p.127).",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Batched inference over val_inputs; predictions is a NumPy array of shape (num_val, 1)."},
+        {"lines": "2", "explanation": "Slices the first ten rows; each row holds one scalar score."}
+      ],
+      "inputs_outputs": "Input: the validation points. Output: ten scalar scores printed as a (10, 1) array.",
+      "algorithm": "predict() then NumPy slicing.",
+      "theory_link": "The scores are raw linear outputs w·x + b; because the model was trained with MSE toward 0/1 targets, values near 0 or 1 indicate the class, and a 0.5 threshold converts them to labels.",
+      "parameters": [
+        {"name": "batch_size", "role": "128 samples per forward pass."}
+      ],
+      "pitfalls": [
+        "Scores are not probabilities: there is no sigmoid, so they can fall below 0 or above 1."
+      ],
+      "illustrative_code": "# AI-written illustration (not from the book)\nimport numpy as np\npreds = model.predict(val_inputs, batch_size=128)\nlabels = (preds[:, 0] > 0.5).astype(\"int32\")       # threshold scores into classes\nacc = np.mean(labels == val_targets[:, 0])\nprint(preds.shape, acc)  # should match evaluate()'s binary_accuracy"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "fit vs evaluate vs predict vs model(x)",
+      "kind": "breakdown",
+      "body": "| call | needs targets? | updates weights? | batched? | returns |\n|---|---|---|---|---|\n| `fit(x, y)` | yes | yes | yes | `History` (p.124) |\n| `evaluate(x, y)` | yes | no | yes | list of scalars (loss, metrics) or one scalar |\n| `predict(x)` | no | no | yes | NumPy array |\n| `model(x)` | no | no | no | backend tensor |\n\nThe first three are the book's (p.124-126); the table is a summary added here.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Why batching bounds memory",
+      "kind": "numerical",
+      "body": "Beyond the book: suppose a convnet's activations need about 50 MB per image during a forward pass. Calling `model(x)` on 10,000 images would need roughly 500 GB of activation memory at once, far beyond any GPU. `predict(x, batch_size=128)` needs about 128 × 50 MB = 6.4 GB at peak, then frees it before the next batch. The total compute is the same; only the peak memory changes. (The 50 MB figure is illustrative.)",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Leakage as an exam analogy",
+      "kind": "analogy",
+      "body": "Grading a student on questions they already saw while studying tells you how well they memorised, not how well they understood. The validation set is the unseen exam; one leaked question already makes the grade less trustworthy.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "The three Keras workflow calls",
+      "why": "The page completes the trio fit / evaluate / predict and contrasts predict() with calling the model directly.",
+      "mermaid": "flowchart LR\n  D[\"inputs + targets\"] --> F[\"fit()<br/>train, update weights\"]\n  F --> M((trained model))\n  V[\"val_inputs + val_targets\"] --> E[\"evaluate()<br/>batched\"]\n  M --> E\n  E --> L[\"[loss, metric, ...]\"]\n  N[\"new_inputs\"] --> P[\"predict()<br/>batched\"]\n  M --> P\n  P --> NP[\"NumPy array\"]\n  N --> C[\"model(x)<br/>all at once\"]\n  M --> C\n  C --> T[\"backend tensor\"]"
+    },
+    {
+      "id": "v2",
+      "type": "widget",
+      "title": "Keeping validation data separate",
+      "why": "Listing 3.35 (p.125) holds out 30% of the data for validation; this page stresses that it must never be trained on.",
+      "widget": "data_split",
+      "params": {"train": 0.7, "val": 0.3, "test": 0.0, "n": 2000}
+    }
+  ],
+  "misconceptions": [
+    {"claim": "evaluate() returns a list in every case.", "correction": "Only when metrics are compiled; with no metrics it returns just the loss scalar (as the page states)."},
+    {"claim": "predict() returns a backend tensor like model(x).", "correction": "predict() returns a NumPy array; model(x) returns a tensor of the current backend."},
+    {"claim": "The linear model's predictions are probabilities.", "correction": "The Dense(1) layer has no activation; outputs are raw scores that can be outside [0, 1]."},
+    {"claim": "Batch size in evaluate()/predict() changes the results.", "correction": "It changes memory use and speed; the outputs are the same (up to floating-point rounding) for standard models in inference mode."}
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 125, "note": "Listing 3.35 creates val_inputs/val_targets and trains the linear model used in the predict() example."},
+      {"page": 124, "note": "fit() and the History object: the training counterpart of evaluate() and predict()."},
+      {"page": 122, "note": "Metrics specified in compile() determine what evaluate() returns."},
+      {"page": 116, "note": "Layers (and therefore models) are callable objects, which is why model(new_inputs) works."}
+    ],
+    "later": [
+      {"page": 127, "note": "Shows the printed predictions and closes chapter 3 with its summary."},
+      {"page": 135, "note": "Chapter 4 sets aside a validation set for the IMDb model."}, {"page": 139, "note": "Chapter 4 uses a trained model to generate predictions on new data."},
+      {"page": 173, "note": "Chapter 5: information leaks and why a separate test set is needed."},
+      {"page": 245, "note": "Chapter 7: writing your own training and evaluation loops instead of fit()/evaluate()."}
+    ],
+    "prerequisites": [
+      {"page": 125, "note": "Validation data concept and the validation_data argument."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 125, "note": "Listing 3.35: model definition and validation split."},
+      {"page": 124, "note": "Listing 3.34: calling fit with NumPy data."}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "Training and validation data must be strictly disjoint; otherwise validation loss and metrics are flawed.",
+    "model.evaluate(x, y, batch_size=...) returns [loss, metrics...] (or only the loss if there are no metrics).",
+    "Inference means using a trained model to predict on new data.",
+    "model(x) processes everything at once and returns a backend tensor; it can run out of GPU memory on large inputs.",
+    "model.predict(x, batch_size=...) runs batched inference, accepts NumPy arrays or Datasets, and returns a NumPy array.",
+    "The linear model's predictions are one scalar score per sample."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "A model is compiled with `loss=\"mse\"` and no metrics. What does `model.evaluate(x, y)` return?",
+      "options": ["An empty list", "A single scalar: the loss", "A list [loss, accuracy]", "A History object"],
+      "answer": "A single scalar: the loss",
+      "explanation": "The page says that if the model has no metrics, only the validation loss is returned rather than a list. An empty list and [loss, accuracy] contradict that; a History object is what fit() returns (p.124).",
+      "page_refs": [126, 124]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "Give two differences between `model(new_inputs)` and `model.predict(new_inputs)` stated on this page.",
+      "options": [],
+      "answer": "model(x) processes all inputs at once and returns a backend tensor; predict() iterates in small batches, returns a NumPy array, and can also take TensorFlow Dataset objects.",
+      "explanation": "These come from the text and the two margin callouts on the page.",
+      "page_refs": [126]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "Why does seeing validation samples during training make the validation loss 'flawed', and in which direction is it typically wrong?",
+      "options": [],
+      "answer": "Validation is meant to estimate performance on new data. Samples the model trained on are no longer new; the model's loss on them is typically lower, so the validation loss becomes optimistically biased and can hide overfitting.",
+      "explanation": "The page states the purpose of validation is to monitor usefulness on new data; the direction of the bias is an inference grounded in chapter 5's discussion of leakage (p.173).",
+      "page_refs": [126, 173]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "Why might `predictions = model(new_inputs)` fail where `model.predict(new_inputs, batch_size=128)` succeeds?",
+      "options": [
+        "model() cannot accept NumPy arrays",
+        "model() processes all inputs at once and may need more memory than the GPU has",
+        "model() updates the weights during the call",
+        "model() requires targets"
+      ],
+      "answer": "model() processes all inputs at once and may need more memory than the GPU has",
+      "explanation": "The page gives exactly this reason. The callout says model() does accept NumPy arrays; neither call updates weights; neither needs targets.",
+      "page_refs": [126]
+    },
+    {
+      "id": "q5",
+      "type": "conceptual",
+      "question": "The linear model from Listing 3.35 outputs 'scalar scores'. How would you turn them into class predictions, and why can a score be larger than 1?",
+      "options": [],
+      "answer": "Threshold at 0.5 (score > 0.5 -> class 1), which is what BinaryAccuracy does by default. Scores can exceed 1 because Dense(1) has no activation: the output is an unbounded linear function w·x + b, trained with MSE toward 0/1 targets.",
+      "explanation": "The page calls the outputs scalar scores; the model definition (p.125) shows Dense(1) with no activation and BinaryAccuracy as the metric.",
+      "page_refs": [126, 125]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "For the model of Listing 3.35, what is the structure of `loss_and_metrics`, and what does each entry mean?",
+      "options": [],
+      "answer": "A two-element list: [mean squared error on the validation data, binary accuracy on the validation data].",
+      "explanation": "evaluate() returns the loss first, then the metrics in compile order; that model has loss MeanSquaredError and metrics [BinaryAccuracy] (p.125).",
+      "page_refs": [126, 125]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Without looking, write the three Keras calls that train, evaluate and run inference with a model, including the batch_size argument, and say what each returns.",
+      "options": [],
+      "answer": "model.fit(x, y, epochs=..., batch_size=128) -> History; model.evaluate(x_val, y_val, batch_size=128) -> [loss, metrics...]; model.predict(x_new, batch_size=128) -> NumPy array.",
+      "explanation": "Checks that you can reproduce the full workflow of p.124-126.",
+      "page_refs": [124, 126]
+    }
+  ]
+}

@@ -1,0 +1,372 @@
+{
+  "page_id": "page_418",
+  "pdf_page": 418,
+  "printed_page": "394",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:54:20Z",
+    "confidence": "high",
+    "review_flags": [
+      "Imprecision: the page says 'The vocabulary contains every character in our source text'. compute_sub_word_vocabulary only sees characters inside tokens matched by r\"[\\w]+|[.,!?;]\", so characters such as '-', quotes or ':' in Moby Dick never enter the vocabulary. They are dropped during splitting rather than mapped to [UNK], so the 'no [UNK]' claim still holds for the tokenized words."
+    ],
+    "extraction_quality": "Clean. Element p418_e07 merges three printed paragraphs ('You might notice...', 'We have now seen three...', 'One final note...'); each gets its own note. The sidebar 'Which tokenization technique should I use?' starts here and continues on p.419."
+  },
+  "overview": {
+    "title": "Subword tokenizer on Moby Dick: results and trade-offs",
+    "chapter": "14 Text classification",
+    "section": "14.2 Preparing text data",
+    "subsection": "14.2.2 Subword tokenization",
+    "main_topic": "Training the BPE SubWordTokenizer on Moby Dick, comparing it with the word and character tokenizers, its training cost, and the move to Keras's built-in tokenization",
+    "central_idea": "With a 2,000-term vocabulary, the BPE tokenizer encodes the test sentence in 16 tokens (13 for words, 63 for characters) and can tokenize every word in Moby Dick without [UNK]. Learning it is slower (about a minute), but that one-time cost is negligible next to model training.",
+    "importance": "This page closes the tokenizer comparison of section 14.2 with concrete evidence for why subword tokenization dominates modern NLP. It also tells readers that from here on they will use Keras's built-in tokenization rather than these hand-made classes.",
+    "learning_objectives": [
+      "Interpret the subword vocabulary printout: [UNK], characters by frequency, then learned merges",
+      "Compare the three tokenizers on vocabulary size, sequence length and coverage",
+      "Explain why the worst case for a BPE tokenizer is one token per character",
+      "Explain why the training cost of BPE rarely matters in practice",
+      "Start answering the question of which tokenization technique to use"
+    ],
+    "prerequisites": [
+      "Listing 14.7 (compute_sub_word_vocabulary, SubWordTokenizer), p.417",
+      "The char and word Moby Dick results (pp.413-414)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The authors train the BPE tokenizer on Moby Dick with `compute_sub_word_vocabulary(moby_dick, 2_000)`, which returns both a `vocabulary` and the ranked `merges`, and wrap them in a `SubWordTokenizer`. The same diagnostics as before give:\n\n- **Vocabulary length: 2000.**\n- **Vocabulary start:** `\"[UNK]\", \"e\", \"t\", \"a\", \"o\", \"n\", \"i\", \"s\", \"h\", \"r\"`: the unknown token followed by single characters in frequency order. There is no space, since spaces never occur inside words.\n- **Vocabulary end:** `\"bright\", \"pilot\", \"sco\", \"ben\", \"dem\", \"gale\", \"ilo\"`: the last merges learned, a mix of whole words and word fragments.\n- **Line length: 16** for \"Call me Ishmael. Some years ago--never mind how long precisely.\"\n\n16 tokens is slightly more than the `WordTokenizer`'s 13, far fewer than the character tokenizer's 63. But unlike the word tokenizer, it **can tokenize every word in Moby Dick without `\"[UNK]\"`**. Every character is in the vocabulary, so the worst case is spelling a word out character by character. The result is a **short *average* token length with a small vocabulary that still handles rare words**, the advantage of subword tokenizers.\n\nThe downside is speed. Learning merge rules takes about **a minute** on the authors' hardware, much slower than counting words. That rarely matters, because a vocabulary is learned once per model and costs little compared with training the model.\n\nWith three tokenization approaches covered, the authors move on to training models. They add that you will **rarely need to build a tokenizer yourself**: Keras and most frameworks include tokenization utilities, and the rest of the chapter uses Keras's built-in functionality.\n\nA sidebar, **\"Which tokenization technique should I use?\"**, begins here. For a *pretrained* model the question is trivial, because you must keep that model's exact tokenization (continued on p.419).",
+  "paragraphs": [
+    {
+      "ref": "p418_e04",
+      "excerpt": "We can take a look at our vocabulary and try a test sentence on our tokenizer",
+      "what_it_says": "The vocabulary is inspected and the test sentence tokenized, as was done for WordTokenizer and CharTokenizer.",
+      "what_it_means": "This is the third run of the same benchmark, so all three tokenizers can be compared directly.",
+      "why_it_matters": "The comparison is valid because text, vocabulary cap (2,000 for words and subwords) and test sentence stay the same.",
+      "connections": [
+        "p.413: char tokenizer diagnostics",
+        "p.414: word tokenizer diagnostics"
+      ]
+    },
+    {
+      "ref": "p418_e06",
+      "excerpt": "The SubWordTokenizer has a slightly longer length for our test sentence than the",
+      "what_it_says": "The SubWordTokenizer gives a slightly longer encoding than the WordTokenizer (16 vs. 13 tokens) but can tokenize every word in Moby Dick without \"[UNK]\". Because the vocabulary contains every character of the source text, the worst case is a word split into individual characters. The result is a short average token length that handles rare words with a small vocabulary.",
+      "what_it_means": "The three extra tokens are words in the sentence that aren't single vocabulary entries and get split into two or more pieces, plausibly rarer words such as 'ishmael' or 'precisely' (the page doesn't show which). Common words stay single tokens. Every token keeps information, unlike [UNK], which erases word identity.",
+      "why_it_matters": "This is the outcome that 14.2.2 was aiming for (p.414): close to word-level length with full coverage at the same 2,000-term budget.",
+      "technical_idea": "Note the word 'average': individual rare words can cost many tokens, but frequent words cost one, so the corpus-wide average stays low. Caveat (not in the book): characters dropped by the split regex never reach the vocabulary.",
+      "terminology": [
+        {"term": "worst-case tokenization", "meaning": "A word with no applicable merges is encoded as one token per character."},
+        {"term": "average token length", "meaning": "Mean number of tokens per word or per input over a corpus."}
+      ],
+      "connections": [
+        "p.414: WordTokenizer needed about 17,000 terms for full coverage",
+        "p.417: vocabulary initialized with all characters"
+      ]
+    },
+    {
+      "ref": "p418_e07",
+      "excerpt": "You might notice that running this code is noticeably slower than the word and",
+      "what_it_says": "Learning the subword vocabulary is noticeably slower (about a minute on the authors' hardware) because learning merge rules is much more complex than counting words. This rarely matters: a vocabulary is learned once per model and costs little compared with model training.",
+      "what_it_means": "Training BPE needs one pass over all distinct words per merge (about 1,900+ merges here), and the toy implementation recomputes every pair count and recompiles a regex each time. Word and char vocabularies need only one counting pass.",
+      "why_it_matters": "It puts the cost in proportion: tokenizer training is a one-time preprocessing step, while model training takes hours to weeks.",
+      "technical_idea": "Beyond the book: efficient BPE implementations update pair counts incrementally, touching only words that contain the merged pair, which makes training much faster.",
+      "terminology": [
+        {"term": "learning merge rules", "meaning": "The BPE training phase that produces the ranked merges dict."}
+      ],
+      "connections": [
+        "p.416: count_pairs recounts all pairs every iteration",
+        "p.495: SentencePiece, written in C++ for speed"
+      ]
+    },
+    {
+      "ref": "p418_e07",
+      "excerpt": "We have now seen three separate approaches for tokenizing input. Now that we can",
+      "what_it_says": "Three tokenization approaches have now been covered. With text translated into numeric input, the chapter can move on to training a model.",
+      "what_it_means": "Tokenization is the bridge from strings to integer sequences, and everything in the chapter's modeling sections (sets vs. sequences, bag-of-words, RNNs, embeddings) takes these integer IDs as input.",
+      "why_it_matters": "This marks the transition from preprocessing to modeling (section 14.3 onward, p.419).",
+      "connections": [
+        "p.419: 14.3 Sets vs. sequences"
+      ]
+    },
+    {
+      "ref": "p418_e07",
+      "excerpt": "One final note on tokenization—while it is quite important to understand how tokenizers",
+      "what_it_says": "It is important to understand how tokenizers work, but you will rarely need to build one yourself. Keras and most deep learning frameworks provide tokenization utilities, and the rest of the chapter uses Keras's built-in functionality.",
+      "what_it_means": "The hand-written classes were for teaching. In practice you use library implementations, which are faster, tested, and match the tokenizers of pretrained models.",
+      "why_it_matters": "It sets expectations for the code that follows: from here on, Keras layers do the standardize/split/index work.",
+      "technical_idea": "Beyond the book: in Keras this is typically the TextVectorization layer, and KerasHub provides the tokenizers of pretrained models.",
+      "connections": [
+        "p.480: RoBERTa's tokenizer from a pretrained model",
+        "p.495: SentencePiece for the mini-GPT"
+      ]
+    },
+    {
+      "ref": "p418_e09",
+      "excerpt": "When approaching a new text-modeling problem, one of the first questions you will",
+      "what_it_says": "Sidebar: how to tokenize is one of the first questions in a new text-modeling problem. For a given pretrained model the question is trivial: you have to preserve the exact tokenization (continued on p.419).",
+      "what_it_means": "A pretrained model's embedding weights are tied to its token IDs. Changing the tokenizer would make those weights meaningless, so you must reuse the original tokenizer.",
+      "why_it_matters": "It separates two situations: using a pretrained model (tokenizer fixed) and training from scratch (tokenizer is your choice, discussed on p.419).",
+      "terminology": [
+        {"term": "pretrained model", "meaning": "A model whose weights were already learned on a large corpus with a specific tokenizer."}
+      ],
+      "connections": [
+        "p.419: continuation: from scratch you can tailor tokenization; subword is dominant; character level for spelling correction; word level for interpretability"
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "subword_tokenization",
+      "name": "Subword tokenization",
+      "definition": "Tokenization with learned units between characters and words.",
+      "intuition": "Whole tokens for common words, pieces for rare ones.",
+      "technical": "Here BPE with a 2,000-term vocabulary: [UNK] + characters + learned merges.",
+      "significance": "16 tokens for the test line (vs. 13 words / 63 chars) with no [UNK] on Moby Dick.",
+      "example": "Vocabulary end entries 'bright', 'pilot', 'gale' are whole words; 'sco', 'dem', 'ilo' are fragments.",
+      "misconception": "Subword tokens aren't always meaningful morphemes; 'ilo' and 'dem' are just frequent strings.",
+      "related": ["byte_pair_encoding", "word_tokenization", "character_tokenization"],
+      "source": "book"
+    },
+    {
+      "id": "byte_pair_encoding",
+      "name": "Byte-pair encoding (BPE)",
+      "definition": "Greedy merge-based algorithm for learning a subword vocabulary.",
+      "intuition": "Glue frequent neighbors together until the vocabulary budget is used.",
+      "technical": "compute_sub_word_vocabulary(moby_dick, 2_000) learns roughly 2,000 − 1 − (number of characters) merges.",
+      "significance": "Used by many modern models; training takes about a minute in this pure-Python version.",
+      "example": "The vocabulary start shows the base characters e, t, a, o, n, ... in frequency order.",
+      "misconception": "BPE training cost isn't a practical bottleneck; it's done once per model.",
+      "related": ["subword_tokenization", "merge_rule"],
+      "source": "book"
+    },
+    {
+      "id": "oov_unk_token",
+      "name": "Out-of-vocabulary token \"[UNK]\"",
+      "definition": "Reserved ID for tokens not in the vocabulary.",
+      "intuition": "A catch-all bucket that loses word identity.",
+      "technical": "Still present at index 0 in the subword vocabulary, but never needed for words in Moby Dick.",
+      "significance": "Avoiding [UNK] is the main coverage advantage of subword over word tokenization.",
+      "example": "The WordTokenizer with 2,000 terms maps about 15,000 distinct rare words to [UNK]; the SubWordTokenizer maps none.",
+      "misconception": "A subword tokenizer can still emit [UNK] for characters it never saw in training (e.g. a new alphabet).",
+      "related": ["word_tokenization", "subword_tokenization"],
+      "source": "book"
+    },
+    {
+      "id": "tokenizer_choice",
+      "name": "Choosing a tokenization technique",
+      "definition": "Deciding between character, word and subword tokenization for a problem.",
+      "intuition": "With a pretrained model, use its tokenizer; from scratch, pick based on the task.",
+      "technical": "Pretrained model: keep the exact tokenization, otherwise the learned token representations are lost (p.418-419).",
+      "significance": "One of the first decisions in any text-modeling project.",
+      "example": "Fine-tuning RoBERTa requires RoBERTa's own subword tokenizer (p.480).",
+      "misconception": "There's no universally best tokenizer: subword dominates for LMs, but characters can suit spelling correction and words help interpretability (p.419).",
+      "related": ["tokenization", "subword_tokenization"],
+      "source": "book"
+    }
+  ],
+  "math": [],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Training the subword vocabulary on Moby Dick",
+      "original_code": "vocabulary, merges = compute_sub_word_vocabulary(moby_dick, 2_000)\nsub_word_tokenizer = SubWordTokenizer(vocabulary, merges)",
+      "language": "python",
+      "what_it_does": "Learns a 2,000-entry BPE vocabulary and its ranked merge rules from Moby Dick and builds a tokenizer from them.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Runs BPE training (Listing 14.7, p.417) on the list of lines loaded on p.413, returning two dicts: token → ID and pair → rank. This is the slow step (about a minute)."},
+        {"lines": "2", "explanation": "Unlike CharTokenizer/WordTokenizer, the constructor also takes the merges, which bpe_merge needs to segment new text."}
+      ],
+      "inputs_outputs": "Input: moby_dick (list of str), vocab_size 2,000. Output: vocabulary (dict, 2,000 entries), merges (dict), and a callable tokenizer.",
+      "algorithm": "Greedy BPE training.",
+      "theory_link": "Same 2,000-term budget as the word tokenizer on p.414, so the coverage comparison is fair.",
+      "parameters": [
+        {"name": "2_000", "role": "vocab_size: target number of vocabulary entries including [UNK] and characters."}
+      ],
+      "pitfalls": [
+        "Printed Listing 14.7 is incomplete (see p.417); you need the full implementation for this to run.",
+        "Requires `import regex as re` (p.408) for overlapped matching."
+      ],
+      "illustrative_code": ""
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Inspecting the subword vocabulary and the test sentence",
+      "original_code": ">>> print(\"Vocabulary length:\", len(vocabulary))\nVocabulary length: 2000\n>>> print(\"Vocabulary start:\", list(vocabulary.keys())[:10])\nVocabulary start: [\"[UNK]\", \"e\", \"t\", \"a\", \"o\", \"n\", \"i\", \"s\", \"h\", \"r\"]\n>>> print(\"Vocabulary end:\", list(vocabulary.keys())[-7:])\nVocabulary end: [\"bright\", \"pilot\", \"sco\", \"ben\", \"dem\", \"gale\", \"ilo\"]\n>>> print(\"Line length:\", len(sub_word_tokenizer(\n...    \"Call me Ishmael. Some years ago--never mind how long precisely.\"\n... )))\nLine length: 16",
+      "language": "python",
+      "what_it_does": "Prints the vocabulary size, the first 10 and last 7 entries, and the token count of the test sentence.",
+      "line_explanations": [
+        {"lines": "1-2", "explanation": "Vocabulary filled to exactly vocab_size."},
+        {"lines": "3-4", "explanation": "[UNK] first, then base characters sorted by weighted frequency. 'e' is the most common letter in English text, and the space is absent because words are split before characters are counted."},
+        {"lines": "5-6", "explanation": "The last merges learned, i.e. the least frequent pairs that still fit in the budget: whole words (bright, pilot, gale) and fragments (sco, ben, dem, ilo)."},
+        {"lines": "7-10", "explanation": "16 tokens for the opening sentence. As with the word tokenizer, '--' is dropped by the split regex; the 3 extra tokens over 13 come from words split into several pieces."}
+      ],
+      "inputs_outputs": "Printed diagnostics.",
+      "algorithm": "Inspection.",
+      "theory_link": "Shows the trade-off reached: near word-level length, full coverage, 2,000 terms.",
+      "parameters": [],
+      "pitfalls": [
+        "The page doesn't show which words were split; you'd need to print sub_word_tokenizer.split(...) to see them."
+      ],
+      "illustrative_code": "# AI-written: see the actual subword pieces\ns = \"Call me Ishmael. Some years ago--never mind how long precisely.\"\nprint(sub_word_tokenizer.split(sub_word_tokenizer.standardize(s)))\n\n# check coverage: count [UNK] ids over the whole book\nunk = sum(sub_word_tokenizer(line).count(0) for line in moby_dick)\nprint(\"[UNK] count:\", unk)  # the book reports none"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Three tokenizers side by side",
+      "kind": "numerical",
+      "body": "| | Character (p.413) | Word (p.414) | Subword / BPE (this page) |\n|---|---|---|---|\n| Vocabulary size | 64 | 2,000 (17,000 for full coverage) | 2,000 |\n| Tokens for test line | 63 | 13 | 16 |\n| [UNK] on Moby Dick | none | many rare words | none |\n| Vocabulary learning | fast | fast | ~1 minute |\n\nThe subword tokenizer keeps word-level sequence lengths (+23%) and character-level coverage at the word tokenizer's vocabulary size.",
+      "source": "inference"
+    },
+    {
+      "title": "Reading the vocabulary end",
+      "kind": "breakdown",
+      "body": "Merges are appended in the order learned, so the last entries are the *least* frequent pairs merged before the 2,000 budget ran out. 'bright', 'pilot' and 'gale' are complete words, probably formed by merging a prefix with a final piece (e.g. 'brigh'+'t'). Fragments such as 'sco', 'dem', 'ilo' are pieces shared by several words (e.g. 'scorn', 'demon', 'pilot'). This mix is typical of a BPE vocabulary. (The specific decompositions are guesses, not shown in the book.)",
+      "source": "inference"
+    },
+    {
+      "title": "Why pretrained models fix the tokenizer",
+      "kind": "application",
+      "body": "A pretrained model's first layer is an embedding table indexed by token ID. If you tokenized differently, ID 517 might mean a different string than it did during pretraining, and the model would get nonsense. That's why the sidebar calls the question trivial for pretrained models: you load the tokenizer that comes with the model, as the book does for RoBERTa (p.480).",
+      "source": "ai_explanation"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "chart",
+      "title": "Tokens needed for the test sentence",
+      "why": "The page's 16 vs. 13 comparison, together with the 63 from p.413.",
+      "chart": {
+        "type": "bar",
+        "data": {
+          "labels": ["Character (vocab 64)", "Word (vocab 2,000)", "Subword BPE (vocab 2,000)"],
+          "datasets": [{"label": "tokens for 'Call me Ishmael...'", "data": [63, 13, 16]}]
+        },
+        "options": {"scales": {"y": {"beginAtZero": true}}}
+      }
+    },
+    {
+      "id": "v2",
+      "type": "widget",
+      "title": "The test sentence as subword tokens",
+      "why": "Lets the reader see how a subword tokenizer splits the page's test sentence. The widget's own vocabulary differs from the book's BPE vocabulary, so the exact pieces may not match the book's 16.",
+      "widget": "token_sequence",
+      "params": {"text": "Call me Ishmael. Some years ago--never mind how long precisely.", "mode": "subword"}
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "The subword tokenizer is worse than the word tokenizer because it produces more tokens.",
+      "correction": "It costs 3 extra tokens on the test line but loses no information to [UNK], with the same 2,000-term vocabulary."
+    },
+    {
+      "claim": "Slow BPE training is a serious obstacle.",
+      "correction": "The vocabulary is learned once per model, and the authors note that the cost is generally negligible compared to model training."
+    },
+    {
+      "claim": "Practitioners usually write their own tokenizers.",
+      "correction": "The page says you will rarely need to; Keras and other frameworks provide tokenization utilities."
+    },
+    {
+      "claim": "Every character in Moby Dick is in the subword vocabulary.",
+      "correction": "Only characters inside tokens matched by the word regex are; characters like '-' are dropped during splitting (see review flag)."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 413, "note": "Moby Dick loading and character tokenizer results (64, 63)"},
+      {"page": 414, "note": "Word tokenizer results (2,000, 13) and subword goals"},
+      {"page": 417, "note": "compute_sub_word_vocabulary and SubWordTokenizer (Listing 14.7)"}
+    ],
+    "later": [
+      {"page": 419, "note": "Sidebar continues; 14.3 Sets vs. sequences begins"},
+      {"page": 443, "note": "Chapter summary: subword tokenization usually most effective given an expressive model and enough data"},
+      {"page": 480, "note": "RoBERTa's subword tokenizer with a 50,000-term vocabulary"},
+      {"page": 495, "note": "SentencePiece BPE with 32,000 terms for the mini-GPT"}
+    ],
+    "prerequisites": [
+      {"page": 417, "note": "How the BPE vocabulary and merges are learned and applied"}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 413, "note": "Same diagnostic printout for CharTokenizer"},
+      {"page": 414, "note": "Same diagnostic printout for WordTokenizer"}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "BPE with 2,000 terms encodes the test sentence in 16 tokens, against 13 for words and 63 for characters.",
+    "It tokenizes every word in Moby Dick without [UNK]; the worst case is one token per character.",
+    "The vocabulary is [UNK], then characters by frequency, then merged subwords in the order learned.",
+    "Learning merges is slower (about a minute) but done once per model, so it is negligible next to training.",
+    "In practice you use built-in tokenizers; the rest of the chapter uses Keras's.",
+    "With a pretrained model you must keep its exact tokenization."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "Why does the subword vocabulary start with \"e\", \"t\", \"a\", \"o\", ... right after [UNK]?",
+      "options": ["They are the first merges learned", "Base characters are added first, sorted by frequency", "They are alphabetically sorted vowels and consonants", "The tokenizer reserves IDs for single letters at random"],
+      "answer": "Base characters are added first, sorted by frequency",
+      "explanation": "compute_sub_word_vocabulary builds char_counts and uses most_common() (p.417). Merges come after the characters. The order is by frequency, not alphabetical, and nothing is random.",
+      "page_refs": [417, 418]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "What is the worst-case tokenization of a word by the SubWordTokenizer, and why?",
+      "options": [],
+      "answer": "One token per character, because the vocabulary contains every character and bpe_merge simply stops when no learned merge applies.",
+      "explanation": "Stated on the page; follows from the vocabulary initialization on p.417.",
+      "page_refs": [418, 417]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "The subword tokenizer uses 16 tokens where the word tokenizer uses 13. Why do the authors still call this an advantage?",
+      "options": [],
+      "answer": "With the same 2,000-term vocabulary it achieves near-word-level average length while never needing [UNK], so no information is lost on rare words.",
+      "explanation": "'We have achieved a short average token length while handling rare words with a small vocabulary.'",
+      "page_refs": [418]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "Why is the slower training of the subword vocabulary rarely a concern?",
+      "options": ["It runs on the GPU", "A vocabulary is learned once per model and costs little compared with model training", "The merges are cached by Keras", "Only the first 100 merges are needed"],
+      "answer": "A vocabulary is learned once per model and costs little compared with model training",
+      "explanation": "This is the page's argument. The toy implementation is pure Python on the CPU, Keras plays no role in it, and all ~1,900+ merges are used.",
+      "page_refs": [418]
+    },
+    {
+      "id": "q5",
+      "type": "short",
+      "question": "According to the sidebar, why is the tokenization question trivial for a pretrained model?",
+      "options": [],
+      "answer": "You must preserve the exact tokenization used during pretraining; otherwise the model's learned representations of input tokens are thrown away.",
+      "explanation": "Sidebar on p.418, continued on p.419.",
+      "page_refs": [418, 419]
+    },
+    {
+      "id": "q6",
+      "type": "conceptual",
+      "question": "Some vocabulary-end entries are whole words ('pilot'), others fragments ('ilo'). What does that tell you about how BPE builds a vocabulary?",
+      "options": [],
+      "answer": "BPE adds whatever frequent adjacent pairs exist, regardless of linguistic meaning. Some merges complete words, others create pieces shared by many words.",
+      "explanation": "Merges are driven only by pair frequency (p.416), so fragments appear whenever they are common across words.",
+      "page_refs": [416, 418]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you fill in the comparison table (vocabulary size, tokens for the test line, [UNK] usage) for the three tokenizers from memory?",
+      "options": [],
+      "answer": "Char: 64 / 63 / none. Word: 2,000 / 13 / many rare words. Subword: 2,000 / 16 / none.",
+      "explanation": "pp.413, 414 and 418.",
+      "page_refs": [413, 414, 418]
+    }
+  ]
+}

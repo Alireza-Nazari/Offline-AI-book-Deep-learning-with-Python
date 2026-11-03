@@ -1,0 +1,437 @@
+{
+  "page_id": "page_055",
+  "pdf_page": 55,
+  "printed_page": "31",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-fable-5-1",
+    "generated_at": "2026-11-03T03:56:00Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean extraction; three short code snippets and one function listing, all callouts captured. No figures on the page."
+  },
+  "overview": {
+    "title": "Broadcasting: a worked example and a naive implementation",
+    "chapter": "2 The mathematical building blocks of neural networks",
+    "section": "2.3 The gears of neural networks: Tensor operations",
+    "subsection": "2.3.2 Broadcasting",
+    "main_topic": "How a smaller tensor is virtually expanded (broadcast) to match a larger one so that element-wise operations can be applied, illustrated with a (32, 10) matrix and a (10,) vector.",
+    "central_idea": "Broadcasting adds axes to the smaller tensor and then (virtually) repeats it along those axes until both tensors have the same shape; NumPy performs this repetition at the algorithmic level without allocating a new tensor.",
+    "importance": "Every `Dense` layer computes `W @ x + b`, where `b` is a vector added to a matrix. Understanding broadcasting explains how that addition is legal and efficient, and it is the key to reading almost any NumPy/Keras shape error you will ever meet.",
+    "learning_objectives": [
+      "Describe the two steps of broadcasting (adding axes, then repeating along them).",
+      "Reproduce the (32, 10) + (10,) example with `np.expand_dims` and `np.tile`.",
+      "Explain why the repetition is virtual and why that matters for memory.",
+      "Trace the naive matrix-plus-vector loop and relate it to the broadcast rule.",
+      "State the general shape-compatibility rule for broadcasting given on this page."
+    ],
+    "prerequisites": [
+      "Tensor rank, shape and `ndim` (p.47)",
+      "Element-wise operations and the naive `naive_add` implementation (p.53)",
+      "The Dense layer formula `output = relu(dot(input, W) + b)` (p.52)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "This page completes the explanation of **broadcasting** begun on p.54. The second step of broadcasting is stated first: after new (broadcast) axes have been added to the smaller tensor, that tensor is *repeated* along the new axes until its shape matches the larger tensor.\n\nThe authors then walk through a concrete example. `X` is a random matrix of shape `(32, 10)` and `y` a random vector of shape `(10,)`. Step one: `y = np.expand_dims(y, axis=0)` inserts an empty first axis so that `y` has shape `(1, 10)`. Step two: `Y = np.tile(y, (32, 1))` repeats `y` 32 times along axis 0, producing `Y` with shape `(32, 10)` and the property that every row `Y[i, :]` equals the original `y`. Now `X` and `Y` have identical shapes, so the element-wise addition from p.53 applies directly.\n\nA crucial implementation remark follows: no new rank-2 tensor is ever materialised when NumPy broadcasts, because that would be \"terribly inefficient\". The repetition is **entirely virtual** — it happens at the algorithmic level, not at the memory level. The mental model of a vector copied 32 times is nonetheless useful. To make the algorithm explicit the page shows `naive_add_matrix_and_vector(x, y)`: it asserts that `x` is rank 2, `y` is rank 1, and that `x.shape[1] == y.shape[0]`; it copies `x` to avoid overwriting the input; then two nested loops add `y[j]` to every element `x[i, j]`. The vector index depends only on the column `j`, which is exactly what \"repeat along axis 0\" means.\n\nFinally the page states the general rule: an element-wise operation between a tensor of shape `(a, b, … n, n + 1, … m)` and one of shape `(n, n + 1, … m)` is permitted, with broadcasting happening automatically over axes `a` through `n − 1` — i.e. the smaller tensor's shape must match the *trailing* axes of the larger one.",
+  "paragraphs": [
+    {
+      "ref": "p055_e03",
+      "excerpt": "The smaller tensor is repeated alongside these new axes to match the full shape",
+      "what_it_says": "This is the second bullet of the two-step description of broadcasting started on p.54: once broadcast axes have been added to the smaller tensor, it is repeated along those axes until its shape equals the shape of the larger tensor.",
+      "what_it_means": "Step one (p.54) fixes the *rank* mismatch by inserting axes of size 1; step two fixes the *size* mismatch along those axes by copying the data. After both steps the two operands have the same shape, so the ordinary element-wise rules from p.53 apply.",
+      "why_it_matters": "This is the conceptual contract behind `W @ x + b` in a `Dense` layer: `b` is a vector, the product is a matrix, and the addition only makes sense because `b` is treated as if it were copied once per sample.",
+      "technical_idea": "Conceptually: `(10,)` → add axis → `(1, 10)` → repeat 32× → `(32, 10)`.",
+      "terminology": [
+        {"term": "broadcast axes", "meaning": "The new axes (of length 1) inserted into the smaller tensor so that its `ndim` matches the larger tensor's (named on p.54)."}
+      ],
+      "connections": ["p.54: the first bullet — adding broadcast axes to match `ndim`.", "p.53: element-wise operations require operands of the same shape."]
+    },
+    {
+      "ref": "p055_e04",
+      "excerpt": "Let’s look at a concrete example. Consider X with shape (32, 10) and y",
+      "what_it_says": "The authors set up a concrete case: a matrix `X` of shape `(32, 10)` and a vector `y` of shape `(10,)`, created with `np.random.random`.",
+      "what_it_means": "The numbers are chosen to look like a mini-batch: 32 samples, each a 10-dimensional feature vector (compare the batch-axis convention on p.49). The vector `y` has one entry per feature, exactly like a bias vector in a `Dense` layer with 10 units.",
+      "why_it_matters": "A fixed, small example lets you check every shape by hand; the same reasoning scales to `(128, 512) + (512,)` or larger.",
+      "terminology": [
+        {"term": "shape `(10,)`", "meaning": "A rank-1 tensor (vector) with 10 entries; the trailing comma marks a one-element tuple (p.47)."}
+      ],
+      "connections": ["p.49: the first axis of a data tensor is the batch/samples axis.", "p.47: shape is a tuple of per-axis sizes."]
+    },
+    {
+      "ref": "p055_e06",
+      "excerpt": "First, we add an empty first axis to y, whose shape becomes (1, 10):",
+      "what_it_says": "Step one is done with `np.expand_dims(y, axis=0)`: a new axis of length 1 is inserted in front, so `y` becomes `(1, 10)`.",
+      "what_it_means": "`y` now has `ndim == 2`, the same rank as `X`, but still holds the same 10 numbers — the new axis is 'empty' in the sense that it carries no additional data.",
+      "why_it_matters": "Matching rank is the precondition for the repeat step; a `(1, 10)` tensor is a one-row matrix, so it can be stacked row-wise.",
+      "technical_idea": "`axis=0` puts the new axis first; `np.expand_dims(y, axis=1)` would have produced `(10, 1)`, a column, which would broadcast against a `(10, k)` matrix instead.",
+      "terminology": [
+        {"term": "`np.expand_dims`", "meaning": "NumPy function that inserts a new axis of size 1 at the given position without changing the data."}
+      ],
+      "connections": ["p.47: `ndim` is the number of axes."]
+    },
+    {
+      "ref": "p055_e08",
+      "excerpt": "Then, we repeat y 32 times alongside this new axis, so that we end",
+      "what_it_says": "Step two uses `np.tile(y, (32, 1))` to repeat `y` 32 times along axis 0 and once along axis 1, giving `Y` of shape `(32, 10)` such that `Y[i, :] == y` for every `i` in `range(0, 32)`.",
+      "what_it_means": "`Y` is a matrix whose 32 rows are all identical copies of the original vector. The tuple `(32, 1)` passed to `tile` gives the repeat count per axis.",
+      "why_it_matters": "After this step `X` and `Y` have the same shape and can be added element-wise; this is the explicit (materialised) version of what broadcasting does implicitly.",
+      "technical_idea": "`Y[i, :]` selects row `i` using the slicing syntax introduced on p.49.",
+      "terminology": [
+        {"term": "`np.tile`", "meaning": "NumPy function that builds a larger array by repeating the input a given number of times along each axis."}
+      ],
+      "connections": ["p.49: tensor slicing with `:`.", "p.53: element-wise addition of same-shape tensors."]
+    },
+    {
+      "ref": "p055_e10",
+      "excerpt": "At this point, we can add X and Y because they have the same shape.",
+      "what_it_says": "With both tensors at shape `(32, 10)`, ordinary element-wise addition applies.",
+      "what_it_means": "The whole purpose of the two steps was to reduce the mixed-shape case to the same-shape case already covered by `naive_add` on p.53.",
+      "why_it_matters": "It shows that broadcasting is not a new kind of operation, just a shape-preparation step in front of an element-wise one.",
+      "terminology": [],
+      "connections": ["p.53: `naive_add` requires `x.shape == y.shape`."]
+    },
+    {
+      "ref": "p055_e11",
+      "excerpt": "In terms of implementation, no new rank-2 tensor is created because that would",
+      "what_it_says": "In a real implementation the repeated tensor `Y` is never built — that would be terribly inefficient. The repetition is entirely virtual, happening at the algorithmic level rather than the memory level. Still, imagining the vector copied 32 times along a new axis is a useful mental model, and the authors introduce a naive implementation to show the algorithm.",
+      "what_it_means": "The `np.tile` call above was pedagogical. NumPy's `X + y` instead loops in a way that reads `y[j]` for every row, so the memory cost stays at `10` numbers rather than `32 × 10`. For a batch of 1,000,000 samples and a 512-unit layer the difference is a 512-float vector versus a 2 GB matrix.",
+      "why_it_matters": "This distinction is why broadcasting is free in practice and why you should write `X + y` rather than `X + np.tile(...)` in your own code.",
+      "technical_idea": "Beyond the book: NumPy implements the virtual repeat with a zero-stride view — the broadcast axis has stride 0, so every index along it maps to the same memory address.",
+      "terminology": [
+        {"term": "virtual repetition", "meaning": "Treating a tensor as if it were copied along an axis, without actually storing the copies."}
+      ],
+      "connections": ["p.54: vectorised NumPy operations are implemented in C/Fortran for speed."]
+    },
+    {
+      "ref": "p055_e13",
+      "excerpt": "With broadcasting, you can generally apply two-tensor element-wise operations if one",
+      "what_it_says": "The general rule: if one tensor has shape `(a, b, … n, n + 1, … m)` and the other has shape `(n, n + 1, … m)`, an element-wise operation is allowed, and broadcasting happens automatically over axes `a` through `n − 1`.",
+      "what_it_means": "The smaller tensor's shape must equal the *trailing* part of the larger tensor's shape. The leading axes of the larger tensor are the ones along which the smaller tensor is virtually repeated. In the example, `(32, 10)` versus `(10,)`: the trailing `10` matches and broadcasting occurs over the single leading axis of size 32.",
+      "why_it_matters": "This rule lets you predict whether an operation such as `(64, 28, 28, 3) * (3,)` (scaling each colour channel) is valid — it is — and whether `(32, 10) + (32,)` is valid — it is not, because `32 ≠ 10` on the trailing axis.",
+      "technical_idea": "Beyond the book: NumPy's full rule is slightly more general — axes of size 1 in either tensor are also stretched — but the trailing-axes rule stated here covers the vast majority of deep-learning uses.",
+      "terminology": [
+        {"term": "trailing axes", "meaning": "The last axes of a shape tuple; broadcasting compares shapes from the right."}
+      ],
+      "connections": ["p.56: the next page applies `np.maximum` to tensors of different shapes via this rule."]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "broadcasting",
+      "name": "Broadcasting",
+      "definition": "The automatic expansion of a smaller tensor — by adding axes and virtually repeating it along them — so that an element-wise operation can be applied with a larger tensor of compatible shape.",
+      "intuition": "Adding a vector to every row of a matrix is like adding the same bias to every sample in a batch; you do not need 32 copies of the bias, just the rule 'use the same one each time'.",
+      "technical": "Two steps: (1) insert broadcast axes of size 1 so the ranks match; (2) repeat along them. Allowed when the smaller shape `(n, …, m)` equals the trailing axes of the larger shape `(a, …, n, …, m)`; broadcasting occurs over axes `a` through `n − 1`. The repetition is virtual (no new tensor is allocated).",
+      "significance": "It is how `W @ x + b` in a `Dense` layer works and how most per-feature scaling/normalisation is written in NumPy and Keras.",
+      "example": "`X` of shape `(32, 10)` plus `y` of shape `(10,)`: `y` → `(1, 10)` → virtually `(32, 10)`; result `X[i, j] + y[j]`.",
+      "misconception": "That broadcasting physically creates the enlarged tensor. It does not; `np.tile` on this page is only a teaching device.",
+      "related": ["elementwise_operation", "tensor", "tensor_shape", "dense_layer"],
+      "source": "book"
+    },
+    {
+      "id": "elementwise_operation",
+      "name": "Element-wise operation",
+      "definition": "An operation applied independently to each entry of a tensor (or to each pair of corresponding entries of two same-shape tensors).",
+      "intuition": "Think of it as the same tiny calculation run once per cell, with no cell depending on any other.",
+      "technical": "For addition, `z[i, j] = x[i, j] + y[i, j]`; such loops are embarrassingly parallel and are executed by vectorised C/Fortran kernels (p.54). Broadcasting extends them to operands whose shapes differ but are compatible.",
+      "significance": "Activations (`relu`) and biases in neural networks are element-wise; they form half of what a `Dense` layer does.",
+      "example": "`naive_add_matrix_and_vector` is an element-wise addition where the second operand is indexed only by `j`.",
+      "misconception": "That `+` on two tensors of different shapes is an error; it is fine whenever broadcasting applies.",
+      "related": ["broadcasting", "relu"],
+      "source": "book"
+    },
+    {
+      "id": "tensor_shape",
+      "name": "Tensor shape and rank",
+      "definition": "The shape is the tuple of sizes along each axis; the rank (`ndim`) is the number of axes.",
+      "intuition": "Shape tells you how big the box is in each direction; rank tells you how many directions there are.",
+      "technical": "`np.expand_dims` changes the rank without changing the data; `np.tile` changes sizes along axes by copying data. `len(x.shape)` equals `x.ndim`.",
+      "significance": "Every broadcasting decision is made purely from shapes, which is why the naive function asserts on `len(x.shape)` and `x.shape[1] == y.shape[0]`.",
+      "example": "`(10,)` has rank 1; `(1, 10)` has rank 2 and the same 10 numbers.",
+      "misconception": "That `(10,)` and `(1, 10)` are the same tensor; they hold the same data but have different ranks, which matters for which axis gets broadcast.",
+      "related": ["broadcasting", "tensor"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Matrix-plus-vector addition via broadcasting",
+      "latex": "Z_{ij} = X_{ij} + y_j, \\qquad i = 0,\\dots,31,\\; j = 0,\\dots,9",
+      "source_text": "x[i, j] += y[j]  (inside the nested loops of naive_add_matrix_and_vector)",
+      "variables": [
+        {"symbol": "X", "meaning": "The larger tensor, a matrix of shape (32, 10)."},
+        {"symbol": "y", "meaning": "The smaller tensor, a vector of shape (10,)."},
+        {"symbol": "Z", "meaning": "The result, a matrix of shape (32, 10)."},
+        {"symbol": "i", "meaning": "Row (sample) index — the broadcast axis; y does not depend on it."},
+        {"symbol": "j", "meaning": "Column (feature) index — the axis shared by X and y."}
+      ],
+      "operations": "For every row i and column j, add the j-th entry of y to the (i, j) entry of X. Because y is indexed only by j, every row receives the same vector.",
+      "purpose": "This is the precise meaning of 'repeat y along axis 0 and add'. It is also exactly the `+ b` in a Dense layer, where each sample in the batch gets the same bias.",
+      "interpretation": "Equivalent to X + Y where Y = tile(expand_dims(y, 0), (32, 1)), but without ever storing Y.",
+      "intuition": "Picture the vector y lying under the matrix; slide it along to each row and add.",
+      "numerical_example": "Take a 2×3 case instead of 32×10 (same rule):\n\n$$X = \\begin{pmatrix} 1 & 2 & 3 \\\\ 4 & 5 & 6 \\end{pmatrix},\\quad y = (10,\\ 20,\\ 30)$$\n\nVirtually $Y = \\begin{pmatrix} 10 & 20 & 30 \\\\ 10 & 20 & 30 \\end{pmatrix}$, so\n\n$$X + y = \\begin{pmatrix} 11 & 22 & 33 \\\\ 14 & 25 & 36 \\end{pmatrix}.$$",
+      "source": "book",
+      "book_ref": "p.55"
+    },
+    {
+      "id": "m2",
+      "title": "General broadcasting compatibility rule",
+      "latex": "\\text{shape}(A) = (a, b, \\dots, n, n{+}1, \\dots, m), \\quad \\text{shape}(B) = (n, n{+}1, \\dots, m) \\;\\Rightarrow\\; A \\circ B \\text{ is defined, broadcasting over axes } a,\\dots,n{-}1",
+      "source_text": "one tensor has shape (a, b, … n, n + 1, … m) and the other has shape (n, n + 1, … m). The broadcasting will then automatically happen for axes a through n - 1.",
+      "variables": [
+        {"symbol": "A", "meaning": "The larger tensor."},
+        {"symbol": "B", "meaning": "The smaller tensor; its shape equals the trailing axes of A's shape."},
+        {"symbol": "a, …, n−1", "meaning": "The leading axes of A that B lacks; B is virtually repeated along these."},
+        {"symbol": "∘", "meaning": "Any element-wise binary operation (+, ×, maximum, …)."}
+      ],
+      "operations": "Compare shapes from the right; if B's shape is a suffix of A's shape, prepend size-1 axes to B and repeat along them.",
+      "purpose": "Gives a one-line test for whether an element-wise operation between two differently shaped tensors is legal.",
+      "interpretation": "The smaller tensor is 'applied per slice' of the larger tensor over its leading axes.",
+      "intuition": "The trailing axes must line up exactly; whatever is left over in front is where the copying happens.",
+      "numerical_example": "`(64, 28, 28, 3)` with `(3,)`: suffix matches, broadcasting over the three leading axes — valid. `(32, 10)` with `(32,)`: trailing `10 ≠ 32` — not valid (you would need `(32, 1)`).",
+      "source": "book",
+      "book_ref": "p.55"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Create a (32, 10) matrix and a (10,) vector",
+      "original_code": "import numpy as np\nX = np.random.random((32, 10))\ny = np.random.random((10,))",
+      "language": "python",
+      "what_it_does": "Builds the two operands of the running example: a random rank-2 tensor `X` of shape `(32, 10)` and a random rank-1 tensor `y` of shape `(10,)`.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Import NumPy under its conventional alias."},
+        {"lines": "2", "explanation": "`np.random.random((32, 10))` draws 320 uniform numbers in [0, 1) arranged as 32 rows of 10 — callout: 'X is a random matrix with shape (32, 10)'."},
+        {"lines": "3", "explanation": "`np.random.random((10,))` draws a vector of 10 numbers — callout: 'y is a random vector with shape (10,)'. Note the one-element tuple `(10,)`."}
+      ],
+      "inputs_outputs": "No inputs; produces `X` (float64, shape (32, 10)) and `y` (float64, shape (10,)).",
+      "algorithm": "Uniform random sampling; the values are irrelevant, only the shapes matter.",
+      "theory_link": "Models a batch of 32 samples with 10 features and a per-feature vector — the same shapes as a layer output and its bias.",
+      "parameters": [
+        {"name": "(32, 10)", "role": "Shape tuple: 32 samples × 10 features."},
+        {"name": "(10,)", "role": "Shape tuple for a vector with 10 entries."}
+      ],
+      "pitfalls": ["Writing `np.random.random(10)` also works, but `np.random.random((10))` is the same as `(10)`, an integer — the trailing comma is what makes a tuple."]
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Step 1 — add an empty first axis",
+      "original_code": "y = np.expand_dims(y, axis=0)",
+      "language": "python",
+      "what_it_does": "Inserts a new axis of length 1 at position 0, turning `y` from shape `(10,)` into `(1, 10)` so that its rank matches `X`.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "`axis=0` means the new axis is the first one. Callout: 'The shape of y is now (1, 10)'. The 10 values are unchanged."}
+      ],
+      "inputs_outputs": "Input: `y` of shape (10,). Output: `y` of shape (1, 10).",
+      "algorithm": "A metadata change only — NumPy returns a view with an extra axis; no data is copied.",
+      "theory_link": "This is the first bullet of the broadcasting definition (p.54): add broadcast axes to match `ndim`.",
+      "parameters": [
+        {"name": "axis", "role": "Position at which to insert the new axis; 0 = leading."}
+      ],
+      "pitfalls": ["`y[np.newaxis, :]` and `y.reshape(1, 10)` produce the same result; `axis=1` would give a column `(10, 1)`, which broadcasts differently."]
+    },
+    {
+      "id": "c3",
+      "listing": null,
+      "title": "Step 2 — repeat y 32 times along the new axis",
+      "original_code": "Y = np.tile(y, (32, 1))",
+      "language": "python",
+      "what_it_does": "Repeats the `(1, 10)` tensor 32 times along axis 0 and 1 time along axis 1, producing `Y` with shape `(32, 10)` whose every row equals the original `y`.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "The tuple `(32, 1)` is the repeat count per axis. Callout: 'Repeat y 32 times along axis 0 to obtain Y with shape (32, 10)'. Afterwards `Y[i, :] == y` for all `i` in `range(0, 32)`."}
+      ],
+      "inputs_outputs": "Input: `y` of shape (1, 10). Output: `Y` of shape (32, 10) — a real, materialised copy (320 numbers).",
+      "algorithm": "Explicit copying of the row 32 times.",
+      "theory_link": "This is the second bullet of the broadcasting definition made concrete; the real `X + y` does this *virtually*.",
+      "parameters": [
+        {"name": "(32, 1)", "role": "Number of repetitions along axis 0 and axis 1 respectively."}
+      ],
+      "pitfalls": ["Do not use `np.tile` in production for this purpose — it allocates the full matrix that broadcasting avoids."]
+    },
+    {
+      "id": "c4",
+      "listing": null,
+      "title": "naive_add_matrix_and_vector — the algorithm behind broadcasting",
+      "original_code": "def naive_add_matrix_and_vector(x, y):\n    assert len(x.shape) == 2\n    assert len(y.shape) == 1\n    assert x.shape[1] == y.shape[0]\n    x = x.copy()\n    for i in range(x.shape[0]):\n        for j in range(x.shape[1]):\n            x[i, j] += y[j]\n    return x",
+      "language": "python",
+      "what_it_does": "Adds a vector `y` to every row of a matrix `x` using explicit Python loops, returning a new matrix. It shows, at the algorithmic level, what NumPy's broadcast addition computes without ever building a repeated copy of `y`.",
+      "line_explanations": [
+        {"lines": "2", "explanation": "Require `x` to be rank 2 — callout: 'x is a rank-2 NumPy tensor'."},
+        {"lines": "3", "explanation": "Require `y` to be rank 1 — callout: 'y is a NumPy vector'."},
+        {"lines": "4", "explanation": "The number of columns of `x` must equal the length of `y`: this is the trailing-axis compatibility condition of the broadcasting rule."},
+        {"lines": "5", "explanation": "Copy `x` so the caller's array is not modified in place — callout: 'Avoids overwriting the input tensor'."},
+        {"lines": "6-8", "explanation": "Outer loop over rows `i`, inner loop over columns `j`; add `y[j]` to `x[i, j]`. Because the index into `y` is only `j`, the same vector is used for every row — the 'virtual repetition' along axis 0."},
+        {"lines": "9", "explanation": "Return the new matrix."}
+      ],
+      "inputs_outputs": "Inputs: `x` with shape (n, m), `y` with shape (m,). Output: a new array of shape (n, m) with `out[i, j] = x[i, j] + y[j]`.",
+      "algorithm": "O(n·m) element-wise loop; memory O(n·m) for the copy of `x` plus O(m) for `y` — no O(n·m) copy of `y` is needed.",
+      "theory_link": "Implements $Z_{ij} = X_{ij} + y_j$ (formula m1) and is the mixed-shape analogue of `naive_add` on p.53.",
+      "parameters": [
+        {"name": "x", "role": "Rank-2 input tensor (e.g. a batch of feature vectors)."},
+        {"name": "y", "role": "Rank-1 tensor added to every row (e.g. a bias vector)."}
+      ],
+      "pitfalls": [
+        "Pure Python loops are orders of magnitude slower than `x + y` (p.54 timed 2.45 s vs 0.02 s for a similar loop).",
+        "Forgetting `x.copy()` would silently mutate the caller's array."
+      ],
+      "illustrative_code": "# AI-written check that the naive loop matches NumPy's broadcast addition\nimport numpy as np\nX = np.random.random((32, 10))\ny = np.random.random((10,))\nassert np.allclose(naive_add_matrix_and_vector(X, y), X + y)\nprint((X + y).shape)   # (32, 10)"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why the repetition can be virtual: zero-stride views",
+      "kind": "breakdown",
+      "body": "Beyond the book: a NumPy array is described by a data pointer, a shape and a tuple of *strides* (bytes to step per axis). To broadcast `y` of shape `(10,)` to `(32, 10)`, NumPy creates a view with shape `(32, 10)` and strides `(0, 8)`: moving along axis 0 advances the pointer by 0 bytes, so all 32 'rows' alias the same 10 floats. You can see this with `np.broadcast_to(y, (32, 10)).strides` → `(0, 8)`. That is precisely what the authors mean by 'the repetition happens at the algorithmic level rather than at the memory level'.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Step by step through the running example",
+      "kind": "step_by_step",
+      "body": "1. `X.shape == (32, 10)`, `y.shape == (10,)` — ranks differ (2 vs 1).\n2. Compare shapes from the right: `10` vs `10` — match.\n3. Add a broadcast axis to `y`: `(1, 10)` — ranks now equal.\n4. Virtually repeat along the size-1 axis 32 times: `(32, 10)`.\n5. Apply element-wise `+`: `Z[i, j] = X[i, j] + y[j]`.\n\nThe naive function does steps 2–5 explicitly: the assert on `x.shape[1] == y.shape[0]` is step 2, and indexing `y[j]` inside the `i` loop is steps 3–4.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "The bias in a Dense layer",
+      "kind": "application",
+      "body": "On p.52 a `Dense` layer was written as `output = relu(dot(input, W) + b)`. If `input` is a batch of shape `(32, 784)` and `W` is `(784, 10)`, then `dot(input, W)` is `(32, 10)` and `b` is `(10,)` — exactly this page's shapes. The `+ b` is a broadcast addition: every one of the 32 samples receives the same 10 bias values. The authors imply this motivation on p.54 ('in the Dense layer introduced earlier, we added a rank-2 tensor with a vector').",
+      "source": "inference"
+    },
+    {
+      "title": "A stencil on a stack of forms",
+      "kind": "analogy",
+      "body": "Imagine 32 identical paper forms (the rows of `X`) and a single transparent stencil with 10 corrections written on it (`y`). You do not photocopy the stencil 32 times; you lay the same stencil over each form in turn and apply the corrections. The stencil is 'repeated' in effect but exists only once — that is virtual broadcasting.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "widget",
+      "title": "Broadcasting (32, 10) + (10,)",
+      "why": "The page's running example: see how the (10,) vector is virtually repeated 32 times along a new leading axis to match X.",
+      "widget": "broadcasting",
+      "params": {"a_shape": [32, 10], "b_shape": [10]}
+    },
+    {
+      "id": "v2",
+      "type": "widget",
+      "title": "Shape flow of the explicit two-step version",
+      "why": "Tracks the shapes through np.expand_dims and np.tile exactly as printed on the page, with element counts showing why the tiled copy is wasteful.",
+      "widget": "tensor_shapes",
+      "params": {"steps": [
+        {"op": "y", "shape": [10]},
+        {"op": "expand_dims axis=0", "shape": [1, 10]},
+        {"op": "tile (32, 1)", "shape": [32, 10]},
+        {"op": "X + Y", "shape": [32, 10]}
+      ]}
+    }
+  ],
+  "misconceptions": [
+    {"claim": "NumPy builds the enlarged (32, 10) copy of y when you write X + y.", "correction": "It does not. The page stresses that the repetition is entirely virtual; np.tile is used only to make the mental model concrete."},
+    {"claim": "Any two tensors can be broadcast together.", "correction": "Only when the smaller shape matches the trailing axes of the larger one (the (n, n + 1, … m) rule). (32, 10) + (32,) fails."},
+    {"claim": "expand_dims changes the data in y.", "correction": "It only adds an axis of length 1; the 10 values are untouched and no copy is made."},
+    {"claim": "The naive loop and NumPy's broadcast give different results.", "correction": "They compute the same Z[i, j] = X[i, j] + y[j]; they differ only in speed and memory."}
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 54, "note": "Broadcasting is introduced and its first step (adding broadcast axes) is stated; motivation is the Dense layer's matrix-plus-vector addition."},
+      {"page": 53, "note": "naive_add for same-shape rank-2 tensors — the function this page generalises."},
+      {"page": 52, "note": "The Dense layer formula output = relu(dot(input, W) + b), where + b relies on broadcasting."},
+      {"page": 49, "note": "Tensor slicing (Y[i, :]) and the batch-axis convention."},
+      {"page": 47, "note": "Rank (ndim) and shape, the attributes broadcasting operates on."}
+    ],
+    "later": [
+      {"page": 56, "note": "np.maximum applied to differently shaped tensors via broadcasting; then the tensor product."},
+      {"page": 58, "note": "Tensor reshaping — another shape-manipulation operation."}
+    ],
+    "prerequisites": [
+      {"page": 47, "note": "Tensor rank (ndim) and shape."},
+      {"page": 53, "note": "Element-wise operations and naive_add."}
+    ],
+    "related_math": [
+      {"page": 52, "note": "The Dense layer formula whose + b term is a broadcast addition."}
+    ],
+    "related_code": [
+      {"page": 53, "note": "naive_add for same-shape tensors, generalised here by naive_add_matrix_and_vector."},
+      {"page": 56, "note": "np.maximum with shapes (64, 3, 32, 10) and (32, 10) — the broadcasting rule in action."}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "Broadcasting = (1) add size-1 axes to the smaller tensor so ranks match, (2) repeat it along those axes to match the larger shape.",
+    "Explicitly: np.expand_dims(y, axis=0) takes (10,) to (1, 10); np.tile(y, (32, 1)) takes (1, 10) to (32, 10).",
+    "In a real implementation the repetition is virtual — no (32, 10) copy of y is ever stored.",
+    "The naive loop x[i, j] += y[j] shows the algorithm: the vector index depends only on the column, so every row gets the same vector.",
+    "Rule: shapes (a, b, … n, n + 1, … m) and (n, n + 1, … m) are compatible; broadcasting happens over axes a through n − 1."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "After `y = np.expand_dims(y, axis=0)` on a vector `y` of shape (10,), what is `y.shape`?",
+      "options": ["(10, 1)", "(1, 10)", "(10,)", "(32, 10)"],
+      "answer": "(1, 10)",
+      "explanation": "`axis=0` inserts a new leading axis of size 1, giving (1, 10) as the page states. (10, 1) would require axis=1; (10,) is the original shape; (32, 10) is only reached after tiling.",
+      "page_refs": [55]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "What does the tuple `(32, 1)` mean in `Y = np.tile(y, (32, 1))`?",
+      "options": [],
+      "answer": "Repeat y 32 times along axis 0 and once along axis 1, producing Y of shape (32, 10) with every row equal to y.",
+      "explanation": "np.tile takes a per-axis repetition count; 32 copies stacked along the first axis and no extra copies along the second yield (32, 10), and Y[i, :] == y for all i.",
+      "page_refs": [55]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "The page says the repetition in broadcasting is 'entirely virtual'. What does that mean and why does it matter?",
+      "options": [],
+      "answer": "No new rank-2 tensor holding 32 copies of y is allocated; the operation simply reuses y[j] for every row i. This avoids wasting memory and time, which would be 'terribly inefficient' for large batches.",
+      "explanation": "The authors contrast the algorithmic level (where y is conceptually repeated) with the memory level (where it is not). The naive loop demonstrates the algorithm: indexing y[j] inside the row loop achieves the repetition without storage.",
+      "page_refs": [55]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "According to the general rule on this page, which pair of shapes is compatible for a broadcast element-wise operation?",
+      "options": ["(32, 10) and (32,)", "(64, 28, 28, 3) and (3,)", "(10, 32) and (10, 32, 3)", "(5, 4) and (4, 5)"],
+      "answer": "(64, 28, 28, 3) and (3,)",
+      "explanation": "The smaller shape must equal the trailing axes of the larger: (3,) matches the last axis of (64, 28, 28, 3), so broadcasting happens over the first three axes. (32,) does not match the trailing 10 of (32, 10); (10, 32) is a prefix, not a suffix, of (10, 32, 3); (5, 4) and (4, 5) have the same rank but mismatched trailing axes.",
+      "page_refs": [55]
+    },
+    {
+      "id": "q5",
+      "type": "math",
+      "question": "Let X = [[1, 2, 3], [4, 5, 6]] and y = [10, 20, 30]. Compute X + y using the broadcasting rule Z_ij = X_ij + y_j.",
+      "options": [],
+      "answer": "[[11, 22, 33], [14, 25, 36]]",
+      "explanation": "Each row of X receives the same vector y: row 0 becomes (1+10, 2+20, 3+30) and row 1 becomes (4+10, 5+20, 6+30). The index into y depends only on the column j.",
+      "page_refs": [55]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "Why does `naive_add_matrix_and_vector` call `x = x.copy()` before the loops?",
+      "options": [],
+      "answer": "To avoid overwriting the input tensor; the function modifies x in place inside the loops, so without the copy the caller's array would be mutated.",
+      "explanation": "The printed callout says 'Avoids overwriting the input tensor'. The in-place `x[i, j] += y[j]` would otherwise change the array passed in.",
+      "page_refs": [55]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Without looking, write down the two steps of broadcasting and give the shapes y passes through in the (32, 10) + (10,) example. Then explain in one sentence why NumPy does not actually perform step 2 in memory.",
+      "options": [],
+      "answer": "Step 1: add broadcast axes to match ndim — (10,) → (1, 10). Step 2: repeat along the new axes — (1, 10) → (32, 10). NumPy skips the physical copy because the same y[j] can be read for every row, making a materialised copy wasteful.",
+      "explanation": "Check your answer against the bullets and the three code snippets on the page; the key insight is that the repetition is algorithmic, not a memory allocation.",
+      "page_refs": [54, 55]
+    }
+  ]
+}

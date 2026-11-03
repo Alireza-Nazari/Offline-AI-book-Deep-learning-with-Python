@@ -1,0 +1,406 @@
+{
+ "page_id": "page_464",
+ "pdf_page": 464,
+ "printed_page": "440",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:05:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Pseudocode imprecision (p464_e05): with scores of shape (num_sources,) and sources of shape (num_sources, dim), `np.sum(scores * sources)` would not broadcast as intended (and with no axis argument it would sum to a single scalar). A literal implementation needs `np.sum(scores[:, None] * sources, axis=0)`. The book labels it pseudocode, and the einsum version (p.464-465) is correct.",
+   "Loose wording (p464_e06): the dot product is called \"a simple measure of the distance between target and source vectors\"; it is a similarity (larger means closer/more aligned), not a distance, and it also grows with vector length."
+  ],
+  "extraction_quality": "Clean. Figure 15.4 is an arrow diagram (no extracted labels); the words and the arrow strengths were read from the page image. The dot_product_attention listing (p464_e08) is cut at the page break; its return line and the call are on p.465 (p465_e03)."
+ },
+ "overview": {
+  "title": "Softmax-weighted sums and the dot-product score",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "15.3.1 Dot-product attention",
+  "main_topic": "How attention scores are turned into a representation (softmax, then weighted sum of source vectors), the choice of the dot product as the score, and the vectorized einsum version for a whole target sequence.",
+  "central_idea": "Instead of passing information through a long loop, attention takes a weighted sum of all source vectors, with weights obtained by softmax-normalizing relevance scores so they sum to 1. The score is simply the dot product between target and source vectors, and for whole sequences all the scores form a target-by-source matrix computed with one einsum.",
+  "importance": "This page contains the two equations at the heart of the Transformer: scores = softmax(target · source) and output = scores · source. Everything later (Dense projections, scaling, multiple heads, Keras MultiHeadAttention) is a refinement of this code.",
+  "learning_objectives": [
+   "Explain why attention uses a weighted sum of source vectors rather than a recurrent loop.",
+   "Explain why the scores are passed through softmax.",
+   "State why the dot product is used as the relevance score.",
+   "Read the einsum \"btd,bsd->bts\" and the shape of the resulting score matrix.",
+   "Interpret figure 15.4."
+  ],
+  "prerequisites": [
+   "Einsum notation (sidebar on p.463).",
+   "The softmax function.",
+   "Dot products between vectors."
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Figure 15.4** shows the idea for one target word: the Spanish word \"traeré\" (\"I will bring\") is connected by arrows to every English source word, \"I\", \"will\", \"bring\", \"the\", \"bag\", \"to\", \"you\". The arrows to \"I\" and \"bring\" are darkest and thickest (high relevance); the others are faint.\n\nFor attention to work well, the authors want to avoid passing information about important tokens **through a loop** as long as the combined source and target length, which is where RNNs fail. A simple alternative is to take a **weighted sum of all source vectors**, weighted by the score. It is convenient if a target's scores **sum to 1**, giving the weighted sum a predictable magnitude, so the scores go through a **softmax**. The NumPy pseudocode computes the scores in a list comprehension, applies softmax and sums `scores * sources`.\n\nHow should the score be computed? This was once a big research question, but one of the most straightforward approaches turned out best: the **dot product** of target and source vectors. If the vectors are close, the source token is assumed relevant; the authors promise to explain why this makes intuitive sense at the end of the chapter.\n\nFinally the pseudocode is vectorized to handle the **entire target sequence** at once, which is equivalent to looping the previous snippet over target tokens. The scores then become a **matrix**: each row says how much a target word values each source word in the weighted sum (figure 15.5, p.465). Using einsum, `np.einsum(\"btd,bsd->bts\", target, source)` takes the dot product between all target and source vectors (b = batch size, t = target length, s = source length, d = vector size), and `softmax(scores, axis=-1)` normalizes each row over the source axis. The function's final line, the weighted sum, is on p.465.",
+ "paragraphs": [
+  {
+   "ref": "p464_e04",
+   "excerpt": "For attention to work well, we want to avoid passing information about important tokens",
+   "what_it_says": "Attention should not pass information about important tokens through a loop as long as the combined source and target length, which is where RNNs fail. Instead, take a weighted sum of all source vectors based on the score. It is convenient if the scores for a target sum to 1, giving the sum a predictable magnitude, achieved by running the scores through softmax, as in the NumPy pseudocode.",
+   "what_it_means": "The output for a target token is a convex combination of the source vectors: each source vector contributes in proportion to its normalized score. Every source token is one step away from every target token, regardless of distance. Softmax makes all weights positive and sum to 1, so the result is a weighted average and stays on the same scale as the source vectors, whether there are 5 or 500 of them.",
+   "why_it_matters": "This replaces the RNN's long chain of state updates with a single, parallel, differentiable lookup, the key structural change behind the Transformer.",
+   "technical_idea": "With scores $e_j$ and source vectors $s_j$: $\\alpha_j = e^{e_j}/\\sum_k e^{e_k}$ and $c = \\sum_j \\alpha_j s_j$. Because $\\sum_j \\alpha_j = 1$ and $\\alpha_j \\ge 0$, $c$ lies in the convex hull of the source vectors.",
+   "terminology": [
+    {"term": "Weighted sum", "meaning": "A sum of vectors each multiplied by a scalar weight."},
+    {"term": "Softmax", "meaning": "A function mapping a list of real scores to positive weights that sum to 1, larger scores getting larger weights."},
+    {"term": "Predictable magnitude", "meaning": "The output's size does not grow with the number of source vectors, because the weights always sum to 1."}
+   ],
+   "connections": [
+    "p.461: RNNs forget the start of long sequences",
+    "p.465: the weighted sum written as np.einsum(\"bts,bsd->btd\", scores, source)"
+   ]
+  },
+  {
+   "ref": "p464_e06",
+   "excerpt": "But how should we compute this relevance score? When researchers first worked with attention,",
+   "what_it_says": "Computing the relevance score was a big topic of research when attention was new, but one of the most straightforward approaches is best: a dot product between target and source vectors as a measure of how close they are. Close vectors mean the source token is assumed relevant. The authors will examine why this assumption makes intuitive sense at the end of the chapter.",
+   "what_it_means": "The dot product $t \\cdot s = \\|t\\|\\|s\\|\\cos\\theta$ is large when the two vectors point in similar directions. Using it as the score means the model must learn representations in which a target and the source tokens useful for predicting it end up aligned. It has no parameters of its own and is just a matrix multiplication, so it is fast on GPUs.",
+   "why_it_matters": "This choice, the plain dot product, is what gives \"dot-product attention\" its name and is still used in modern Transformers.",
+   "technical_idea": "Beyond the book: historically, \"additive\" attention (Bahdanau et al.) used a small feedforward network $v^\\top \\tanh(W_1 t + W_2 s)$ as the score. Dot-product (multiplicative) scoring, later with learned projections and scaling (p.465-466), won out because it is simpler and much faster. Note that, strictly speaking, the dot product measures similarity rather than distance.",
+   "terminology": [
+    {"term": "Dot product", "meaning": "$\\sum_i t_i s_i$; large and positive when two vectors point the same way."}
+   ],
+   "connections": [
+    "p.488: section 15.5, what makes the Transformer effective, where the authors return to why dot-product similarity works",
+    "p.463: \"i,i->\" is a dot product in einsum"
+   ]
+  },
+  {
+   "ref": "p464_e07",
+   "excerpt": "Let’s update our pseudocode. We can make our snippet more complete by handling the",
+   "what_it_says": "The pseudocode is extended to handle the whole target sequence at once, equivalent to running the previous snippet in a loop over target tokens. With target and source both sequences, the scores become a matrix whose rows say how much each target word values each source word (figure 15.5). Einsum is used to write the dot product and weighted sum.",
+   "what_it_means": "Stacking all target vectors into a (t, d) matrix and all source vectors into an (s, d) matrix, all t×s dot products are one matrix product. The softmax is applied along the source axis (axis=-1), so each row is a probability distribution over source words for one target word.",
+   "why_it_matters": "Vectorizing over targets (and the batch) is what makes attention parallel: unlike an RNN decoder loop, all positions are computed at once on accelerator hardware.",
+   "technical_idea": "In matrix form, per batch element: $A = \\operatorname{softmax}_{\\text{row}}(T S^\\top)$ with $T \\in \\mathbb{R}^{t\\times d}$, $S \\in \\mathbb{R}^{s\\times d}$, $A \\in \\mathbb{R}^{t\\times s}$.",
+   "terminology": [
+    {"term": "Attention score matrix", "meaning": "A (target length × source length) matrix; row i holds the weights target word i gives to each source word."}
+   ],
+   "connections": [
+    "p.465: figure 15.5 shows this matrix for the English-Spanish example",
+    "p.463: einsum rules"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "dot_product_attention",
+   "name": "Dot-product attention",
+   "definition": "Attention in which the relevance score between a target and a source vector is their dot product; the scores are softmax-normalized and used to take a weighted sum of the source vectors.",
+   "intuition": "Each target word asks which source words point in the same direction as it does, and blends those words' vectors accordingly.",
+   "technical": "$\\text{out}_t = \\sum_s \\operatorname{softmax}_s(t\\cdot s)\\, s$; vectorized: $\\operatorname{softmax}(TS^\\top)S$.",
+   "significance": "It is the basic operation of the Transformer.",
+   "example": "When predicting \"traeré\", the vectors for \"I\" and \"bring\" get the highest weights (figure 15.4).",
+   "misconception": "Attention does not select one source word; every source vector contributes, with weights that sum to 1.",
+   "related": ["attention", "softmax", "einsum", "self_attention"],
+   "source": "book"
+  },
+  {
+   "id": "softmax",
+   "name": "Softmax normalization of scores",
+   "definition": "Turning raw scores into positive weights that sum to 1.",
+   "intuition": "A budget of 100% attention is split among the source words in proportion to exp(score).",
+   "technical": "$\\operatorname{softmax}(e)_j = e^{e_j}/\\sum_k e^{e_k}$, applied along the source axis.",
+   "significance": "It gives the weighted sum a predictable magnitude, as the authors note.",
+   "example": "Scores (2, 1, 0.1) become about (0.66, 0.24, 0.10).",
+   "misconception": "Applying softmax along the wrong axis (targets instead of sources) would normalize the wrong thing; the code uses axis=-1, the source axis.",
+   "related": ["dot_product_attention", "cross_entropy"],
+   "source": "book"
+  },
+  {
+   "id": "attention_score_matrix",
+   "name": "Attention score matrix",
+   "definition": "When both target and source are sequences, the matrix of scores with one row per target word and one column per source word.",
+   "intuition": "A table of how much each output word looks at each input word.",
+   "technical": "Shape (batch, t, s), computed by np.einsum(\"btd,bsd->bts\", target, source).",
+   "significance": "It is what attention visualizations such as figure 15.5 display.",
+   "example": "For 4 Spanish tokens plus [end] and 7 English words, a 5 × 7 block of scores.",
+   "misconception": "",
+   "related": ["dot_product_attention", "einsum"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Softmax-weighted sum for one target vector",
+   "latex": "\\alpha_j = \\frac{\\exp\\big(\\operatorname{score}(t, s_j)\\big)}{\\sum_{k=1}^{S} \\exp\\big(\\operatorname{score}(t, s_k)\\big)}, \\qquad \\text{combined} = \\sum_{j=1}^{S} \\alpha_j\\, s_j",
+   "source_text": "scores = [score(target, source) for source in sources]; scores = softmax(scores); combined = np.sum(scores * sources)",
+   "variables": [
+    {"symbol": "t", "meaning": "The target vector for the token being predicted"},
+    {"symbol": "s_j", "meaning": "The vector for source token j"},
+    {"symbol": "S", "meaning": "Number of source tokens"},
+    {"symbol": "\\alpha_j", "meaning": "Normalized attention weight on source token j; $\\alpha_j \\ge 0$, $\\sum_j \\alpha_j = 1$"}
+   ],
+   "operations": "Score each source vector, exponentiate and normalize (softmax), multiply each source vector by its weight, add.",
+   "purpose": "Builds a representation of the source tailored to the current target.",
+   "interpretation": "A weighted average of the source vectors; the weights sum to 1, so the magnitude is predictable.",
+   "intuition": "Distribute 100% of attention among the source words and blend their vectors accordingly.",
+   "numerical_example": "Two source vectors $s_1 = (1, 0)$, $s_2 = (0, 1)$ and scores $(2, 0)$: $\\alpha = (e^2, 1)/(e^2+1) \\approx (0.88, 0.12)$, so combined $\\approx (0.88, 0.12)$.",
+   "source": "book",
+   "book_ref": "p.464"
+  },
+  {
+   "id": "m2",
+   "title": "Dot product as the relevance score",
+   "latex": "\\operatorname{score}(t, s) = t \\cdot s = \\sum_{i=1}^{d} t_i\\, s_i",
+   "source_text": "We can use a dot-product as a simple measure of the distance between target and source vectors.",
+   "variables": [
+    {"symbol": "d", "meaning": "Vector size"},
+    {"symbol": "t_i, s_i", "meaning": "Components of the target and source vectors"}
+   ],
+   "operations": "Multiply component-wise and sum.",
+   "purpose": "A parameter-free, fast relevance measure.",
+   "interpretation": "Large when the vectors are aligned (and long), near zero when orthogonal, negative when opposite. It is a similarity, so larger means more relevant.",
+   "intuition": "\"Close together\" vectors get a high score.",
+   "numerical_example": "$t = (1, 2)$, $s = (3, 1)$: $1\\cdot3 + 2\\cdot1 = 5$; with $s' = (-2, 1)$: $-2 + 2 = 0$.",
+   "source": "book",
+   "book_ref": "p.464"
+  },
+  {
+   "id": "m3",
+   "title": "All target-source scores at once",
+   "latex": "\\text{scores}_{bts} = \\sum_{d} \\text{target}_{btd}\\, \\text{source}_{bsd}, \\qquad \\text{scores}_{bt\\,\\cdot} \\leftarrow \\operatorname{softmax}\\big(\\text{scores}_{bt\\,\\cdot}\\big)",
+   "source_text": "scores = np.einsum(\"btd,bsd->bts\", target, source); scores = softmax(scores, axis=-1)",
+   "variables": [
+    {"symbol": "b", "meaning": "Batch index"},
+    {"symbol": "t", "meaning": "Target position"},
+    {"symbol": "s", "meaning": "Source position"},
+    {"symbol": "d", "meaning": "Feature (vector) index, summed over"}
+   ],
+   "operations": "A batched matrix product $T S^\\top$, followed by a softmax over the source axis.",
+   "purpose": "Computes the whole attention score matrix in one operation.",
+   "interpretation": "Row $t$ of the result is the attention distribution for target word $t$ over all source words.",
+   "intuition": "Equivalent to looping the single-target pseudocode over every target token.",
+   "numerical_example": "Target shape (32, 5, 256) and source shape (32, 7, 256) give scores of shape (32, 5, 7).",
+   "source": "book",
+   "book_ref": "p.464"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Attention pseudocode for a single target",
+   "original_code": "scores = [score(target, source) for source in sources]\nscores = softmax(scores)\ncombined = np.sum(scores * sources)",
+   "language": "python",
+   "what_it_does": "Scores every source vector against the target, normalizes the scores with softmax, and combines the source vectors in a weighted sum.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "One relevance score per source vector, using the still-abstract score function."},
+    {"lines": "2", "explanation": "Softmax makes the scores positive and sum to 1."},
+    {"lines": "3", "explanation": "Weights each source vector by its score and sums them into one combined vector."}
+   ],
+   "inputs_outputs": "Input: one target vector and a list of S source vectors of size d. Output: one combined vector of size d.",
+   "algorithm": "score, normalize, weighted sum.",
+   "theory_link": "This is the general attention idea of p.462 made concrete: more weight to relevant parts, chosen by the current input (the target).",
+   "parameters": [],
+   "pitfalls": [
+    "As pseudocode, the last line glosses over shapes: scores has shape (S,) and sources (S, d), so in real NumPy you need scores[:, None] * sources and a sum over axis=0.",
+    "softmax is not a NumPy function; it must be defined or taken from a library."
+   ],
+   "illustrative_code": "# AI-written: a runnable version of the single-target pseudocode\nimport numpy as np\n\ndef softmax(x, axis=-1):\n    x = x - x.max(axis=axis, keepdims=True)  # numerical stability\n    e = np.exp(x)\n    return e / e.sum(axis=axis, keepdims=True)\n\ntarget = np.random.rand(8)\nsources = np.random.rand(7, 8)        # 7 source tokens, d = 8\nscores = sources @ target              # dot-product scores, shape (7,)\nscores = softmax(scores)\ncombined = np.sum(scores[:, None] * sources, axis=0)   # shape (8,)"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "dot_product_attention (first part)",
+   "original_code": "def dot_product_attention(target, source):\n    scores = np.einsum(\"btd,bsd->bts\", target, source)\n    scores = softmax(scores, axis=-1)",
+   "language": "python",
+   "what_it_does": "Vectorized attention for whole batches of target and source sequences: computes every target-source dot product and normalizes each target's scores over the source axis. The function continues on p.465 with `return np.einsum(\"bts,bsd->btd\", scores, source)` and the call `dot_product_attention(target, source)`.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Takes target of shape (b, t, d) and source of shape (b, s, d)."},
+    {"lines": "2", "explanation": "Callout: takes the dot product between all target and source vectors, where b = batch size, t = target length, s = source length, d = vector size. d is summed; the result has shape (b, t, s)."},
+    {"lines": "3", "explanation": "Softmax over the last axis (source positions), so each row of each matrix sums to 1."}
+   ],
+   "inputs_outputs": "Inputs (b, t, d) and (b, s, d); scores (b, t, s). The output after the return line on p.465 is (b, t, d).",
+   "algorithm": "Batched matrix product $TS^\\top$ followed by row-wise softmax.",
+   "theory_link": "Equivalent to running the single-target pseudocode in a loop over target tokens, as the text says.",
+   "parameters": [
+    {"name": "axis=-1", "role": "Normalizes over source positions, so each target word's weights sum to 1."}
+   ],
+   "pitfalls": [
+    "The target and source must have the same vector size d for the dot product; p.465 adds Dense projections that guarantee this.",
+    "There is no scaling yet; large d makes the scores large and the softmax very peaked (fixed on p.466)."
+   ],
+   "illustrative_code": "# AI-written: check that the einsum equals a batched matmul\nimport numpy as np\ntarget = np.random.rand(2, 5, 16)\nsource = np.random.rand(2, 7, 16)\nscores = np.einsum(\"btd,bsd->bts\", target, source)\nassert np.allclose(scores, target @ source.transpose(0, 2, 1))\nprint(scores.shape)   # (2, 5, 7)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why softmax and not plain normalization?",
+   "kind": "alternative",
+   "body": "Beyond the book: you could divide scores by their sum, but dot-product scores can be negative or zero, which would give negative or undefined weights. Softmax exponentiates first, so every weight is positive, and it is smooth and differentiable, so gradients flow to every score. It also turns differences in scores into ratios of weights: a source word whose score is larger by 1 gets $e \\approx 2.7$ times more weight.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Reading figure 15.4",
+   "kind": "breakdown",
+   "body": "The target word is \"traeré\", Spanish for \"I will bring\" (one verb carrying subject, tense and meaning). The darkest arrows go to \"I\" and \"bring\", and \"will\" gets a lighter one; \"the\", \"bag\", \"to\" and \"you\" get faint arrows. That pattern is exactly what a translator would consult: the subject and the verb. The other Spanish words (\"Te\", \"la\", \"bolsa\") are shown faded because the figure only draws the scores for one target word; figure 15.5 on p.465 shows all rows.",
+   "source": "inference"
+  },
+  {
+   "title": "Loop vs. matrix",
+   "kind": "step_by_step",
+   "body": "The text says the einsum version is equivalent to running the first snippet in a loop over target tokens. Concretely, for one batch element:\n\n1. For each target position $t$: compute $e_{t,s} = T_t \\cdot S_s$ for all $s$ (a row of length $s$).\n2. Stack these rows: that is the $t \\times s$ matrix $TS^\\top$.\n3. Apply softmax to each row.\n4. (p.465) Multiply by $S$: row $t$ of $AS$ is $\\sum_s A_{ts} S_s$, the combined vector for target $t$.\n\nThe batch axis b just repeats this for each example.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "From scores to attention weights",
+   "why": "The page passes relevance scores through softmax so they sum to 1. Move the scores for the source words that \"traeré\" looks at in figure 15.4 and watch the weights change. The score values are illustrative.",
+   "widget": "softmax_temperature",
+   "params": {"logits": [3.0, 1.5, 3.2, 0.3, 0.5, 0.2, 0.4], "labels": ["I", "will", "bring", "the", "bag", "to", "you"], "temperature": 1}
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Dot-product attention over a sentence",
+   "why": "Click a token to see dot-product scores, softmax weights and the weighted sum, the three steps in this page's pseudocode, using the English source sentence of figure 15.4 (the vectors are random, not trained).",
+   "widget": "attention",
+   "params": {"tokens": ["I", "will", "bring", "the", "bag", "to", "you"], "dim": 4, "seed": 1}
+  },
+  {
+   "id": "v3",
+   "type": "widget",
+   "title": "Shapes in dot_product_attention",
+   "why": "The callout defines b, t, s and d; this traces the shapes through the einsum and softmax (sizes are illustrative: 7 English words, 5 Spanish positions).",
+   "widget": "tensor_shapes",
+   "params": {"steps": [{"op": "target (b,t,d)", "shape": [null, 5, 256]}, {"op": "source (b,s,d)", "shape": [null, 7, 256]}, {"op": "einsum btd,bsd->bts", "shape": [null, 5, 7]}, {"op": "softmax axis=-1", "shape": [null, 5, 7]}]}
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Attention picks the single most relevant source word.",
+   "correction": "It takes a weighted sum over all source vectors; softmax weights are all positive and sum to 1."
+  },
+  {
+   "claim": "Softmax is applied over the target axis.",
+   "correction": "The code uses axis=-1, the source axis, so each target word gets its own distribution over source words."
+  },
+  {
+   "claim": "The dot-product score has learned parameters.",
+   "correction": "On this page it does not; it is just t · s. Learned Dense projections are added on p.465."
+  },
+  {
+   "claim": "Vectorizing over the target sequence changes the result.",
+   "correction": "The text says it is equivalent to running the single-target snippet in a loop for each target token; it is only faster."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 463, "note": "Einsum notation and the score(target_vector, source_vector) setup"},
+   {"page": 462, "note": "Attention as contextual weighting; figure 15.3"},
+   {"page": 461, "note": "RNNs struggle to pass information through long loops"}
+  ],
+  "later": [
+   {"page": 465, "note": "The weighted-sum return line, figure 15.5 and the query/key/value naming"},
+   {"page": 466, "note": "Parameterized attention and scaling by the square root of the vector size"},
+   {"page": 467, "note": "Multi-head attention"},
+   {"page": 488, "note": "Section 15.5 revisits why dot-product similarity works"}
+  ],
+  "prerequisites": [
+   {"page": 463, "note": "Einsum rules"}
+  ],
+  "related_math": [
+   {"page": 465, "note": "\"bts,bsd->btd\" computes the weighted sum"},
+   {"page": 466, "note": "Scaled scores"}
+  ],
+  "related_code": [
+   {"page": 465, "note": "End of dot_product_attention"},
+   {"page": 466, "note": "parameterized_attention"}
+  ],
+  "related_figures": [
+   {"page": 465, "note": "Figure 15.5: the full attention score matrix"},
+   {"page": 467, "note": "Figure 15.7: multi-headed attention from \"traeré\""}
+  ]
+ },
+ "takeaways": [
+  "Attention avoids long loops by taking a weighted sum of all source vectors.",
+  "Softmax makes the scores for a target sum to 1, giving the sum a predictable magnitude.",
+  "The relevance score is the plain dot product of target and source vectors.",
+  "For whole sequences the scores form a target × source matrix: np.einsum(\"btd,bsd->bts\", target, source).",
+  "Softmax is applied along the source axis (axis=-1)."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why do the authors pass the attention scores through softmax?",
+   "options": [
+    "To make the scores sparse so only one source word is used",
+    "So that the scores for a given target sum to 1, giving the weighted sum a predictable magnitude",
+    "To add learnable parameters to the score",
+    "To make the computation run in a loop over the source"
+   ],
+   "answer": "So that the scores for a given target sum to 1, giving the weighted sum a predictable magnitude",
+   "explanation": "This is the reason stated in the first paragraph. Softmax is not sparse (all weights are positive), it has no parameters, and it does not introduce loops.",
+   "page_refs": [464]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Two source vectors $s_1 = (1, 0)$ and $s_2 = (0, 2)$, target $t = (1, 1)$. Compute the dot-product scores, the softmax weights and the combined vector.",
+   "options": [],
+   "answer": "Scores 1 and 2; weights $e/(e+e^2) \\approx 0.27$ and $e^2/(e+e^2) \\approx 0.73$; combined $\\approx 0.27\\cdot(1,0) + 0.73\\cdot(0,2) = (0.27, 1.46)$.",
+   "explanation": "Follow the three lines of the pseudocode: score, softmax, weighted sum.",
+   "page_refs": [464]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What do the letters b, t, s and d stand for in np.einsum(\"btd,bsd->bts\", target, source)?",
+   "options": [],
+   "answer": "Batch size, target length, source length and vector size.",
+   "explanation": "Given in the code callout. d is summed over, so the result has shape (b, t, s).",
+   "page_refs": [464]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "In figure 15.4, why might \"traeré\" attend mostly to \"I\" and \"bring\"?",
+   "options": [],
+   "answer": "\"Traeré\" means \"I will bring\": it encodes the subject and the verb, so those source words carry the information needed to produce it.",
+   "explanation": "The figure shows the darkest arrows to \"I\" and \"bring\", illustrating that relevance depends on what is being predicted.",
+   "page_refs": [464]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "What does each row of the attention score matrix represent?",
+   "options": [
+    "How much one source word is used by all target words",
+    "How much a target word values each source word in the weighted sum",
+    "The embedding of one source word",
+    "The gradient for one target word"
+   ],
+   "answer": "How much a target word values each source word in the weighted sum",
+   "explanation": "The text says so directly; softmax over axis=-1 normalizes each such row. Columns, not rows, correspond to source words.",
+   "page_refs": [464, 465]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Why is the dot product a reasonable relevance score, and what assumption does it encode?",
+   "options": [],
+   "answer": "It is large when the target and source vectors point in similar directions. The assumption is that a source token whose vector is close to the target vector is relevant to the prediction, so the model must learn representations where this holds.",
+   "explanation": "The authors say they will examine why this assumption makes intuitive sense at the end of the chapter. It is also cheap: a single matrix product.",
+   "page_refs": [464]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you write, from memory, the three lines of the single-target pseudocode and the two lines of the vectorized version on this page?",
+   "options": [],
+   "answer": "scores = [score(target, source) for source in sources]; scores = softmax(scores); combined = np.sum(scores * sources). Vectorized: scores = np.einsum(\"btd,bsd->bts\", target, source); scores = softmax(scores, axis=-1).",
+   "explanation": "These lines, plus the return on p.465, are the full dot-product attention.",
+   "page_refs": [464, 465]
+  }
+ ]
+}

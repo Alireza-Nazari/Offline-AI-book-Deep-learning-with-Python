@@ -1,0 +1,440 @@
+{
+  "page_id": "page_450",
+  "pdf_page": 450,
+  "printed_page": "426",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:48:16Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean extraction; all text and Listing 15.6 match the page image. The top code fragment is the tail of Listing 15.5, which begins on p.449."
+  },
+  "overview": {
+    "title": "From a trained language model to an autoregressive generator",
+    "chapter": "15 Language models and the Transformer",
+    "section": "15.1 The language model",
+    "subsection": "15.1.2 Generating Shakespeare",
+    "main_topic": "Rebuilding the character-level GRU language model so it can be called one token at a time with an explicit recurrent state, in preparation for autoregressive text generation.",
+    "central_idea": "A model trained to predict the next character over fixed 100-character windows can generate whole sequences if it is called in a loop, feeding each prediction back in. To do this efficiently, the authors build a second model with the same weights that takes one token plus the GRU state as input and returns the next-token distribution plus the new state.",
+    "importance": "This page introduces the core idea of autoregressive generation, which is how every text generator in the rest of the book works (seq2seq decoders in section 15.2, the mini-GPT in chapter 16). It also shows a practical Keras technique: training-time and inference-time models can differ in their inputs and outputs while sharing the same weights.",
+    "learning_objectives": [
+      "Explain what an autoregressive model is and how a next-token predictor becomes a sequence generator.",
+      "Explain why the training model (fixed length 100, implicit state) is not convenient for generation.",
+      "Read Listing 15.6 and describe how `return_state=True` and `initial_state=` expose the GRU state.",
+      "Explain why `generation_model.set_weights(model.get_weights())` works even though the two models have different input shapes and the generation model has no Dropout layer.",
+      "Define a prompt in the context of text generation."
+    ],
+    "prerequisites": [
+      "The character-level Shakespeare language model built in Listings 15.4 and 15.5 (p.449).",
+      "Recurrent layers and the GRU, including `return_sequences` and recurrent state.",
+      "The Keras Functional API with multiple inputs and outputs.",
+      "Softmax outputs and sparse categorical crossentropy."
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page opens with the last lines of **Listing 15.5**: the language model is compiled with a `sparse_categorical_accuracy` metric and trained with `model.fit(training_data, epochs=20)`. After 20 epochs it predicts the next character about **70%** of the time.\n\nSection **15.1.2 Generating Shakespeare** then asks how to turn this next-character predictor into something that writes a whole passage. The answer is to call the model **in a loop**: the character predicted at one step becomes the input at the next step. The authors name this an **autoregressive** model.\n\nThe training model is awkward for this. It was built for a fixed input length of 100 tokens, and the `GRU` managed its state internally inside a single layer call. For generation we want to:\n\n- feed **one token** at a time,\n- get the GRU's state **back as an output**, and\n- pass that state in again on the next call, because it holds everything the model has encoded about the characters seen so far.\n\n**Listing 15.6** builds such a `generation_model`. It has two inputs: `token_ids` with shape `(1,)` and `state` with shape `(hidden_dim,)`. It has two outputs: the softmax distribution over the vocabulary and the new state. The `GRU` is created with `return_state=True` and called with `initial_state=input_state`. The computation is the same as in the trained model, so all the learned parameters can be copied over with `generation_model.set_weights(model.get_weights())`.\n\nThe page ends by saying the next steps are to build lookup tables between characters and integer IDs, and to choose a **prompt**: a snippet of text fed to the model before it starts predicting new tokens. That code is on p.451.",
+  "paragraphs": [
+    {
+      "ref": "p450_e04",
+      "excerpt": "After 20 epochs, our model can eventually predict the next character",
+      "what_it_says": "After training for 20 epochs (the `model.fit` call just above), the model predicts the next character correctly about 70% of the time.",
+      "what_it_means": "The reported metric is `sparse_categorical_accuracy`, averaged over all 100 positions in every sequence and then over batches (as p.449 explains). A 70% hit rate on single characters is fairly high. Many next characters in English are nearly determined by context, such as the letters that finish a word, spaces and punctuation. Others, such as the first letter of a new word, are genuinely uncertain.",
+      "why_it_matters": "This sets what to expect from generation. With roughly 30% of next-character guesses wrong, generated text will look locally plausible but will drift. The sample output on p.452 shows exactly that.",
+      "technical_idea": "Accuracy counts how often the argmax of the softmax matches the true next character. Greedy generation (p.451) uses that same argmax, so accuracy roughly measures how often each greedy step would match the training text.",
+      "terminology": [
+        {"term": "epoch", "meaning": "One full pass over the training dataset."},
+        {"term": "sparse_categorical_accuracy", "meaning": "Accuracy for integer targets: the fraction of positions where the argmax of the predicted distribution equals the integer label."}
+      ],
+      "connections": [
+        "p.449: the model (Embedding -> GRU(1024) -> Dropout -> Dense(67, softmax)) and the compile call are defined there.",
+        "p.452: the generated sample shows what 70% next-character accuracy looks like in practice."
+      ]
+    },
+    {
+      "ref": "p450_e06",
+      "excerpt": "Now that we have trained a model that can predict the next individual",
+      "what_it_says": "Now that the model predicts single next tokens, the goal is to extrapolate a whole sequence. This is done by calling the model in a loop, with each step's predicted output used as the next step's input. Such a model is called autoregressive.",
+      "what_it_means": "The model was trained only for a narrow task: given the past, predict one character. Chaining that one-step prediction lets it produce text of any length. Each new character depends on all the characters generated before it, including its own earlier outputs, hence \"auto\" (self) \"regressive\" (predicting from previous values).",
+      "why_it_matters": "This feedback loop is the foundation of text generation in this book: the Shakespeare generator here, seq2seq decoding (p.453) and GPT-style generation in chapter 16 (p.502).",
+      "technical_idea": "Beyond the book: autoregressive generation relies on the chain rule of probability. The joint probability of a sequence factorizes as $p(x_1,\\dots,x_T)=\\prod_t p(x_t\\mid x_{<t})$. The language model learns each factor $p(x_t\\mid x_{<t})$ (p.488 phrases this as `p(token|past tokens)`), so sampling or choosing one factor at a time builds a whole sequence.",
+      "terminology": [
+        {"term": "autoregressive model", "meaning": "A model whose output at one step is fed back as its input at the next step, so each prediction is conditioned on its own previous outputs."},
+        {"term": "extrapolate", "meaning": "Here: extend a sequence beyond the given input by repeatedly predicting what comes next."}
+      ],
+      "connections": [
+        "p.488: the chapter summary defines a language model as learning p(token|past tokens) and says it generates text by being called in a loop.",
+        "p.502: the mini-GPT in chapter 16 uses the same generation idea."
+      ]
+    },
+    {
+      "ref": "p450_e07",
+      "excerpt": "To run such a loop, we need to perform a slight surgery",
+      "what_it_says": "The trained model needs a \"slight surgery\". During training it took a fixed sequence length of 100 tokens, and the GRU's state stayed hidden inside the layer call. For generation we want to predict one output token at a time and get the GRU's state out explicitly, so we can pass it back in on the next call. That state contains all the information the model has encoded about past characters.",
+      "what_it_means": "When a GRU processes a 100-step sequence in one call, it starts from a zero state, updates the state 100 times internally and throws it away at the end. In a generation loop each call sees only one new character. If the state were reset to zeros on every call, the model would forget the whole context. Making the state an explicit input and output means the caller carries the model's memory between calls.",
+      "why_it_matters": "Without this change you would have to re-run the model on the entire growing sequence at every step, which costs time proportional to the sequence length per new character. With an explicit state, each step costs the same small amount. Chapter 16 (p.504) returns to this point when it discusses cached generation for Transformers.",
+      "technical_idea": "The GRU's hidden state $h_t\\in\\mathbb{R}^{1024}$ is a fixed-size summary of all previous inputs. Because the recurrence $h_t = f(h_{t-1}, x_t)$ depends only on the previous state and the current input, running one step at a time while carrying $h$ gives exactly the same results as running the whole sequence at once.",
+      "terminology": [
+        {"term": "RNN state / hidden state", "meaning": "The vector a recurrent layer carries from one timestep to the next, summarizing everything it has seen so far."},
+        {"term": "implicit state", "meaning": "State that is created and discarded inside a single layer call and never shown to the user."}
+      ],
+      "connections": [
+        "p.448: the authors chose a GRU because it is fast and has a simpler internal state than an LSTM.",
+        "p.504: cached generation in chapter 16 compares the RNN state used here to the key/value cache of causal attention."
+      ]
+    },
+    {
+      "ref": "p450_e07",
+      "excerpt": "Let’s make a model that handles a single input character at a",
+      "what_it_says": "The plan is to build a model that takes a single input character and lets us pass the RNN state explicitly. It has the same computational structure as the trained model, with slightly different inputs and outputs, so the weights can be assigned from one model to the other.",
+      "what_it_means": "A Keras model's weights depend only on its layers' configurations (vocabulary size, embedding dimension, number of GRU units, Dense units), not on the sequence length or on whether state is returned. So a second model can be built around the same layer types and filled with the trained parameters.",
+      "why_it_matters": "This pattern of one model for training and a different-shaped model sharing the same weights for inference is common in practice. The seq2seq section later in this chapter (p.457, p.458) also handles training and inference differently.",
+      "technical_idea": "Inference: the extractor merged this printed paragraph with the previous one into element p450_e07. On the page it starts a new paragraph.",
+      "terminology": [
+        {"term": "weight transfer", "meaning": "Copying learned parameter arrays from one model to another model whose layers have identically shaped weights."}
+      ],
+      "connections": [
+        "p.449: the trained model whose weights are copied."
+      ]
+    },
+    {
+      "ref": "p450_e10",
+      "excerpt": "With this, we can call the model to predict an output sequence",
+      "what_it_says": "With the generation model built, we can call it in a loop. Before that, the authors build explicit lookup tables to convert between characters and integers, and choose a prompt: a snippet of text fed to the model before it starts predicting new tokens.",
+      "what_it_means": "The model works only with integer token IDs. To feed it the prompt string and later read its output as text, we need a mapping in both directions. The prompt sets the context, here the speaker heading of a play, so the model starts from a familiar spot in its learned distribution.",
+      "why_it_matters": "Prompting appears here for the first time in the book, in a tiny character-level model. The same idea later drives prompting of large language models (chapter 16).",
+      "terminology": [
+        {"term": "prompt", "meaning": "Text given to a language model as initial context before it generates new tokens."},
+        {"term": "lookup table", "meaning": "A dictionary mapping characters to token IDs (char_to_id) or token IDs to characters (id_to_char)."}
+      ],
+      "connections": [
+        "p.451: the lookup tables and the prompt \"KING RICHARD III:\" are defined at the top of the next page."
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "autoregressive_generation",
+      "name": "Autoregressive generation",
+      "definition": "Producing a sequence by repeatedly predicting the next token and feeding each prediction back to the model as the next input.",
+      "intuition": "Like writing one word at a time while rereading what you have written so far: each choice depends on all your earlier choices.",
+      "technical": "Given a model of $p(x_t\\mid x_{<t})$, pick $x_t$ (by argmax or by sampling), append it to the context, and repeat. In an RNN the context is summarized by the hidden state, so each step only needs the new token and the previous state.",
+      "significance": "It is how a model trained only on one-step next-token prediction can do an open-ended task: generating text of any length.",
+      "example": "The prompt \"KING RICHARD III:\\n\" primes the GRU. The model then picks one character, feeds it back, and repeats this 250 times (p.451).",
+      "misconception": "That the model predicts a whole sequence at once. It only ever predicts one token per call; the loop produces the sequence.",
+      "related": ["language_model", "rnn", "gru", "greedy_decoding"],
+      "source": "book"
+    },
+    {
+      "id": "language_model",
+      "name": "Language model",
+      "definition": "A model that learns the probability distribution of the next token given the past tokens, p(token | past tokens).",
+      "intuition": "A very well-read autocomplete.",
+      "technical": "Here it is a character-level model: Embedding(67, 256) -> GRU(1024) -> Dense(67, softmax), trained with sparse categorical crossentropy on the next character at each of 100 positions.",
+      "significance": "Training it needs no labels beyond the text itself, and the trained model can generate text.",
+      "example": "About 70% next-character accuracy after 20 epochs on Shakespeare.",
+      "misconception": "That 70% accuracy means 70% of generated text is \"correct\". Accuracy measures single-step guesses against real text. During generation, errors feed back into the input and compound.",
+      "related": ["autoregressive_generation", "rnn", "cross_entropy"],
+      "source": "book"
+    },
+    {
+      "id": "rnn_state",
+      "name": "Explicit recurrent state",
+      "definition": "Exposing the hidden state of a recurrent layer as a model output and accepting it as an input, so state can be carried across separate model calls.",
+      "intuition": "Instead of the model keeping its memory to itself and wiping it after each call, you take the memory out and hand it back next time.",
+      "technical": "In Keras, `layers.GRU(units, return_state=True)` returns `(output, state)`. Calling the layer with `initial_state=...` sets the starting state instead of zeros. For a GRU the output of the last step equals the final state $h_T$.",
+      "significance": "It allows step-by-step (streaming) inference with a constant cost per token.",
+      "example": "`x, output_state = layers.GRU(hidden_dim, return_state=True)(x, initial_state=input_state)` in Listing 15.6.",
+      "misconception": "That a stateful layer (`stateful=True`) is needed. The book instead passes the state explicitly as a model input and output.",
+      "related": ["gru", "rnn", "autoregressive_generation"],
+      "source": "book"
+    },
+    {
+      "id": "weight_sharing_between_models",
+      "name": "Reusing trained weights in a differently shaped model",
+      "definition": "Building an inference model with the same layer configuration as a training model and copying the trained parameters into it with `set_weights(get_weights())`.",
+      "intuition": "Same engine, different chassis: the parameters do not care how long the input sequence is.",
+      "technical": "`get_weights()` returns a flat list of NumPy arrays in layer order. `set_weights` requires the same number of arrays with matching shapes. Sequence length and the extra state input do not change any weight shape. Dropout has no weights, so leaving it out does not break the list.",
+      "significance": "It decouples training-time efficiency (whole sequences, parallel batches) from inference-time needs (one token, explicit state).",
+      "example": "Both models hold embedding (67x256), GRU kernel (256x3072), recurrent kernel (1024x3072), bias (2x3072), Dense kernel (1024x67) and bias (67).",
+      "misconception": "That the input shape must match for weights to transfer. Only the weight shapes must match.",
+      "related": ["functional_api", "keras_model"],
+      "source": "ai_explanation"
+    },
+    {
+      "id": "prompt",
+      "name": "Prompt",
+      "definition": "A snippet of text fed to the model before it begins predicting new tokens.",
+      "intuition": "The opening line you give a storyteller.",
+      "technical": "The prompt's tokens are run through the model to compute the state; only after that do generated tokens start.",
+      "significance": "It conditions what the model generates.",
+      "example": "\"\\nKING RICHARD III:\\n\" (p.451).",
+      "misconception": "That the prompt changes the weights. It only changes the state the model starts generating from.",
+      "related": ["autoregressive_generation", "language_model"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Autoregressive factorization (background)",
+      "latex": "p(x_1,\\dots,x_T)=\\prod_{t=1}^{T} p(x_t \\mid x_1,\\dots,x_{t-1})",
+      "source_text": "Not printed on this page; the book later writes the distribution as p(token|past tokens) (p.488).",
+      "variables": [
+        {"symbol": "x_t", "meaning": "the token (here a character ID) at position t"},
+        {"symbol": "T", "meaning": "sequence length"},
+        {"symbol": "p(x_t \\mid x_{<t})", "meaning": "the next-token distribution produced by the softmax output of the model"}
+      ],
+      "operations": "The chain rule of probability writes the joint probability as a product of conditional probabilities.",
+      "purpose": "It explains why a next-token predictor is enough to generate whole sequences.",
+      "interpretation": "Each factor is exactly what the language model outputs at one timestep. Generating means choosing $x_t$ from factor $t$ and moving to factor $t+1$.",
+      "intuition": "Write the sentence one character at a time, each conditioned on what came before.",
+      "numerical_example": "If p('t'|prompt)=0.4, p('h'|prompt,'t')=0.9 and p('e'|prompt,'th')=0.8, then p('the'|prompt)=0.4·0.9·0.8=0.288.",
+      "source": "ai_explanation",
+      "book_ref": "p.488"
+    },
+    {
+      "id": "m2",
+      "title": "One step of the generation model",
+      "latex": "(\\hat{y}_t,\\ h_t) = \\operatorname{GenModel}(x_t,\\ h_{t-1}),\\quad \\hat{y}_t=\\operatorname{softmax}(W_d h_t + b_d),\\quad h_t=\\operatorname{GRU}(E[x_t],\\ h_{t-1})",
+      "source_text": "inputs=(inputs, input_state), outputs=(outputs, output_state) in Listing 15.6",
+      "variables": [
+        {"symbol": "x_t", "meaning": "the current input token ID, shape (1,) per sample"},
+        {"symbol": "E", "meaning": "embedding matrix of shape (vocabulary_size, embedding_dim) = (67, 256)"},
+        {"symbol": "h_{t-1}", "meaning": "the GRU state passed in, shape (hidden_dim,) = (1024,)"},
+        {"symbol": "h_t", "meaning": "the new GRU state returned by the model"},
+        {"symbol": "W_d, b_d", "meaning": "Dense layer kernel (1024x67) and bias (67)"},
+        {"symbol": "\\hat{y}_t", "meaning": "softmax distribution over the 67 characters"}
+      ],
+      "operations": "Embedding lookup, one GRU recurrence step, affine map and softmax.",
+      "purpose": "It states formally what one call of `generation_model` computes.",
+      "interpretation": "The model is a function from (token, memory) to (next-token distribution, updated memory).",
+      "intuition": "A state machine whose transition function was learned from Shakespeare.",
+      "source": "inference",
+      "book_ref": "p.450"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": "15.5",
+      "title": "End of Listing 15.5: compile and train the language model",
+      "original_code": "    metrics=[\"sparse_categorical_accuracy\"],\n)\nmodel.fit(training_data, epochs=20)",
+      "language": "python",
+      "what_it_does": "Finishes the `model.compile(...)` call started on p.449 (optimizer \"adam\", loss \"sparse_categorical_crossentropy\") by adding an accuracy metric, then trains for 20 epochs.",
+      "line_explanations": [
+        {"lines": "1-2", "explanation": "Track sparse categorical accuracy, the fraction of positions where the argmax character equals the true next character; closes the compile call."},
+        {"lines": "3", "explanation": "Train on the `training_data` dataset of (input, next-character target) pairs for 20 epochs."}
+      ],
+      "inputs_outputs": "Input: batches of shape (64, 100) of character IDs with targets of the same shape shifted by one. Output: a trained `model` with about 70% next-character accuracy.",
+      "algorithm": "Adam optimization of the per-position crossentropy averaged over sequences and batches.",
+      "theory_link": "The one-step prediction learned here is the factor $p(x_t\\mid x_{<t})$ used in generation.",
+      "parameters": [
+        {"name": "epochs", "role": "Number of passes over the data (20)."},
+        {"name": "metrics", "role": "Reports next-character accuracy."}
+      ],
+      "pitfalls": [
+        "This is only the end of Listing 15.5; the first lines (`model.compile(`, `optimizer=\"adam\"`, `loss=\"sparse_categorical_crossentropy\",`) are on p.449."
+      ]
+    },
+    {
+      "id": "c2",
+      "listing": "15.6",
+      "title": "Modifying the language model for autoregressive inference",
+      "original_code": "inputs = keras.Input(shape=(1,), dtype=\"int\", name=\"token_ids\")\ninput_state = keras.Input(shape=(hidden_dim,), name=\"state\")\nx = layers.Embedding(vocabulary_size, embedding_dim)(inputs)\nx, output_state = layers.GRU(hidden_dim, return_state=True)(\n    x, initial_state=input_state\n)\noutputs = layers.Dense(vocabulary_size, activation=\"softmax\")(x)\ngeneration_model = keras.Model(\n    inputs=(inputs, input_state),\n    outputs=(outputs, output_state),\n)\ngeneration_model.set_weights(model.get_weights())",
+      "language": "python",
+      "what_it_does": "Builds a two-input, two-output Functional model that processes one character at a time with an explicitly passed GRU state, then copies all trained parameters from the training model into it.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Input of one token ID per sample (shape `(1,)`), instead of the 100 used in training."},
+        {"lines": "2", "explanation": "A second input for the GRU state, a vector of size `hidden_dim` (1024)."},
+        {"lines": "3", "explanation": "Same embedding as before: 67-character vocabulary to 256-dim vectors. Output shape (None, 1, 256)."},
+        {"lines": "4-6", "explanation": "GRU with `return_state=True` returns both its output and its final state. `initial_state=input_state` starts the recurrence from the state passed in rather than zeros. Without `return_sequences`, `x` is the last-step output, shape (None, 1024)."},
+        {"lines": "7", "explanation": "Same Dense softmax head, giving a distribution over the 67 characters, shape (None, 67). There is no Dropout layer here; it only matters during training."},
+        {"lines": "8-11", "explanation": "Wrap into a model taking `(token_ids, state)` and returning `(probabilities, new_state)`."},
+        {"lines": "12", "explanation": "Copy weights: the list of arrays from the trained model (embedding, GRU kernel/recurrent kernel/bias, Dense kernel/bias) has the same shapes in the new model."}
+      ],
+      "inputs_outputs": "Inputs: token IDs of shape (batch, 1) and state of shape (batch, 1024). Outputs: probabilities of shape (batch, 67) and new state of shape (batch, 1024).",
+      "algorithm": "One GRU step per call; the state is carried by the caller.",
+      "theory_link": "It implements $(\\hat y_t, h_t)=f(x_t,h_{t-1})$, the recurrence written as an explicit function.",
+      "parameters": [
+        {"name": "hidden_dim", "role": "GRU units and state size (1024 on p.449)."},
+        {"name": "embedding_dim", "role": "Embedding size (256)."},
+        {"name": "vocabulary_size", "role": "Number of distinct characters (67, from the Dense param count 68,675 = 1024·67 + 67 on p.449)."},
+        {"name": "return_state", "role": "Makes the GRU also return its final state."},
+        {"name": "initial_state", "role": "State to start the recurrence from."}
+      ],
+      "pitfalls": [
+        "Layer order must match for `set_weights` to work: weights are matched by position in the list, not by name.",
+        "Leaving out `initial_state` would reset the memory to zeros on every call and destroy the context.",
+        "The output prediction has no time axis (shape (batch, 67)), unlike the training model's (batch, 100, 67)."
+      ],
+      "illustrative_code": "# AI-written sanity check (not from the book): the two models agree\nimport numpy as np\nseq = np.random.randint(0, vocabulary_size, size=(1, 100))\nfull = model.predict(seq, verbose=0)          # (1, 100, 67)\nstate = np.zeros((1, hidden_dim), \"float32\")\nfor t in range(100):\n    p, state = generation_model.predict((seq[:, t:t+1], state), verbose=0)\nprint(np.allclose(p, full[:, -1], atol=1e-4))  # expect True"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why the weights fit: a parameter census",
+      "kind": "numerical",
+      "body": "From the summary on p.449: Embedding 17,152 = 67 x 256; GRU 3,938,304 = 3 x (256·1024 + 1024·1024 + 2·1024), since Keras' GRU uses `reset_after=True` with two bias vectors; Dense 68,675 = 1024·67 + 67. None of these numbers involve the sequence length 100 or the batch size, so the one-token model in Listing 15.6 has exactly the same weight shapes. Dropout contributes 0 parameters, so leaving it out keeps the `get_weights()` list aligned.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Cost of generation with and without explicit state",
+      "kind": "breakdown",
+      "body": "Without explicit state you would have to feed the whole context (prompt plus everything generated so far) at every step, so generating $N$ characters costs about $\\sum_{t} t = O(N^2)$ GRU steps. With the state carried between calls, each new character costs one GRU step, $O(N)$ in total. Chapter 16 (p.504) finds the same inefficiency in naive Transformer generation and fixes it with a cache of keys and values. Beyond the book: this is the KV cache.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Analogy: a relay runner's baton",
+      "kind": "analogy",
+      "body": "The training model runs the whole 100-meter race by itself and keeps the baton. The generation model runs one meter at a time and must hand the baton (the state) to its next call. If you dropped the baton by passing zeros, the next runner would start without knowing anything about the race so far.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "The autoregressive generation loop with explicit GRU state",
+      "why": "The page describes the model's output at one step becoming its input at the next, with the state passed explicitly (Listing 15.6).",
+      "mermaid": "flowchart LR\n  T[\"token_ids (1,)\"] --> E[\"Embedding 67→256\"]\n  S[\"state (1024,)\"] --> G[\"GRU(1024, return_state=True)\"]\n  E --> G\n  G --> D[\"Dense(67, softmax)\"]\n  G --> S2[\"output_state (1024,)\"]\n  D --> P[\"next-char probabilities (67,)\"]\n  P -->|pick next char| T\n  S2 -->|feed back next call| S"
+    },
+    {
+      "id": "v2",
+      "type": "widget",
+      "title": "One-step generation model layers",
+      "why": "Listing 15.6 builds a model with a single-token input; this shows the per-layer output shapes with the page's sizes (vocab 67, embedding 256, hidden 1024).",
+      "widget": "nn_architecture",
+      "params": {
+        "layers": [
+          {"name": "token_ids", "type": "input", "shape": "(None, 1)"},
+          {"name": "embedding", "type": "embedding", "units": 256, "shape": "(None, 1, 256)"},
+          {"name": "gru (return_state=True)", "type": "rnn", "units": 1024, "activation": "tanh", "shape": "(None, 1024)"},
+          {"name": "dense", "type": "output", "units": 67, "activation": "softmax", "shape": "(None, 67)"}
+        ]
+      }
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "To generate text you can just call `model.predict()` once on the prompt.",
+      "correction": "A single call returns only next-character distributions for the given inputs. Generation needs a loop that feeds predictions back in (p.452 makes this point explicitly)."
+    },
+    {
+      "claim": "The generation model must be retrained because its input shape changed.",
+      "correction": "Weight shapes do not depend on sequence length, so `set_weights(model.get_weights())` transfers the trained parameters directly."
+    },
+    {
+      "claim": "Dropout must be included in the generation model for the weights to line up.",
+      "correction": "Dropout has no weights and is inactive at inference, so leaving it out is harmless."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 446, "note": "Why generating text needs a model that predicts integer token sequences one step at a time."},
+      {"page": 448, "note": "Choice of Embedding plus GRU for the character-level language model."},
+      {"page": 449, "note": "Listings 15.4 and 15.5: model definition, summary and the start of the compile call."}
+    ],
+    "later": [
+      {"page": 451, "note": "Lookup tables, prompt, priming the state (Listing 15.7) and the greedy generation loop (Listing 15.8)."},
+      {"page": 452, "note": "Generated Shakespeare sample and why a bidirectional GRU would break generation."},
+      {"page": 453, "note": "Seq2seq inference reuses the same one-token-at-a-time generation."},
+      {"page": 504, "note": "Cached generation for Transformers, compared with the RNN state used here."}
+    ],
+    "prerequisites": [
+      {"page": 449, "note": "The trained model whose weights are copied."}
+    ],
+    "related_math": [
+      {"page": 488, "note": "Language model defined as p(token|past tokens)."}
+    ],
+    "related_code": [
+      {"page": 451, "note": "Listings 15.7 and 15.8 call `generation_model` in a loop."},
+      {"page": 502, "note": "Listing 16.9, generation function for the mini-GPT."}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "After 20 epochs the character-level GRU predicts the next character about 70% of the time.",
+    "Autoregressive generation means calling the model in a loop, feeding each predicted token back in as input.",
+    "The training model used fixed 100-token sequences and implicit state; generation needs one token per call and an explicit state.",
+    "`return_state=True` and `initial_state=` expose the GRU's state as a model output and input.",
+    "Because weight shapes do not depend on sequence length, `set_weights(model.get_weights())` turns the trained model into a generator with no retraining.",
+    "A prompt is the text fed in before generation begins."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "Why can `generation_model.set_weights(model.get_weights())` succeed even though the two models have different input shapes?",
+      "options": [
+        "Because Keras automatically resizes weights to the new input shape",
+        "Because no weight shape depends on sequence length, and the layers with weights appear in the same order with the same configurations",
+        "Because both models are trained jointly",
+        "Because the generation model has no trainable weights"
+      ],
+      "answer": "Because no weight shape depends on sequence length, and the layers with weights appear in the same order with the same configurations",
+      "explanation": "Embedding, GRU and Dense weights depend only on vocabulary size, embedding_dim and hidden_dim. Keras does not resize weights; the generation model is not trained at all; and it does have weights, the copied ones.",
+      "page_refs": [450, 449]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "What two arguments in Listing 15.6 make the GRU's state explicit, and what does each do?",
+      "options": [],
+      "answer": "`return_state=True` makes the layer return its final state alongside its output; `initial_state=input_state` makes it start from the state passed in instead of zeros.",
+      "explanation": "Together they let the caller carry the memory from one call to the next.",
+      "page_refs": [450]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "What would go wrong in generation if the GRU state were reset to zeros on each one-character call?",
+      "options": [],
+      "answer": "The model would see only the single current character with no context, so each prediction would be based on one character alone and the text would quickly become meaningless.",
+      "explanation": "The state contains all information encoded about past characters (p.450). Dropping it removes the conditioning on $x_{<t}$.",
+      "page_refs": [450]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "What is an autoregressive model, as defined on this page?",
+      "options": [
+        "A model whose output at one time step becomes its input at the next time step",
+        "A model that regresses continuous values",
+        "A model trained with automatic differentiation",
+        "A model that reads a sequence in both directions"
+      ],
+      "answer": "A model whose output at one time step becomes its input at the next time step",
+      "explanation": "That is the page's definition. Regression of continuous values and autodiff are unrelated; bidirectional reading would actually break generation (p.452).",
+      "page_refs": [450, 452]
+    },
+    {
+      "id": "q5",
+      "type": "math",
+      "question": "Using the sizes from p.449 (vocabulary 67, embedding 256, hidden 1024), what are the output shapes of the two outputs of `generation_model` for a batch of 1?",
+      "options": [],
+      "answer": "Probabilities (1, 67) and state (1, 1024).",
+      "explanation": "Without `return_sequences` the GRU emits only its last output (1, 1024), which the Dense layer maps to (1, 67). The returned state has shape (1, hidden_dim).",
+      "page_refs": [450, 449]
+    },
+    {
+      "id": "q6",
+      "type": "conceptual",
+      "question": "Why is Dropout missing from Listing 15.6, and does that change the predictions?",
+      "options": [],
+      "answer": "Dropout is only active during training and has no weights. At inference it is the identity, so leaving it out changes nothing.",
+      "explanation": "The training model applied Dropout(0.1) after the GRU (p.449). In `predict` it is disabled anyway.",
+      "page_refs": [449, 450]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you explain, without looking, why carrying the state makes each generation step cost the same regardless of how much text has already been generated?",
+      "options": [],
+      "answer": "The state is a fixed-size (1024) summary of all past input, so each step processes one token plus a constant-size vector.",
+      "explanation": "Without the state you would re-run the whole growing sequence at every step.",
+      "page_refs": [450]
+    }
+  ]
+}

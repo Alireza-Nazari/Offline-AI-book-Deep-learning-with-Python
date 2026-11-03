@@ -1,0 +1,435 @@
+{
+  "page_id": "page_054",
+  "pdf_page": 54,
+  "printed_page": "30",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:14:31Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean extraction; three code blocks and two code callouts (\"Element-wise addition\", \"Element-wise relu\") match the page image. The page ends mid-list: the second broadcasting step is on p.55."
+  },
+  "overview": {
+    "title": "Vectorized element-wise ops and the start of broadcasting",
+    "chapter": "2 The mathematical building blocks of neural networks",
+    "section": "2.3 The gears of neural networks: Tensor operations",
+    "subsection": "2.3.2 Broadcasting",
+    "main_topic": "Why built-in NumPy element-wise operations are dramatically faster than naive Python loops, and how tensors of different shapes can still be added via broadcasting.",
+    "central_idea": "Element-wise operations delegated to optimized BLAS (on CPU) or CUDA (on GPU) routines run around a hundred times faster than Python loops; and when two tensors have different shapes, the smaller one is broadcast — first by adding broadcast axes so its ndim matches the larger one.",
+    "importance": "Every Dense layer computes relu(matmul(input, W) + b), where b is a vector added to a matrix. Understanding vectorization explains why deep learning code is written as whole-tensor operations rather than loops, and broadcasting explains how the bias addition is even legal.",
+    "learning_objectives": [
+      "Write the vectorized NumPy equivalent of naive element-wise addition and relu (`x + y`, `np.maximum(z, 0.0)`).",
+      "Explain why vectorized implementations backed by BLAS or CUDA are orders of magnitude faster than Python for loops.",
+      "Reproduce the timing experiment on the page and interpret the 0.02 s vs 2.45 s result.",
+      "State the problem broadcasting solves: adding tensors whose shapes differ, such as a rank-2 batch and a bias vector.",
+      "Describe the first step of broadcasting: adding broadcast axes to the smaller tensor until its ndim matches."
+    ],
+    "prerequisites": [
+      "Tensors, rank (ndim) and shape (p.47)",
+      "The Dense layer as relu(matmul(input, W) + b) (p.52-53)",
+      "The naive_relu and naive_add loop implementations (p.53)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "This page closes section 2.3.1 on **element-wise operations** and opens **2.3.2 Broadcasting**.\n\nThe opening line finishes a sentence from p.53: NumPy's built-in element-wise functions delegate the heavy lifting to **BLAS** (Basic Linear Algebra Subprograms), which are *highly parallel, efficient tensor-manipulation routines typically implemented in Fortran or C*. As a result, the two lines\n\n```python\nz = x + y\nz = np.maximum(z, 0.0)\n```\n\nperform element-wise addition and element-wise relu on whole arrays at once — and they are \"blazing fast.\"\n\nThe authors then time it. With two random `(20, 100)` arrays, 1,000 repetitions of vectorized add-and-relu take **0.02 seconds**, while the same work done with the loop-based `naive_add` and `naive_relu` from p.53 takes **2.45 seconds** — over 100× slower. The same logic carries over to GPUs: when JAX, TensorFlow or PyTorch code runs on a GPU, element-wise operations are executed by **fully vectorized CUDA implementations** that exploit the GPU's massively parallel architecture.\n\nSection 2.3.2 then raises a problem: `naive_add` only handles two rank-2 tensors of *identical* shape, yet the `Dense` layer adds a rank-2 tensor (the output of `matmul`) to a vector `b`. What happens when shapes differ? Answer: *when possible, and if there's no ambiguity*, the smaller tensor is **broadcast** to match the larger one. Broadcasting has two steps; this page gives only the first — **broadcast axes** are added to the smaller tensor so its `ndim` matches the larger tensor's. The second step (repeating the smaller tensor along those new axes) and the concrete `(32, 10)` + `(10,)` example follow on p.55.",
+  "paragraphs": [
+    {
+      "ref": "p054_e03",
+      "excerpt": "highly parallel, efficient tensor-manipulation routines that are typically implemented in Fortran or C.",
+      "what_it_says": "This completes the sentence begun on p.53: NumPy's built-in element-wise functions hand off the work to a BLAS implementation, and BLAS routines are low-level, highly parallel, efficient tensor-manipulation routines, usually written in Fortran or C.",
+      "what_it_means": "When you write `x + y` on NumPy arrays, the Python interpreter does not loop over elements. It makes one call into compiled code that processes the whole buffer of numbers in a tight, optimized loop (often using SIMD vector instructions and multiple cores).",
+      "why_it_matters": "This is the reason all deep-learning code is written in terms of whole-tensor operations: the cost of Python's per-element interpretation is paid once per operation instead of once per number.",
+      "technical_idea": "Beyond the book: strictly speaking, BLAS is best known for vector/matrix routines (dot products, matrix multiplication); NumPy's simple element-wise ufuncs such as `add` and `maximum` are implemented in NumPy's own compiled C loops, which are also vectorized. The practical point the book makes — compiled, parallel, low-level code does the work — is the same.",
+      "terminology": [
+        {"term": "BLAS", "meaning": "Basic Linear Algebra Subprograms: a standard interface for low-level linear-algebra routines with many optimized implementations (OpenBLAS, Intel MKL, Apple Accelerate)."},
+        {"term": "Fortran / C", "meaning": "Compiled languages that produce fast machine code, unlike interpreted Python."}
+      ],
+      "connections": ["p.53: the sentence starts there, right after the naive_relu and naive_add loop implementations."]
+    },
+    {
+      "ref": "p054_e04",
+      "excerpt": "So, in NumPy, you can do the following element-wise operation, and",
+      "what_it_says": "In NumPy you can write the element-wise addition and relu as two one-liners — `z = x + y` and `z = np.maximum(z, 0.0)` — and they will run very fast.",
+      "what_it_means": "The `+` operator on arrays is element-wise addition, and `np.maximum(z, 0.0)` compares every entry with 0 and keeps the larger value, which is exactly relu. These two lines replace the explicit double `for` loops of `naive_add` and `naive_relu`.",
+      "why_it_matters": "These two lines are, minus the matrix product, the body of a Dense layer: add a bias, apply relu. Writing them vectorized is both shorter and faster.",
+      "technical_idea": "`np.maximum` is the element-wise binary maximum (not to be confused with `np.max`, which reduces an array to its largest value). Here the second argument is the scalar 0.0, which is itself broadcast against `z` — a preview of the next subsection.",
+      "terminology": [
+        {"term": "element-wise operation", "meaning": "An operation applied independently to each entry (or each pair of corresponding entries) of tensors."}
+      ],
+      "connections": ["p.53: relu(x) is defined as max(x, 0) and element-wise operations are introduced."]
+    },
+    {
+      "ref": "p054_e08",
+      "excerpt": "This takes 0.02 seconds. Meanwhile, the naive version takes a stunning",
+      "what_it_says": "The vectorized loop of 1,000 add-and-relu steps on `(20, 100)` arrays takes 0.02 s; the version using `naive_add` and `naive_relu` takes 2.45 s.",
+      "what_it_means": "The speed-up is roughly 2.45 / 0.02 ≈ 120×. Each iteration processes 2,000 elements twice (add, then relu), so the naive version spends about 2.45 s / (1000 × 4000) ≈ 0.6 µs per element-operation in Python, while the vectorized version spends about 5 ns.",
+      "why_it_matters": "A factor of ~100 is the difference between a training run taking an hour and taking four days. Real networks process tensors with millions of entries, where the gap matters even more.",
+      "technical_idea": "Note (not in the book): the exact timings depend on your machine, NumPy build and Python version; `time.time()` is also a coarse timer. For careful benchmarks use `timeit` or `time.perf_counter()`. The order of magnitude of the gap, however, is robust.",
+      "terminology": [],
+      "connections": ["p.53: naive_add and naive_relu are defined there with explicit loops over both axes."]
+    },
+    {
+      "ref": "p054_e10",
+      "excerpt": "Likewise, when running JAX/TensorFlow/PyTorch code on a GPU, element-wise operations are",
+      "what_it_says": "The same principle applies on GPUs: JAX, TensorFlow and PyTorch execute element-wise operations through fully vectorized CUDA implementations designed to make the most of the GPU's highly parallel chip architecture.",
+      "what_it_means": "A GPU has thousands of simple cores. An element-wise operation, by definition, has no dependency between entries, so each core (thread) can handle one or a few entries simultaneously. CUDA is NVIDIA's programming platform for writing such kernels.",
+      "why_it_matters": "It connects the NumPy story to the frameworks used in the rest of the book: the code you write in Keras on top of JAX, TensorFlow or PyTorch is fast because it compiles down to these parallel kernels.",
+      "technical_idea": "Beyond the book: element-wise operations on GPUs are usually memory-bandwidth-bound rather than compute-bound — the chip can add numbers faster than it can read them from memory. That is why compilers such as XLA (used by JAX and TensorFlow) 'fuse' consecutive element-wise ops like add-then-relu into one kernel, reading the data only once.",
+      "terminology": [
+        {"term": "CUDA", "meaning": "NVIDIA's parallel computing platform and API for running general-purpose code on its GPUs."},
+        {"term": "vectorized implementation", "meaning": "An implementation that applies one operation to many data elements at once instead of one at a time in a loop."}
+      ],
+      "connections": ["p.53: the term 'vectorized' was traced back to 1970-1990s vector-processor supercomputers.", "Chapter 3 (from p.84 onward) introduces the JAX, TensorFlow and PyTorch frameworks named here."]
+    },
+    {
+      "ref": "p054_e13",
+      "excerpt": "Our earlier naive implementation of naive_add only supports the addition of",
+      "what_it_says": "`naive_add` only adds two rank-2 tensors of identical shape. But the Dense layer adds a rank-2 tensor to a vector. So what happens when the shapes of the two tensors being added differ?",
+      "what_it_means": "In `relu(matmul(input, W) + b)`, `matmul(input, W)` has shape `(batch_size, units)` while `b` has shape `(units,)`. A strict element-wise addition is undefined for these shapes, yet the layer works — so there must be a rule that reconciles them.",
+      "why_it_matters": "This motivates broadcasting as a practical necessity, not a curiosity: the bias addition in every Dense layer depends on it, and the same bias must be added to every sample in the batch.",
+      "technical_idea": "The naive_add on p.53 starts with `assert x.shape == y.shape`, which is exactly the restriction being lifted here.",
+      "terminology": [
+        {"term": "rank-2 tensor", "meaning": "A matrix: a tensor with two axes (ndim == 2)."}
+      ],
+      "connections": ["p.52: the Dense layer computes output = relu(matmul(input, W) + b).", "p.53: naive_add requires equal shapes."]
+    },
+    {
+      "ref": "p054_e14",
+      "excerpt": "When possible, and if there’s no ambiguity, the smaller tensor will be",
+      "what_it_says": "When it is possible and unambiguous, the smaller tensor is broadcast to match the shape of the larger tensor. Broadcasting consists of two steps.",
+      "what_it_means": "Broadcasting is an automatic, implicit shape-matching rule. 'When possible, and if there's no ambiguity' signals that it does not work for every pair of shapes: the trailing axes of the smaller tensor must line up with those of the larger tensor (p.55 states the general condition).",
+      "why_it_matters": "It lets you write `matrix + vector` without manually copying the vector into a full matrix — saving both code and memory.",
+      "technical_idea": "Beyond the book: NumPy's full rule compares shapes from the last axis backward; two axis sizes are compatible if they are equal or if one of them is 1. Shapes `(32, 10)` and `(10,)` are compatible; `(32, 10)` and `(32,)` are not, because 10 ≠ 32.",
+      "terminology": [
+        {"term": "broadcast", "meaning": "To virtually expand a smaller tensor so it has the same shape as a larger one in an element-wise operation."}
+      ],
+      "connections": ["p.55: the second step and a full worked example with X of shape (32, 10) and y of shape (10,)."]
+    },
+    {
+      "ref": "p054_e15",
+      "excerpt": "Axes (called broadcast axes) are added to the smaller tensor to match",
+      "what_it_says": "Step 1 of broadcasting: new axes, called broadcast axes, are added to the smaller tensor until its ndim equals that of the larger tensor.",
+      "what_it_means": "A vector of shape `(10,)` added to a `(32, 10)` matrix first becomes shape `(1, 10)`: a size-1 axis is inserted at the front. The data is unchanged; only the shape's rank is raised to 2.",
+      "why_it_matters": "Matching the number of axes first is what makes the second step (repeating along the new axes) well defined.",
+      "technical_idea": "In NumPy this step corresponds to `np.expand_dims(y, axis=0)` or `y[None, :]`; the new axes are always added on the left (leading axes).",
+      "terminology": [
+        {"term": "broadcast axes", "meaning": "The new (leading) axes inserted into the smaller tensor during broadcasting."},
+        {"term": "ndim", "meaning": "Number of axes (rank) of a tensor, an attribute of NumPy arrays (p.47)."}
+      ],
+      "connections": ["p.55: step 2 — the smaller tensor is repeated along these new axes to reach the full shape."]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "vectorization",
+      "name": "Vectorized implementation",
+      "definition": "Implementing an operation so it applies to an entire tensor in one call to optimized low-level code, rather than with a Python loop over elements.",
+      "intuition": "Instead of a clerk stamping each form one by one, you hand the whole stack to a machine that stamps hundreds in parallel.",
+      "technical": "NumPy dispatches `x + y` to compiled C/Fortran loops (and BLAS for linear algebra) that use SIMD instructions and avoid per-element interpreter overhead; on GPUs, frameworks dispatch to CUDA kernels where thousands of threads each handle some elements.",
+      "significance": "On this page the vectorized version is about 120× faster (0.02 s vs 2.45 s). All deep-learning code depends on this.",
+      "example": "`z = np.maximum(x + y, 0.0)` vs. the double for loops of naive_add and naive_relu.",
+      "misconception": "Vectorization is not just syntactic sugar; the speed difference comes from where the loop runs (compiled code vs. the Python interpreter), not from fewer arithmetic operations.",
+      "related": ["element_wise_operation", "tensor", "broadcasting"],
+      "source": "book"
+    },
+    {
+      "id": "element_wise_operation",
+      "name": "Element-wise operation",
+      "definition": "An operation applied independently to each entry of a tensor (unary, like relu) or to each pair of corresponding entries of two tensors (binary, like addition).",
+      "intuition": "Each cell of the output depends only on the same cell of the inputs, so all cells can be computed at the same time.",
+      "technical": "For tensors of equal shape, $z_{ij} = f(x_{ij}, y_{ij})$. The independence between entries is what makes these ops 'highly amenable to massively parallel implementations' (p.53).",
+      "significance": "Bias addition and activation functions in every layer are element-wise operations.",
+      "example": "`x + y`, `np.maximum(z, 0.0)`, `x * y` (element-wise product, not matrix product).",
+      "misconception": "`x * y` on NumPy arrays is element-wise multiplication, not the matrix/tensor product, which is `np.matmul` or `@` (p.56).",
+      "related": ["relu", "vectorization", "broadcasting"],
+      "source": "book"
+    },
+    {
+      "id": "relu",
+      "name": "ReLU (rectified linear unit)",
+      "definition": "relu(x) = max(x, 0), applied element-wise.",
+      "intuition": "Keep positive values, zero out negative ones.",
+      "technical": "In NumPy: `np.maximum(z, 0.0)` — the element-wise maximum of `z` and the scalar 0.",
+      "significance": "It is the activation used in the Dense layers of the chapter's first example.",
+      "example": "relu([-1.5, 0.0, 2.3]) = [0.0, 0.0, 2.3].",
+      "misconception": "Using `np.max(z, 0)` instead is a common bug: that computes the maximum along axis 0, a reduction, not relu.",
+      "related": ["element_wise_operation", "dense_layer"],
+      "source": "book"
+    },
+    {
+      "id": "broadcasting",
+      "name": "Broadcasting",
+      "definition": "The rule by which, when possible and unambiguous, the smaller tensor in an element-wise operation is expanded to match the shape of the larger tensor.",
+      "intuition": "Adding one bias vector to every row of a batch: conceptually the vector is copied once per row.",
+      "technical": "Two steps: (1) add broadcast axes to the smaller tensor so its ndim matches the larger one (this page); (2) repeat the smaller tensor along those axes to match the full shape (p.55). The repetition is virtual — no copy is made in memory (p.55).",
+      "significance": "It is what makes `matmul(input, W) + b` in a Dense layer valid when `b` is a vector.",
+      "example": "X with shape (32, 10) plus y with shape (10,): y → (1, 10) → virtually (32, 10).",
+      "misconception": "Broadcasting does not work for arbitrary shapes; the smaller tensor's shape must match the trailing axes of the larger one.",
+      "related": ["element_wise_operation", "tensor", "dense_layer"],
+      "source": "book"
+    },
+    {
+      "id": "blas",
+      "name": "BLAS",
+      "definition": "Basic Linear Algebra Subprograms — low-level, highly parallel, efficient tensor-manipulation routines, typically implemented in Fortran or C, to which NumPy delegates heavy computation.",
+      "intuition": "A decades-old, heavily tuned toolbox of number-crunching routines that libraries call instead of reinventing them.",
+      "technical": "BLAS defines Level 1 (vector-vector), Level 2 (matrix-vector) and Level 3 (matrix-matrix) routines; implementations such as OpenBLAS and Intel MKL are tuned per CPU.",
+      "significance": "Explains where NumPy's speed comes from.",
+      "example": "`np.dot` on large float arrays calls a BLAS GEMM/GEMV routine.",
+      "misconception": "BLAS is an interface standard, not a single library; performance depends on which implementation your NumPy is linked against.",
+      "related": ["vectorization"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Vectorized add-then-relu, element by element",
+      "latex": "z_{ij} = \\max\\left(x_{ij} + y_{ij},\\ 0\\right), \\quad 0 \\le i < 20,\\ 0 \\le j < 100",
+      "source_text": "z = x + y\nz = np.maximum(z, 0.0)",
+      "variables": [
+        {"symbol": "x_{ij}, y_{ij}", "meaning": "Entries of the two random input arrays of shape (20, 100) in the timing experiment."},
+        {"symbol": "z_{ij}", "meaning": "Entry of the output array, same shape (20, 100)."},
+        {"symbol": "i, j", "meaning": "Row and column indices."}
+      ],
+      "operations": "An element-wise sum followed by an element-wise maximum with 0 (relu).",
+      "purpose": "Shows that the two NumPy lines compute, for every index pair, exactly what the naive loops compute.",
+      "interpretation": "Each of the 2,000 outputs depends only on the two inputs at the same position, so all can be computed in parallel.",
+      "intuition": "Add the two grids cell by cell, then clip negatives to zero.",
+      "numerical_example": "If $x_{00} = 0.3$ and $y_{00} = 0.5$, then $z_{00} = \\max(0.8, 0) = 0.8$. Because `np.random.random` draws from $[0, 1)$, every sum is non-negative in this experiment, so relu actually leaves the values unchanged here — the timing measures the cost of the operations, not their effect.",
+      "source": "inference",
+      "book_ref": "p.54 (code), relu defined on p.53"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Vectorized element-wise addition and relu in NumPy",
+      "original_code": "import numpy as np\nz = x + y\nz = np.maximum(z, 0.0)",
+      "language": "python",
+      "what_it_does": "Adds two same-shaped arrays element-wise, then applies relu element-wise, using NumPy's built-in vectorized operations.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Imports NumPy under the conventional alias np."},
+        {"lines": "2", "explanation": "Element-wise addition (book callout: \"Element-wise addition\"). `x` and `y` must have the same shape or be broadcast-compatible."},
+        {"lines": "3", "explanation": "Element-wise relu (book callout: \"Element-wise relu\"): each entry becomes max(entry, 0.0)."}
+      ],
+      "inputs_outputs": "Inputs: arrays `x`, `y` (assumed defined, e.g. rank-2 of equal shape). Output: array `z` of the same shape.",
+      "algorithm": "Two vectorized passes over the data: one sum, one maximum.",
+      "theory_link": "These are the `+ b` and `relu` parts of a Dense layer (p.52-53).",
+      "parameters": [
+        {"name": "0.0", "role": "The threshold for relu; being a scalar, it is broadcast against z."}
+      ],
+      "pitfalls": [
+        "`np.max(z, 0.0)` is not relu — `np.max` is a reduction whose second argument is an axis.",
+        "`x` and `y` are not defined in this snippet; it assumes they already exist."
+      ],
+      "illustrative_code": "# AI-written: verify equivalence with the naive loops from p.53\nimport numpy as np\nx = np.random.randn(3, 4); y = np.random.randn(3, 4)\nz_fast = np.maximum(x + y, 0.0)\nz_slow = x.copy()\nfor i in range(x.shape[0]):\n    for j in range(x.shape[1]):\n        z_slow[i, j] = max(x[i, j] + y[i, j], 0)\nprint(np.allclose(z_fast, z_slow))  # True"
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Timing the vectorized version",
+      "original_code": "import time\nx = np.random.random((20, 100))\ny = np.random.random((20, 100))\nt0 = time.time()\nfor _ in range(1000):\n    z = x + y\n    z = np.maximum(z, 0.0)\nprint(\"Took: {0:.2f} s\".format(time.time() - t0))",
+      "language": "python",
+      "what_it_does": "Creates two random (20, 100) arrays and measures the wall-clock time of 1,000 repetitions of vectorized add + relu.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Imports the standard-library `time` module for wall-clock timing."},
+        {"lines": "2-3", "explanation": "Two arrays of shape (20, 100) — 2,000 entries each — with values drawn uniformly from [0, 1)."},
+        {"lines": "4", "explanation": "Records the start time in seconds."},
+        {"lines": "5-7", "explanation": "Repeats the vectorized element-wise addition and relu 1,000 times so the total time is measurable."},
+        {"lines": "8", "explanation": "Prints the elapsed time with two decimals; the book reports 0.02 s."}
+      ],
+      "inputs_outputs": "No external inputs; prints the elapsed time (about 0.02 s in the book).",
+      "algorithm": "Simple wall-clock micro-benchmark: start time, repeated work, end time.",
+      "theory_link": "Demonstrates the performance benefit of vectorized implementations discussed on p.53-54.",
+      "parameters": [
+        {"name": "(20, 100)", "role": "Array shape; 2,000 elements per array."},
+        {"name": "1000", "role": "Number of repetitions to make the timing measurable."}
+      ],
+      "pitfalls": [
+        "Timings vary by machine; with arrays this small, part of the 0.02 s is per-call overhead rather than arithmetic.",
+        "`time.time()` has limited resolution; `time.perf_counter()` or `timeit` is more reliable for benchmarks."
+      ],
+      "illustrative_code": "# AI-written: a more careful benchmark\nimport timeit, numpy as np\nx = np.random.random((20, 100)); y = np.random.random((20, 100))\nprint(timeit.timeit(lambda: np.maximum(x + y, 0.0), number=1000))"
+    },
+    {
+      "id": "c3",
+      "listing": null,
+      "title": "Timing the naive loop version",
+      "original_code": "t0 = time.time()\nfor _ in range(1000):\n    z = naive_add(x, y)\n    z = naive_relu(z)\nprint(\"Took: {0:.2f} s\".format(time.time() - t0))",
+      "language": "python",
+      "what_it_does": "Measures 1,000 repetitions of the same computation done with the pure-Python loop implementations `naive_add` and `naive_relu`.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Start time."},
+        {"lines": "2-4", "explanation": "Same work as before, but each call loops in Python over all 20 × 100 entries."},
+        {"lines": "5", "explanation": "Prints the elapsed time; the book reports 2.45 s."}
+      ],
+      "inputs_outputs": "Reuses `x`, `y` from the previous snippet and the functions defined on p.53; prints about 2.45 s.",
+      "algorithm": "Same micro-benchmark, different implementation of the operations.",
+      "theory_link": "The ~120× gap is the cost of executing the inner loops in the Python interpreter instead of compiled code.",
+      "parameters": [],
+      "pitfalls": [
+        "`naive_add` and `naive_relu` must be defined first (p.53); they also call `x.copy()` so the inputs are not modified.",
+        "`naive_add` asserts identical shapes, so it cannot handle broadcasting — the problem raised next on the page."
+      ],
+      "illustrative_code": null
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Where does the 120× come from?",
+      "kind": "breakdown",
+      "body": "Beyond the book: in a Python loop, each `z[i, j] += y[i, j]` involves looking up the array, creating Python float objects, dispatching the `+` operator dynamically, type checking and writing back — hundreds of machine instructions for one addition. A compiled loop does the same addition in roughly one instruction, and SIMD units can do 4–16 additions per instruction. The two versions perform the same arithmetic; the naive one just wraps each operation in a lot of interpreter overhead.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Broadcast step 1, step by step for a Dense layer",
+      "kind": "step_by_step",
+      "body": "For a batch of 128 MNIST images through `Dense(512)`: `matmul(input, W)` has shape `(128, 512)`; `b` has shape `(512,)`.\n\n1. Compare ndims: 2 vs 1. Add one broadcast axis to `b` on the left: `(1, 512)`. *(This page.)*\n2. Repeat along the new axis 128 times: virtually `(128, 512)`. *(p.55.)*\n3. Add element-wise; every row of the result received the same bias vector.\n\nThe batch size 128 and 512 units come from the chapter's first example; the walk-through itself is an illustration.",
+      "source": "inference"
+    },
+    {
+      "title": "Assembly line analogy",
+      "kind": "analogy",
+      "body": "Naive Python loops are like a craftsman who walks to the warehouse for each screw. The vectorized version is an assembly line that receives the whole crate at once. Broadcasting is like a stamp: rather than manufacturing 32 copies of a logo to put on 32 boxes, you reuse the same stamp on every box.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "chart",
+      "title": "Vectorized vs naive: 1,000 add + relu steps on (20, 100) arrays",
+      "why": "Plots the two timings reported on this page (0.02 s vs 2.45 s).",
+      "chart": {
+        "type": "bar",
+        "data": {
+          "labels": ["NumPy vectorized", "naive_add + naive_relu"],
+          "datasets": [{"label": "Seconds (book's measurement)", "data": [0.02, 2.45]}]
+        },
+        "options": {
+          "indexAxis": "y",
+          "plugins": {"legend": {"display": false}},
+          "scales": {"x": {"title": {"display": true, "text": "seconds"}}}
+        }
+      }
+    },
+    {
+      "id": "v2",
+      "type": "widget",
+      "title": "Broadcasting a (10,) vector onto a (32, 10) matrix",
+      "why": "This page introduces broadcasting and its first step (adding broadcast axes); the widget uses the shapes of the book's worked example on p.55 to show the axis being added and the virtual repetition.",
+      "widget": "broadcasting",
+      "params": {"a_shape": [32, 10], "b_shape": [10]}
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "Vectorized NumPy is faster because it does fewer additions.",
+      "correction": "It does exactly the same number of additions; it is faster because the loop runs in compiled, parallel code instead of the Python interpreter."
+    },
+    {
+      "claim": "Adding a vector to a matrix is undefined, so the Dense layer must reshape b manually.",
+      "correction": "Broadcasting handles it automatically when the shapes are compatible: b is given a leading broadcast axis and (virtually) repeated for every row."
+    },
+    {
+      "claim": "Broadcast axes can be inserted anywhere.",
+      "correction": "They are added as leading axes, so the smaller tensor's existing axes align with the larger tensor's trailing axes (see p.55)."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 53, "note": "naive_relu and naive_add loop implementations, the definition relu(x) = max(x, 0), and the start of the BLAS sentence."},
+      {"page": 52, "note": "The Dense layer as output = relu(matmul(input, W) + b), whose bias addition motivates broadcasting."},
+      {"page": 47, "note": "ndim and shape as key tensor attributes, used in the broadcasting rule."}
+    ],
+    "later": [
+      {"page": 55, "note": "Second broadcasting step, the (32, 10) + (10,) example, virtual repetition and naive_add_matrix_and_vector."},
+      {"page": 56, "note": "Broadcasting with np.maximum on tensors of different shapes, then the tensor product."},
+      {"page": 77, "note": "The from-scratch Dense layer reimplementation relies on these vectorized ops and broadcasting."}
+    ],
+    "prerequisites": [
+      {"page": 46, "note": "Vectors and matrices (rank-1 and rank-2 tensors)."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 53, "note": "Definitions of naive_relu and naive_add used in the timing comparison."}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "`z = x + y` and `z = np.maximum(z, 0.0)` are the vectorized forms of element-wise addition and relu.",
+    "Vectorized NumPy ran 1,000 add+relu iterations in 0.02 s versus 2.45 s for the naive loops — over 100× faster.",
+    "The speed comes from delegating to compiled, parallel routines (BLAS/C/Fortran on CPU, CUDA on GPU).",
+    "The Dense layer adds a vector to a matrix, which requires broadcasting.",
+    "Broadcasting step 1: add broadcast axes to the smaller tensor until its ndim matches the larger tensor; step 2 follows on p.55."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "Which NumPy expression implements the element-wise relu used on this page?",
+      "options": ["np.max(z, 0.0)", "np.maximum(z, 0.0)", "np.clip(z, 0.0, 0.0)", "z.max(axis=0)"],
+      "answer": "np.maximum(z, 0.0)",
+      "explanation": "`np.maximum` takes the element-wise maximum of z and 0.0. `np.max(z, 0.0)` and `z.max(axis=0)` are reductions along an axis; `np.clip(z, 0.0, 0.0)` would set every value to 0.",
+      "page_refs": [54]
+    },
+    {
+      "id": "q2",
+      "type": "math",
+      "question": "Using the book's timings, how many times faster is the vectorized version than the naive version? And roughly how much time per iteration does each take?",
+      "options": [],
+      "answer": "About 2.45 / 0.02 ≈ 122×. Per iteration: 0.02 s / 1000 = 20 µs for the vectorized version, 2.45 s / 1000 = 2.45 ms for the naive one.",
+      "explanation": "Both loops run 1,000 iterations, so dividing the total time by 1,000 gives the per-iteration cost; the ratio of totals gives the speed-up.",
+      "page_refs": [54]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "Why are element-wise operations particularly well suited to GPUs?",
+      "options": [],
+      "answer": "Because each output entry depends only on the corresponding input entries, all entries can be computed independently and simultaneously by the GPU's many parallel cores via vectorized CUDA kernels.",
+      "explanation": "The page says element-wise ops on GPU run via fully vectorized CUDA implementations that best use the highly parallel chip; p.53 explains that element-wise ops are highly amenable to massive parallelism.",
+      "page_refs": [53, 54]
+    },
+    {
+      "id": "q4",
+      "type": "short",
+      "question": "What limitation of naive_add motivates section 2.3.2?",
+      "options": [],
+      "answer": "It only supports adding rank-2 tensors with identical shapes, whereas the Dense layer adds a rank-2 tensor and a vector.",
+      "explanation": "The first paragraph of 2.3.2 states this directly.",
+      "page_refs": [54]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "A tensor of shape (10,) is added to one of shape (32, 10). After the first broadcasting step described on this page, what is the smaller tensor's shape?",
+      "options": ["(10,)", "(1, 10)", "(10, 1)", "(32, 10)"],
+      "answer": "(1, 10)",
+      "explanation": "Step 1 adds a broadcast axis so the ndim becomes 2, giving (1, 10) (confirmed on p.55). (10, 1) would put the axis in the wrong place; (32, 10) is the result only after step 2 (repetition).",
+      "page_refs": [54, 55]
+    },
+    {
+      "id": "q6",
+      "type": "conceptual",
+      "question": "What does the phrase 'when possible, and if there's no ambiguity' imply about broadcasting?",
+      "options": [],
+      "answer": "Broadcasting does not apply to every pair of shapes; the smaller tensor's shape must be compatible with (align to the trailing axes of) the larger tensor's shape, otherwise the operation fails.",
+      "explanation": "p.55 states the general condition: shapes (a, b, … n, n+1, … m) and (n, n+1, … m) broadcast over axes a through n−1. Beyond the book, NumPy also allows axes of size 1 to stretch.",
+      "page_refs": [54, 55]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Run both timing snippets on your own machine. Do you get a similar ratio? What happens to the ratio if you make the arrays (200, 1000)?",
+      "options": [],
+      "answer": "Answers vary by hardware; typically the ratio stays large and often grows with larger arrays, because the fixed per-call overhead of NumPy becomes negligible while the Python loop cost scales linearly with the number of elements.",
+      "explanation": "This checks that you understand the source of the speed-up: per-element interpreter overhead versus per-call overhead.",
+      "page_refs": [54]
+    }
+  ]
+}

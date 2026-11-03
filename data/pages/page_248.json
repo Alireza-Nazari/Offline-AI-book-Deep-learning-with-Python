@@ -1,0 +1,322 @@
+{
+ "page_id": "page_248",
+ "pdf_page": 248,
+ "printed_page": "224",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:29:50Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction: four unnumbered code blocks, short connecting sentences, one subsubsection heading and callouts, all verified against the page image. The code blocks are not numbered listings in the book."
+ },
+ "overview": {
+  "title": "Training the custom TensorFlow model, and the PyTorch train_step()",
+  "chapter": "7 A deep dive on Keras",
+  "section": "7.4 Writing your own training and evaluation loops",
+  "subsection": "7.4.4 Using fit() with a custom training loop",
+  "main_topic": "A reusable get_custom_model() factory that builds a Functional MNIST classifier inside CustomModel and compiles it with only an optimizer; training it with fit(); and the PyTorch version of the overridden train_step().",
+  "central_idea": "The same Keras contract (train_step returns a logs dict, metrics property lists trackers) holds across backends; only the gradient mechanism changes. In PyTorch it is loss.backward(), reading each variable's .value.grad, and applying updates under torch.no_grad().",
+  "importance": "It demonstrates concretely that a Functional model can be wrapped in a custom-trained Model subclass, and it shows the backend-specific part of a custom step for PyTorch in its entirety.",
+  "learning_objectives": [
+   "Read get_custom_model(): a 784-512-10 Functional network with dropout, wrapped in CustomModel(inputs, outputs).",
+   "Explain why compile() receives only keras.optimizers.Adam().",
+   "Write a PyTorch train_step(): forward pass, loss.backward(), collect gradients from v.value.grad, optimizer.apply under torch.no_grad().",
+   "Compare the PyTorch and TensorFlow versions line by line.",
+   "Recognize that calling fit() is identical whichever backend's train_step is used."
+  ],
+  "prerequisites": [
+   "Listing 7.21 and the train_step() recipe (p.247).",
+   "The PyTorch training step function from 7.4.2 (p.241-242).",
+   "Functional API: keras.Input, layer calls (p.219).",
+   "Dense, Dropout and softmax for MNIST classification."
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page continues *Customizing fit() with TensorFlow* by packaging the model definition into a **reusable function, `get_custom_model()`**. It builds a Functional graph: `keras.Input(shape=(28 * 28,))`, a `Dense(512, activation=\"relu\")` layer, `Dropout(0.5)`, and a `Dense(10, activation=\"softmax\")` output. Instead of `keras.Model(inputs, outputs)` it calls **`CustomModel(inputs, outputs)`**, so the Functional network gets the custom `train_step()` from Listing 7.21. It compiles with `optimizer=keras.optimizers.Adam()` only, because the loss is defined outside the model, and returns the model. Training is then a plain `model.fit(train_images, train_labels, epochs=3)`.\n\nUnder *Customizing fit() with PyTorch*, the authors give the PyTorch `CustomModel`. The module-level `loss_fn` and `loss_tracker` are the same. In `train_step()` the forward pass (`self(inputs, training=True)`) and the loss are computed normally (callout: *runs the forward pass*). Then `loss.backward()` populates gradients, and the gradients are **retrieved** by listing the trainable weights and reading `v.value.grad` for each, since a Keras variable wraps a torch tensor in its `.value`. The weights are **updated** with `self.optimizer.apply(gradients, trainable_weights)` inside `with torch.no_grad():`, so the update itself is not tracked by autograd. The loss tracker is updated and `{\"loss\": loss_tracker.result()}` is returned; the `metrics` property again lists `loss_tracker`.\n\nThe page ends with the identical two lines `model = get_custom_model()` and `model.fit(train_images, train_labels, epochs=3)`. When this runs with the PyTorch backend, `get_custom_model()` picks up the PyTorch `CustomModel` that was just defined. The JAX version follows on p.249.",
+ "paragraphs": [
+  {
+   "ref": "p248_e03",
+   "excerpt": "Let’s put the model definition in its own reusable function:",
+   "what_it_says": "Introduces get_custom_model(), which builds and compiles the model so it can be recreated for each backend example.",
+   "what_it_means": "Because the function looks up the name CustomModel when it is called, redefining CustomModel for another backend (PyTorch below) and calling get_custom_model() again yields a model with the new train_step.",
+   "why_it_matters": "Separates architecture from training logic, which is exactly what the train_step pattern enables: the same Functional graph, different learning algorithms.",
+   "connections": ["p.247: the note that this pattern works with Functional models."]
+  },
+  {
+   "ref": "p248_e04",
+   "excerpt": "def get_custom_model():",
+   "what_it_says": "Code: a Functional MNIST classifier (784 inputs, Dense 512 relu, Dropout 0.5, Dense 10 softmax) instantiated as CustomModel and compiled with Adam.",
+   "what_it_means": "CustomModel(inputs, outputs) uses keras.Model's Functional constructor; the subclass only changes train_step. Dropout(0.5) is why training=True matters in train_step.",
+   "why_it_matters": "Concrete proof of the p.247 claim that the pattern does not prevent you from using the Functional API.",
+   "terminology": [{"term": "keras.Input(shape=(28 * 28,))", "meaning": "Symbolic input of 784 features per sample (a flattened 28x28 MNIST image)."}],
+   "connections": ["p.219: Functional API construction with keras.Input and layer calls."]
+  },
+  {
+   "ref": "p248_e06",
+   "excerpt": "model = get_custom_model()",
+   "what_it_says": "'Let's give it a whirl': build the model and train for three epochs with fit().",
+   "what_it_means": "From the outside nothing looks custom. fit() handles batching, epochs and the progress bar; each batch goes through the overridden train_step.",
+   "why_it_matters": "The user-facing API stays unchanged while the learning algorithm is custom.",
+   "connections": ["p.230: the standard compile/fit workflow this mirrors."]
+  },
+  {
+   "ref": "p248_e09",
+   "excerpt": "import keras",
+   "what_it_says": "'Next, the PyTorch version': a CustomModel whose train_step uses loss.backward(), v.value.grad and torch.no_grad().",
+   "what_it_means": "PyTorch computes gradients by side effect: backward() stores each gradient in the .grad attribute of the leaf tensors. Keras variables wrap the torch tensor in .value, hence v.value.grad. The update runs under torch.no_grad() so that modifying the weights is not recorded as part of a computation graph.",
+   "why_it_matters": "Shows the only part that differs across backends is how gradients are obtained and applied; the rest of the train_step is identical to TensorFlow's.",
+   "technical_idea": "Imperative autograd (PyTorch) versus explicit tape (TensorFlow): in PyTorch the graph is recorded automatically during the forward pass and consumed by backward().",
+   "terminology": [{"term": "loss.backward()", "meaning": "Backpropagates from the scalar loss, accumulating gradients into .grad of tensors requiring gradients."}, {"term": "torch.no_grad()", "meaning": "Context manager that disables gradient tracking."}],
+   "connections": ["p.241: the from-scratch PyTorch training step this mirrors.", "p.247: the TensorFlow version for comparison."]
+  },
+  {
+   "ref": "p248_e11",
+   "excerpt": "model = get_custom_model()",
+   "what_it_says": "'Let's try it': the same two lines train the PyTorch-backed custom model.",
+   "what_it_means": "The training call is backend-independent; only the class definition changed.",
+   "why_it_matters": "Highlights Keras's multi-backend design: your training script does not change when the step's internals do.",
+   "connections": ["p.249: the JAX version follows."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "custom_train_step",
+   "name": "Overriding train_step()",
+   "definition": "Redefining Model.train_step(), called by fit() per batch, to implement a custom algorithm.",
+   "intuition": "Swap the loop body, keep the loop.",
+   "technical": "Here implemented with PyTorch autograd: forward, loss.backward(), gather v.value.grad, optimizer.apply under torch.no_grad(), update metrics, return logs.",
+   "significance": "Same pattern across TensorFlow, PyTorch and JAX.",
+   "example": "The PyTorch CustomModel on this page.",
+   "misconception": "That the PyTorch version needs to call optimizer.zero_grad(); the page's code does not, as Keras's optimizer handles gradients it is given. (The book does not discuss gradient zeroing here.)",
+   "related": ["functional_api", "keras_model"],
+   "source": "book"
+  },
+  {
+   "id": "functional_api",
+   "name": "Functional API inside a custom Model subclass",
+   "definition": "Building a graph of layers from keras.Input to outputs and passing it to a Model subclass's constructor.",
+   "intuition": "The architecture is a blueprint; the subclass decides how it is trained.",
+   "technical": "CustomModel(inputs, outputs) invokes the inherited Functional constructor of keras.Model.",
+   "significance": "You keep Functional conveniences while customizing training.",
+   "example": "get_custom_model() on this page.",
+   "misconception": "That subclassing Model forces you to write call() yourself.",
+   "related": ["custom_train_step", "keras_model"],
+   "source": "book"
+  },
+  {
+   "id": "dropout",
+   "name": "Dropout",
+   "definition": "A layer that randomly zeroes a fraction of its inputs during training.",
+   "intuition": "Prevents the network from relying on any single feature.",
+   "technical": "Dropout(0.5) drops half of the 512 features at training time and is inactive at inference; train_step's training=True turns it on.",
+   "significance": "Explains why the training flag must be passed in train_step.",
+   "example": "layers.Dropout(0.5)(features)",
+   "misconception": "That dropout is active during evaluate() or predict(); it is not.",
+   "related": ["regularization"],
+   "source": "book"
+  },
+  {
+   "id": "autodiff",
+   "name": "PyTorch-style backward pass",
+   "definition": "loss.backward() computes gradients of the loss and stores them on the tensors that require grad.",
+   "intuition": "The forward pass leaves breadcrumbs; backward follows them in reverse.",
+   "technical": "Gradients are accessed via v.value.grad on Keras variables, then passed to self.optimizer.apply.",
+   "significance": "The backend-specific core of the PyTorch train_step.",
+   "example": "gradients = [v.value.grad for v in trainable_weights]",
+   "misconception": "That backward() returns the gradients; it returns None and stores them as attributes.",
+   "related": ["gradient_tape", "backpropagation"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Parameter count of the model built by get_custom_model()",
+   "latex": "\\underbrace{784 \\cdot 512 + 512}_{401{,}920} + \\underbrace{512 \\cdot 10 + 10}_{5{,}130} = 407{,}050",
+   "source_text": "Not printed; derived from keras.Input(shape=(28 * 28,)), Dense(512), Dense(10).",
+   "variables": [
+    {"symbol": "784", "meaning": "Input features, 28 x 28"},
+    {"symbol": "512", "meaning": "Units in the hidden Dense layer"},
+    {"symbol": "10", "meaning": "Output classes (digits)"}
+   ],
+   "operations": "Each Dense layer has inputs x units weights plus units biases; Dropout has none.",
+   "purpose": "Gives a sense of the model size being trained by the custom step.",
+   "interpretation": "About 0.4 M trainable weights, all of which appear in self.trainable_weights and receive gradients.",
+   "intuition": "Almost all parameters are in the first layer.",
+   "source": "ai_explanation",
+   "book_ref": "p.248"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Reusable model factory get_custom_model()",
+   "original_code": "def get_custom_model():\n    inputs = keras.Input(shape=(28 * 28,))\n    features = layers.Dense(512, activation=\"relu\")(inputs)\n    features = layers.Dropout(0.5)(features)\n    outputs = layers.Dense(10, activation=\"softmax\")(features)\n    model = CustomModel(inputs, outputs)\n    model.compile(optimizer=keras.optimizers.Adam())\n    return model",
+   "language": "python",
+   "what_it_does": "Builds a Functional MNIST classifier, wraps it in CustomModel so it uses the overridden train_step, compiles it with Adam only, and returns it.",
+   "line_explanations": [
+    {"lines": "2", "explanation": "Symbolic input of 784 features."},
+    {"lines": "3-4", "explanation": "Hidden Dense layer of 512 relu units followed by Dropout(0.5)."},
+    {"lines": "5", "explanation": "10-way softmax output producing class probabilities, matching SparseCategoricalCrossentropy's default from_logits=False."},
+    {"lines": "6", "explanation": "CustomModel instead of keras.Model: same Functional constructor, custom train_step."},
+    {"lines": "7", "explanation": "Only an optimizer is passed, since loss_fn and loss_tracker are used directly inside train_step (p.247)."},
+    {"lines": "8", "explanation": "Returns the ready-to-train model."}
+   ],
+   "inputs_outputs": "No inputs; returns a compiled CustomModel.",
+   "algorithm": "Functional graph construction then compilation.",
+   "theory_link": "Demonstrates the p.247 note that custom train_step works with Functional models.",
+   "parameters": [
+    {"name": "Dense(512, activation=\"relu\")", "role": "Hidden representation."},
+    {"name": "Dropout(0.5)", "role": "Regularization; active only when training=True."},
+    {"name": "keras.optimizers.Adam()", "role": "The optimizer exposed as self.optimizer inside train_step."}
+   ],
+   "pitfalls": [
+    "CustomModel is resolved at call time, so the version defined most recently is used; re-run the right definition before calling get_custom_model().",
+    "Passing loss= to compile() would have no effect on this custom train_step, which ignores the compiled loss."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Training the TensorFlow custom model",
+   "original_code": "model = get_custom_model()\nmodel.fit(train_images, train_labels, epochs=3)",
+   "language": "python",
+   "what_it_does": "Creates the custom model and trains it for three epochs with the standard fit() call.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Builds a fresh model using the TensorFlow CustomModel from Listing 7.21."},
+    {"lines": "2", "explanation": "fit() iterates over batches, calling the overridden train_step, and shows the 'loss' key returned by it."}
+   ],
+   "inputs_outputs": "Inputs: MNIST train_images (flattened to 784 features) and integer train_labels, prepared earlier in the chapter. Output: a History object; progress bar shows loss per epoch.",
+   "algorithm": "Standard fit() loop driving a custom step.",
+   "theory_link": "fit() provides batching, epochs, callbacks and compilation around the custom step (p.246).",
+   "parameters": [{"name": "epochs=3", "role": "Number of passes over the training data."}],
+   "pitfalls": ["train_images must be flattened and scaled as in the chapter's earlier MNIST examples to match shape (784,)."]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Customizing fit(): PyTorch version",
+   "original_code": "import keras\nfrom keras import layers\n\nloss_fn = keras.losses.SparseCategoricalCrossentropy()\nloss_tracker = keras.metrics.Mean(name=\"loss\")\n\nclass CustomModel(keras.Model):\n    def train_step(self, data):\n        inputs, targets = data\n        predictions = self(inputs, training=True)\n        loss = loss_fn(targets, predictions)\n\n        loss.backward()\n        trainable_weights = [v for v in self.trainable_weights]\n        gradients = [v.value.grad for v in trainable_weights]\n\n        with torch.no_grad():\n            self.optimizer.apply(gradients, trainable_weights)\n\n        loss_tracker.update_state(loss)\n        return {\"loss\": loss_tracker.result()}\n\n    @property\n    def metrics(self):\n        return [loss_tracker]",
+   "language": "python",
+   "what_it_does": "Defines the PyTorch-backend CustomModel whose train_step uses PyTorch autograd for gradients while staying inside fit().",
+   "line_explanations": [
+    {"lines": "4-5", "explanation": "Same module-level loss function and loss tracker as the TensorFlow version."},
+    {"lines": "9-11", "explanation": "Callout: runs the forward pass. No tape is needed; PyTorch records the graph automatically."},
+    {"lines": "13-15", "explanation": "Callout: retrieves the gradients. backward() fills .grad on each underlying torch tensor; v.value is the torch tensor inside a Keras variable."},
+    {"lines": "17-18", "explanation": "Callout: updates weights. torch.no_grad() prevents autograd from tracking the in-place weight update."},
+    {"lines": "20", "explanation": "Callout: updates loss tracker metric."},
+    {"lines": "21", "explanation": "Callout: returns the average loss so far by querying the loss tracker metric."},
+    {"lines": "23-25", "explanation": "metrics property, so fit() resets loss_tracker each epoch and at the start of evaluate()."}
+   ],
+   "inputs_outputs": "Input: batch (inputs, targets). Output: {\"loss\": running mean}. Side effect: weights updated.",
+   "algorithm": "Forward -> loss -> backward -> collect grads -> optimizer.apply (no_grad) -> metric update -> logs.",
+   "theory_link": "Same three-step loop as p.239; PyTorch's imperative autograd replaces the TensorFlow tape.",
+   "parameters": [
+    {"name": "v.value.grad", "role": "Gradient tensor stored by backward() on the torch tensor behind each Keras variable."},
+    {"name": "torch.no_grad()", "role": "Disables gradient tracking during the update."}
+   ],
+   "pitfalls": [
+    "The listing uses torch without importing it; it assumes `import torch` and the PyTorch backend are set up.",
+    "Beyond the book: in plain PyTorch, gradients accumulate across backward() calls unless zeroed; the page does not show explicit zeroing, so rely on the code as written with Keras's optimizer."
+   ]
+  },
+  {
+   "id": "c4",
+   "listing": null,
+   "title": "Training the PyTorch custom model",
+   "original_code": "model = get_custom_model()\nmodel.fit(train_images, train_labels, epochs=3)",
+   "language": "python",
+   "what_it_does": "Rebuilds the model, now picking up the PyTorch CustomModel, and trains for three epochs.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "get_custom_model() looks up CustomModel at call time, so it uses the PyTorch definition."},
+    {"lines": "2", "explanation": "Same fit() call as before."}
+   ],
+   "inputs_outputs": "Same as c2.",
+   "algorithm": "Standard fit() loop with the PyTorch train_step.",
+   "theory_link": "Backend-independent training API.",
+   "parameters": [{"name": "epochs=3", "role": "Passes over the data."}],
+   "pitfalls": ["Requires the Keras backend to be set to PyTorch before importing keras."]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "TensorFlow vs PyTorch train_step, line by line",
+   "kind": "breakdown",
+   "body": "| Step | TensorFlow (p.247) | PyTorch (p.248) |\n|---|---|---|\n| Forward | inside `with tf.GradientTape() as tape:` | plain call |\n| Gradients | `tape.gradient(loss, self.trainable_weights)` | `loss.backward()` then `[v.value.grad for v in ...]` |\n| Update | `self.optimizer.apply(...)` | same, inside `torch.no_grad()` |\n| Metrics / return | identical | identical |\n\nThe comparison is an editorial summary of the two listings.",
+   "source": "inference"
+  },
+  {
+   "title": "Why the update runs under torch.no_grad()",
+   "kind": "step_by_step",
+   "body": "Beyond the book: weights in PyTorch are tensors with `requires_grad=True`. Modifying them in place while autograd is recording would (a) be recorded as part of a graph and (b) typically raise an error for in-place operations on leaf tensors that require grad. `torch.no_grad()` tells PyTorch that this arithmetic is bookkeeping, not part of the model's differentiable computation.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "The network built by get_custom_model()",
+   "why": "get_custom_model() on this page defines a 784 -> Dense(512, relu) -> Dropout(0.5) -> Dense(10, softmax) network; click layers to see shapes and parameter counts.",
+   "widget": "nn_architecture",
+   "params": {"layers": [
+    {"name": "input", "type": "input", "shape": "(None, 784)"},
+    {"name": "dense", "type": "dense", "units": 512, "activation": "relu"},
+    {"name": "dropout (0.5)", "type": "dropout", "units": 512},
+    {"name": "output", "type": "output", "units": 10, "activation": "softmax"}
+   ]}
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "PyTorch train_step flow",
+   "why": "Follows the four callouts on the PyTorch code: forward pass, retrieve gradients, update weights, update metric.",
+   "mermaid": "flowchart LR\n  A[\"self(inputs, training=True)\"] --> B[\"loss_fn(targets, predictions)\"]\n  B --> C[\"loss.backward()\"]\n  C --> D[\"gradients = v.value.grad\"]\n  D --> E[\"torch.no_grad():<br/>optimizer.apply\"]\n  B --> F[\"loss_tracker.update_state\"]\n  F --> G[\"return {'loss': ...}\"]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "loss.backward() returns the gradients.", "correction": "It stores them on the tensors; the code reads them via v.value.grad."},
+  {"claim": "A different fit() call is needed for each backend.", "correction": "The same model.fit(train_images, train_labels, epochs=3) works; only CustomModel's definition changes."},
+  {"claim": "CustomModel(inputs, outputs) cannot work because CustomModel defines no __init__.", "correction": "It inherits keras.Model's constructor, which accepts Functional inputs and outputs."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 247, "note": "Listing 7.21, the TensorFlow CustomModel used by the first fit() call."},
+   {"page": 241, "note": "From-scratch PyTorch training step that this train_step mirrors."},
+   {"page": 219, "note": "The Functional API used in get_custom_model()."}
+  ],
+  "later": [
+   {"page": 249, "note": "Customizing fit() with JAX, which uses compute_loss_and_updates()."},
+   {"page": 250, "note": "Handling metrics in a custom train_step()."}
+  ],
+  "prerequisites": [
+   {"page": 246, "note": "Why overriding train_step() is useful."},
+   {"page": 226, "note": "Subclassing the Model class."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 247, "note": "TensorFlow version of CustomModel."},
+   {"page": 249, "note": "JAX version of CustomModel."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "get_custom_model() wraps a Functional 784-512-10 network in CustomModel and compiles it with Adam only.",
+  "Training is the usual model.fit(train_images, train_labels, epochs=3).",
+  "PyTorch's train_step: forward, loss.backward(), gradients from v.value.grad, optimizer.apply inside torch.no_grad().",
+  "Metric handling (loss_tracker, metrics property, returned dict) is identical across backends.",
+  "Only the gradient mechanism is backend-specific."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "In the PyTorch train_step, how are the gradients obtained?", "options": ["tape.gradient(loss, self.trainable_weights)", "By calling loss.backward() and then reading v.value.grad for each trainable weight", "jax.grad(loss_fn)", "self.optimizer.compute_gradients(loss)"], "answer": "By calling loss.backward() and then reading v.value.grad for each trainable weight", "explanation": "That is the code on the page. tape.gradient is TensorFlow's way; jax.grad is JAX's; compute_gradients is not used here.", "page_refs": [248]},
+  {"id": "q2", "type": "conceptual", "question": "Why is self.optimizer.apply() wrapped in torch.no_grad()?", "options": [], "answer": "So that the weight update is not tracked by PyTorch's autograd; it is a bookkeeping operation, not part of the differentiable computation.", "explanation": "The callout says 'Updates weights'; the no_grad context ensures autograd ignores this step.", "page_refs": [248]},
+  {"id": "q3", "type": "short", "question": "Why does get_custom_model() call CustomModel(inputs, outputs) instead of keras.Model(inputs, outputs)?", "options": [], "answer": "So the Functional network uses the overridden train_step() of CustomModel when fit() is called.", "explanation": "CustomModel inherits the Functional constructor and adds only the custom training step.", "page_refs": [248, 247]},
+  {"id": "q4", "type": "math", "question": "How many trainable parameters does the model built by get_custom_model() have?", "options": [], "answer": "407,050 (784x512+512 = 401,920 plus 512x10+10 = 5,130).", "explanation": "Dense layers have weights plus biases; Dropout has no parameters.", "page_refs": [248]},
+  {"id": "q5", "type": "mcq", "question": "Which line is identical in the TensorFlow and PyTorch train_step implementations?", "options": ["with tf.GradientTape() as tape:", "loss.backward()", "return {\"loss\": loss_tracker.result()}", "with torch.no_grad():"], "answer": "return {\"loss\": loss_tracker.result()}", "explanation": "The metric update and returned dict are shared; the other three are backend-specific.", "page_refs": [247, 248]},
+  {"id": "q6", "type": "conceptual", "question": "Why is training=True passed in self(inputs, training=True) for this model in particular?", "options": [], "answer": "Because the model contains Dropout(0.5), which must be active during training and inactive at inference.", "explanation": "The training flag selects the training behavior of such layers.", "page_refs": [248]},
+  {"id": "q7", "type": "self", "question": "Could you explain to someone why the exact same two lines train both the TensorFlow and PyTorch custom models?", "options": [], "answer": "fit() only calls train_step and reads the returned dict; get_custom_model() picks up whichever CustomModel is currently defined.", "explanation": "This is the separation of concerns the train_step pattern provides.", "page_refs": [248]}
+ ]
+}

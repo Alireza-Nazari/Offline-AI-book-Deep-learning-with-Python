@@ -1,0 +1,386 @@
+{
+  "page_id": "page_286",
+  "pdf_page": 286,
+  "printed_page": "262",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:30:24Z",
+    "confidence": "high",
+    "review_flags": [
+      "The end-to-end model's `layers.Dense(256)` is printed without `activation=\"relu\"`, unlike Listing 8.26 (p.284); reproduced verbatim and noted as an observation, not a correction."
+    ],
+    "extraction_quality": "Clean. The final code block (model definition) continues on p.287 with keras.Model(...) and compile(...)."
+  },
+  "overview": {
+    "title": "Freezing the convolutional base",
+    "chapter": "8 Image classification",
+    "section": "8.3 Using a pretrained model",
+    "subsection": "8.3.1 Feature extraction with a pretrained model",
+    "main_topic": "Test result of plain feature extraction (98.1%), then the second technique: freeze the Xception backbone and chain it with a new dense classifier to train end to end with data augmentation.",
+    "central_idea": "To train a new randomly initialized head on top of a pretrained base end to end, you must first freeze the base (trainable=False), otherwise large gradient updates from the random head would destroy the pretrained representations.",
+    "importance": "Freezing is the core mechanism that makes end-to-end feature extraction (and later fine-tuning) safe. The page also shows how freezing is visible in Keras through `trainable_weights`.",
+    "learning_objectives": [
+      "State the test accuracy of plain feature extraction and compare with training from scratch.",
+      "Define freezing and explain why it is necessary before training a random head end to end.",
+      "Freeze a KerasHub backbone with `trainable=False` at construction, or by setting the attribute.",
+      "Interpret Listing 8.29's trainable-weight counts (26 vs 0).",
+      "Read the model that chains preprocessor, frozen conv_base and a dense classifier."
+    ],
+    "prerequisites": [
+      "The two feature-extraction options (p.283)",
+      "Listings 8.23-8.26 (p.282-284)",
+      "Gradient descent and backpropagation (chapter 2)",
+      "Data augmentation (p.276)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page opens with the result of the fast approach: **98.1% test accuracy**, a very nice improvement over the model trained from scratch.\n\nUnder the heading **\"Feature extraction together with data augmentation\"**, the authors turn to the second technique from p.283: chain `conv_base` with a new dense classifier and train end to end on the inputs. It is much slower and more expensive, but allows data augmentation.\n\nFirst, the convolutional base must be **frozen**: its weights are prevented from being updated during training. Otherwise the representations it learned would be modified; since the new `Dense` layers start randomly initialized, *very large weight updates would be propagated through the network, effectively destroying the representations previously learned*. In Keras you freeze a layer or model by setting its `trainable` attribute to `False`.\n\n- **Listing 8.28** recreates the backbone with `Backbone.from_preset(\"xception_41_imagenet\", trainable=False)`.\n- Setting `trainable = False` **empties the list of trainable weights**. **Listing 8.29** demonstrates it: with `trainable = True`, `len(conv_base.trainable_weights)` is **26**; after `trainable = False`, it is **0**.\n\nFinally, a new model is built that chains everything: `keras.Input(shape=(180, 180, 3))` -> `preprocessor` -> frozen `conv_base` -> `GlobalAveragePooling2D` -> `Dense(256)` -> `Dropout(0.25)` -> `Dense(1, activation=\"sigmoid\")`. Unlike the fast approach, this model takes raw images, so augmented images can be fed to it on every epoch. The model construction and compilation finish on p.287, which also notes that only the four weight tensors of the two Dense layers will be trained.",
+  "paragraphs": [
+    {
+      "ref": "p286_e03",
+      "excerpt": "We get test accuracy of 98.1%—a very nice improvement over training a model from scratch!",
+      "what_it_says": "The cached-feature classifier from Listing 8.26, evaluated on test features (p.285), gets 98.1% test accuracy, a very nice improvement over the from-scratch model.",
+      "what_it_means": "The test result confirms the slightly-over-98% validation accuracy: the selected checkpoint generalizes. Compared with the roughly 84% target for the augmented from-scratch ConvNet (p.266), the error rate drops from about 16% to under 2%.",
+      "why_it_matters": "Establishes the baseline that the end-to-end augmented approach (p.287-288) and fine-tuning (p.290) will try to beat.",
+      "terminology": [],
+      "connections": ["p.285: the evaluation code that produces this number.", "p.266: the from-scratch model with augmentation is said to reach about 84% test accuracy."]
+    },
+    {
+      "ref": "p286_e05",
+      "excerpt": "Now, let’s review the second technique we mentioned for doing feature extraction",
+      "what_it_says": "The second technique is much slower and more expensive but permits data augmentation: build a model that chains conv_base with a new dense classifier and train it end to end on the inputs.",
+      "what_it_means": "Instead of feeding cached features, the model receives images; the backbone runs inside every training step so each augmented variant yields new features.",
+      "why_it_matters": "Addresses the early overfitting seen in figure 8.13 (p.285), at the price of running Xception on every image every epoch.",
+      "terminology": [
+        {"term": "end to end", "meaning": "From raw inputs to output in a single model, trained on raw (here augmented) data."}
+      ],
+      "connections": ["p.283: option 2 described in the second bullet.", "p.285: overfitting attributed to the lack of augmentation."]
+    },
+    {
+      "ref": "p286_e06",
+      "excerpt": "To do this, we will first freeze the convolutional base. Freezing a layer",
+      "what_it_says": "Freezing means preventing a layer's (or set of layers') weights from being updated during training. Without freezing, the pretrained representations would be modified: because the new Dense layers are randomly initialized, very large weight updates would propagate through the network and effectively destroy them.",
+      "what_it_means": "At the start of training, the random head produces poor predictions and therefore large loss gradients. Backpropagation would carry those large, essentially noisy gradients into Xception's carefully tuned filters, and a few big updates could wreck features that took ImageNet-scale training to learn. Freezing cuts this off: gradients still flow to the head, but the base's weights are excluded from updates.",
+      "why_it_matters": "This rule (freeze first, train the head, only then consider unfreezing) is the foundation of the fine-tuning procedure on p.288.",
+      "technical_idea": "Freezing removes the base's variables from the set the optimizer updates: for frozen parameters $\\theta_{base}$, the update $\\theta \\leftarrow \\theta - \\eta\\,\\nabla_\\theta \\mathcal{L}$ is simply not applied.",
+      "terminology": [
+        {"term": "freezing", "meaning": "Preventing a layer's weights from being updated during training."},
+        {"term": "randomly initialized", "meaning": "Weights set to random starting values before any training."}
+      ],
+      "connections": ["p.288: fine-tuning is only possible once the classifier on top has already been trained, for the same reason."]
+    },
+    {
+      "ref": "p286_e06",
+      "excerpt": "In Keras, you freeze a layer or model by setting its trainable attribute to False.",
+      "what_it_says": "In Keras, freezing is done by setting the `trainable` attribute of a layer or model to `False`.",
+      "what_it_means": "`trainable` is a property on every Keras layer and model; setting it on a model applies recursively to all its sublayers.",
+      "why_it_matters": "A single attribute flips the whole 41-layer backbone between learnable and fixed.",
+      "terminology": [
+        {"term": "trainable", "meaning": "Boolean attribute of a Keras layer/model controlling whether its weights are updated in training."}
+      ],
+      "connections": []
+    },
+    {
+      "ref": "p286_e09",
+      "excerpt": "Setting trainable to False empties the list of trainable weights of the layer",
+      "what_it_says": "Setting `trainable` to `False` empties the layer's or model's list of trainable weights; Listing 8.29 shows 26 trainable weights before freezing and 0 after.",
+      "what_it_means": "The optimizer only updates variables in `trainable_weights`, so an empty list means nothing in the base can change. The weights still exist; they just move to `non_trainable_weights`. Note that 26 counts weight *tensors*, not layers or individual parameters.",
+      "why_it_matters": "Gives you a quick sanity check that freezing worked before launching an expensive training run.",
+      "terminology": [
+        {"term": "trainable_weights", "meaning": "List of variables that gradient descent will update."}
+      ],
+      "connections": ["p.287: after freezing, the full model has only four trainable weight tensors (two Dense layers x kernel and bias)."]
+    },
+    {
+      "ref": "p286_e12",
+      "excerpt": "Now, we can just create a new model that chains together our frozen convolutional base",
+      "what_it_says": "A new model chains the frozen convolutional base with a dense classifier, as shown in the code that follows.",
+      "what_it_means": "The model takes 180x180x3 images, applies the Xception-matched preprocessor, the frozen backbone, global average pooling, Dense(256), Dropout(0.25), and a sigmoid output: the same head as before, now attached directly to the backbone.",
+      "why_it_matters": "Because raw images are the input, augmented images from `augmented_train_dataset` (p.287) can be used.",
+      "terminology": [],
+      "connections": ["p.284: the same head structure in Listing 8.26.", "p.287: compilation and training on augmented_train_dataset."]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "freezing_layers",
+      "name": "Freezing layers",
+      "definition": "Preventing a layer's or model's weights from being updated during training.",
+      "intuition": "Laminating a finished map so newcomers can draw on top without smudging it.",
+      "technical": "In Keras, `layer.trainable = False` (or `trainable=False` at construction) moves all its variables out of `trainable_weights`; the optimizer ignores them. Changes take effect at compile time (p.287).",
+      "significance": "Protects pretrained representations from the large, noisy gradients of a randomly initialized head.",
+      "example": "`conv_base = keras_hub.models.Backbone.from_preset(\"xception_41_imagenet\", trainable=False)`.",
+      "misconception": "That freezing stops the forward pass or stops gradients from reaching earlier layers in general; the base still computes features, it just isn't updated.",
+      "related": ["transfer_learning", "fine_tuning", "backbone"],
+      "source": "book"
+    },
+    {
+      "id": "backbone",
+      "name": "Backbone (convolutional base)",
+      "definition": "The pretrained feature extractor without classification head.",
+      "intuition": "The reusable 'eyes' of the model.",
+      "technical": "Used here as a layer inside a larger Functional model: `x = conv_base(x)`.",
+      "significance": "Can be embedded like any layer, enabling end-to-end training with augmentation.",
+      "example": "Chained after `preprocessor` in the new model.",
+      "misconception": "That a backbone has to be run separately with predict(); it can be called as a layer.",
+      "related": ["freezing_layers", "transfer_learning"],
+      "source": "book"
+    },
+    {
+      "id": "data_augmentation",
+      "name": "Data augmentation with a frozen base",
+      "definition": "Feeding randomly transformed images through the frozen base on every epoch.",
+      "intuition": "The frozen eye sees a slightly different picture each time.",
+      "technical": "Requires the base inside the training model, so its forward pass runs per step.",
+      "significance": "Counters the overfitting of the cached-feature approach.",
+      "example": "Using `augmented_train_dataset` (p.287).",
+      "misconception": "That freezing the base prevents augmentation from helping; augmentation acts on inputs, so features still vary.",
+      "related": ["overfitting", "freezing_layers"],
+      "source": "book"
+    },
+    {
+      "id": "fine_tuning",
+      "name": "Fine-tuning (preview)",
+      "definition": "Unfreezing (part of) a pretrained base after training the head, then training jointly.",
+      "intuition": "Once the new head is no longer random, gentle adjustments to the base are safe.",
+      "technical": "Covered in 8.3.2 (p.288); relies on the freezing rule introduced here.",
+      "significance": "Next step after end-to-end feature extraction.",
+      "example": "Reaches 98.6% test accuracy (p.290).",
+      "misconception": "That you can fine-tune from the start; the random head's gradients would destroy the base.",
+      "related": ["freezing_layers", "transfer_learning"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Gradient update with frozen parameters",
+      "latex": "\\theta_{head} \\leftarrow \\theta_{head} - \\eta\\,\\nabla_{\\theta_{head}}\\mathcal{L}, \\qquad \\theta_{base} \\leftarrow \\theta_{base}\\ \\text{(unchanged)}",
+      "source_text": "Freezing a layer or set of layers means preventing their weights from being updated during training.",
+      "variables": [
+        {"symbol": "\\theta_{head}", "meaning": "Trainable weights of the new Dense layers."},
+        {"symbol": "\\theta_{base}", "meaning": "Weights of the frozen Xception backbone."},
+        {"symbol": "\\eta", "meaning": "Learning rate (handled by Adam here)."},
+        {"symbol": "\\mathcal{L}", "meaning": "Binary crossentropy loss."}
+      ],
+      "operations": "Only head parameters receive gradient steps; base parameters are skipped.",
+      "purpose": "Formalizes the book's verbal definition of freezing.",
+      "interpretation": "The base acts as a fixed function; learning happens only in the head.",
+      "intuition": "If the head starts random, $\\nabla_{\\theta_{base}}\\mathcal{L}$ would be large and uninformative; freezing ignores it.",
+      "numerical_example": null,
+      "source": "ai_explanation",
+      "book_ref": "p.286"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": "8.28",
+      "title": "Creating the frozen convolutional base",
+      "original_code": "import keras_hub\n\nconv_base = keras_hub.models.Backbone.from_preset(\n    \"xception_41_imagenet\",\n    trainable=False,\n)",
+      "language": "python",
+      "what_it_does": "Reloads the ImageNet-pretrained Xception backbone with all its weights frozen.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Imports KerasHub."},
+        {"lines": "3-6", "explanation": "Same preset as Listing 8.23, with `trainable=False` passed to the constructor so the backbone is frozen from the start."}
+      ],
+      "inputs_outputs": "Output: a frozen backbone model mapping preprocessed images to (6, 6, 2048) feature maps for 180x180 inputs.",
+      "algorithm": "Load preset, then mark every variable as non-trainable.",
+      "theory_link": "Implements freezing to protect pretrained representations from large updates.",
+      "parameters": [
+        {"name": "trainable=False", "role": "Freezes all weights of the backbone."}
+      ],
+      "pitfalls": ["Changing trainable after compiling requires recompiling (p.287)."]
+    },
+    {
+      "id": "c2",
+      "listing": "8.29",
+      "title": "Printing the list of trainable weights before and after freezing",
+      "original_code": ">>> conv_base.trainable = True\n>>> len(conv_base.trainable_weights)\n26\n>>> conv_base.trainable = False\n>>> len(conv_base.trainable_weights)\n0",
+      "language": "python",
+      "what_it_does": "Toggles the backbone's trainable flag and shows that the number of trainable weight tensors goes from 26 to 0.",
+      "line_explanations": [
+        {"lines": "1-3", "explanation": "Unfrozen: 26 trainable weights (callout: number of trainable weights before freezing the conv base)."},
+        {"lines": "4-6", "explanation": "Frozen: 0 trainable weights (callout: after freezing the conv base)."}
+      ],
+      "inputs_outputs": "Prints the lengths of the trainable weight lists.",
+      "algorithm": "Attribute toggling and list inspection.",
+      "theory_link": "Shows concretely that freezing empties trainable_weights.",
+      "parameters": [],
+      "pitfalls": [
+        "26 is a count of weight tensors (kernels, biases, etc.), not of layers or of scalar parameters.",
+        "Leaving `trainable = True` after this experiment would unfreeze the base; the listing ends in the frozen state."
+      ],
+      "illustrative_code": "# AI-written: inspect the frozen weights too\nprint(len(conv_base.non_trainable_weights))\nprint(sum(w.numpy().size for w in conv_base.weights))  # total scalar parameters"
+    },
+    {
+      "id": "c3",
+      "listing": null,
+      "title": "Chaining the frozen base with a dense classifier (part 1)",
+      "original_code": "inputs = keras.Input(shape=(180, 180, 3))\nx = preprocessor(inputs)\nx = conv_base(x)\nx = layers.GlobalAveragePooling2D()(x)\nx = layers.Dense(256)(x)\nx = layers.Dropout(0.25)(x)\noutputs = layers.Dense(1, activation=\"sigmoid\")(x)",
+      "language": "python",
+      "what_it_does": "Defines the end-to-end graph from raw 180x180 RGB images to a dog/cat probability, through the Xception preprocessing and frozen backbone. The `keras.Model(...)` call and `compile(...)` continue on p.287.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Raw image input of shape (180, 180, 3)."},
+        {"lines": "2", "explanation": "ImageConverter from Listing 8.24 rescales to Xception's expected range."},
+        {"lines": "3", "explanation": "Frozen backbone produces (6, 6, 2048) feature maps."},
+        {"lines": "4", "explanation": "Averages the 6x6 spatial positions into a 2,048-vector."},
+        {"lines": "5", "explanation": "Dense(256): as printed, no activation is specified (Keras default is linear), unlike Listing 8.26's `activation=\"relu\"`."},
+        {"lines": "6", "explanation": "Dropout of 25% for regularization."},
+        {"lines": "7", "explanation": "Sigmoid output unit."}
+      ],
+      "inputs_outputs": "Symbolic input (None, 180, 180, 3) -> output (None, 1).",
+      "algorithm": "Functional API graph construction.",
+      "theory_link": "Option 2 of p.283: the base is inside the model, so augmented images pass through it every step.",
+      "parameters": [
+        {"name": "shape=(180, 180, 3)", "role": "Matches the dataset images and the preprocessor's image_size."}
+      ],
+      "pitfalls": [
+        "Without a nonlinearity, Dense(256) followed by Dense(1) is mathematically a single affine map before the sigmoid (beyond the book: it still trains fine on strong features, but differs from Listing 8.26).",
+        "The model is only usable after `keras.Model(inputs, outputs)` and `compile` on p.287."
+      ]
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why random heads produce destructive gradients",
+      "kind": "step_by_step",
+      "body": "Beyond the book:\n\n1. At step 0 the head's weights are random, so predictions are near-random and the loss is high.\n2. By the chain rule, $\\partial\\mathcal L/\\partial\\theta_{base}$ is computed by passing the head's error signal backward through the random Dense weights.\n3. That signal is large (high loss) and points in arbitrary directions (random weights), so it carries little useful information about how Xception's filters should change.\n4. Applying such updates to the 41 layers of Xception quickly erases structure learned from 1.4M ImageNet images.\n5. Freezing avoids steps 2-4 for the base; once the head is trained (small, meaningful errors), unfreezing becomes safe: that is fine-tuning (p.288).",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Fast vs. augmented feature extraction at a glance",
+      "kind": "breakdown",
+      "body": "| | Fast (p.283-286) | Augmented end to end (p.286-288) |\n|---|---|---|\n| Model input | cached (6,6,2048) features | raw (180,180,3) images |\n| Backbone runs | once per image | every image, every epoch |\n| Augmentation | no | yes |\n| Trainable tensors | 4 | 4 (base frozen) |\n| Hardware | CPU OK | GPU needed (p.287) |\n| Test accuracy | 98.1% | 98.4% (p.288) |",
+      "source": "inference"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "End-to-end model with a frozen base",
+      "why": "Shows the model built at the bottom of the page and which parts are frozen vs trainable.",
+      "mermaid": "flowchart LR\n  I[\"Input (180,180,3)\"] --> P[preprocessor\\nImageConverter]\n  P --> B[\"conv_base Xception\\nFROZEN trainable=False\\n26 -> 0 trainable weights\"]\n  B --> G[\"GlobalAveragePooling2D\\n(2048)\"]\n  G --> D1[\"Dense(256)\\ntrainable\"]\n  D1 --> DR[\"Dropout(0.25)\"]\n  DR --> D2[\"Dense(1, sigmoid)\\ntrainable\"]\n  style B fill:#ddd,stroke:#888"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "A frozen layer no longer participates in the forward pass.",
+      "correction": "It still computes outputs; only its weights are excluded from updates."
+    },
+    {
+      "claim": "Freezing is optional because Adam uses small steps.",
+      "correction": "The book explains that the random head would propagate very large updates and effectively destroy the learned representations."
+    },
+    {
+      "claim": "len(trainable_weights) == 26 means Xception has 26 layers.",
+      "correction": "It counts weight tensors in the trainable list, not layers; the preset name refers to 41 trainable conv/dense layers."
+    },
+    {
+      "claim": "The end-to-end model uses data augmentation layers inside it.",
+      "correction": "On these pages augmentation comes from the dataset (`augmented_train_dataset`, p.287); the model itself starts with the preprocessor."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 285, "note": "Evaluation code whose result (98.1%) is reported at the top of this page."},
+      {"page": 283, "note": "Option 2 (end to end with augmentation) was introduced there; Listing 8.24 defines preprocessor."},
+      {"page": 282, "note": "Listing 8.23 first loaded the backbone without freezing."},
+      {"page": 276, "note": "Data augmentation for the from-scratch model."}
+    ],
+    "later": [
+      {"page": 287, "note": "Model compilation, four trainable weight tensors, training on augmented_train_dataset for 30 epochs."},
+      {"page": 288, "note": "98.4% test accuracy and introduction of fine-tuning, which builds on freezing."},
+      {"page": 290, "note": "Fine-tuned model reaches 98.6% test accuracy."}
+    ],
+    "prerequisites": [
+      {"page": 284, "note": "The head design reused here."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 284, "note": "Listing 8.26: same head, with relu on Dense(256)."},
+      {"page": 287, "note": "Continuation of the model code and training."}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "Plain feature extraction gives 98.1% test accuracy.",
+    "End-to-end feature extraction with augmentation requires freezing the base first.",
+    "Without freezing, large updates from the randomly initialized head would destroy the pretrained representations.",
+    "Freeze with `trainable=False`; this empties `trainable_weights` (26 -> 0 for conv_base).",
+    "The new model chains Input(180,180,3) -> preprocessor -> frozen conv_base -> GAP -> Dense(256) -> Dropout(0.25) -> Dense(1, sigmoid)."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "Why must the convolutional base be frozen before training the new classifier end to end?",
+      "options": [
+        "To make the forward pass faster",
+        "Because the randomly initialized Dense layers would propagate very large weight updates that destroy the learned representations",
+        "Because Keras cannot backpropagate through KerasHub models",
+        "To make data augmentation possible"
+      ],
+      "answer": "Because the randomly initialized Dense layers would propagate very large weight updates that destroy the learned representations",
+      "explanation": "That is the reason given on the page. Freezing does not speed up the forward pass, Keras can backpropagate through backbones (fine-tuning does), and augmentation is enabled by the end-to-end setup, not by freezing.",
+      "page_refs": [286]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "What does Listing 8.29 print before and after freezing, and what does that demonstrate?",
+      "options": [],
+      "answer": "26 trainable weights with trainable=True and 0 with trainable=False, demonstrating that freezing empties the trainable weights list.",
+      "explanation": "Directly from the listing and the sentence preceding it.",
+      "page_refs": [286]
+    },
+    {
+      "id": "q3",
+      "type": "short",
+      "question": "Give two ways to freeze the Xception backbone shown on this page.",
+      "options": [],
+      "answer": "Pass `trainable=False` to `Backbone.from_preset(...)` (Listing 8.28), or set `conv_base.trainable = False` (Listing 8.29).",
+      "explanation": "Both appear on the page.",
+      "page_refs": [286]
+    },
+    {
+      "id": "q4",
+      "type": "conceptual",
+      "question": "Why does the new model take inputs of shape (180, 180, 3) instead of (6, 6, 2048) as in Listing 8.26?",
+      "options": [],
+      "answer": "Because the backbone is now part of the model; raw (possibly augmented) images enter, are preprocessed and pass through the frozen base on every step, which is what allows data augmentation.",
+      "explanation": "Contrasts option 1 (cached features) with option 2 (end to end) from p.283.",
+      "page_refs": [283, 284, 286]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "What was the test accuracy of the fast feature-extraction model?",
+      "options": ["84%", "98.1%", "98.4%", "98.6%"],
+      "answer": "98.1%",
+      "explanation": "Stated in the first sentence. 84% is the from-scratch target (p.266), 98.4% is the augmented feature-extraction result (p.288), and 98.6% is the fine-tuned result (p.290).",
+      "page_refs": [286]
+    },
+    {
+      "id": "q6",
+      "type": "math",
+      "question": "In the new model, how many trainable scalar parameters are there, given the backbone is frozen and Dense(256) receives 2,048 inputs?",
+      "options": [],
+      "answer": "Dense(256): 2048*256 + 256 = 524,544; Dense(1): 257; total 524,801.",
+      "explanation": "Same head as Listing 8.26; frozen backbone contributes zero trainable parameters. p.287 confirms only four weight tensors (two kernels, two biases) are trained.",
+      "page_refs": [286, 287]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you explain, without notes, what would happen in the first few training steps if you forgot to freeze conv_base?",
+      "options": [],
+      "answer": "The random head would produce large errors; their gradients would flow into Xception and apply large, uninformative updates that erase its pretrained features.",
+      "explanation": "Self-check of the page's central argument.",
+      "page_refs": [286]
+    }
+  ]
+}

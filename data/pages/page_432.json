@@ -1,0 +1,364 @@
+{
+ "page_id": "page_432",
+ "pdf_page": 432,
+ "printed_page": "408",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:46:55Z",
+  "confidence": "high",
+  "review_flags": [
+   "Typo in the book: p432_e04 reads \"Let’s trying training the model\" (should be \"Let’s try training the model\").",
+   "Minor rounding inconsistency: Listing 14.23 prints test_acc 0.84811, which rounds to 85%, but p432_e10 says the model \"only gets to 84% test accuracy\" (truncation rather than rounding)."
+  ],
+  "extraction_quality": "Clean. The model.summary() table (p432_e03) matches the page image exactly. Listings 14.22 and 14.23 are complete on this page. The model being summarized is built in Listing 14.21 on p.431."
+ },
+ "overview": {
+  "title": "Training and evaluating the one-hot bidirectional LSTM",
+  "chapter": "14 Text classification",
+  "section": "14.5 Sequence models",
+  "subsection": "14.5.1 Training a recurrent model",
+  "main_topic": "The parameter count of the one-hot-encoded bidirectional LSTM (about 15.4 million), its training (Listing 14.22) and evaluation (Listing 14.23), and why it is slow and less accurate than the set-based models",
+  "central_idea": "Feeding one-hot token vectors of size 30,000 into a bidirectional LSTM makes the model huge (15,393,409 parameters) and each review an 18-million-number matrix, so training is slow, and the model reaches only about 84-85% test accuracy, worse than the bag-of-words (88%) and bigram (90%) models.",
+  "importance": "This disappointing result is the motivation for the rest of section 14.5: it shows that one-hot encoding is the wrong input representation for sequence models and sets up word embeddings (p.433 onward).",
+  "learning_objectives": [
+   "Read a Keras model.summary() and explain where each parameter count comes from",
+   "Derive the 15,393,280 parameters of the Bidirectional(LSTM(64)) layer on 30,000-dimensional inputs",
+   "Explain what Listing 14.22 and Listing 14.23 do, including the early_stopping callback",
+   "Explain why an input of shape (600, 30000) makes training slow",
+   "Compare the LSTM's 84.8% test accuracy with the set-based models' results"
+  ],
+  "prerequisites": [
+   "LSTM layers and the Bidirectional wrapper (chapter 13 and p.431)",
+   "The OneHotEncoding layer of Listing 14.20 (p.431)",
+   "The sequence datasets with max_length = 600 and max_tokens = 30,000 (p.430)",
+   "The EarlyStopping callback defined on p.424"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the output of `model.summary()` for the model `lstm_with_one_hot` built in Listing 14.21 (p.431). The layers and shapes are:\n\n| Layer | Output shape | Params |\n|---|---|---|\n| `input_layer_2` (InputLayer) | (None, 600) | 0 |\n| `one_hot_encoding` (OneHotEncoding) | (None, 600, 30000) | 0 |\n| `bidirectional` (Bidirectional) | (None, 128) | 15,393,280 |\n| `dropout` (Dropout) | (None, 128) | 0 |\n| `dense_2` (Dense) | (None, 1) | 129 |\n\nIn total there are **15,393,409 parameters (58.72 MB)**, all trainable. The authors point out that this is a big step up from the unigram and bigram models (20,001 and 30,001 parameters, p.428). At about 15 million parameters it is one of the larger models in the book so far, even though it has only a single LSTM layer.\n\n**Listing 14.22** trains it with `model.fit` on `sequence_train_ds`, validating on `sequence_val_ds`, for up to 10 epochs with the `early_stopping` callback. **Listing 14.23** evaluates it on `sequence_test_ds` and gets a test accuracy of **0.84811**.\n\nThe closing paragraph gives the verdict. The model works, but it trains very slowly, because every review is encoded as a `(600, 30000)` matrix: **18,000,000 floating-point numbers per review**, almost all of them zeros. On top of being slow, it reaches only about 84% test accuracy, clearly worse than the fast set-based models (88% for bag-of-words, p.426; 90% for bigrams, p.428). The next page draws the lesson: one-hot encoding words was the simplest option but a poor one, and **word embeddings** are the better way (p.433).",
+ "paragraphs": [
+  {
+   "ref": "p432_e03",
+   "excerpt": ">>> model.summary()",
+   "what_it_says": "The summary of the `lstm_with_one_hot` model lists five layers. The input (None, 600) is turned into one-hot vectors (None, 600, 30000), a bidirectional LSTM reduces each sequence to a 128-dimensional vector with 15,393,280 parameters, dropout follows, and a Dense layer with 129 parameters gives one sigmoid output. Total: 15,393,409 parameters, 58.72 MB.",
+   "what_it_means": "Almost all of the parameters are in the LSTM's input kernels, which have to project 30,000-dimensional one-hot vectors down to 64 units for each of four gates, in each of two directions. The one-hot layer itself has no weights, but it makes the LSTM's input dimension enormous. The output shape (None, 128) is the forward and backward final states (64 each) concatenated.",
+   "why_it_matters": "Being able to reproduce these numbers by hand shows you understand the LSTM's structure, and it explains why the model is slow: its size grows linearly with the vocabulary size.",
+   "technical_idea": "Beyond the book: an LSTM with input dimension $d$ and $h$ units has $4(h\\,d + h\\,h + h)$ parameters. With $d=30{,}000$ and $h=64$ that is $4(1{,}920{,}000+4{,}096+64) = 7{,}696{,}640$ per direction, and $\\times 2 = 15{,}393{,}280$ for the Bidirectional wrapper. The Dense layer has $128 + 1 = 129$. The memory figure is $15{,}393{,}409 \\times 4$ bytes $\\approx 61.6$ million bytes $= 58.72$ MiB.",
+   "terminology": [
+    {"term": "Bidirectional", "meaning": "A Keras wrapper that runs one copy of the recurrent layer forward and another backward over the sequence and, by default, concatenates their outputs."},
+    {"term": "Param #", "meaning": "The number of trainable and non-trainable weights in a layer."},
+    {"term": "None", "meaning": "The batch dimension, whose size is not fixed when the model is built."}
+   ],
+   "connections": [
+    "p.431: Listing 14.21 builds this model with hidden_dim = 64, Bidirectional(LSTM), Dropout(0.5) and Dense(1, sigmoid)",
+    "p.431: Listing 14.20 defines the weightless OneHotEncoding layer",
+    "p.437: an Embedding layer cuts the parameter count from 15 million to 2 million"
+   ]
+  },
+  {
+   "ref": "p432_e04",
+   "excerpt": "This is quite the step up in size from the unigram and bigram",
+   "what_it_says": "The model is much larger than the unigram and bigram models. At about 15 million parameters it is one of the larger models in the book so far, despite having just one LSTM layer. The authors then move on to training it.",
+   "what_it_means": "The set-based models were essentially logistic regressions over 20,000 or 30,000 multi-hot features (20,001 and 30,001 parameters, p.428). Switching to sequences multiplies the parameter count by about 500. The size is not there because the task needs it; it comes from the wasteful input encoding.",
+   "why_it_matters": "It sets an expectation: a model this much bigger ought to do better. The rest of the page shows that it does not.",
+   "terminology": [
+    {"term": "Unigram / bigram model", "meaning": "The set-based bag-of-words models of section 14.4, using single tokens or token pairs as multi-hot features."}
+   ],
+   "connections": [
+    "p.428: the bigram model has 30,001 parameters versus 20,001 for the bag-of-words model"
+   ]
+  },
+  {
+   "ref": "p432_e10",
+   "excerpt": "This model works, but it trains very slowly, especially compared to the",
+   "what_it_says": "The LSTM trains very slowly compared with the lightweight set model, because each sample is a (600, 30000) matrix (600 words, 30,000 possible words), which is 18 million floats per review. It also reaches only 84% test accuracy, well below the fast set-based models.",
+   "what_it_means": "The LSTM has to do a 30,000 × 256 matrix multiply (four gates × 64 units) at each of the 600 timesteps, in both directions, for every review, and almost all of that work is multiplying zeros. The extra information (word order) does not make up for this inefficiency or for the limited 20,000 training reviews.",
+   "why_it_matters": "This negative result motivates word embeddings (14.5.2-14.5.3) and later pretraining (14.5.4). It also teaches that, in practice, a richer model is not automatically better than a simple, well-matched one.",
+   "technical_idea": "Beyond the book: $600 \\times 30{,}000 = 18{,}000{,}000$ values; stored as float32 that is 72 MB per review, or about 2.3 GB for a batch of 32 (the batch shape (32, 600, 30000) shown on p.431). Multiplying a one-hot vector by a matrix is mathematically just selecting one row, which is exactly what an Embedding layer does cheaply.",
+   "terminology": [
+    {"term": "Set-based model", "meaning": "A model that treats a text as an unordered set of tokens (bag-of-words or bag-of-bigrams)."},
+    {"term": "Sparse input", "meaning": "An input in which almost all values are zero; one-hot vectors have exactly one nonzero entry."}
+   ],
+   "connections": [
+    "p.426: bag-of-words model reaches 0.88388 test accuracy",
+    "p.428: bigram model reaches 0.90116",
+    "p.433: \"Clearly, using one-hot encoding ... wasn’t a great idea. There’s a better way—word embeddings.\""
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "lstm",
+   "name": "LSTM (Long Short-Term Memory)",
+   "definition": "A recurrent layer with a cell state and three gates plus a candidate update, which processes a sequence step by step and can carry information across many timesteps.",
+   "intuition": "A conveyor belt (the cell state) runs along the sequence, and gates decide what to write onto it, what to erase, and what to read out at each step.",
+   "technical": "Each of the four internal transforms has an input kernel $(d, h)$, a recurrent kernel $(h, h)$ and a bias $(h)$, so the parameter count is $4(dh + h^2 + h)$. Here $d = 30{,}000$, which makes the input kernels dominate.",
+   "significance": "It is the sequence-aware model tried in section 14.5, as opposed to the set models of 14.4.",
+   "example": "LSTM(64) on 30,000-dimensional inputs: 7,696,640 parameters.",
+   "misconception": "The parameter count does not depend on the sequence length (600); weights are shared across timesteps. It depends on the input dimension and the number of units.",
+   "related": ["rnn", "bidirectional_rnn", "one_hot_encoding"],
+   "source": "ai_explanation"
+  },
+  {
+   "id": "bidirectional_rnn",
+   "name": "Bidirectional RNN",
+   "definition": "Two independent recurrent layers, one reading the sequence forward and one backward, with their outputs combined (concatenated by default in Keras).",
+   "intuition": "You read the review both ways, so each position's representation can use context from both sides.",
+   "technical": "Bidirectional(LSTM(64)) doubles the parameters (2 × 7,696,640 = 15,393,280) and outputs 2 × 64 = 128 features, matching the summary on this page.",
+   "significance": "The authors chose it on p.431 because classification can use the full context. Generation (chapter 15) needs unidirectional models.",
+   "example": "Output shape (None, 128) in the summary.",
+   "misconception": "Bidirectional is not a deeper model; it is two shallow models side by side.",
+   "related": ["lstm", "rnn"],
+   "source": "book"
+  },
+  {
+   "id": "one_hot_encoding",
+   "name": "One-hot encoding of tokens",
+   "definition": "Representing token id $i$ as a vector of length equal to the vocabulary size, with a 1 at index $i$ and 0s elsewhere.",
+   "intuition": "Each word gets its own private axis; no two words share anything.",
+   "technical": "With a 30,000-token vocabulary and 600 tokens per review, an input becomes a 600 × 30,000 matrix, 18 million numbers, almost all zero.",
+   "significance": "This page shows its cost: a huge model, slow training and mediocre accuracy. That motivates word embeddings.",
+   "example": "Token id 3 in a 5-word vocabulary becomes [0, 0, 0, 1, 0].",
+   "misconception": "One-hot encoding is not \"neutral\". As p.433 explains, it builds in the assumption that all words are unrelated (orthogonal vectors).",
+   "related": ["embedding", "lstm"],
+   "source": "book"
+  },
+  {
+   "id": "early_stopping",
+   "name": "Early stopping callback",
+   "definition": "A Keras callback that stops training when a monitored metric stops improving.",
+   "intuition": "Stop studying when the practice-test score stops getting better.",
+   "technical": "Defined on p.424 as EarlyStopping(monitor=\"val_loss\", restore_best_weights=True, patience=2). Here it lets the 10-epoch run stop early and keep the best weights.",
+   "significance": "It reuses the training setup from the set models, so the comparison between models is fair.",
+   "example": "If val_loss is lowest at epoch 3 and does not improve at epochs 4 and 5, training stops after epoch 5 and the epoch-3 weights are restored.",
+   "misconception": "epochs=10 is only an upper bound when early stopping is used.",
+   "related": ["validation_set", "overfitting"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Parameter count of the Bidirectional LSTM",
+   "latex": "P_{\\text{BiLSTM}} = 2\\cdot 4\\,(h\\,d + h^2 + h) = 2\\cdot4\\,(64\\cdot30000 + 64^2 + 64) = 15{,}393{,}280",
+   "source_text": "bidirectional (Bidirectional) (None, 128) 15,393,280",
+   "variables": [
+    {"symbol": "d", "meaning": "Input feature dimension per timestep = vocabulary size 30,000 (one-hot)"},
+    {"symbol": "h", "meaning": "LSTM units, hidden_dim = 64 (Listing 14.21)"},
+    {"symbol": "4", "meaning": "The input, forget and output gates plus the candidate cell transform"},
+    {"symbol": "2", "meaning": "Forward and backward directions of the Bidirectional wrapper"}
+   ],
+   "operations": "Each of the four transforms has a d×h input kernel, an h×h recurrent kernel and an h-dimensional bias; multiply by 4 transforms and 2 directions.",
+   "purpose": "It explains the parameter count printed in the summary.",
+   "interpretation": "$64\\cdot 30000 = 1{,}920{,}000$ of the $1{,}924{,}160$ weights per gate come from the input kernel, so 99.8% of the model is spent projecting one-hot vectors.",
+   "intuition": "A one-hot input times a kernel just picks one row, so each of these input kernels works like an embedding table inside every gate.",
+   "numerical_example": "$64\\cdot30000=1{,}920{,}000$; $+\\,4096+64 = 1{,}924{,}160$; $\\times 4 = 7{,}696{,}640$; $\\times 2 = 15{,}393{,}280$. Add Dense $128+1=129$ to get $15{,}393{,}409$.",
+   "source": "ai_explanation",
+   "book_ref": "p.432"
+  },
+  {
+   "id": "m2",
+   "title": "Size of one encoded review",
+   "latex": "600 \\times 30{,}000 = 18{,}000{,}000 \\text{ floats per review}",
+   "source_text": "each input sample is encoded as a matrix of size (600, 30000) ... That is 18,000,000 floating-point numbers",
+   "variables": [
+    {"symbol": "600", "meaning": "max_length, tokens per review after padding or truncation"},
+    {"symbol": "30{,}000", "meaning": "max_tokens, the vocabulary size and so the one-hot depth"}
+   ],
+   "operations": "Multiplication of the sequence length by the one-hot depth.",
+   "purpose": "It quantifies why training is slow.",
+   "interpretation": "Only 600 of these 18 million values are 1; the rest are 0.",
+   "intuition": "It is like sending a 30,000-page book in which each page has a single tick mark, just to tell the model one word.",
+   "numerical_example": "At 4 bytes per float32 that is 72 MB per review, and about 2.3 GB for a batch of 32.",
+   "source": "book",
+   "book_ref": "p.432"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Model summary of lstm_with_one_hot",
+   "original_code": ">>> model.summary()\nModel: \"lstm_with_one_hot\"\n┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓\n┃ Layer (type)                      ┃ Output Shape             ┃       Param # ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩\n│ input_layer_2 (InputLayer)        │ (None, 600)              │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ one_hot_encoding (OneHotEncoding) │ (None, 600, 30000)       │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ bidirectional (Bidirectional)     │ (None, 128)              │    15,393,280 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ dropout (Dropout)                 │ (None, 128)              │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ dense_2 (Dense)                   │ (None, 1)                │           129 │\n└───────────────────────────────────┴──────────────────────────┴───────────────┘\n Total params: 15,393,409 (58.72 MB)\n Trainable params: 15,393,409 (58.72 MB)\n Non-trainable params: 0 (0.00 B)",
+   "language": "python",
+   "what_it_does": "It prints the layer-by-layer structure, output shapes and parameter counts of the model built in Listing 14.21.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Calls summary() on the model named \"lstm_with_one_hot\"."},
+    {"lines": "input_layer_2", "explanation": "Integer token ids, 600 per review; no weights."},
+    {"lines": "one_hot_encoding", "explanation": "The custom layer from Listing 14.20 expands each id into a 30,000-dimensional one-hot vector; no weights."},
+    {"lines": "bidirectional", "explanation": "Forward and backward LSTM(64); final states are concatenated to 128 features; 15,393,280 weights."},
+    {"lines": "dropout", "explanation": "Dropout(0.5) for regularization; no weights."},
+    {"lines": "dense_2", "explanation": "One sigmoid unit: 128 weights + 1 bias = 129."},
+    {"lines": "totals", "explanation": "15,393,409 parameters, all trainable; 58.72 MB in float32."}
+   ],
+   "inputs_outputs": "Input: batches of shape (None, 600) int32 token ids. Output: (None, 1) probability that the review is positive.",
+   "algorithm": "One-hot expansion, bidirectional recurrence, dropout, then logistic output.",
+   "theory_link": "Parameter count of recurrent layers; the cost of sparse one-hot inputs.",
+   "parameters": [
+    {"name": "hidden_dim = 64", "role": "Units per LSTM direction (set on p.431)"},
+    {"name": "max_tokens = 30,000", "role": "Vocabulary size and one-hot depth (p.430)"},
+    {"name": "max_length = 600", "role": "Sequence length (p.430)"}
+   ],
+   "pitfalls": [
+    "Layer names such as input_layer_2 and dense_2 depend on how many layers were created earlier in the session; they are not meaningful.",
+    "The summary does not show the memory needed for activations, which is dominated by the 18-million-value inputs."
+   ],
+   "illustrative_code": "# AI-written check of the LSTM parameter count\nd, h = 30_000, 64\nper_direction = 4 * (h * d + h * h + h)\nprint(per_direction, 2 * per_direction)  # 7696640 15393280\nprint(2 * per_direction + (2 * h + 1))   # 15393409"
+  },
+  {
+   "id": "c2",
+   "listing": "14.22",
+   "title": "Training the LSTM sequence model",
+   "original_code": "model.fit(\n    sequence_train_ds,\n    validation_data=sequence_val_ds,\n    epochs=10,\n    callbacks=[early_stopping],\n)",
+   "language": "python",
+   "what_it_does": "It trains the one-hot BiLSTM on the training reviews for up to 10 epochs, monitoring the validation set and stopping early when val_loss stops improving.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "fit on sequence_train_ds, a tf.data dataset of (600-token id sequence, label) batches."},
+    {"lines": "3", "explanation": "Validation data is used for monitoring and early stopping, not for updates."},
+    {"lines": "4", "explanation": "At most 10 passes over the data."},
+    {"lines": "5", "explanation": "early_stopping from p.424: monitor val_loss, patience 2, restore best weights."}
+   ],
+   "inputs_outputs": "Input: the training and validation datasets. Output: a History object; the model weights are updated in place.",
+   "algorithm": "Mini-batch training with Adam on binary cross-entropy (compiled in Listing 14.21).",
+   "theory_link": "Same training procedure as the set models, so the comparison isolates the input representation and architecture.",
+   "parameters": [
+    {"name": "epochs", "role": "Upper bound of 10 epochs"},
+    {"name": "callbacks", "role": "Early stopping on val_loss"}
+   ],
+   "pitfalls": [
+    "Because each batch expands to (32, 600, 30000), training is slow and memory-hungry; on modest hardware it may run out of memory."
+   ]
+  },
+  {
+   "id": "c3",
+   "listing": "14.23",
+   "title": "Evaluating the LSTM sequence model",
+   "original_code": ">>> test_loss, test_acc = model.evaluate(sequence_test_ds)\n>>> test_acc\n0.84811",
+   "language": "python",
+   "what_it_does": "It computes the loss and accuracy on the held-out test reviews.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "evaluate returns [loss, accuracy] because the model was compiled with metrics=[\"accuracy\"]."},
+    {"lines": "2-3", "explanation": "Test accuracy of 0.84811, about 85% (the text says 84%)."}
+   ],
+   "inputs_outputs": "Input: sequence_test_ds. Output: scalar loss and accuracy.",
+   "algorithm": "Forward pass over the test set without updates.",
+   "theory_link": "Final generalization measure, comparable to 0.88388 (bag-of-words, p.426) and 0.90116 (bigrams, p.428).",
+   "parameters": [],
+   "pitfalls": [
+    "Exact accuracy varies a little from run to run because of random initialization and dropout."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why one-hot times a matrix is wasteful",
+   "kind": "breakdown",
+   "body": "For a one-hot vector $e_i$ and the LSTM input kernel $W \\in \\mathbb{R}^{30000\\times 256}$ (four gates × 64), $e_i^\\top W = W_{i,:}$, just row $i$ of $W$. The dense multiplication does $30{,}000 \\times 256 \\approx 7.7$ million multiply-adds to produce a result that a table lookup gives for free. Repeat that for 600 timesteps, 2 directions and every review, and the slow training on this page is explained. An `Embedding` layer (p.434 onward) performs exactly this lookup directly, which is why it cuts the size and the training time by an order of magnitude (p.437).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why more parameters did not help",
+   "kind": "step_by_step",
+   "body": "1. The training set has only 20,000 reviews, while the model has 15 million parameters, so it can easily memorize (on p.437 the authors report train accuracy above 99% for the related embedding model).\n2. Each word's vector (a row of each input kernel) is learned only from the reviews in which that word appears; rare words get almost no training signal.\n3. Word order helps in principle, but learning to exploit it needs much more data. The authors return to this on p.443, saying the model is \"data-constrained\".\n4. Set models, by contrast, have one weight per feature and generalize well from little data.",
+   "source": "inference"
+  },
+  {
+   "title": "A library analogy",
+   "kind": "analogy",
+   "body": "Describing a 600-word review with one-hot vectors is like handing someone 600 sheets of paper, each listing all 30,000 dictionary words with a single one circled. All the information is there, but reading through it is exhausting, and nothing tells the reader that \"film\" and \"movie\" are related.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "lstm_with_one_hot architecture",
+   "why": "It reproduces the model summary at the top of the page, so you can click each layer to see its shape and role.",
+   "widget": "nn_architecture",
+   "params": {
+    "layers": [
+     {"name": "input_layer_2", "type": "input", "shape": "(None, 600)"},
+     {"name": "one_hot_encoding", "type": "other", "shape": "(None, 600, 30000)"},
+     {"name": "bidirectional (LSTM 64 ×2)", "type": "rnn", "units": 128, "shape": "(None, 128)"},
+     {"name": "dropout", "type": "dropout", "shape": "(None, 128)"},
+     {"name": "dense_2", "type": "output", "units": 1, "activation": "sigmoid", "shape": "(None, 1)"}
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Shape flow of one batch",
+   "why": "It shows how a batch of 32 reviews (p.431) grows to 576 million numbers after one-hot encoding before the LSTM shrinks it to 128 features per review.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "token ids", "shape": [32, 600]},
+     {"op": "one-hot", "shape": [32, 600, 30000]},
+     {"op": "BiLSTM", "shape": [32, 128]},
+     {"op": "Dense sigmoid", "shape": [32, 1]}
+    ]
+   }
+  },
+  {
+   "id": "v3",
+   "type": "chart",
+   "title": "Test accuracy: set models vs. one-hot LSTM",
+   "why": "It compares the 0.84811 of Listing 14.23 with the set-based results the paragraph refers to.",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": ["Bag-of-words (p.426)", "Bigrams (p.428)", "One-hot BiLSTM (p.432)"],
+     "datasets": [{"label": "Test accuracy", "data": [0.88388, 0.90116, 0.84811]}]
+    },
+    "options": {"scales": {"y": {"min": 0.8, "max": 0.92}}}
+   }
+  }
+ ],
+ "misconceptions": [
+  {"claim": "A sequence model that sees word order should always beat a bag-of-words model.", "correction": "On this page the BiLSTM (84.8%) loses to both set models (88% and 90%). Order information only helps if the model has a good input representation and enough data to learn from it."},
+  {"claim": "The 15 million parameters come from the long 600-token sequence.", "correction": "Recurrent weights are shared across timesteps. The size comes from the 30,000-dimensional one-hot input times 4 gates times 2 directions."},
+  {"claim": "The OneHotEncoding layer is expensive because it has weights.", "correction": "It has 0 parameters. Its cost lies in the huge tensors it produces and in the size of the LSTM kernels that must consume them."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 431, "note": "Listings 14.20-14.21 define the OneHotEncoding layer and the BiLSTM model summarized here"},
+   {"page": 430, "note": "Sequence datasets with max_length = 600 and max_tokens = 30,000"},
+   {"page": 424, "note": "The early_stopping callback reused in Listing 14.22"},
+   {"page": 426, "note": "Bag-of-words baseline at 0.88388 test accuracy"},
+   {"page": 428, "note": "Bigram model at 0.90116 test accuracy with 30,001 parameters"}
+  ],
+  "later": [
+   {"page": 433, "note": "The lesson drawn: one-hot encoding was a bad idea; word embeddings are introduced"},
+   {"page": 437, "note": "An Embedding layer cuts parameters from 15M to 2M, but accuracy stays about 84%"},
+   {"page": 443, "note": "Pretrained embeddings bring the LSTM up to roughly the set models' level"}
+  ],
+  "prerequisites": [
+   {"page": 389, "note": "LSTMs in chapter 13 for timeseries"}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 437, "note": "Listing 14.25 trains and evaluates the LSTM with an Embedding layer"}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "The one-hot BiLSTM has 15,393,409 parameters, almost all of them in the LSTM input kernels: 2 × 4 × (64·30000 + 64² + 64).",
+  "Each review becomes a (600, 30000) matrix, 18 million floats, which makes training very slow.",
+  "Listing 14.22 reuses the training setup of the set models (10 epochs, early stopping); Listing 14.23 gives 0.84811 test accuracy.",
+  "The sequence model is worse than both bag-of-words (0.884) and bigrams (0.901).",
+  "The problem is the input representation, which leads to word embeddings on the next page."
+ ],
+ "questions": [
+  {"id": "q1", "type": "math", "question": "Show how the Bidirectional layer gets 15,393,280 parameters, given hidden_dim = 64 and a one-hot depth of 30,000.", "options": [], "answer": "Per direction: 4 × (64·30000 + 64·64 + 64) = 4 × 1,924,160 = 7,696,640. Two directions: 15,393,280.", "explanation": "An LSTM has four transforms (three gates plus the candidate), each with an input kernel (d×h), a recurrent kernel (h×h) and a bias (h). Bidirectional doubles the count.", "page_refs": [432, 431]},
+  {"id": "q2", "type": "mcq", "question": "Why does the Dense layer have 129 parameters?", "options": ["It has 128 inputs from the concatenated BiLSTM states plus 1 bias", "It has 64 inputs times 2 outputs plus 1 bias", "It has 129 sigmoid units", "Dropout adds one parameter"], "answer": "It has 128 inputs from the concatenated BiLSTM states plus 1 bias", "explanation": "The Bidirectional output is (None, 128), and Dense(1) needs 128 weights plus one bias. The layer has a single output unit, not two or 129, and Dropout has no parameters.", "page_refs": [432]},
+  {"id": "q3", "type": "short", "question": "How many floating-point numbers represent a single review after one-hot encoding, and why?", "options": [], "answer": "18,000,000, because the review is a matrix of 600 tokens × 30,000 vocabulary entries.", "explanation": "The text states 600 words per sample and 30,000 possible words, so 600 × 30,000 = 18 million.", "page_refs": [432]},
+  {"id": "q4", "type": "mcq", "question": "What test accuracy does the one-hot LSTM reach in Listing 14.23, and how does it compare?", "options": ["0.84811, worse than both set models", "0.90116, equal to the bigram model", "0.88388, equal to the bag-of-words model", "0.95, better than all set models"], "answer": "0.84811, worse than both set models", "explanation": "Listing 14.23 prints 0.84811. 0.88388 and 0.90116 are the bag-of-words (p.426) and bigram (p.428) results, and no model in this chapter reaches 0.95.", "page_refs": [432, 426, 428]},
+  {"id": "q5", "type": "conceptual", "question": "The model has about 500 times more parameters than the bigram model, yet performs worse. Give two reasons, based on this page and what follows.", "options": [], "answer": "(1) The one-hot input is extremely high-dimensional and sparse, so most of the computation and most of the parameters are wasted, and words share no information. (2) With only 20,000 training reviews, a 15M-parameter model cannot learn good per-word representations or order patterns before it overfits.", "explanation": "This page blames the large inputs. Page 433 explains that one-hot vectors assume all words are unrelated, and pp.437 and 443 point to the data constraint.", "page_refs": [432, 433, 437]},
+  {"id": "q6", "type": "short", "question": "What does the early_stopping callback in Listing 14.22 do, and where is it defined?", "options": [], "answer": "It monitors val_loss, stops training if it does not improve for 2 epochs, and restores the best weights. It is defined on p.424.", "explanation": "It is EarlyStopping(monitor=\"val_loss\", restore_best_weights=True, patience=2), so epochs=10 is only an upper bound.", "page_refs": [432, 424]},
+  {"id": "q7", "type": "self", "question": "Without looking, can you rebuild the summary table: each layer's output shape and parameter count?", "options": [], "answer": "(None,600) 0; (None,600,30000) 0; (None,128) 15,393,280; (None,128) 0; (None,1) 129; total 15,393,409.", "explanation": "If you can derive each number, you understand the shapes in a one-hot recurrent pipeline.", "page_refs": [432]}
+ ]
+}

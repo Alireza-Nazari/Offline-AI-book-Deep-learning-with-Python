@@ -1,0 +1,378 @@
+{
+ "page_id": "page_469",
+ "pdf_page": 469,
+ "printed_page": "445",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:58:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. Element p469_e04 merges two printed paragraphs (\"At some point, all recurrent cells…\" and \"We are ready to start building…\"), annotated separately. Listing 15.14 is complete on this page; the NumPy pseudocode announced in the last paragraph is on p.470."
+ },
+ "overview": {
+  "title": "Listing 15.14: the Transformer encoder block",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "15.3.2 Transformer encoder block",
+  "main_topic": "Adding a two-layer feedforward network, residual connections and LayerNormalization around self-attention to form the TransformerEncoder layer.",
+  "central_idea": "A Transformer encoder block alternates two sublayers: self-attention, which passes information across the sequence, and a per-token feedforward network (Dense-ReLU-Dense), which restores the nonlinearity attention lacks. Each sublayer is wrapped in a residual connection followed by layer normalization.",
+  "importance": "Listing 15.14 is the first complete Transformer building block in the book; the decoder (p.471) and the GPT-style model of chapter 16 (p.498) are built by modifying it.",
+  "learning_objectives": [
+   "Explain why a feedforward network is added after attention and what each of the two sublayers does.",
+   "Read and reproduce the TransformerEncoder layer of listing 15.14 line by line.",
+   "Explain how key_dim is derived from hidden_dim and num_heads.",
+   "Trace the residual-plus-LayerNormalization pattern in the call() method.",
+   "Explain how source_mask is reshaped to serve as an attention_mask.",
+   "State why LayerNormalization rather than BatchNormalization is used for sequences."
+  ],
+  "prerequisites": [
+   "Self-attention and the linearity argument (p.468)",
+   "keras.layers.MultiHeadAttention (pp.467-468)",
+   "Residual connections and normalization from the ConvNet chapter (chapter 9)",
+   "Subclassing keras.Layer with __init__ and call"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes the argument from p.468: stacked attention layers could collapse \"to a single matrix multiplication!\", a real problem for expressiveness.\n\nRecurrent cells always pass each token's vector through a dense projection with an activation. The authors of \"Attention is all you need\" restored this \"in the simplest way possible\": a **feedforward network of two dense layers with an activation in the middle**. The division of labour is stated crisply: *attention passes information across the sequence, and the feedforward network updates the representation of individual sequence items.*\n\nThe book then starts building a Transformer by replacing the encoder of the translation model. Self-attention carries information along the English source sequence, and two ingredients from the ConvNet chapter (chapter 9) are added: **normalization** and **residual connections**.\n\n**Listing 15.14** defines `TransformerEncoder(keras.Layer)` with `hidden_dim`, `intermediate_dim` and `num_heads`. It sets `key_dim = hidden_dim // num_heads`, creates a `MultiHeadAttention(num_heads, key_dim)`, two `LayerNormalization` layers, and a feedforward pair `Dense(intermediate_dim, activation=\"relu\")` and `Dense(hidden_dim)`. In `call(source, source_mask)`, the mask is reshaped with `source_mask[:, None, :]`, self-attention is applied with `query=x, key=x, value=x, attention_mask=mask`, the input is added back (residual) and normalized; then the feedforward network runs, its input is added back, and the result is normalized again.\n\nFinally the authors note that these are `LayerNormalization` layers, not `BatchNormalization`, because batch normalization \"doesn't work well for sequence data\"; layer normalization normalizes each sequence independently of the others in the batch. The NumPy-like pseudocode follows on p.470.",
+ "paragraphs": [
+  {
+   "ref": "p469_e03",
+   "excerpt": "to a single matrix multiplication! That’s a real problem with the expressiveness",
+   "what_it_says": "Completing the sentence from p.468: 100 stacked attention layers could be simplified to a single matrix multiplication, which is a real problem for the model's expressiveness.",
+   "what_it_means": "Without a nonlinearity, depth adds no representational power: a product of matrices is a matrix.",
+   "why_it_matters": "It is the explicit motivation for the feedforward sublayer introduced next.",
+   "terminology": [{"term": "Expressiveness", "meaning": "The range of functions a model architecture can represent."}],
+   "connections": ["p.468: the length-one argument that attention reduces to a linear projection"]
+  },
+  {
+   "ref": "p469_e04",
+   "excerpt": "At some point, all recurrent cells pass the input vector for each",
+   "what_it_says": "Every recurrent cell, at some point, passes each token's input vector through a dense projection and an activation function. The Transformer authors added this back in the simplest way: a feedforward network of two dense layers with an activation between them. Attention passes information across the sequence; the feedforward network updates the representation of individual sequence items.",
+   "what_it_means": "The Transformer block separates two jobs that an RNN cell does at once: mixing information across time (attention) and transforming features nonlinearly (feedforward). The feedforward network is applied to every position independently with shared weights, much like a 1×1 convolution over the sequence.",
+   "why_it_matters": "This two-sublayer pattern, attention then feedforward, is the repeating unit of every Transformer, as the chapter summary repeats (p.489).",
+   "technical_idea": "Beyond the book: the hidden layer of this network (intermediate_dim) is typically wider than hidden_dim, often 4×, so the block expands features, applies ReLU, and projects back.",
+   "terminology": [
+    {"term": "Feedforward network (FFN)", "meaning": "Here: Dense(intermediate_dim, relu) followed by Dense(hidden_dim), applied to each token separately."},
+    {"term": "Dense projection", "meaning": "A learned affine map W·x + b."}
+   ],
+   "connections": ["p.489: Transformers stack blocks of alternating attention and two-layer feedforward networks"]
+  },
+  {
+   "ref": "p469_e04",
+   "excerpt": "We are ready to start building a Transformer model. Let’s start by",
+   "what_it_says": "Building begins by replacing the encoder of the translation model. Self-attention will pass information along the English source sequence, and normalization and residual connections, found important for ConvNets in chapter 9, are added.",
+   "what_it_means": "The encoder's GRU is swapped out for this block, but the rest of the seq2seq setup (English input, Spanish output) stays. Residual connections and normalization are what make deep stacks of such blocks trainable.",
+   "why_it_matters": "It shows that the Transformer reuses well-established training aids rather than inventing everything new; the block is attention + FFN + proven plumbing.",
+   "technical_idea": "Beyond the book: residuals give gradients a direct path through the block, and normalization keeps activations at a stable scale across many stacked blocks.",
+   "terminology": [
+    {"term": "Residual connection", "meaning": "Adding a block's input to its output (x + f(x)) so the block learns a correction."},
+    {"term": "Normalization", "meaning": "Rescaling activations to zero mean and unit variance (plus learned scale/offset)."}
+   ],
+   "connections": ["p.473: this encoder is plugged into the full Transformer translation model"]
+  },
+  {
+   "ref": "p469_e07",
+   "excerpt": "You’ll note that the normalization layers we’re using here aren’t BatchNormalization layers",
+   "what_it_says": "The listing uses LayerNormalization, not the BatchNormalization used in image models, because batch normalization does not work well for sequence data. LayerNormalization normalizes each sequence independently from the other sequences in the batch (pseudocode on the next page).",
+   "what_it_means": "BatchNormalization computes statistics across the samples of a batch, which couples examples together and is awkward when sequences have different lengths and padding. LayerNormalization computes statistics within each token's feature vector, so it behaves identically in training and inference and for any batch composition.",
+   "why_it_matters": "LayerNormalization is the standard normalization in Transformers; understanding why helps when designing other sequence models.",
+   "technical_idea": "Beyond the book: Keras's LayerNormalization defaults to axis=-1, i.e., per-token normalization over the feature dimension, as the p.470 pseudocode shows.",
+   "terminology": [
+    {"term": "LayerNormalization", "meaning": "Normalizes over the feature axis of each individual item, independent of the batch."},
+    {"term": "BatchNormalization", "meaning": "Normalizes each feature using mean and variance computed across the batch (and spatial axes for images)."}
+   ],
+   "connections": ["p.470: NumPy-like pseudocode comparing layer_normalization and batch_normalization"]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "transformer_encoder",
+   "name": "Transformer encoder block",
+   "definition": "A layer made of a self-attention sublayer and a position-wise feedforward sublayer, each followed by a residual addition and layer normalization.",
+   "intuition": "First let tokens talk to each other (attention), then let each token think on its own (feedforward); keep the original signal via residuals and keep scales tame via normalization.",
+   "technical": "In listing 15.14: x = LN1(x + MHA(x, x, x, mask)); x = LN2(x + Dense2(relu-Dense1(x))). Input and output shapes are identical, so blocks stack.",
+   "significance": "The fundamental unit of Transformer encoders (and, with changes, decoders).",
+   "example": "TransformerEncoder(hidden_dim, intermediate_dim, num_heads) applied to embedded English token sequences.",
+   "misconception": "An encoder block is not just a MultiHeadAttention layer; the feedforward sublayer is essential for nonlinearity.",
+   "related": ["self_attention", "feedforward_network", "residual_connection", "layer_normalization", "transformer"],
+   "source": "book"
+  },
+  {
+   "id": "feedforward_network",
+   "name": "Position-wise feedforward network",
+   "definition": "Two Dense layers with an activation in between, applied to each sequence element independently.",
+   "intuition": "A small MLP that each token passes through separately, with the same weights for all tokens.",
+   "technical": "$\\operatorname{FFN}(x) = W_2\\,\\operatorname{relu}(W_1 x + b_1) + b_2$ with $W_1\\in\\mathbb{R}^{\\text{intermediate\\_dim}\\times\\text{hidden\\_dim}}$, $W_2\\in\\mathbb{R}^{\\text{hidden\\_dim}\\times\\text{intermediate\\_dim}}$.",
+   "significance": "Supplies the nonlinearity attention lacks and holds a large share of the block's parameters.",
+   "example": "Dense(intermediate_dim, activation=\"relu\") followed by Dense(hidden_dim).",
+   "misconception": "It does not mix information between positions; only attention does that.",
+   "related": ["dense_layer", "relu", "transformer_encoder"],
+   "source": "book"
+  },
+  {
+   "id": "residual_connection",
+   "name": "Residual connection",
+   "definition": "Adding a sublayer's input to its output: x + f(x).",
+   "intuition": "The sublayer only needs to learn a change to the representation; the original passes through untouched.",
+   "technical": "Implemented as residual = x; x = f(x); x = x + residual. Requires f to preserve the shape, which is why the second Dense projects back to hidden_dim.",
+   "significance": "Allows deep stacks of blocks to train; first seen with ConvNets in chapter 9.",
+   "example": "x = x + residual after self-attention and after the feedforward network in listing 15.14.",
+   "misconception": "Residuals are not optional decorations; without them deep Transformers are hard to optimize.",
+   "related": ["layer_normalization", "transformer_encoder"],
+   "source": "book"
+  },
+  {
+   "id": "layer_normalization",
+   "name": "Layer normalization",
+   "definition": "Normalization that uses statistics computed within each sample (here, over the features of each token), independent of other samples in the batch.",
+   "intuition": "Each token vector is rescaled on its own, so other sentences in the batch never influence it.",
+   "technical": "$\\operatorname{LN}(x) = \\gamma\\odot\\frac{x-\\mu}{\\sqrt{\\sigma^2+\\epsilon}}+\\beta$, with $\\mu,\\sigma^2$ over the last axis (Beyond the book: the full formula with learned $\\gamma,\\beta$ and $\\epsilon$).",
+   "significance": "Standard for Transformers because BatchNormalization doesn't work well for sequence data.",
+   "example": "self.self_attention_layernorm and self.feed_forward_layernorm in listing 15.14.",
+   "misconception": "Layer normalization does not normalize across the sequence length or batch; it normalizes each token's feature vector.",
+   "related": ["batch_normalization", "transformer_encoder"],
+   "source": "book"
+  },
+  {
+   "id": "attention_mask",
+   "name": "Attention mask (padding mask)",
+   "definition": "A Boolean tensor telling MultiHeadAttention which key positions each query may attend to.",
+   "intuition": "Cover up the padding so no token pays attention to it.",
+   "technical": "source_mask has shape (batch, source_length); source_mask[:, None, :] gives (batch, 1, source_length), which broadcasts over query positions to (batch, target_length, source_length) (explained on p.470).",
+   "significance": "Prevents padding tokens, which carry no information, from contaminating representations.",
+   "example": "attention_mask=mask in the self-attention call of listing 15.14.",
+   "misconception": "The mask does not remove padding positions from the output; padded positions still get output vectors, they just are not attended to.",
+   "related": ["self_attention", "broadcasting"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "The encoder block as two residual sublayers",
+   "latex": "\\begin{aligned} h &= \\operatorname{LN}_1\\big(x + \\operatorname{MHA}(x, x, x;\\ \\text{mask})\\big) \\\\ y &= \\operatorname{LN}_2\\big(h + W_2\\,\\operatorname{relu}(W_1 h + b_1) + b_2\\big) \\end{aligned}",
+   "source_text": "x = self.self_attention(query=x, key=x, value=x, attention_mask=mask); x = x + residual; x = self.self_attention_layernorm(x); ... x = self.feed_forward_1(x); x = self.feed_forward_2(x); x = x + residual; x = self.feed_forward_layernorm(x)",
+   "variables": [
+    {"symbol": "x", "meaning": "Input sequence, shape (batch, seq_len, hidden_dim)."},
+    {"symbol": "MHA", "meaning": "Multi-head self-attention with num_heads heads of size key_dim."},
+    {"symbol": "LN_1, LN_2", "meaning": "The two LayerNormalization layers."},
+    {"symbol": "W_1, b_1", "meaning": "feed_forward_1: hidden_dim → intermediate_dim, ReLU."},
+    {"symbol": "W_2, b_2", "meaning": "feed_forward_2: intermediate_dim → hidden_dim, no activation."},
+    {"symbol": "h, y", "meaning": "Intermediate and final outputs, same shape as x."}
+   ],
+   "operations": "Self-attention, residual add, layer norm; then per-token two-layer MLP, residual add, layer norm.",
+   "purpose": "Writes listing 15.14's call() as equations.",
+   "interpretation": "Normalization is applied after each residual addition (the original \"post-norm\" arrangement, Beyond the book terminology).",
+   "intuition": "Each sublayer proposes an update that is added to the running representation, then the sum is renormalized.",
+   "numerical_example": "Beyond the book: with hidden_dim=256, num_heads=8 → key_dim=32. With intermediate_dim=2048 the FFN has 256·2048+2048 + 2048·256+256 = 1,050,880 parameters.",
+   "source": "book",
+   "book_ref": "p.469"
+  },
+  {
+   "id": "m2",
+   "title": "Per-head key dimension",
+   "latex": "\\text{key\\_dim} = \\left\\lfloor \\frac{\\text{hidden\\_dim}}{\\text{num\\_heads}} \\right\\rfloor",
+   "source_text": "key_dim = hidden_dim // num_heads",
+   "variables": [
+    {"symbol": "hidden_dim", "meaning": "Feature size of each token vector entering and leaving the block."},
+    {"symbol": "num_heads", "meaning": "Number of attention heads."},
+    {"symbol": "key_dim", "meaning": "Size of each head's query/key projection."}
+   ],
+   "operations": "Integer division.",
+   "purpose": "Splits the model width evenly among heads so total attention width stays about hidden_dim.",
+   "interpretation": "More heads means narrower heads at the same total cost.",
+   "intuition": "Divide one wide attention into several narrower ones looking at different things.",
+   "numerical_example": "hidden_dim = 512, num_heads = 8 → key_dim = 64; concatenating 8 heads gives 512 again.",
+   "source": "book",
+   "book_ref": "p.469"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "15.14",
+   "title": "A Transformer encoder block",
+   "original_code": "class TransformerEncoder(keras.Layer):\n    def __init__(self, hidden_dim, intermediate_dim, num_heads):\n        super().__init__()\n        key_dim = hidden_dim // num_heads\n        self.self_attention = layers.MultiHeadAttention(num_heads, key_dim)\n        self.self_attention_layernorm = layers.LayerNormalization()\n        self.feed_forward_1 = layers.Dense(intermediate_dim, activation=\"relu\")\n        self.feed_forward_2 = layers.Dense(hidden_dim)\n        self.feed_forward_layernorm = layers.LayerNormalization()\n    def call(self, source, source_mask):\n        residual = x = source\n        mask = source_mask[:, None, :]\n        x = self.self_attention(query=x, key=x, value=x, attention_mask=mask)\n        x = x + residual\n        x = self.self_attention_layernorm(x)\n        residual = x\n        x = self.feed_forward_1(x)\n        x = self.feed_forward_2(x)\n        x = x + residual\n        x = self.feed_forward_layernorm(x)\n        return x",
+   "language": "python",
+   "what_it_does": "Defines a reusable Keras layer implementing one Transformer encoder block: masked self-attention and a two-layer feedforward network, each with a residual connection and layer normalization.",
+   "line_explanations": [
+    {"lines": "1-3", "explanation": "Subclass keras.Layer; the constructor takes the model width (hidden_dim), the FFN hidden width (intermediate_dim) and the number of heads."},
+    {"lines": "4", "explanation": "Each head gets hidden_dim // num_heads dimensions."},
+    {"lines": "5-6", "explanation": "Self-attention layers (callout): the MultiHeadAttention and the LayerNormalization that follows it."},
+    {"lines": "7-9", "explanation": "Feedforward layers (callout): Dense with ReLU expanding to intermediate_dim, Dense projecting back to hidden_dim (no activation), and its LayerNormalization."},
+    {"lines": "10-11", "explanation": "call receives the embedded source sequence and its padding mask; residual keeps a copy of the input."},
+    {"lines": "12", "explanation": "Insert an axis: (batch, source_len) → (batch, 1, source_len), so it broadcasts across all query positions (p.470)."},
+    {"lines": "13-15", "explanation": "Self-attention computation (callout): attend with query=key=value=x, add residual, normalize."},
+    {"lines": "16-20", "explanation": "Feedforward computation (callout): save residual, Dense-ReLU, Dense, add residual, normalize."},
+    {"lines": "21", "explanation": "Return a tensor of the same shape as source, so blocks can be stacked."}
+   ],
+   "inputs_outputs": "Inputs: source (batch, seq_len, hidden_dim) float tensor; source_mask (batch, seq_len) Boolean (True for real tokens). Output: (batch, seq_len, hidden_dim).",
+   "algorithm": "Post-norm Transformer encoder layer: LN(x + SelfAttn(x)), then LN(x + FFN(x)).",
+   "theory_link": "Implements the page's principle: attention moves information across positions; the FFN adds per-token nonlinearity; residuals and normalization come from the ConvNet chapter.",
+   "parameters": [
+    {"name": "hidden_dim", "role": "Width of token vectors; must match the embedding size of the input."},
+    {"name": "intermediate_dim", "role": "Width of the FFN's hidden ReLU layer."},
+    {"name": "num_heads", "role": "Number of attention heads; determines key_dim."},
+    {"name": "source_mask", "role": "Boolean padding mask used as attention_mask."}
+   ],
+   "pitfalls": [
+    "hidden_dim should be divisible by num_heads, otherwise integer division silently drops dimensions per head.",
+    "feed_forward_2 must output hidden_dim; otherwise the residual addition fails with a shape mismatch.",
+    "Forgetting the [:, None, :] reshape gives a mask of the wrong rank for MultiHeadAttention.",
+    "Beyond the book: this layer has no dropout; chapter 16 adds dropout inside the block when stacking many layers (p.498)."
+   ],
+   "illustrative_code": "# AI-written shape check, not from the book\nimport numpy as np\nenc = TransformerEncoder(hidden_dim=256, intermediate_dim=1024, num_heads=8)\nx = np.random.rand(4, 20, 256).astype('float32')\nmask = np.ones((4, 20), dtype=bool); mask[:, 15:] = False  # last 5 are padding\nprint(enc(x, mask).shape)  # (4, 20, 256)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why the second Dense has no activation",
+   "kind": "breakdown",
+   "body": "Beyond the book: the output of the FFN is added to the residual stream. If it ended with ReLU, updates could only ever be non-negative, which would bias the representation upward over many blocks. A linear final projection lets the block push each feature up or down; the single ReLU in the middle is enough nonlinearity, as the page puts it: \"two dense layers with an activation in the middle.\"",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Meeting and desk work",
+   "kind": "analogy",
+   "body": "Think of each token as a team member. The self-attention sublayer is a meeting where everyone hears from the colleagues most relevant to them. The feedforward sublayer is desk work: each person processes what they learned, alone, with the same skills (shared weights). The residual connection means you keep your notes from before the meeting, and layer normalization is tidying those notes to a standard format before the next round.",
+   "source": "analogy"
+  },
+  {
+   "title": "Post-norm vs pre-norm",
+   "kind": "alternative",
+   "body": "Beyond the book: listing 15.14 normalizes *after* the residual addition (`x = LN(x + f(x))`), as in the original 2017 Transformer. Many modern models use *pre-norm*, `x = x + f(LN(x))`, which tends to train more stably when stacking dozens of blocks because the residual path stays un-normalized. For the single-layer encoder used in this chapter the difference is minor.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Data flow through TransformerEncoder.call()",
+   "why": "Traces the exact sequence of operations in listing 15.14, including both residual paths and the mask reshape.",
+   "mermaid": "flowchart TD\n  S[source: batch, len, hidden_dim] --> A[\"MultiHeadAttention\\nquery=key=value=x\"]\n  M[\"source_mask: batch, len\"] -->|\"[:, None, :]\"| MM[\"mask: batch, 1, len\"]\n  MM --> A\n  A --> P1((+))\n  S -->|residual| P1\n  P1 --> L1[LayerNormalization]\n  L1 --> F1[\"Dense intermediate_dim, relu\"]\n  F1 --> F2[Dense hidden_dim]\n  F2 --> P2((+))\n  L1 -->|residual| P2\n  P2 --> L2[LayerNormalization]\n  L2 --> O[output: batch, len, hidden_dim]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Hoverable Transformer encoder block",
+   "why": "Listing 15.14 implements the encoder half of the Transformer; explore its sublayers (attention, add & norm, feedforward).",
+   "widget": "transformer_block",
+   "params": {"kind": "encoder"}
+  },
+  {
+   "id": "v3",
+   "type": "widget",
+   "title": "Residual connection toggle",
+   "why": "Both sublayers in the listing are wrapped in a residual connection (x = x + residual); toggle the skip path to see its role.",
+   "widget": "residual_block",
+   "params": {"layers": 2}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "The feedforward network mixes information between tokens.", "correction": "It is applied to each token independently; the page says attention passes information across the sequence and the FFN updates individual items."},
+  {"claim": "BatchNormalization would work just as well here.", "correction": "The book states BatchNormalization doesn't work well for sequence data; LayerNormalization normalizes each sequence independently of the batch."},
+  {"claim": "The encoder block changes the shape of the sequence.", "correction": "Input and output have the same shape (batch, seq_len, hidden_dim), which is what lets blocks be stacked (p.470)."},
+  {"claim": "num_heads multiplies the attention cost by num_heads.", "correction": "key_dim = hidden_dim // num_heads, so the total projection width stays roughly hidden_dim regardless of the number of heads."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 468, "note": "Self-attention introduced and shown to be linear on its own, motivating this page's feedforward network."},
+   {"page": 467, "note": "Multi-head attention and the MultiHeadAttention layer."},
+   {"page": 456, "note": "The GRU encoder that this block replaces."}
+  ],
+  "later": [
+   {"page": 470, "note": "Pseudocode for LayerNormalization vs BatchNormalization and explanation of attention_mask shapes."},
+   {"page": 471, "note": "Listing 15.15, the TransformerDecoder, built the same way with an extra cross-attention sublayer."},
+   {"page": 472, "note": "Figure 15.8 shows the encoder and decoder computations."},
+   {"page": 473, "note": "The encoder is used in the full Transformer translation model."},
+   {"page": 498, "note": "Chapter 16 reuses the block design and adds dropout inside each layer."}
+  ],
+  "prerequisites": [
+   {"page": 468, "note": "Why attention needs a nonlinear companion."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 471, "note": "Listing 15.15, TransformerDecoder, shares the same structure."},
+   {"page": 470, "note": "layer_normalization and batch_normalization pseudocode."}
+  ],
+  "related_figures": [
+   {"page": 472, "note": "Figure 15.8, visual representation of encoder and decoder blocks."}
+  ]
+ },
+ "takeaways": [
+  "Attention moves information across the sequence; a two-layer feedforward network with a ReLU in the middle updates each token's representation.",
+  "Listing 15.14: TransformerEncoder = self-attention → add & LayerNorm → Dense(relu) → Dense → add & LayerNorm.",
+  "key_dim = hidden_dim // num_heads splits the model width among heads.",
+  "The padding mask is reshaped to (batch, 1, source_len) and passed as attention_mask.",
+  "LayerNormalization, not BatchNormalization, is used because batch statistics don't suit sequence data.",
+  "Input and output shapes match, so encoder blocks stack."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "According to the page, what are the respective roles of attention and the feedforward network in a Transformer block?",
+   "options": ["Attention normalizes the sequence; the feedforward network adds positional information.", "Attention passes information across the sequence; the feedforward network updates the representation of individual items.", "Attention updates individual items; the feedforward network passes information across the sequence.", "Both mix information across the sequence, at different scales."],
+   "answer": "Attention passes information across the sequence; the feedforward network updates the representation of individual items.",
+   "explanation": "This is stated verbatim on the page. Option 3 swaps the roles; the FFN is applied per token. Option 1 confuses roles with normalization and positional embedding (p.475). Option 4 is wrong because the FFN never mixes positions.",
+   "page_refs": [469]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "With hidden_dim = 256 and num_heads = 8, what is key_dim in listing 15.14? What output shape does the block produce for an input of shape (32, 20, 256)?",
+   "options": [],
+   "answer": "key_dim = 256 // 8 = 32. Output shape (32, 20, 256).",
+   "explanation": "key_dim = hidden_dim // num_heads; feed_forward_2 projects back to hidden_dim and residuals preserve shape.",
+   "page_refs": [469]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What does `source_mask[:, None, :]` do and why is it needed?",
+   "options": [],
+   "answer": "It inserts an axis, turning the (batch, source_length) padding mask into (batch, 1, source_length), which MultiHeadAttention broadcasts over query positions to match the attention score shape and prevent attending to padding.",
+   "explanation": "p.470 explains that attention_mask is broadcast to (batch_size, target_length, source_length) and that the encoder upranks source_mask for this purpose.",
+   "page_refs": [469, 470]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why does the book add a feedforward network after self-attention instead of simply stacking more attention layers?",
+   "options": [],
+   "answer": "Attention only combines linear projections; stacked attention layers can collapse (in the length-one case) to a single matrix multiplication. Recurrent cells apply a dense projection plus activation to each token, and the FFN restores that nonlinearity in the simplest way.",
+   "explanation": "This is the argument spanning p.468 and the top of p.469.",
+   "page_refs": [468, 469]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Which two ingredients from the ConvNet chapter does the book add to the encoder block?",
+   "options": ["Pooling and strides", "Dropout and data augmentation", "Normalization and residual connections", "Depthwise separable convolutions and batch statistics"],
+   "answer": "Normalization and residual connections",
+   "explanation": "The page says: \"two things we learned to be particularly important when building ConvNets back in chapter 9, normalization and residual connections.\" The other options are not added in listing 15.14 (dropout is only added in chapter 16, p.498).",
+   "page_refs": [469]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "Why does the listing use LayerNormalization instead of BatchNormalization?",
+   "options": [],
+   "answer": "BatchNormalization doesn't work well for sequence data; LayerNormalization normalizes each sequence independently from the other sequences in the batch.",
+   "explanation": "Stated in the last paragraph; p.470 contrasts the axes over which statistics are computed.",
+   "page_refs": [469, 470]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Without looking, can you write the call() method of TransformerEncoder in the correct order (attention, residual, norm, Dense, Dense, residual, norm)?",
+   "options": [],
+   "answer": "residual = x = source; mask = source_mask[:, None, :]; x = self_attention(query=x, key=x, value=x, attention_mask=mask); x = x + residual; x = LN1(x); residual = x; x = FF1(x); x = FF2(x); x = x + residual; x = LN2(x); return x.",
+   "explanation": "Compare with listing 15.14; the key detail is that the residual is reset after the first normalization.",
+   "page_refs": [469]
+  }
+ ]
+}

@@ -1,0 +1,513 @@
+{
+ "page_id": "page_577",
+ "pdf_page": 577,
+ "printed_page": "553",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:50:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. Two code elements: the DeviceMesh with explicit devices (continuing the last sentence of p.576) and the illustrative LayoutMap dictionary with two printed callouts. Minor point, mentioned only in notes: the text calls the example entry 'the kernel variable of the first dense layer', but the path shown is 'sequential/dense_1/kernel'. With Keras auto-naming, dense_1 is normally the second Dense layer of a fresh session. The printed mapping is described as 'It looks like this', i.e., schematic."
+ },
+ "overview": {
+  "title": "Explicit device meshes and the LayoutMap API",
+  "chapter": "18 Best practices for the real world",
+  "section": "18.2 Scaling up model training with multiple devices",
+  "subsection": "18.2.2 Distributed training in practice",
+  "main_topic": "Assigning mesh axes to data vs model parallelism, and describing per-variable sharding with LayoutMap (replicate with None, shard with an axis name)",
+  "central_idea": "Keras distributes computation by deciding, for each variable and each of its dimensions, whether to replicate it or shard it along a named mesh axis. The compiler then moves the computation that touches each piece to the device holding it. A LayoutMap is a dict-like mapping from variable paths to such per-dimension tuples.",
+  "importance": "This is the core abstraction of Keras/JAX model parallelism: you annotate variables, not computations, and the same model and training code then runs sharded (p.578).",
+  "learning_objectives": [
+   "Create a DeviceMesh with an explicit list of devices.",
+   "Explain how axis 0 (data, size 2) and axis 1 (model, size 4) of the mesh are used.",
+   "Distinguish replicating and sharding a variable along a mesh axis, and compute shard shapes.",
+   "Read a LayoutMap entry: one tuple entry per variable dimension, None = replicate, axis name = shard."
+  ],
+  "prerequisites": [
+   "DeviceMesh (p.576)",
+   "Vertical partitioning of a Dense kernel (p.574)",
+   "Kernel and bias shapes of Dense layers (chapter 3/7)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page starts with the code promised at the end of p.576: the same 2 x 4 `DeviceMesh`, now with an explicit device list `devices = [f\"gpu:{i}\" for i in range(8)]`.\n\nAs the `axis_names` suggest, **axis 0 (\"data\")** is used for data parallelism and **axis 1 (\"model\")** for model parallelism. With two devices along axis 0 and four along axis 1, the model's computation is split across **four GPUs**, and there are **two copies** of the split model, each processing a different sub-batch in parallel. Next, Keras needs to know how to split the computation, which is done with the **`LayoutMap` API**.\n\n**LayoutMap.** The reference point is **variables**. You split or replicate variables across devices, and the compiler moves all computation associated with each part of a variable to the matching device. For a variable of shape `(32, 64)` you can:\n\n- **replicate** it along a mesh axis, so every device on that axis sees the same value, or\n- **shard** it along a mesh axis, e.g. into four `(32, 16)` chunks, so each device on that axis sees a different chunk.\n\nThis decision is made **independently for each dimension** of the variable. A `LayoutMap` works like a dictionary. It maps a **variable path** (e.g., `\"sequential/dense_1/kernel\"`) to a tuple with one entry per variable dimension. `None` means *replicate along this dimension*, and `\"model\"` means *shard this dimension across the devices of the mesh's model axis*. In the example, the kernel `(None, \"model\")` is replicated along its input dimension and sharded along its output dimension. The bias `(\"model\",)` is sharded along its only dimension. This is the vertical partitioning of p.574, now declared rather than hand-coded.",
+ "paragraphs": [
+  {
+   "ref": "p577_e04",
+   "excerpt": "As you may have guessed from the axis_names argument, we intend to use the",
+   "what_it_says": "Axis 0 of the mesh is for data parallelism and axis 1 for model parallelism. With two devices along axis 0 and four along axis 1, the model's computation is split across four GPUs and there are two copies of the split model, each running on a different sub-batch in parallel.",
+   "what_it_means": "With devices listed gpu:0..gpu:7 and reshaped to (2, 4), mesh row 0 is gpu:0-3 (replica 0) and row 1 is gpu:4-7 (replica 1), matching figure 18.2. Inside a replica, each of the 4 GPUs holds a quarter of every sharded variable.",
+   "why_it_matters": "It fixes the meaning of the axis names that the LayoutMap entries use.",
+   "technical_idea": "Beyond the book: the input batch is sharded along the 'data' axis and replicated along the 'model' axis, so all 4 GPUs of a replica see the same sub-batch.",
+   "connections": [
+    "p.576: DeviceMesh(shape=(2, 4)) and the grid drawing",
+    "p.575: figure 18.2"
+   ]
+  },
+  {
+   "ref": "p577_e05",
+   "excerpt": "Now that we have our mesh, we need to tell Keras how to split different",
+   "what_it_says": "With the mesh defined, Keras must be told how to split different parts of the computation across devices, which is done with the LayoutMap API.",
+   "what_it_means": "The mesh says *where* devices are; the layout map says *what* goes on them.",
+   "why_it_matters": "These are the two pieces needed to build the ModelParallel distribution on p.578."
+  },
+  {
+   "ref": "p577_e07",
+   "excerpt": "To specify where different bits of computation should take place, we use variables as",
+   "what_it_says": "Variables are the reference point for placing computation. You split or replicate variables across devices, and the compiler moves the computation associated with each part of a variable to the corresponding device.",
+   "what_it_means": "You never write 'run this matmul on GPU 2'. You only annotate weights, and XLA's sharding propagation works out how activations should be split and where communication is needed. Compare with the manual keras.device scopes on p.574.",
+   "why_it_matters": "This is why model code and training code do not change under model parallelism (p.578).",
+   "technical_idea": "Beyond the book: this is the GSPMD approach of JAX/XLA. Sharding annotations on a few tensors are propagated through the graph, and collectives (all-gather, reduce-scatter, all-reduce) are inserted automatically.",
+   "connections": [
+    "p.574: hand-written device placement for the same idea"
+   ]
+  },
+  {
+   "ref": "p577_e08",
+   "excerpt": "Consider a variable. Its shape is, let’s say, (32, 64). There are two things",
+   "what_it_says": "Take a variable of shape (32, 64). There are two things you could do with it (the bullets follow).",
+   "what_it_means": "This sets up a small concrete example before the general rule.",
+   "why_it_matters": "It grounds the replicate/shard vocabulary in shapes you can check."
+  },
+  {
+   "ref": "p577_e09",
+   "excerpt": "You could replicate it (copy it) across an axis of your mesh so each device",
+   "what_it_says": "Replicate: copy the variable across a mesh axis so every device along that axis sees the same value.",
+   "what_it_means": "Each device on the axis stores the full (32, 64) array. This costs memory but needs no communication to read it. In data parallelism, all weights are replicated along the data axis.",
+   "why_it_matters": "Replication along the data axis is what makes replicas identical copies.",
+   "terminology": [
+    {
+     "term": "Replicate",
+     "meaning": "Every device along the given mesh axis stores a full copy of that dimension."
+    }
+   ]
+  },
+  {
+   "ref": "p577_e10",
+   "excerpt": "You could shard it (split it) across an axis of your mesh—for instance, you could",
+   "what_it_says": "Shard: split the variable across a mesh axis, e.g., into four chunks of shape (32, 16), so each device along that axis sees a different chunk.",
+   "what_it_means": "Splitting the last dimension (64) across the 4-device model axis gives 64/4 = 16 columns per device, a quarter of the memory each. The dimension size should divide evenly by the axis size.",
+   "why_it_matters": "Sharding is what reduces memory per device and makes large models fit.",
+   "terminology": [
+    {
+     "term": "Shard",
+     "meaning": "Split a dimension into equal chunks, one per device along the given mesh axis."
+    }
+   ],
+   "connections": [
+    "p.574: (16000, 64000) split into two (16000, 32000) halves"
+   ]
+  },
+  {
+   "ref": "p577_e11",
+   "excerpt": "Now, do note that our variable has two dimensions. Importantly, “sharding” or “replicating” are",
+   "what_it_says": "The variable has two dimensions, and the choice of sharding or replicating can be made independently for each dimension.",
+   "what_it_means": "For (32, 64) there are four basic choices on a single axis: replicate both, shard rows, shard columns, or (on a 2-D mesh) shard rows along one axis and columns along another. Each choice implies different communication when the variable is used.",
+   "why_it_matters": "It explains why a layout is a tuple and not a single flag.",
+   "technical_idea": "Beyond the book: sharding a Dense kernel's output dimension (columns) needs no communication in the forward matmul, because each device produces its slice of output units. Sharding the input dimension (rows) produces partial sums that must be all-reduced."
+  },
+  {
+   "ref": "p577_e12",
+   "excerpt": "The API you will use to tell Keras about such decisions is the LayoutMap",
+   "what_it_says": "The LayoutMap class records these decisions. It is like a dictionary mapping model variables (for example, the kernel of the first dense layer) to how they should be replicated or sharded over the mesh. Concretely, it maps a variable path to a tuple with one entry per variable dimension, each saying what to do with that dimension.",
+   "what_it_means": "Keys are string paths such as \"sequential/dense_1/kernel\" (explained on p.578). Values are per-dimension specs: None or a mesh-axis name.",
+   "why_it_matters": "It is the main interface for model parallelism in Keras.",
+   "technical_idea": "Note: the text says 'the kernel variable of the first dense layer', while the example path is dense_1. Under default naming, dense_1 is usually the second Dense layer of Listing 18.4. The snippet is schematic ('It looks like this').",
+   "terminology": [
+    {
+     "term": "LayoutMap",
+     "meaning": "keras.distribution.LayoutMap: dict-like mapping from variable paths to sharding layouts over a DeviceMesh."
+    },
+    {
+     "term": "Variable path",
+     "meaning": "A string identifier such as \"sequential/dense_1/kernel\" naming a variable by its position in the model (p.578)."
+    }
+   ],
+   "connections": [
+    "p.578: printing variable paths and the 'shard the last dimension' rule"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "device_mesh",
+   "name": "Device mesh with explicit devices",
+   "definition": "DeviceMesh(shape, axis_names, devices) arranges a given device list into the mesh shape.",
+   "intuition": "Assign named seats to specific people.",
+   "technical": "devices=[\"gpu:0\", ..., \"gpu:7\"] reshaped to (2, 4); axis 0 = \"data\", axis 1 = \"model\".",
+   "significance": "Controls which physical GPU sits at which mesh coordinate.",
+   "example": "Row 0 = gpu:0-3 (replica 0), row 1 = gpu:4-7 (replica 1).",
+   "misconception": "That the order of devices does not matter. It decides which GPUs communicate along the model axis.",
+   "related": [
+    "layout_map"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "layout_map",
+   "name": "LayoutMap",
+   "definition": "A dictionary-like mapping from variable paths to per-dimension sharding tuples over a device mesh.",
+   "intuition": "A seating chart for weights: which slice of each weight goes to which group of devices.",
+   "technical": "Each tuple has one entry per variable dimension: None = replicate that dimension, axis name = shard it along that mesh axis.",
+   "significance": "Model code and training loop stay unchanged; distribution is declared separately.",
+   "example": "\"sequential/dense_1/kernel\": (None, \"model\"); \"sequential/dense_1/bias\": (\"model\",).",
+   "misconception": "That None means 'not placed anywhere'. It means replicated (every device has the full dimension).",
+   "related": [
+    "device_mesh",
+    "sharding",
+    "model_parallelism"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "sharding",
+   "name": "Replicate vs shard",
+   "definition": "Replicate: every device on a mesh axis gets the full value. Shard: the dimension is split into equal chunks, one per device on the axis.",
+   "intuition": "Photocopy the whole handout for everyone versus give each person different pages.",
+   "technical": "Decided per variable dimension; shard size = dimension size / axis size.",
+   "significance": "Sharding reduces memory per device; replication avoids communication.",
+   "example": "(32, 64) sharded on its last axis over 4 devices gives four (32, 16) chunks.",
+   "misconception": "That a variable is either sharded or replicated as a whole. The choice is per dimension.",
+   "related": [
+    "layout_map",
+    "vertical_partitioning"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Shard shape along a mesh axis",
+   "latex": "(32, 64) \\xrightarrow{(\\text{None},\\ \\text{model}),\\ |\\text{model}| = 4} (32,\\ 64/4) = (32, 16) \\text{ per device}",
+   "source_text": "you could shard it into four chunks of shape (32, 16)—so that each device along that axis sees one different chunk",
+   "variables": [
+    {
+     "symbol": "(32, 64)",
+     "meaning": "the example variable's shape"
+    },
+    {
+     "symbol": "|\\text{model}|",
+     "meaning": "number of devices along the 'model' mesh axis (4)"
+    }
+   ],
+   "operations": "Divide each sharded dimension by the size of the mesh axis it is sharded on; replicated dimensions are unchanged.",
+   "purpose": "Lets you predict per-device memory for any layout.",
+   "interpretation": "Each of the 4 model-axis devices holds 32 x 16 = 512 of the 2,048 values.",
+   "intuition": "Shard = divide, replicate = keep.",
+   "numerical_example": "Applied to Listing 18.4 on this 2 x 4 mesh: first kernel (16000, 64000) with (None, \"model\") gives (16000, 16000) per device (256 M params, about 1 GB float32); its bias (64000,) gives (16000,).",
+   "source": "book",
+   "book_ref": "p.577"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "DeviceMesh with an explicit list of devices",
+   "original_code": "devices = [f\"gpu:{i}\" for i in range(8)]\ndevice_mesh = keras.distribution.DeviceMesh(\n    shape=(2, 4),\n    axis_names=[\"data\", \"model\"],\n    devices=devices,\n)",
+   "language": "python",
+   "what_it_does": "Builds the names gpu:0..gpu:7 and creates a 2 x 4 mesh over exactly these devices with axes 'data' and 'model'.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "List comprehension giving [\"gpu:0\", ..., \"gpu:7\"]."
+    },
+    {
+     "lines": "2-4",
+     "explanation": "Same shape and axis names as on p.576."
+    },
+    {
+     "lines": "5",
+     "explanation": "devices=devices pins which devices populate the mesh, in this order (row-major: the first four form data index 0)."
+    },
+    {
+     "lines": "6",
+     "explanation": "Close the call."
+    }
+   ],
+   "inputs_outputs": "Output: a DeviceMesh object.",
+   "algorithm": "Reshape the device list to the mesh shape.",
+   "theory_link": "Concrete version of the 2 replicas x 4 shards of figure 18.2.",
+   "parameters": [
+    {
+     "name": "devices",
+     "role": "explicit, ordered device list; length must equal 2 x 4"
+    }
+   ],
+   "pitfalls": [
+    "Device name strings must match what keras.distribution.list_devices() returns on your machine (p.575).",
+    "Ordering matters: put devices with fast links between them on the same model-axis row."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "What a LayoutMap looks like",
+   "original_code": "{\n    \"sequential/dense_1/kernel\": (None, \"model\"),\n    \"sequential/dense_1/bias\": (\"model\",),\n    ...\n}",
+   "language": "python",
+   "what_it_does": "Schematic mapping from variable paths to per-dimension layouts for one Dense layer's kernel and bias.",
+   "line_explanations": [
+    {
+     "lines": "2",
+     "explanation": "Kernel (input_dim, units): dimension 0 replicated (None), dimension 1 sharded along the 'model' axis (callout: None means 'replicate the variable along this dimension')."
+    },
+    {
+     "lines": "3",
+     "explanation": "Bias (units,): its only dimension sharded along 'model', matching the kernel's output split. Note the trailing comma that makes (\"model\",) a 1-tuple (callout: 'model' means 'shard the variable along this dimension across the devices of the model axis of the device mesh')."
+    },
+    {
+     "lines": "4",
+     "explanation": "... stands for entries for the other variables."
+    }
+   ],
+   "inputs_outputs": "N/A: it is a mapping, not executable as-is (the ... is a placeholder).",
+   "algorithm": "Declarative vertical partitioning: column-split kernel, split bias.",
+   "theory_link": "Equivalent to the hand-written half-kernel code of p.574, generalised to the 4-device model axis.",
+   "parameters": [
+    {
+     "name": "None",
+     "role": "replicate this dimension"
+    },
+    {
+     "name": "\"model\"",
+     "role": "shard this dimension across the model mesh axis"
+    }
+   ],
+   "pitfalls": [
+    "Forgetting the trailing comma: (\"model\") is just the string \"model\", not a tuple.",
+    "Tuple length must equal the variable's rank.",
+    "Paths must match the model's actual variable paths (print them, p.578)."
+   ],
+   "illustrative_code": "# AI-written sketch of the real API (details on p.578)\nlayout_map = keras.distribution.LayoutMap(device_mesh)\nlayout_map[\"sequential/dense/kernel\"] = (None, \"model\")\nlayout_map[\"sequential/dense/bias\"] = (\"model\",)\nlayout_map[\"sequential/dense_1/kernel\"] = (None, \"model\")\nlayout_map[\"sequential/dense_1/bias\"] = (\"model\",)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why annotate variables and not operations?",
+   "kind": "breakdown",
+   "body": "Beyond the book. In a neural network, most large tensors are either weights or activations computed from weights. If you fix how the weights are laid out, there is usually one natural layout for each matmul's output. For example, x @ W with W column-sharded gives a column-sharded output with no communication. XLA propagates these layouts through the graph and adds a collective only where two layouts disagree. This is much less error-prone than hand-placing every operation with keras.device as on p.574, and it is why the book can say your model and training code stay unchanged.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "The four layouts of a 2-D variable on the 2 x 4 mesh",
+   "kind": "numerical",
+   "body": "Illustration for the (32, 64) example on the book's 2 x 4 mesh (axes data=2, model=4):\n\n- `(None, None)`: fully replicated, (32, 64) on all 8 devices.\n- `(None, \"model\")`: (32, 16) per device; each replica's 4 GPUs hold different column blocks, and the two replicas mirror each other.\n- `(\"model\", None)`: (8, 64) per device, row blocks.\n- `(\"data\", \"model\")`: (16, 16) per device, all 8 devices hold different blocks (fully sharded; used by ZeRO/FSDP-style strategies, beyond the book).",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Sharding the (32, 64) example and Listing 18.4's kernel",
+   "why": "Follows the shape arithmetic on the page: (32, 64) sharded 4 ways along the model axis gives (32, 16); the same rule applied to Listing 18.4's first kernel.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "example variable",
+      "shape": [
+       32,
+       64
+      ]
+     },
+     {
+      "op": "shard last dim / 4",
+      "shape": [
+       32,
+       16
+      ]
+     },
+     {
+      "op": "Listing 18.4 kernel",
+      "shape": [
+       16000,
+       64000
+      ]
+     },
+     {
+      "op": "(None, model) / 4",
+      "shape": [
+       16000,
+       16000
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "From mesh + layout map to a distributed model",
+   "why": "Shows how the two APIs on p.576-577 fit together (the last step is described on p.578).",
+   "mermaid": "flowchart LR\n  A[\"DeviceMesh (2, 4): data, model\"] --> C[\"LayoutMap: variable path -> per-dimension tuple\"]\n  B[\"Variable paths, e.g. sequential/dense_1/kernel\"] --> C\n  C --> D[\"Distribution set before building model (p.578)\"]\n  D --> E[\"Variables created sharded / replicated\"]\n  E --> F[\"Compiler places computation next to each variable shard\"]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "None in a layout tuple means the variable is not placed on any device.",
+   "correction": "None means replicate along that dimension: every device gets the full extent of it."
+  },
+  {
+   "claim": "With model parallelism you must specify where each operation runs.",
+   "correction": "The book says you place variables, and the compiler moves the associated computation to the right device."
+  },
+  {
+   "claim": "A variable is either sharded or replicated.",
+   "correction": "The decision is made independently for each dimension of the variable."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 576,
+    "note": "DeviceMesh basics and the 2 x 4 grid."
+   },
+   {
+    "page": 574,
+    "note": "Manual vertical partitioning of a Dense kernel that LayoutMap automates."
+   },
+   {
+    "page": 575,
+    "note": "list_devices() and device name strings."
+   }
+  ],
+  "later": [
+   {
+    "page": 578,
+    "note": "Variable paths, the 'shard the last dimension along model' rule, and setting the distribution."
+   },
+   {
+    "page": 579,
+    "note": "Checking how variables were sharded via variable.value.sharding; TPU training."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 573,
+    "note": "Listing 18.4, whose variables are sharded."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 574,
+    "note": "Half-kernel shapes (16000, 32000)."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 576,
+    "note": "DeviceMesh without explicit devices."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 575,
+    "note": "Figure 18.2: the replica/shard layout this mesh encodes."
+   }
+  ]
+ },
+ "takeaways": [
+  "DeviceMesh can take an explicit, ordered devices list.",
+  "Axis 0 ('data', size 2) gives two replicas; axis 1 ('model', size 4) splits each replica across four GPUs.",
+  "Keras distributes by placing variables; the compiler moves the computation to the variable shards.",
+  "Each variable dimension is independently replicated (None) or sharded (axis name).",
+  "LayoutMap maps variable paths to per-dimension tuples, e.g. kernel (None, \"model\"), bias (\"model\",)."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "A variable of shape (32, 64) with layout (None, \"model\") on a mesh whose model axis has 4 devices: what shape does each device on that axis hold?",
+   "options": [
+    "(32, 64)",
+    "(8, 64)",
+    "(32, 16)",
+    "(8, 16)"
+   ],
+   "answer": "(32, 16)",
+   "explanation": "None keeps dimension 0 (32) whole; \"model\" splits dimension 1 by 4 (64/4 = 16). (8, 64) would be (\"model\", None), (32, 64) fully replicated, and (8, 16) would split both dimensions over the same 4 devices, which is not a valid single-axis layout.",
+   "page_refs": [
+    577
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "What does None mean in a LayoutMap tuple?",
+   "options": [],
+   "answer": "Replicate the variable along this dimension (the full dimension is present on every device).",
+   "explanation": "Printed callout.",
+   "page_refs": [
+    577
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why does the bias layout (\"model\",) match the kernel layout (None, \"model\")?",
+   "options": [],
+   "answer": "The kernel is split along its output-units dimension, so each device computes a slice of the output units. The bias has one entry per output unit, so it must be split the same way for each device to add the right bias slice to its output slice.",
+   "explanation": "Same reasoning as the half-kernel/half-bias pairing on p.574.",
+   "page_refs": [
+    574,
+    577
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "In DeviceMesh(shape=(2, 4), axis_names=[\"data\", \"model\"], devices=[gpu:0..gpu:7]), which GPUs form model replica 0 (assuming row-major ordering)?",
+   "options": [
+    "gpu:0, gpu:2, gpu:4, gpu:6",
+    "gpu:0-gpu:3",
+    "gpu:0 and gpu:4",
+    "gpu:4-gpu:7"
+   ],
+   "answer": "gpu:0-gpu:3",
+   "explanation": "The first 4 devices fill data index 0 across the 4 model positions, matching figure 18.2. gpu:0 and gpu:4 are the same shard in two different replicas. gpu:4-7 is replica 1.",
+   "page_refs": [
+    575,
+    577
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "Why does Keras use variables as the frame of reference for distribution?",
+   "options": [],
+   "answer": "Once variables are split or replicated across devices, the compiler can move the computation associated with each part of a variable to the device that holds it. You only annotate weights, and model and training code stay unchanged.",
+   "explanation": "From e07 and p.578.",
+   "page_refs": [
+    577,
+    578
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "math",
+   "question": "On the 2 x 4 mesh, how many parameters of Listing 18.4's first kernel does each GPU hold with layout (None, \"model\")?",
+   "options": [],
+   "answer": "16000 x (64000 / 4) = 256,000,000 parameters (about 1.02 GB in float32).",
+   "explanation": "Shard the last dimension by the model-axis size 4; the data axis replicates.",
+   "page_refs": [
+    573,
+    577
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you write the LayoutMap entries for a Dense layer whose variable path prefix is \"sequential/dense\", sharding its output units along \"model\"?",
+   "options": [],
+   "answer": "\"sequential/dense/kernel\": (None, \"model\") and \"sequential/dense/bias\": (\"model\",).",
+   "explanation": "Same pattern as the printed example.",
+   "page_refs": [
+    577
+   ]
+  }
+ ]
+}

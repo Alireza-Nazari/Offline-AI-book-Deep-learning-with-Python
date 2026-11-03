@@ -1,0 +1,508 @@
+{
+ "page_id": "page_454",
+ "pdf_page": 454,
+ "printed_page": "430",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T11:00:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. Four unnumbered code blocks; the extraction drops the blank lines visible in the image (e.g. after `import pathlib`), otherwise identical."
+ },
+ "overview": {
+  "title": "Loading and splitting the English-Spanish dataset",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.2 Sequence-to-sequence learning",
+  "subsection": "15.2.1 English-to-Spanish translation",
+  "main_topic": "Downloading spa-eng.zip, parsing tab-separated English/Spanish sentence pairs, wrapping each Spanish target in [start] ... [end] tokens, and making a shuffled 70/15/15 train/validation/test split",
+  "central_idea": "A translation dataset is a list of (source, target) sentence pairs. The target is wrapped in explicit start and end markers so a decoder can later be seeded with [start] and know to stop at [end]; the pairs are shuffled and split before any tokenizer is fitted.",
+  "importance": "This data is used for every translation model in the chapter: the RNN seq2seq model (15.2.2) and the Transformer (15.3.4). The [start]/[end] convention directly implements the inference procedure of Figure 15.1.",
+  "learning_objectives": [
+   "Download and locate a dataset with keras.utils.get_file",
+   "Parse a tab-separated parallel corpus into (english, spanish) pairs",
+   "Explain why the Spanish target gets [start] and [end] but the English source does not",
+   "Compute the split sizes: 15% validation, 15% test, 70% training",
+   "Explain why the shuffle happens before the split"
+  ],
+  "prerequisites": [
+   "Sequence-to-sequence template and Figure 15.1 (p.453)",
+   "Train/validation/test splits (chapter 5)",
+   "Basic Python string and list operations"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "Section 15.2.1 starts the translation example with an **English-to-Spanish** dataset.\n\n1. **Download**: `keras.utils.get_file` fetches `spa-eng.zip` from `storage.googleapis.com`, extracts it (`extract=True`), and `text_path` points to `spa-eng/spa.txt` inside the extracted folder.\n2. **Parse**: the file holds one example per line: *English sentence, a tab, the Spanish sentence*. The code reads the file, splits on `\"\\n\"` and drops the last (empty) element with `[:-1]`. Each line is split on `\"\\t\"`; the Spanish side is rewritten as `\"[start] \" + spanish + \" [end]\"` and the pair is appended to `text_pairs`.\n3. **Inspect**: a random pair looks like `(\"Who is in this room?\", \"[start] ¿Quién está en esta habitación? [end]\")`.\n4. **Split**: after `random.shuffle(text_pairs)`, `val_samples = int(0.15 * len(text_pairs))`, `train_samples = len(text_pairs) - 2 * val_samples`; the list is sliced into `train_pairs` (~70%), `val_pairs` (15%) and `test_pairs` (the remaining ~15%).\n\nThe page ends by announcing **two separate `TextVectorization` layers**, one per language, with customized string preprocessing (detailed on p.455).\n\nWhy the markers? Following Figure 15.1 (p.453), the decoder is seeded with `\"[start]\"` at inference time and generation stops when it emits `\"[end]\"`. Only the target (Spanish) needs them, because only the target is generated; the English source is simply encoded.",
+ "paragraphs": [
+  {
+   "ref": "p454_e04",
+   "excerpt": "We’ll be working with an English-to-Spanish translation dataset. Let’s download it:",
+   "what_it_says": "The example uses an English-to-Spanish translation dataset, downloaded with the code below.",
+   "what_it_means": "`get_file` downloads once and caches the file (by default under `~/.keras/datasets`), and `extract=True` unzips it. `pathlib.Path(zip_path) / \"spa-eng\" / \"spa.txt\"` builds the path to the text file inside the extracted directory.",
+   "why_it_matters": "A parallel corpus (aligned sentence pairs) is the supervised data a translation model needs.",
+   "technical_idea": "Beyond the book: the exact directory layout returned by get_file with extract=True has changed across Keras versions; if `spa.txt` is not found, print `zip_path` and inspect the folder.",
+   "terminology": [
+    {
+     "term": "Parallel corpus",
+     "meaning": "A dataset of sentences paired with their translations."
+    }
+   ],
+   "connections": [
+    "p.452: 15.2 Sequence-to-sequence learning introduced"
+   ]
+  },
+  {
+   "ref": "p454_e06",
+   "excerpt": "The text file contains one example per line: an English sentence, followed by",
+   "what_it_says": "Each line is an English sentence, a tab, and the Spanish translation; the code parses the file into pairs and wraps the Spanish side in [start] and [end].",
+   "what_it_means": "`f.read().split(\"\\n\")[:-1]` produces one string per line and discards the empty string after the final newline. `line.split(\"\\t\")` separates the two languages. Adding `\"[start] \"` and `\" [end]\"` (note the spaces) makes them separate whitespace tokens after tokenization.",
+   "why_it_matters": "These markers are what the decoder will learn to produce and condition on. At training time the decoder input begins with [start]; the target sequence (shifted by one) ends with [end] (p.455-456).",
+   "technical_idea": "Note (not in the book): `english, spanish = line.split(\"\\t\")` assumes exactly two fields per line; if a version of the file had extra columns (such as attribution), the unpacking would fail and you'd use `line.split(\"\\t\")[:2]`.",
+   "terminology": [
+    {
+     "term": "[start] / [end]",
+     "meaning": "Special tokens marking the beginning and end of a target sequence for the decoder."
+    }
+   ],
+   "connections": [
+    "p.453: Figure 15.1, seed token [start] and stop token [end]"
+   ]
+  },
+  {
+   "ref": "p454_e08",
+   "excerpt": "Our `text_pairs` look like this:",
+   "what_it_says": "A random example: (\"Who is in this room?\", \"[start] ¿Quién está en esta habitación? [end]\").",
+   "what_it_means": "The source keeps its original case and punctuation; the target has the markers and Spanish punctuation such as ¿. Both will be standardized by the tokenizers on p.455.",
+   "why_it_matters": "Looking at raw samples reveals preprocessing needs, e.g. the inverted question mark that string.punctuation does not cover.",
+   "terminology": [],
+   "connections": [
+    "p.455: stripping ¿ and preserving [ ]"
+   ]
+  },
+  {
+   "ref": "p454_e10",
+   "excerpt": "Let’s shuffle them and split them into the usual training, validation, and test sets:",
+   "what_it_says": "The pairs are shuffled and split into training, validation and test sets.",
+   "what_it_means": "Validation and test each get `int(0.15 * N)` pairs; training gets the rest, about 70%. Slicing is contiguous, so shuffling first is what makes each split a random sample.",
+   "why_it_matters": "The file is likely ordered (e.g. by sentence length); without shuffling, the test set would contain only the longest sentences. The tokenizers are later fitted on train_pairs only, avoiding information leakage.",
+   "technical_idea": "random.shuffle is unseeded here, so the split differs between runs; call random.seed(...) first for reproducibility (not in the book).",
+   "terminology": [
+    {
+     "term": "Hold-out split",
+     "meaning": "Partitioning data into disjoint training, validation and test subsets."
+    }
+   ],
+   "connections": [
+    "p.455: tokenizers adapted on train_pairs only"
+   ]
+  },
+  {
+   "ref": "p454_e12",
+   "excerpt": "Next, let’s prepare two separate `TextVectorization` layers: one for English and one for",
+   "what_it_says": "Two separate TextVectorization layers will be prepared, one per language, with customized string preprocessing.",
+   "what_it_means": "Each language gets its own vocabulary, since the encoder reads English IDs and the decoder reads and predicts Spanish IDs. The customization (continued on p.455) keeps [ and ] and strips ¿ for Spanish.",
+   "why_it_matters": "Separate vocabularies keep each embedding table and the decoder's output softmax limited to the relevant language.",
+   "terminology": [
+    {
+     "term": "TextVectorization",
+     "meaning": "Keras layer that standardizes, splits and indexes text (chapter 14)."
+    }
+   ],
+   "connections": [
+    "p.455: Listing 15.9",
+    "p.423: TextVectorization and adapt()"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "seq2seq",
+   "name": "Sequence-to-sequence data",
+   "definition": "Training data consisting of (source sequence, target sequence) pairs.",
+   "intuition": "Question and answer, sentence and translation.",
+   "technical": "Here a list of (English string, '[start] Spanish [end]') tuples.",
+   "significance": "Defines what the encoder reads and what the decoder must generate.",
+   "example": "(\"Who is in this room?\", \"[start] ¿Quién está en esta habitación? [end]\").",
+   "misconception": "Source and target need not have the same length.",
+   "related": [
+    "language_model",
+    "tokenization"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "special_tokens",
+   "name": "Start and end tokens",
+   "definition": "Marker tokens that signal the start and end of a generated sequence.",
+   "intuition": "'Go' and 'stop' signals for the decoder.",
+   "technical": "Inserted as text, preserved through standardization (p.455), and assigned their own vocabulary IDs.",
+   "significance": "Enable seeding generation and deciding when to stop.",
+   "example": "The decoder is fed [start] first and loops until it outputs [end] (p.453).",
+   "misconception": "They are not added to the source sentence; only the target is generated.",
+   "related": [
+    "seq2seq",
+    "tokenization"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "validation_set",
+   "name": "Train/validation/test split",
+   "definition": "Disjoint subsets for fitting, model selection and final evaluation.",
+   "intuition": "Practice questions, mock exam, real exam.",
+   "technical": "15% / 15% / ~70% after a random shuffle.",
+   "significance": "Gives an unbiased estimate of translation quality.",
+   "example": "With 10,000 pairs: 1,500 val, 1,500 test, 7,000 train.",
+   "misconception": "Shuffling after slicing would not randomize which examples go to test.",
+   "related": [
+    "data_split"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Split sizes",
+   "latex": "n_{val} = n_{test} = \\lfloor 0.15\\,N \\rfloor,\\qquad n_{train} = N - 2\\,n_{val} \\approx 0.7\\,N",
+   "source_text": "val_samples = int(0.15 * len(text_pairs)); train_samples = len(text_pairs) - 2 * val_samples",
+   "variables": [
+    {
+     "symbol": "N",
+     "meaning": "number of sentence pairs"
+    },
+    {
+     "symbol": "n_{val}, n_{test}, n_{train}",
+     "meaning": "sizes of the three splits"
+    }
+   ],
+   "operations": "int() truncates toward zero, i.e. floor for positive numbers.",
+   "purpose": "Makes the split proportions explicit.",
+   "interpretation": "The test set is everything after train and validation, so it has exactly n_val elements.",
+   "intuition": "Two equal 15% slices, the rest for training.",
+   "numerical_example": "N = 10,001: n_val = int(1500.15) = 1500, n_train = 10,001 - 3,000 = 7,001, n_test = 1,500.",
+   "source": "book",
+   "book_ref": "p.454"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Downloading the English-Spanish dataset",
+   "original_code": "import pathlib\nzip_path = keras.utils.get_file(\n    origin=(\n        \"http://storage.googleapis.com/download.tensorflow.org/data/spa-eng.zip\"\n    ),\n    fname=\"spa-eng\",\n    extract=True,\n)\ntext_path = pathlib.Path(zip_path) / \"spa-eng\" / \"spa.txt\"",
+   "language": "python",
+   "what_it_does": "Downloads and extracts spa-eng.zip and builds the path to spa.txt.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "pathlib for path joining with `/`."
+    },
+    {
+     "lines": "2-8",
+     "explanation": "get_file downloads (and caches) the archive under the name spa-eng and extracts it."
+    },
+    {
+     "lines": "9",
+     "explanation": "Path to the tab-separated text file."
+    }
+   ],
+   "inputs_outputs": "Output: text_path, a pathlib.Path.",
+   "algorithm": "Download, cache, unzip.",
+   "theory_link": "Data acquisition for supervised seq2seq.",
+   "parameters": [
+    {
+     "name": "origin",
+     "role": "URL to download."
+    },
+    {
+     "name": "fname",
+     "role": "Local cache name."
+    },
+    {
+     "name": "extract",
+     "role": "Unpack the archive."
+    }
+   ],
+   "pitfalls": [
+    "Directory layout of the extracted archive can differ between Keras versions."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Parsing sentence pairs and adding start/end tokens",
+   "original_code": "with open(text_path) as f:\n    lines = f.read().split(\"\\n\")[:-1]\ntext_pairs = []\nfor line in lines:\n    english, spanish = line.split(\"\\t\")\n    spanish = \"[start] \" + spanish + \" [end]\"\n    text_pairs.append((english, spanish))",
+   "language": "python",
+   "what_it_does": "Reads spa.txt into a list of (english, '[start] spanish [end]') tuples.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "Read the whole file and split into lines, dropping the trailing empty string."
+    },
+    {
+     "lines": "3",
+     "explanation": "Empty list of pairs."
+    },
+    {
+     "lines": "4-5",
+     "explanation": "Split each line at the tab into source and target."
+    },
+    {
+     "lines": "6",
+     "explanation": "Wrap the target in start/end markers, separated by spaces so they become separate tokens."
+    },
+    {
+     "lines": "7",
+     "explanation": "Store the pair."
+    }
+   ],
+   "inputs_outputs": "Input: text file. Output: text_pairs list.",
+   "algorithm": "Line-by-line parsing.",
+   "theory_link": "Implements the seed/stop convention of Figure 15.1.",
+   "parameters": [],
+   "pitfalls": [
+    "open() without encoding='utf-8' relies on the platform default; on some systems accented characters may be decoded incorrectly (not discussed in the book).",
+    "A line with more than one tab would break the two-way unpacking."
+   ]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Inspecting a random pair",
+   "original_code": ">>> import random\n>>> random.choice(text_pairs)\n(\"Who is in this room?\", \"[start] ¿Quién está en esta habitación? [end]\")",
+   "language": "python",
+   "what_it_does": "Prints one randomly chosen pair.",
+   "line_explanations": [
+    {
+     "lines": "1-3",
+     "explanation": "random.choice picks one tuple; the output shows the markers around the Spanish sentence."
+    }
+   ],
+   "inputs_outputs": "Output: one (english, spanish) tuple.",
+   "algorithm": "Random sampling.",
+   "theory_link": "Sanity-check the data before modeling.",
+   "parameters": [],
+   "pitfalls": []
+  },
+  {
+   "id": "c4",
+   "listing": null,
+   "title": "Shuffling and splitting the pairs",
+   "original_code": "import random\nrandom.shuffle(text_pairs)\nval_samples = int(0.15 * len(text_pairs))\ntrain_samples = len(text_pairs) - 2 * val_samples\ntrain_pairs = text_pairs[:train_samples]\nval_pairs = text_pairs[train_samples : train_samples + val_samples]\ntest_pairs = text_pairs[train_samples + val_samples :]",
+   "language": "python",
+   "what_it_does": "Shuffles in place and slices into train (~70%), validation (15%) and test (15%).",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "In-place random permutation."
+    },
+    {
+     "lines": "3-4",
+     "explanation": "Split sizes."
+    },
+    {
+     "lines": "5-7",
+     "explanation": "Contiguous slices of the shuffled list."
+    }
+   ],
+   "inputs_outputs": "Output: train_pairs, val_pairs, test_pairs.",
+   "algorithm": "Shuffle then partition.",
+   "theory_link": "Hold-out evaluation (chapter 5).",
+   "parameters": [
+    {
+     "name": "0.15",
+     "role": "Fraction for validation and for test."
+    }
+   ],
+   "pitfalls": [
+    "Unseeded shuffle: different split each run.",
+    "Exact-duplicate sentence pairs may land in both train and test."
+   ],
+   "illustrative_code": "# AI-written: reproducible split\nrandom.seed(1337)\nrandom.shuffle(text_pairs)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "How the markers will be used",
+   "kind": "step_by_step",
+   "body": "On p.455-456 the Spanish string is tokenized to `sequence_length + 1 = 21` IDs. The decoder **input** is the first 20 (starting with [start]); the **target** is the last 20 (ending with [end], then padding). At inference the decoder receives only [start], predicts a word, appends it, and repeats until it predicts [end] (Figure 15.1, p.453).",
+   "source": "inference"
+  },
+  {
+   "title": "Why separate source and target treatment",
+   "kind": "breakdown",
+   "body": "The English sentence is only *read* (encoded), so it needs no markers. The Spanish sentence is both *read* (teacher forcing: the decoder sees previous target tokens) and *predicted*, so it needs a defined starting input and a defined end.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Analogy: a relay baton",
+   "kind": "analogy",
+   "body": "[start] is the starter's pistol that tells the decoder to run its first leg; [end] is the finish line. Without a finish line, generation would run until an arbitrary length cap.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "The 70/15/15 split",
+   "why": "The page splits the shuffled pairs into 15% validation, 15% test and the remaining ~70% for training.",
+   "widget": "data_split",
+   "params": {
+    "train": 0.7,
+    "val": 0.15,
+    "test": 0.15,
+    "n": 1000
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "From spa.txt to split sentence pairs",
+   "why": "Summarizes the four code blocks on this page.",
+   "mermaid": "flowchart LR\n  A[spa-eng.zip] -->|get_file, extract| B[spa.txt]\n  B -->|split lines, split tab| C[english, spanish]\n  C -->|wrap target| D[english, start spanish end]\n  D -->|shuffle| E[text_pairs]\n  E --> F[train ~70%]\n  E --> G[val 15%]\n  E --> H[test 15%]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Both source and target need [start] and [end].",
+   "correction": "Only the target, which the decoder generates, is wrapped."
+  },
+  {
+   "claim": "The test set is defined by its own 0.15 calculation.",
+   "correction": "It is the remainder after train and validation, which equals int(0.15 N) by construction."
+  },
+  {
+   "claim": "It doesn't matter whether you shuffle before slicing.",
+   "correction": "Slicing an ordered file would give non-representative splits."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 453,
+    "note": "Figure 15.1 and the seed/stop-token inference procedure."
+   },
+   {
+    "page": 452,
+    "note": "15.2 Sequence-to-sequence learning introduced."
+   },
+   {
+    "page": 447,
+    "note": "The language-model offset-by-one setup the decoder will reuse."
+   }
+  ],
+  "later": [
+   {
+    "page": 455,
+    "note": "Listing 15.9: custom standardization and per-language TextVectorization."
+   },
+   {
+    "page": 456,
+    "note": "Listing 15.10: tf.data pipeline with inputs, targets and sample weights."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 423,
+    "note": "TextVectorization and adapt()."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 455,
+    "note": "Uses train_pairs to adapt the tokenizers."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 453,
+    "note": "Figure 15.1."
+   }
+  ]
+ },
+ "takeaways": [
+  "The dataset is a tab-separated file of English/Spanish sentence pairs.",
+  "Each Spanish target is wrapped as '[start] ... [end]' for the decoder.",
+  "Pairs are shuffled, then split 15% validation, 15% test, ~70% training.",
+  "Two separate TextVectorization layers will tokenize English and Spanish."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why are [start] and [end] added only to the Spanish sentences?",
+   "options": [
+    "Spanish has more punctuation",
+    "Spanish is the target sequence the decoder generates",
+    "The English tokenizer cannot handle brackets",
+    "To make the sentences equal in length"
+   ],
+   "answer": "Spanish is the target sequence the decoder generates",
+   "explanation": "The decoder needs a seed token and a stop token (Figure 15.1). Punctuation, bracket handling and length equalization are not the reason.",
+   "page_refs": [
+    454,
+    453
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "With 20,000 pairs, how many go to training, validation and test?",
+   "options": [],
+   "answer": "val = test = 3,000; train = 14,000.",
+   "explanation": "int(0.15 x 20,000) = 3,000; 20,000 - 6,000 = 14,000.",
+   "page_refs": [
+    454
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What does [:-1] do in `f.read().split(\"\\n\")[:-1]`?",
+   "options": [],
+   "answer": "Drops the empty string that follows the file's final newline.",
+   "explanation": "Splitting 'a\\nb\\n' on newlines gives ['a', 'b', ''].",
+   "page_refs": [
+    454
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why must the shuffle precede the slicing?",
+   "options": [],
+   "answer": "Slices are contiguous; without shuffling, each split would inherit the file's ordering and not be a random sample.",
+   "explanation": "Representative splits require random assignment.",
+   "page_refs": [
+    454
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "Why are spaces included in \"[start] \" and \" [end]\"?",
+   "options": [],
+   "answer": "So that the markers become separate tokens when the text is split on whitespace.",
+   "explanation": "Otherwise '[start]¿quién' would be one token.",
+   "page_refs": [
+    454
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "self",
+   "question": "Could you explain how the [start] token will be used at inference time?",
+   "options": [],
+   "answer": "The decoder receives [start] plus the encoded source, predicts the first word, feeds it back, and loops until [end].",
+   "explanation": "Described with Figure 15.1 on p.453.",
+   "page_refs": [
+    453,
+    454
+   ]
+  }
+ ]
+}

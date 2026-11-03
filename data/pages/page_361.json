@@ -1,0 +1,296 @@
+{
+ "page_id": "page_361",
+ "pdf_page": 361,
+ "printed_page": "337",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:46:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Imprecision (p361_e06, repeated from p.358): the text speaks of \"all possible 91 labels\". COCO 2017 annotates 80 object categories whose integer ids run from 1 to 90 with gaps; 91 is max id + 1 (as computed in listing 12.3, p.358), so 91 is the number of output slots rather than the number of real categories.",
+   "Figure 12.4 is a reproduction of the original YOLO paper figure; the exact grid size drawn (it looks like roughly 5 x 5 cells) is hard to read from the image and is not stated in the caption, so the notes do not rely on it."
+  ],
+  "extraction_quality": "Good. Figure 12.4's internal labels (S x S grid on input, Bounding boxes + confidence, Class probability map, Final detections) were captured. Listing 12.5 matches the page. The italic term 'class probability map' is visible only in the image."
+ },
+ "overview": {
+  "title": "Figure 12.4, loading ResNet-50, and the shape of the YOLO head",
+  "chapter": "12 Object detection",
+  "section": "12.2 Training a YOLO model from scratch",
+  "subsection": "12.2.2 Creating a YOLO model",
+  "main_topic": "The original YOLO output scheme (grid, boxes + confidence, class probability map, final detections), loading a pretrained ResNet-50 backbone and image converter from KerasHub at 448 x 448, and the recipe for the prediction head",
+  "central_idea": "YOLO overlays an S x S grid on the image and produces two maps, boxes with confidences and a per-cell class probability map, which combine into final detections. The book loads `resnet_50_imagenet` with a matching 448 x 448 preprocessor and will attach a head of two dense layers whose output, per grid cell, is split into 5 box numbers (x, y, w, h, confidence) and 91 class scores.",
+  "importance": "This page fixes the exact layout of the output vector for each grid cell (5 + 91 numbers) that every later piece of code depends on: the model (p.362), the target arrays (p.364), the visualization (p.365) and the loss (p.366).",
+  "learning_objectives": [
+   "Read figure 12.4 and explain the role of each of its four panels.",
+   "Explain what `keras_hub.models.Backbone.from_preset` and `keras_hub.layers.ImageConverter.from_preset` return and why both use the same preset name.",
+   "Describe the YOLO head recipe: backbone features, two dense layers with an activation in between, then a split of the output.",
+   "State how the per-cell output is divided: four box coordinates, one box confidence and 91 class scores."
+  ],
+  "prerequisites": [
+   "The YOLO grid, one-box-per-cell and confidence ideas (p.360)",
+   "Dense layers and activations (chapters 2-3)",
+   "Pretrained models from KerasHub and preprocessing presets (chapter 8)",
+   "COCO's 91 label slots (p.358)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Figure 12.4**, reproduced from the first YOLO paper, shows the method in four panels. On the left an **S x S grid** is overlaid on the input photo (a person walking a dog on a beach). From this the model produces two things in parallel: at the top, many candidate **bounding boxes with confidence** (thick outlines for confident boxes around the person and the dog, thin ones elsewhere); at the bottom, a **class probability map** in which each grid cell is colored by its most likely class (blue cells over the person, red cells over the dog). Combining them gives the **final detections** on the right: one blue box for the person and one red box for the dog.\n\n**Listing 12.5** sets `image_size = 448` and loads two KerasHub objects from the same preset, `\"resnet_50_imagenet\"`: a `Backbone` (the convolutional feature extractor, without a classification head) and an `ImageConverter`, the matching preprocessing layer that resizes images to `(448, 448)` and rescales pixel values the way the backbone expects.\n\nThe text then gives the **head recipe** from the YOLO paper: take the backbone's output, pass it through **two densely connected layers with an activation in the middle**, and **split** the output. For each grid location, the **first five numbers** are the bounding-box prediction, four for the box and one for the box confidence, and **the rest** form the class probability map: a classification prediction over all **91 labels** for each grid location. \"Let's write this out\" leads to listing 12.6 on the next page (p.362), which also inserts a strided convolution before the dense layers and uses a 6 x 6 grid.",
+ "paragraphs": [
+  {
+   "ref": "p361_e06",
+   "excerpt": "Next, we can turn our backbone into a detection model by adding new layers",
+   "what_it_says": "The backbone becomes a detector by adding layers that output box and class predictions. Following the YOLO paper: feed the backbone's output through two dense layers with an activation in between, then split the output. The first five numbers are the box prediction (four coordinates plus one confidence); the rest are the class probability map, a prediction over all 91 labels for every grid location.",
+   "what_it_means": "The head produces, for each grid cell, a vector of length 5 + 91 = 96. Elements 0 to 3 encode the box (x, y, w, h), element 4 is the box confidence, and elements 5 to 95 are class scores turned into probabilities with a softmax (p.362). Because the dense layers see the flattened feature map of the whole image, every cell's prediction can use global context.",
+   "why_it_matters": "This split is the contract between the model and the rest of the pipeline: the targets (p.364) are built as a `(grid, grid, 5)` box array and a `(grid, grid)` class array, and the loss (p.366) treats the two parts differently (sum-squared error for boxes, sparse categorical crossentropy for classes).",
+   "technical_idea": "Using fully connected layers for the head is specific to the original YOLO; later detectors (and later YOLO versions) predict with convolutional heads instead (beyond the book).",
+   "terminology": [
+    {"term": "detection head", "meaning": "The task-specific layers stacked on top of the backbone that produce boxes and classes."},
+    {"term": "class probability map", "meaning": "The per-grid-cell probability distribution over object labels, shown as colored cells in figure 12.4."},
+    {"term": "box confidence", "meaning": "The fifth box number, indicating whether the cell's box contains an object."}
+   ],
+   "connections": [
+    "p.360: the one-box-per-cell simplification and the confidence score are introduced.",
+    "p.358: 91 is computed as the maximum COCO label id plus one.",
+    "p.362: listing 12.6 implements this head with `num_labels + 5` outputs per cell."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "yolo",
+   "name": "YOLO (You Only Look Once)",
+   "definition": "A single-stage detector that overlays an S x S grid on the image and predicts boxes with confidences plus a class probability map, combining them into final detections.",
+   "intuition": "Two parallel 'opinions' per cell, 'is there something here and where exactly?' and 'what kind of thing occupies this cell?', are merged.",
+   "technical": "In the book: per cell a 96-vector, split into 5 box values and 91 class scores.",
+   "significance": "Defines the output format of the whole chapter's model.",
+   "example": "Figure 12.4: blue cells and box for the person, red for the dog.",
+   "misconception": "The class map is not per box but per cell; each box takes the label of the cell it is predicted in.",
+   "related": ["single_stage_detector", "confidence_score", "class_probability_map"],
+   "source": "book"
+  },
+  {
+   "id": "class_probability_map",
+   "name": "Class probability map",
+   "definition": "A grid-shaped output that gives, for each grid cell, a probability distribution over the object labels.",
+   "intuition": "A coarse semantic-segmentation map at grid resolution.",
+   "technical": "Shape `(grid_size, grid_size, 91)` after a softmax over the last axis (p.362). Its argmax per cell is what figure 12.4 colors.",
+   "significance": "Supplies the label of each predicted box.",
+   "example": "In figure 12.4 the cells over the dog are red and those over the person are blue.",
+   "misconception": "It does not contain box coordinates; those come from the separate 5-number box output.",
+   "related": ["yolo", "softmax"],
+   "source": "book"
+  },
+  {
+   "id": "convnet_backbone",
+   "name": "ConvNet backbone",
+   "definition": "A pretrained convolutional feature extractor without a classification head, onto which task-specific layers are attached.",
+   "intuition": "Reusable 'eyes' trained on ImageNet.",
+   "technical": "`keras_hub.models.Backbone.from_preset(\"resnet_50_imagenet\")` returns ResNet-50 weights pretrained on ImageNet; at 448 x 448 it outputs `(None, 14, 14, 2048)` (p.362).",
+   "significance": "Gives the detector strong features without training a backbone from scratch.",
+   "example": "Listing 12.5.",
+   "misconception": "Loading a `Backbone` does not give you an ImageNet classifier; the classification layers are not included.",
+   "related": ["resnet", "transfer_learning"],
+   "source": "book"
+  },
+  {
+   "id": "image_preprocessing_preset",
+   "name": "Matching preprocessing (ImageConverter)",
+   "definition": "A KerasHub layer, loaded from the same preset as the model, that resizes and rescales raw images to the format the pretrained model expects.",
+   "intuition": "The backbone only 'understands' images in the format it was trained on; the converter translates your images into that format.",
+   "technical": "`keras_hub.layers.ImageConverter.from_preset(\"resnet_50_imagenet\", image_size=(448, 448))`; the preset supplies the rescaling (e.g. normalization statistics) while `image_size` overrides the target resolution.",
+   "significance": "Mismatched preprocessing is a common silent cause of poor transfer learning.",
+   "example": "The `preprocessor` object is applied to the COCO images before training (later in the chapter).",
+   "misconception": "Resizing alone is not enough; pixel-value scaling must also match the pretraining setup.",
+   "related": ["convnet_backbone"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Size of the per-cell output vector",
+   "latex": "d_{\\text{cell}} = \\underbrace{4}_{x,\\,y,\\,w,\\,h} + \\underbrace{1}_{\\text{confidence}} + \\underbrace{91}_{\\text{class scores}} = 96",
+   "source_text": "The first five numbers will be used for bounding box prediction (four for the box and one for the box confidence). The rest will be used for the class probability map ... over all possible 91 labels.",
+   "variables": [
+    {"symbol": "d_{\\text{cell}}", "meaning": "Number of values the head predicts per grid cell."},
+    {"symbol": "x, y, w, h", "meaning": "Box center (relative to the cell) and size (relative to the image), as defined on p.363."}
+   ],
+   "operations": "A simple count of the output slots per grid location.",
+   "purpose": "Determines the width of the final dense layer: $S^2 \\cdot d_{\\text{cell}}$ units for an $S \\times S$ grid.",
+   "interpretation": "Each grid cell carries one box hypothesis and one label distribution.",
+   "intuition": "Think of a row in a table per cell, with 96 columns.",
+   "numerical_example": "With the 6 x 6 grid of listing 12.6 (p.362): $6 \\cdot 6 \\cdot 96 = 3456$ outputs, which matches the `(None, 3456)` shape of `dense_7` in the model summary.",
+   "source": "book",
+   "book_ref": "p.361"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "12.5",
+   "title": "Loading the ResNet model",
+   "original_code": "image_size = 448\n\nbackbone = keras_hub.models.Backbone.from_preset(\n    \"resnet_50_imagenet\",\n)\npreprocessor = keras_hub.layers.ImageConverter.from_preset(\n    \"resnet_50_imagenet\",\n    image_size=(image_size, image_size),\n)",
+   "language": "python",
+   "what_it_does": "Sets the detection input size to 448 and loads (1) the ImageNet-pretrained ResNet-50 backbone and (2) its matching image converter configured to output 448 x 448 images.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "`image_size = 448` will be reused for the model's `keras.Input` shape (p.362) and the converter."},
+    {"lines": "3-5", "explanation": "`Backbone.from_preset` downloads the architecture config and pretrained weights for the preset `resnet_50_imagenet`. A backbone returns feature maps, not class predictions."},
+    {"lines": "6-9", "explanation": "`ImageConverter.from_preset` loads the preprocessing associated with the same preset; `image_size=(image_size, image_size)` makes it resize inputs to 448 x 448 rather than the preset's default classification resolution."}
+   ],
+   "inputs_outputs": "No data yet. Produces `backbone`, a Keras model mapping `(batch, H, W, 3)` images to feature maps (for 448 x 448 inputs: `(batch, 14, 14, 2048)`, p.362), and `preprocessor`, a layer mapping raw images to resized, rescaled images.",
+   "algorithm": "Preset loading: look up a named configuration, build the model or layer from config, load weights or preprocessing statistics.",
+   "theory_link": "Transfer learning with a pretrained ConvNet base (chapter 8); ResNet chosen for its strided downsampling (p.360).",
+   "parameters": [
+    {"name": "\"resnet_50_imagenet\"", "role": "Preset name: ResNet-50 architecture with ImageNet-pretrained weights."},
+    {"name": "image_size", "role": "Target spatial resolution; 448 x 448 for detection."}
+   ],
+   "pitfalls": [
+    "Using different presets for the backbone and the converter would apply the wrong pixel scaling.",
+    "Forgetting `image_size` would leave the converter at its default resolution, mismatching the model's 448 x 448 input.",
+    "`keras_hub` must be imported (it was imported earlier in the chapter)."
+   ],
+   "illustrative_code": "# AI-written: inspect what the backbone produces at 448 x 448\nimport numpy as np\ndummy = np.random.uniform(0, 255, size=(1, 448, 448, 3)).astype(\"float32\")\nfeatures = backbone(preprocessor(dummy))\nprint(features.shape)  # expected (1, 14, 14, 2048), cf. p.362"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Reading figure 12.4 panel by panel",
+   "kind": "breakdown",
+   "body": "1. **S x S grid on input**: the image is conceptually divided into cells; each cell is responsible for objects whose center lies inside it (made precise on p.363).\n2. **Bounding boxes + confidence**: every cell proposes box(es); line thickness in the figure reflects confidence. Only a few boxes (around the person and the dog) are drawn thick.\n3. **Class probability map**: every cell gets a label distribution; the figure colors cells by their most likely class.\n4. **Final detections**: confident boxes are kept and colored by the class of their cell, producing one box per object.\n\nNote (not in the book): the original paper also applies non-maximum suppression to remove duplicate boxes for the same object.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why split one dense output instead of two separate heads?",
+   "kind": "alternative",
+   "body": "The book follows the YOLO paper: one final `Dense` layer produces all $S^2 \\cdot 96$ numbers, which are reshaped and sliced. An equivalent alternative is two separate dense layers, one producing $S^2 \\cdot 5$ box values and one producing $S^2 \\cdot 91$ class logits. Since a single dense layer is just a concatenation of independent output units sharing the same input, the two designs have the same expressive power and parameter count; the split version is simply more compact to write. (AI explanation.)",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Figure 12.4 as a data flow",
+   "why": "Figure 12.4 shows an input grid branching into 'bounding boxes + confidence' and 'class probability map', which merge into 'final detections'; this diagram restates that flow and attaches the book's head recipe.",
+   "mermaid": "flowchart LR\n  A[Input image<br/>S x S grid] --> B[ResNet-50 backbone<br/>resnet_50_imagenet]\n  B --> C[Dense + activation]\n  C --> D[Dense: S x S x 96]\n  D --> E[First 5 per cell:<br/>x, y, w, h, confidence]\n  D --> F[Remaining 91 per cell:<br/>class probability map]\n  E --> G[Final detections]\n  F --> G"
+  },
+  {
+   "id": "v2",
+   "type": "svg",
+   "title": "How one grid cell's output vector is split",
+   "why": "The page says the first five numbers are for the box (four coordinates plus confidence) and the rest are class predictions over 91 labels.",
+   "svg": "<svg viewBox=\"0 0 520 110\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"12\" fill=\"none\" stroke=\"currentColor\"><text x=\"10\" y=\"18\" fill=\"currentColor\" stroke=\"none\">one grid cell: 96 numbers</text><rect x=\"10\" y=\"30\" width=\"32\" height=\"30\"/><rect x=\"42\" y=\"30\" width=\"32\" height=\"30\"/><rect x=\"74\" y=\"30\" width=\"32\" height=\"30\"/><rect x=\"106\" y=\"30\" width=\"32\" height=\"30\"/><rect x=\"138\" y=\"30\" width=\"40\" height=\"30\" stroke-width=\"2.5\"/><rect x=\"178\" y=\"30\" width=\"330\" height=\"30\" stroke-dasharray=\"4 3\"/><text x=\"22\" y=\"50\" fill=\"currentColor\" stroke=\"none\">x</text><text x=\"54\" y=\"50\" fill=\"currentColor\" stroke=\"none\">y</text><text x=\"85\" y=\"50\" fill=\"currentColor\" stroke=\"none\">w</text><text x=\"118\" y=\"50\" fill=\"currentColor\" stroke=\"none\">h</text><text x=\"143\" y=\"50\" fill=\"currentColor\" stroke=\"none\">conf</text><text x=\"230\" y=\"50\" fill=\"currentColor\" stroke=\"none\">scores for labels 0 ... 90 (91 values)</text><text x=\"40\" y=\"82\" fill=\"currentColor\" stroke=\"none\">box (4)</text><text x=\"132\" y=\"82\" fill=\"currentColor\" stroke=\"none\">confidence (1)</text><text x=\"260\" y=\"82\" fill=\"currentColor\" stroke=\"none\">class probability map (softmax)</text><text x=\"10\" y=\"102\" fill=\"currentColor\" stroke=\"none\">indices 0-4</text><text x=\"260\" y=\"102\" fill=\"currentColor\" stroke=\"none\">indices 5-95</text></svg>"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The backbone loaded with `Backbone.from_preset` already outputs ImageNet class probabilities.",
+   "correction": "A KerasHub backbone stops at the convolutional feature maps; the detection head is added on top in listing 12.6."
+  },
+  {
+   "claim": "The 91 numbers per cell belong to the box.",
+   "correction": "Only the first five numbers (x, y, w, h, confidence) describe the box; the remaining 91 are the class prediction for the grid location."
+  },
+  {
+   "claim": "Any image size works equally well because the converter resizes anyway.",
+   "correction": "The model's input layer is fixed at 448 x 448 (p.362), and the book stresses that input size matters for detection; the converter must be set to the same size."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 358, "note": "Listing 12.3 computes 91 label slots from the COCO metadata."},
+   {"page": 360, "note": "The YOLO grid, confidence score and choice of ResNet at 448 x 448."}
+  ],
+  "later": [
+   {"page": 362, "note": "Listing 12.6 attaches the YOLO head and prints the model summary."},
+   {"page": 363, "note": "Defines the (x, y, w, h, confidence) encoding relative to grid cells."},
+   {"page": 364, "note": "Listing 12.7 builds box and class target arrays matching this split."},
+   {"page": 366, "note": "Losses for the box and class outputs."}
+  ],
+  "prerequisites": [
+   {"page": 360, "note": "Section 12.2.2 opening."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 362, "note": "Listing 12.6 uses `image_size` and `backbone` from this listing."}
+  ],
+  "related_figures": [
+   {"page": 365, "note": "Figure 12.5 draws the book's own grid targets in the style of figure 12.4."}
+  ]
+ },
+ "takeaways": [
+  "Figure 12.4: grid on input, boxes with confidence and a class probability map computed in parallel, merged into final detections.",
+  "Listing 12.5 loads the `resnet_50_imagenet` backbone and its matching `ImageConverter`, resized to 448 x 448.",
+  "The head recipe: backbone output, two dense layers with an activation between them, then split.",
+  "Per grid cell, 5 numbers describe the box (4 coordinates + confidence) and 91 numbers give the class prediction.",
+  "Backbone and preprocessing should come from the same preset so the pixel scaling matches pretraining."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In the book's YOLO head, how are the numbers predicted for each grid location divided?",
+   "options": [
+    "5 for the box (4 coordinates + 1 confidence), the rest (91) for class predictions",
+    "4 for the box, 91 for classes, and the confidence is computed afterwards",
+    "91 for the box and 5 for the class",
+    "1 confidence per image and 4 coordinates per cell"
+   ],
+   "answer": "5 for the box (4 coordinates + 1 confidence), the rest (91) for class predictions",
+   "explanation": "The page states the first five numbers are for bounding box prediction (four for the box, one for confidence) and the rest form the class probability map over 91 labels. Confidence is predicted, not computed afterwards; the 91 values are class scores, not box values; and there is one confidence per cell, not per image.",
+   "page_refs": [361]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Why do `Backbone.from_preset` and `ImageConverter.from_preset` in listing 12.5 use the same preset string?",
+   "options": [],
+   "answer": "The converter supplies the preprocessing (resizing and rescaling) matching the pretrained backbone; loading it from the same preset ensures images are prepared exactly as the backbone expects.",
+   "explanation": "The book describes it as 'matching preprocessing (to rescale the image)' on p.360.",
+   "page_refs": [360, 361]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "In figure 12.4, what are the two intermediate outputs, and how are they combined into the final detections?",
+   "options": [],
+   "answer": "Bounding boxes with confidence scores and a class probability map. Confident boxes are kept and labeled with the class predicted for their grid cell, giving the final colored boxes for the person and the dog.",
+   "explanation": "The figure's middle panels are labeled 'Bounding boxes + confidence' and 'Class probability map' and both feed 'Final detections'.",
+   "page_refs": [361]
+  },
+  {
+   "id": "q4",
+   "type": "math",
+   "question": "For a 6 x 6 grid with the output split described on this page, how many units must the final dense layer have?",
+   "options": [],
+   "answer": "6 x 6 x (5 + 91) = 36 x 96 = 3456.",
+   "explanation": "Each cell needs 96 numbers; listing 12.6's summary (p.362) shows `dense_7` with output shape `(None, 3456)`.",
+   "page_refs": [361, 362]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Which description of the YOLO head recipe matches the page?",
+   "options": [
+    "Feed the backbone output through two densely connected layers with an activation in the middle, then split the output",
+    "Feed each grid cell's crop through a separate classifier",
+    "Use a region-proposal network followed by RoI pooling",
+    "Apply a single softmax to the whole output, including the box coordinates"
+   ],
+   "answer": "Feed the backbone output through two densely connected layers with an activation in the middle, then split the output",
+   "explanation": "That is the setup described in the text. Per-crop classifiers and region proposals belong to two-stage detectors; the softmax is applied only to the class part (p.362), never to box coordinates.",
+   "page_refs": [361]
+  },
+  {
+   "id": "q6",
+   "type": "self",
+   "question": "Can you explain, without looking, what a KerasHub `Backbone` is and what it lacks compared with a full image classifier?",
+   "options": [],
+   "answer": "It is the pretrained convolutional feature extractor; it lacks the classification head (pooling and dense softmax layers), so it outputs feature maps instead of class probabilities.",
+   "explanation": "This is why the book can attach its own YOLO head on top.",
+   "page_refs": [361]
+  }
+ ]
+}

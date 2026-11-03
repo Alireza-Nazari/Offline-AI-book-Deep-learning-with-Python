@@ -1,0 +1,345 @@
+{
+ "page_id": "page_372",
+ "pdf_page": 372,
+ "printed_page": "348",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:40:18Z",
+  "confidence": "medium",
+  "review_flags": [
+   "Listing 12.14 is captioned 'Creating the ResNet model', but the code creates a RetinaNet object detector (preset 'retinanet_resnet50_fpn_v2_coco'); ResNet-50 is only its backbone. The caption probably should read 'Creating the RetinaNet model'.",
+   "p372_e09 says 'The model can predict a total of 100 objects for each input model' — 'input model' appears to be a slip for 'input image' (the output shapes (1, 100, ...) are per image in the batch).",
+   "The printed sample box [0.53, 0.00, 0.81, 0.29] is described as being in 'rel_xywh' format, but 0.53 + 0.81 = 1.34 > 1, so read as (x, y, width, height) it would extend past the right edge of the image. The four numbers look more like (x1, y1, x2, y2) corners. Either the printed output came from a different box format or the box is genuinely clipped; the notes flag this rather than resolve it.",
+   "Listing 12.15 is captioned 'Running inference with RetinaNet', but inference (detector.predict) already happens in Listing 12.14; Listing 12.15 only draws the predictions."
+  ],
+  "extraction_quality": "Clean. Three code blocks plus two listings: an unnumbered image-download snippet (continuing the setup sentence from p.371), Listing 12.14, an unnumbered REPL inspection of the outputs, and the first four lines of Listing 12.15, which continues on p.373. The extractor split the string \"rel_xywh\" across a line break (\"rel_` `xywh\"); it is one string."
+ },
+ "overview": {
+  "title": "Running a pretrained RetinaNet with KerasHub",
+  "chapter": "12 Object detection",
+  "section": "12.3 Using a pretrained RetinaNet detector",
+  "subsection": "",
+  "main_topic": "Downloading an out-of-distribution test image (Seurat's pointillist painting), instantiating a COCO-pretrained RetinaNet through the KerasHub ObjectDetector task API with a chosen bounding-box format, inspecting the structure of its predictions, and starting the drawing loop of Listing 12.15.",
+  "central_idea": "A pretrained single-stage detector can be loaded and run in three lines with `keras_hub.models.ObjectDetector.from_preset(...)`; asking for boxes in the same `rel_xywh` format used for the YOLO model lets you reuse the chapter's drawing utilities, and the model returns a fixed-size set of 100 candidate detections (boxes, confidences, labels) plus a count of how many are valid.",
+  "importance": "After the from-scratch YOLO model produced weak, low-confidence boxes (p.370), this page shows how practitioners actually get good detections: a pretrained model from a hub. It also teaches two practical details that trip people up with every detection library: bounding-box formats, and the padded fixed-size output convention (`num_detections`).",
+  "learning_objectives": [
+   "Load an image from a URL into a batched NumPy array suitable for a Keras model.",
+   "Create a pretrained RetinaNet detector with `ObjectDetector.from_preset` and explain what the preset name encodes.",
+   "Explain the `bounding_box_format` argument and what `rel_xywh` means.",
+   "Interpret the four prediction outputs and their shapes: `boxes` (1, 100, 4), `confidence` (1, 100), `labels` (1, 100), `num_detections` (1,).",
+   "Explain why the drawing loop iterates only over `range(num_detections)` instead of all 100 slots."
+  ],
+  "prerequisites": [
+   "The YOLO model's box representation and drawing utilities `draw_image`, `draw_box`, `label_to_color` (p.358–359)",
+   "The feature pyramid network idea behind RetinaNet (p.371)",
+   "The KerasHub task API used for segmentation in chapter 11",
+   "COCO class ids and `keras_hub.utils.coco_id_to_name` (p.364)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page puts the pretrained **RetinaNet** detector to work on a deliberately unusual test image: Georges Seurat's pointillist painting *A Sunday on La Grande Jatte* (1884), chosen on p.371 because it is out-of-distribution for a model trained on COCO photographs.\n\n1. **Getting the image.** A Wikimedia URL for a 1280-pixel-wide version of the painting is downloaded with `keras.utils.get_file`, loaded with `keras.utils.load_img`, and wrapped in a list before `np.array(...)`, which adds a **batch axis** so the array has shape `(1, height, width, 3)`.\n2. **Listing 12.14 — creating the detector.** As with the segmentation model in the previous chapter, the high-level KerasHub **task API** is used: `keras_hub.models.ObjectDetector.from_preset(\"retinanet_resnet50_fpn_v2_coco\", bounding_box_format=\"rel_xywh\")`. The task object bundles preprocessing, so `detector.predict(image)` works directly on raw pixels.\n3. **Bounding-box format.** Most Keras models and layers that handle boxes accept a `bounding_box_format`. Choosing `\"rel_xywh\"` makes RetinaNet output boxes in the same convention as the YOLO model, so the existing drawing functions can be reused. `rel` means coordinates are **relative to the image size**, in $[0, 1]$.\n4. **The outputs.** `predictions` is a dict of four arrays: `boxes` of shape `(1, 100, 4)`, `confidence` `(1, 100)`, `labels` `(1, 100)`, and `num_detections` `(1,)`. The structure resembles the YOLO model's outputs (box, confidence, class). The model returns at most **100 detections per image**; the first box printed is `[0.53, 0.00, 0.81, 0.29]`.\n5. **Listing 12.15 begins.** A Matplotlib figure is created at 300 dpi, the painting is drawn with `draw_image`, `num_detections` is read from the predictions, and a loop over `range(num_detections)` starts; its body (drawing each labeled box) and the resulting figure 12.9 are on p.373.\n\nThe overall lesson: with a hub preset, a state-of-the-art detector is three lines of code, and the main things you must get right are the box format and how to read the padded output.",
+ "paragraphs": [
+  {
+   "ref": "p372_e04",
+   "excerpt": "Next, let’s download the model and make a prediction. As we did",
+   "what_it_says": "Having loaded the image, the authors now download the pretrained model and run it. As with the previous chapter's segmentation model, they use KerasHub's high-level task API to create an `ObjectDetector`, which includes preprocessing.",
+   "what_it_means": "A KerasHub 'task' is a complete, ready-to-use model for a problem type (classification, segmentation, detection...) that packages the backbone, the task head, and the preprocessing layer. `from_preset` downloads the weights and configuration for a named pretrained checkpoint. Because preprocessing (resizing, pixel scaling) is built in, you can pass the raw uint8 image array straight to `predict`.",
+   "why_it_matters": "It removes the hardest, most error-prone part of using a pretrained detector: matching the exact input pipeline the model was trained with. Getting normalization or resizing wrong silently ruins pretrained performance.",
+   "technical_idea": "Task API = backbone + head + preprocessor, configured and loaded from a named preset.",
+   "terminology": [
+    {"term": "task API", "meaning": "KerasHub's high-level model classes (e.g. `ObjectDetector`, `ImageSegmenter`) that wrap a backbone, a task-specific head and preprocessing into one model."},
+    {"term": "preset", "meaning": "A named, downloadable configuration plus pretrained weights."}
+   ],
+   "connections": ["p.371: the image to be used is introduced as out-of-distribution for the COCO-trained model.", "p.370: RetinaNet is introduced as a better-performing alternative to the from-scratch YOLO model."]
+  },
+  {
+   "ref": "p372_e07",
+   "excerpt": "You’ll note we pass an extra argument to specify the bounding",
+   "what_it_says": "The `bounding_box_format` argument is accepted by most Keras models and layers that deal with bounding boxes. Passing `\"rel_xywh\"` gives the same format used for the YOLO model, so the same drawing utilities work. `rel` means relative to the image size, values in [0, 1].",
+   "what_it_means": "A box can be encoded in several ways: corner coordinates (`xyxy`), top-left corner plus size (`xywh`), centre plus size (`center_xywh`), and each either in pixels or relative to image dimensions. The model internally uses one format; the argument tells Keras to convert its outputs (and expected training targets) into the one you want. In the chapter's `draw_box` (p.358), `x, y, w, h = box` is passed to `Rectangle((x, y), w, h)`, so x and y are the top-left corner and w, h the size, all in the unit square set up by `draw_image`.",
+   "why_it_matters": "Mismatched box formats are one of the most common bugs in detection code: boxes appear shifted, squashed, or off-image while everything 'runs'. Asking the model for the format your downstream code expects avoids hand-written conversions.",
+   "technical_idea": "Relative xywh: $(x/W_{img},\\ y/H_{img},\\ w/W_{img},\\ h/H_{img})$ with $(x, y)$ the top-left corner in pixels.",
+   "terminology": [
+    {"term": "bounding_box_format", "meaning": "Keras argument naming the coordinate convention for boxes, e.g. \"xyxy\", \"xywh\", \"center_xywh\", \"rel_xywh\"."},
+    {"term": "rel (relative)", "meaning": "Coordinates divided by image width/height, so they lie in [0, 1] regardless of resolution."}
+   ],
+   "connections": ["p.358: `draw_box` unpacks `x, y, w, h` and draws a Rectangle anchored at (x, y).", "p.359: `draw_image` draws the image on a unit square with (0, 0) at the top left.", "p.363: the YOLO targets use w and h relative to the image size."]
+  },
+  {
+   "ref": "p372_e09",
+   "excerpt": "We have four different model outputs: bounding boxes, confidences, labels, and",
+   "what_it_says": "The predictions contain bounding boxes, confidences, labels and the total number of detections, which is quite similar to the YOLO model. The model can predict up to 100 objects per input (the text says 'input model', most likely meaning input image).",
+   "what_it_means": "The output is a fixed-size, padded list. Every image gets 100 slots: `boxes[0]` is a (100, 4) array, `confidence[0]` and `labels[0]` are length-100 vectors. Only the first `num_detections[0]` slots hold real detections that survived post-processing (confidence thresholding and non-max suppression, done inside the detector); the remaining slots are padding. Fixed shapes are needed because tensors in a batch must be rectangular, while different images contain different numbers of objects.",
+   "why_it_matters": "If you loop over all 100 entries you will draw padding boxes as garbage. That is why Listing 12.15 iterates over `range(num_detections)`.",
+   "technical_idea": "Padded fixed-size detection output + a valid-count tensor, the standard way to return a variable number of objects from a batched model.",
+   "terminology": [
+    {"term": "num_detections", "meaning": "Per-image count of valid entries in the padded boxes/confidence/labels arrays."},
+    {"term": "confidence", "meaning": "The model's score for each detection; higher means more certain an object of that label is there."}
+   ],
+   "connections": ["p.361: the YOLO head likewise outputs a box, a confidence and a class prediction for each grid cell.", "p.370: the from-scratch YOLO model learned very low confidence values."]
+  },
+  {
+   "ref": "p372_e10",
+   "excerpt": "Let’s try displaying the prediction with our box-drawing utilities (figure 12.9).",
+   "what_it_says": "The authors move on to drawing the predicted boxes on the painting, which produces figure 12.9.",
+   "what_it_means": "Listing 12.15 reuses `draw_image` and `draw_box` from section 12.2. On this page we see only the setup: a 300-dpi figure, the painting drawn, `num_detections` extracted and the loop header. The loop body and figure 12.9 are on p.373.",
+   "why_it_matters": "Visual inspection is the fastest sanity check for a detector: you immediately see whether box format, label mapping and thresholds are correct.",
+   "terminology": [],
+   "connections": ["p.373: the rest of Listing 12.15 and figure 12.9."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "retinanet",
+   "name": "RetinaNet",
+   "definition": "A single-stage object detector that uses a ConvNet backbone (here ResNet-50) with a feature pyramid network to predict boxes and classes at multiple scales in one pass.",
+   "intuition": "Like YOLO, it looks at the whole image once; unlike the chapter's YOLO, it makes predictions from several feature-map resolutions so both small and large objects are found.",
+   "technical": "Preset `retinanet_resnet50_fpn_v2_coco`: ResNet-50 backbone, FPN neck, trained on COCO. Beyond the book: the original RetinaNet paper (Lin et al., 2017) also introduced the focal loss to deal with the huge imbalance between background and object anchors; the book does not discuss it on this page.",
+   "significance": "Shows how far a well-engineered, fully trained detector goes beyond the toy from-scratch model of section 12.2.",
+   "example": "Run on Seurat's painting, it finds people, umbrellas and dogs (figure 12.9, p.373).",
+   "misconception": "The listing caption says 'ResNet model', but ResNet is only the backbone; the detector is RetinaNet.",
+   "related": ["feature_pyramid_network", "single_stage_detector", "yolo", "object_detection"],
+   "source": "book"
+  },
+  {
+   "id": "bounding_box_format",
+   "name": "Bounding-box format",
+   "definition": "The convention used to encode a rectangle with four numbers, e.g. corners (xyxy), top-left plus size (xywh), centre plus size, in pixels or relative to the image.",
+   "intuition": "The same box can be written many ways, like a date in different calendars; all code that touches boxes must agree on one.",
+   "technical": "Keras models and layers that support boxes take `bounding_box_format`; `\"rel_xywh\"` means $(x, y, w, h)$ with each coordinate divided by the image width or height.",
+   "significance": "Lets the RetinaNet outputs plug directly into the YOLO section's drawing utilities.",
+   "example": "A box with top-left (320, 0), size 256×215 in a 1280×860 image is `rel_xywh` ≈ (0.25, 0.0, 0.2, 0.25).",
+   "misconception": "That 'xywh' always means centre coordinates. In the chapter's `draw_box`, (x, y) is the top-left corner; centre-based formats have their own name.",
+   "related": ["object_detection", "retinanet"],
+   "source": "book"
+  },
+  {
+   "id": "keras_hub_task",
+   "name": "KerasHub task API (ObjectDetector)",
+   "definition": "High-level KerasHub model classes that package a pretrained backbone, a task head and preprocessing, created with `from_preset`.",
+   "intuition": "A ready-to-use appliance instead of a kit of parts.",
+   "technical": "`keras_hub.models.ObjectDetector.from_preset(name, bounding_box_format=...)` returns a Keras model whose `predict` accepts raw images and returns a dict of post-processed detections.",
+   "significance": "Removes the need to replicate the training-time preprocessing by hand.",
+   "example": "`detector.predict(image)` on a `(1, H, W, 3)` uint8 array.",
+   "misconception": "That you must resize or normalize the image yourself; the task's preprocessor does it.",
+   "related": ["transfer_learning", "retinanet"],
+   "source": "book"
+  },
+  {
+   "id": "padded_detections",
+   "name": "Padded detection outputs and num_detections",
+   "definition": "Returning a fixed maximum number of detections per image (here 100) plus a count of how many are valid.",
+   "intuition": "A form with 100 lines where only the first few are filled in; `num_detections` tells you where to stop reading.",
+   "technical": "Shapes: boxes (batch, 100, 4), confidence (batch, 100), labels (batch, 100), num_detections (batch,). Beyond the book: the fixed-size list typically results from non-max suppression with a cap of 100 outputs.",
+   "significance": "Batched tensors must be rectangular, but each image has a different number of objects.",
+   "example": "If `num_detections[0]` is 12, only `boxes[0][:12]` are real.",
+   "misconception": "That all 100 rows are meaningful predictions.",
+   "related": ["object_detection", "bounding_box_format"],
+   "source": "inference"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Relative box coordinates",
+   "latex": "(x_{rel},\\, y_{rel},\\, w_{rel},\\, h_{rel}) = \\left(\\frac{x}{W},\\ \\frac{y}{H},\\ \\frac{w}{W},\\ \\frac{h}{H}\\right) \\in [0,1]^4",
+   "source_text": "\"rel_xywh\" ... rel stands for relative to the image size (e.g., from [0, 1])",
+   "variables": [
+    {"symbol": "x, y", "meaning": "pixel coordinates of the box's top-left corner (as used by the chapter's draw_box)"},
+    {"symbol": "w, h", "meaning": "box width and height in pixels"},
+    {"symbol": "W, H", "meaning": "image width and height in pixels"}
+   ],
+   "operations": "Divide horizontal quantities by the image width and vertical quantities by the image height.",
+   "purpose": "Make box coordinates independent of image resolution, matching the unit-square canvas of draw_image.",
+   "interpretation": "A relative width of 0.5 means the box spans half the image width, whatever its pixel size.",
+   "intuition": "Express positions as fractions of the picture, like 'a third of the way across'.",
+   "numerical_example": "For a 1280×860 image, a box with top-left (640, 86) and size 320×258 pixels is $(0.5, 0.1, 0.25, 0.3)$. A valid xywh box satisfies $x_{rel}+w_{rel} \\le 1$; the printed `[0.53, 0.00, 0.81, 0.29]` would give $0.53+0.81=1.34$, which is why it was flagged as looking more like corner coordinates.",
+   "source": "ai_explanation",
+   "book_ref": "p.372"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Downloading the La Grande Jatte painting as a batched array",
+   "original_code": "url = (\n    \"https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/\"\n    \"A_Sunday_on_La_Grande_Jatte%2C_Georges_Seurat%2C_1884.jpg/\"\n    \"1280px-A_Sunday_on_La_Grande_Jatte%2C_Georges_Seurat%2C_1884.jpg\"\n)\npath = keras.utils.get_file(origin=url)\nimage = np.array([keras.utils.load_img(path)])",
+   "language": "python",
+   "what_it_does": "Builds the URL of a 1280-px-wide JPEG of Seurat's painting from three concatenated string literals, downloads and caches it locally, loads it as a PIL image and converts it to a NumPy array with a leading batch dimension.",
+   "line_explanations": [
+    {"lines": "1-5", "explanation": "Adjacent string literals inside parentheses are concatenated by Python into one URL. `%2C` is the URL-encoded comma."},
+    {"lines": "6", "explanation": "`keras.utils.get_file` downloads the file (to `~/.keras/datasets` by default) and returns the local path; repeated calls reuse the cache."},
+    {"lines": "7", "explanation": "`load_img` returns a PIL image; wrapping it in a list and calling `np.array` yields shape `(1, height, width, 3)` — a batch of one image."}
+   ],
+   "inputs_outputs": "Input: a URL. Output: `path` (local file path, used later by draw_image) and `image`, a uint8 array of shape (1, H, W, 3).",
+   "algorithm": "Download → decode JPEG → stack into a batch.",
+   "theory_link": "Keras models always consume batches; the list wrapper is the idiomatic way to create a batch of one.",
+   "parameters": [
+    {"name": "origin", "role": "URL to download from."}
+   ],
+   "pitfalls": [
+    "Forgetting the list brackets gives shape (H, W, 3), and predict would treat the rows as a batch.",
+    "Needs network access; Wikimedia thumbnail URLs can change over time."
+   ],
+   "illustrative_code": "# AI-written: check what you loaded\nprint(image.shape, image.dtype)  # e.g. (1, H, 1280, 3) uint8"
+  },
+  {
+   "id": "c2",
+   "listing": "12.14",
+   "title": "Creating the pretrained RetinaNet detector and predicting",
+   "original_code": "detector = keras_hub.models.ObjectDetector.from_preset(\n    \"retinanet_resnet50_fpn_v2_coco\",\n    bounding_box_format=\"rel_xywh\",\n)\npredictions = detector.predict(image)",
+   "language": "python",
+   "what_it_does": "Downloads a COCO-trained RetinaNet (ResNet-50 backbone, FPN, v2 weights), configured to emit boxes in relative xywh format, and runs it on the batched painting.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "The generic `ObjectDetector` task class; `from_preset` resolves the concrete architecture (RetinaNet) from the preset."},
+    {"lines": "2", "explanation": "Preset name: retinanet (detector) + resnet50 (backbone) + fpn (feature pyramid network, p.371) + v2 (weights version) + coco (training dataset, 91 label ids)."},
+    {"lines": "3", "explanation": "Request boxes in the chapter's convention so `draw_box` can be reused."},
+    {"lines": "5", "explanation": "`predict` runs preprocessing, the network and box decoding/post-processing, returning a dict of NumPy arrays."}
+   ],
+   "inputs_outputs": "Input: uint8 image batch (1, H, W, 3). Output: dict with boxes (1, 100, 4), confidence (1, 100), labels (1, 100), num_detections (1,).",
+   "algorithm": "Single forward pass of a single-stage detector, followed by built-in decoding of box predictions and selection of up to 100 final detections.",
+   "theory_link": "Single-stage detection (p.356) with multi-scale features from a feature pyramid network (p.371).",
+   "parameters": [
+    {"name": "\"retinanet_resnet50_fpn_v2_coco\"", "role": "Which pretrained architecture and weights to load."},
+    {"name": "bounding_box_format", "role": "Coordinate convention of output boxes."}
+   ],
+   "pitfalls": [
+    "The caption says 'ResNet model' but this is a RetinaNet detector.",
+    "Omitting bounding_box_format gives the preset's default format, which may not match draw_box."
+   ],
+   "illustrative_code": ""
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Inspecting the prediction dictionary",
+   "original_code": ">>> [(k, v.shape) for k, v in predictions.items()]\n[(\"boxes\", (1, 100, 4)),\n (\"confidence\", (1, 100)),\n (\"labels\", (1, 100)),\n (\"num_detections\", (1,))]\n>>> predictions[\"boxes\"][0][0]\narray([0.53, 0.00, 0.81, 0.29], dtype=float32)",
+   "language": "python",
+   "what_it_does": "Lists each output name with its array shape, then prints the first box of the first image.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "List comprehension over the dict items, pairing each key with its shape."},
+    {"lines": "2-5", "explanation": "Batch of 1; 100 detection slots; 4 coordinates per box; one valid-count per image."},
+    {"lines": "6-7", "explanation": "Index [0] selects the image, [0] the first detection slot; four float32 relative coordinates. See the review note: 0.53 + 0.81 > 1."}
+   ],
+   "inputs_outputs": "Input: the `predictions` dict. Output: printed shapes and one box.",
+   "algorithm": "Plain inspection.",
+   "theory_link": "Fixed-size padded output with a valid count.",
+   "parameters": [],
+   "pitfalls": ["The first slot is not guaranteed to be meaningful unless num_detections > 0."],
+   "illustrative_code": "# AI-written: look at the valid detections only\nn = int(predictions[\"num_detections\"][0])\nfor box, conf, lab in zip(predictions[\"boxes\"][0][:n],\n                          predictions[\"confidence\"][0][:n],\n                          predictions[\"labels\"][0][:n]):\n    print(keras_hub.utils.coco_id_to_name(int(lab)), round(float(conf), 2), box)"
+  },
+  {
+   "id": "c4",
+   "listing": "12.15",
+   "title": "Drawing RetinaNet's predictions (first part)",
+   "original_code": "fig, ax = plt.subplots(dpi=300)\ndraw_image(ax, path)\nnum_detections = predictions[\"num_detections\"][0]\nfor i in range(num_detections):",
+   "language": "python",
+   "what_it_does": "Sets up a high-resolution Matplotlib figure, draws the painting onto the unit-square canvas, gets the number of valid detections and opens the loop over them. The loop body (fetch box and label, map the COCO id to a name, call draw_box) and plt.show() continue on p.373.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "One axes at 300 dots per inch for a crisp figure."},
+    {"lines": "2", "explanation": "`draw_image` (p.359) reads the file at `path`, pads it into the unit square and sets (0, 0) at the top left."},
+    {"lines": "3", "explanation": "Valid count for image 0."},
+    {"lines": "4", "explanation": "Iterate only over real detections, skipping padding slots."}
+   ],
+   "inputs_outputs": "Input: `path`, `predictions`. Output: figure 12.9 once the loop on p.373 completes.",
+   "algorithm": "Draw background image, then overlay one rectangle per valid detection.",
+   "theory_link": "Reuses the visualization utilities from section 12.2.1.",
+   "parameters": [{"name": "dpi=300", "role": "Figure resolution."}],
+   "pitfalls": ["Unlike the YOLO visualization on p.365, no confidence threshold is applied here; the model's own post-processing already filtered the detections."],
+   "illustrative_code": ""
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why a fixed 100 slots?",
+   "kind": "breakdown",
+   "body": "Beyond the book: a detector's raw head produces thousands of candidate boxes (one set per anchor per FPN level). Post-processing keeps boxes whose class score exceeds a threshold, then runs **non-max suppression** to remove near-duplicates that overlap heavily (high IoU) with a stronger box, and finally keeps at most a fixed number (here 100). To keep tensor shapes static for batching and compilation, the result is padded to 100 and accompanied by `num_detections`.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Decoding the preset name",
+   "kind": "breakdown",
+   "body": "`retinanet_resnet50_fpn_v2_coco` reads left to right: the **detector family** (RetinaNet), the **backbone** (ResNet-50, a residual ConvNet), the **neck** (FPN, the feature pyramid network from p.371), the **weights version** (v2), and the **training data** (COCO, the dataset used throughout the chapter, so its labels are COCO ids that `coco_id_to_name` can decode). This interpretation of the naming scheme is ours, but each component is named in the chapter.",
+   "source": "inference"
+  },
+  {
+   "title": "Box formats side by side",
+   "kind": "numerical",
+   "body": "Take a box with corners (256, 172) and (512, 430) in a 1280×860 image.\n\n- `xyxy` (pixels): (256, 172, 512, 430)\n- `xywh` (pixels): (256, 172, 256, 258)\n- `center_xywh`: (384, 301, 256, 258)\n- `rel_xyxy`: (0.2, 0.2, 0.4, 0.5)\n- `rel_xywh`: (0.2, 0.2, 0.2, 0.3)\n\nOnly the last one can be passed directly to the chapter's `draw_box`.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "svg",
+   "title": "The rel_xywh convention used by draw_box",
+   "why": "The page explains that 'rel_xywh' means coordinates relative to the image in [0, 1]; the chapter's draw_box anchors a rectangle at (x, y) with size (w, h) on a unit canvas with (0, 0) at the top left.",
+   "svg": "<svg viewBox=\"0 0 320 240\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"11\" fill=\"currentColor\"><rect x=\"40\" y=\"20\" width=\"240\" height=\"180\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"30\" y=\"16\">(0,0)</text><text x=\"262\" y=\"214\">(1,1)</text><text x=\"140\" y=\"232\">image width = 1</text><rect x=\"112\" y=\"56\" width=\"96\" height=\"90\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-dasharray=\"5 3\"/><circle cx=\"112\" cy=\"56\" r=\"3.5\"/><text x=\"60\" y=\"52\">(x, y)</text><line x1=\"40\" y1=\"56\" x2=\"112\" y2=\"56\" stroke=\"currentColor\" stroke-dasharray=\"2 2\"/><line x1=\"112\" y1=\"20\" x2=\"112\" y2=\"56\" stroke=\"currentColor\" stroke-dasharray=\"2 2\"/><text x=\"145\" y=\"162\">w</text><line x1=\"112\" y1=\"152\" x2=\"208\" y2=\"152\" stroke=\"currentColor\"/><text x=\"214\" y=\"104\">h</text><line x1=\"210\" y1=\"56\" x2=\"210\" y2=\"146\" stroke=\"currentColor\"/><text x=\"120\" y=\"104\">box = [x, y, w, h]</text></svg>"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Shapes through the RetinaNet inference on this page",
+   "why": "The page prints the shapes of the image batch and the four outputs; this widget lays them out as a flow.",
+   "widget": "tensor_shapes",
+   "params": {"steps": [
+    {"op": "input image batch", "shape": [1, null, null, 3]},
+    {"op": "boxes", "shape": [1, 100, 4]},
+    {"op": "confidence", "shape": [1, 100]},
+    {"op": "labels", "shape": [1, 100]},
+    {"op": "num_detections", "shape": [1]}
+   ]}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "Listing 12.14 builds a ResNet classifier.", "correction": "It builds a RetinaNet object detector; ResNet-50 is the backbone inside it (the preset name says retinanet_resnet50_fpn...)."},
+  {"claim": "All 100 returned boxes are detections.", "correction": "Only the first num_detections entries are valid; the rest are padding to keep shapes fixed."},
+  {"claim": "You must preprocess the image (resize, normalize) before detector.predict.", "correction": "The KerasHub task includes preprocessing, as the page says ('preprocessing included')."},
+  {"claim": "'rel' coordinates are in pixels relative to the box centre.", "correction": "'rel' means relative to the image size: coordinates divided by the image width/height, in [0, 1]."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 371, "note": "Feature pyramid networks and the choice of Seurat's painting as an out-of-distribution test image."},
+   {"page": 370, "note": "Limitations of the from-scratch YOLO model motivate using a pretrained RetinaNet."},
+   {"page": 358, "note": "label_to_color and draw_box utilities reused here."},
+   {"page": 359, "note": "draw_image puts the image on a unit square with (0, 0) at the top left."},
+   {"page": 364, "note": "keras_hub.utils.coco_id_to_name maps COCO ids to names."}
+  ],
+  "later": [
+   {"page": 373, "note": "End of Listing 12.15 and figure 12.9: RetinaNet's detections on the painting."},
+   {"page": 374, "note": "Chapter summary, including RetinaNet and FPNs."}
+  ],
+  "prerequisites": [
+   {"page": 356, "note": "Single-stage detectors."},
+   {"page": 363, "note": "Box coordinates relative to image size in the YOLO data pipeline."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 362, "note": "Listing 12.6: the YOLO prediction head whose outputs (box, confidence, class) parallel RetinaNet's."},
+   {"page": 365, "note": "Visualizing YOLO predictions with the same utilities."}
+  ],
+  "related_figures": [
+   {"page": 371, "note": "Figure 12.8: feature pyramid network."},
+   {"page": 373, "note": "Figure 12.9: the result of this page's code."}
+  ]
+ },
+ "takeaways": [
+  "A pretrained detector is three lines with KerasHub: from_preset, then predict on a batched image; preprocessing is included.",
+  "Always set bounding_box_format to the convention your downstream code expects; rel_xywh means fractions of image width/height in [0, 1].",
+  "RetinaNet returns a padded set of 100 detections (boxes, confidence, labels) plus num_detections; only the first num_detections entries are real.",
+  "The output structure mirrors the YOLO model's box/confidence/class outputs.",
+  "The test image is a pointillist painting, chosen to probe out-of-distribution generalization."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "What does the 'rel' in the bounding-box format \"rel_xywh\" mean?", "options": ["Coordinates are relative to the box's centre", "Coordinates are relative to the image size, in [0, 1]", "Coordinates are relative to the previous detection", "Coordinates are relative to the feature-map grid cell"], "answer": "Coordinates are relative to the image size, in [0, 1]", "explanation": "The page states that rel stands for relative to the image size (e.g., from [0, 1]). Box-centre offsets and grid-cell-relative coordinates are other encodings (the YOLO targets on p.363 put x, y relative to the grid cell, but that is internal to the YOLO training setup), and nothing is relative to a previous detection.", "page_refs": [372, 363]},
+  {"id": "q2", "type": "short", "question": "Why does Listing 12.15 loop over range(num_detections) instead of over all 100 boxes?", "options": [], "answer": "Because the outputs are padded to a fixed size of 100; only the first num_detections entries are valid detections.", "explanation": "The page shows boxes with shape (1, 100, 4) and a separate num_detections output. A fixed maximum keeps tensor shapes rectangular; the count tells you how many slots are real.", "page_refs": [372]},
+  {"id": "q3", "type": "conceptual", "question": "Why do the authors pass bounding_box_format=\"rel_xywh\" rather than accepting the model's default?", "options": [], "answer": "So the boxes use the same format as the YOLO model and the chapter's box-drawing utilities can be reused without conversion.", "explanation": "The page says exactly this; draw_box (p.358) unpacks x, y, w, h on a unit canvas, so relative xywh boxes plot correctly.", "page_refs": [372, 358]},
+  {"id": "q4", "type": "short", "question": "What is the shape of `image` after `np.array([keras.utils.load_img(path)])`, and why the list brackets?", "options": [], "answer": "(1, height, width, 3); the list adds a batch axis of size 1 because Keras models predict on batches.", "explanation": "load_img returns one RGB image; wrapping it in a list and converting gives a batch of one, consistent with the (1, ...) leading dimension of every output.", "page_refs": [372]},
+  {"id": "q5", "type": "mcq", "question": "Which component does the preset name 'retinanet_resnet50_fpn_v2_coco' NOT tell you?", "options": ["The backbone architecture", "The dataset the model was trained on", "The bounding-box format of the output", "That a feature pyramid network is used"], "answer": "The bounding-box format of the output", "explanation": "resnet50 names the backbone, coco the training data, fpn the feature pyramid network. The box format is chosen separately via the bounding_box_format argument.", "page_refs": [372, 371]},
+  {"id": "q6", "type": "math", "question": "A 1280×860 image contains a box whose top-left corner is at pixel (384, 172) and which is 256 px wide and 344 px tall. Write it in rel_xywh. Then check whether the printed box [0.53, 0.00, 0.81, 0.29] is a valid rel_xywh box.", "options": [], "answer": "(0.3, 0.2, 0.2, 0.4). The printed box would need x + w ≤ 1, but 0.53 + 0.81 = 1.34, so as xywh it would extend past the right edge.", "explanation": "Divide x and w by 1280 and y and h by 860: 384/1280 = 0.3, 172/860 = 0.2, 256/1280 = 0.2, 344/860 = 0.4. For the printed box, the sum exceeds 1, which suggests those numbers are corner coordinates (x1, y1, x2, y2) rather than xywh — a point flagged for review.", "page_refs": [372]},
+  {"id": "q7", "type": "self", "question": "Can you list the four outputs of the detector and explain the role of each in drawing figure 12.9?", "options": [], "answer": "boxes give rectangles, labels give COCO class ids (converted to names and colours), confidence gives the score of each detection, num_detections gives how many slots to read.", "explanation": "If you can connect each output to a line of Listing 12.15 (p.372–373), you understand the inference flow.", "page_refs": [372, 373]}
+ ]
+}

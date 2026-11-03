@@ -1,0 +1,398 @@
+{
+  "page_id": "page_284",
+  "pdf_page": 284,
+  "printed_page": "260",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:30:24Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean. Listing 8.27 starts on this page (import and two accuracy lines) and continues on p.285; the callout 'Averages spatial dimensions to flatten the feature map' points at the GlobalAveragePooling2D line."
+  },
+  "overview": {
+    "title": "Training a dense classifier on Xception features",
+    "chapter": "8 Image classification",
+    "section": "8.3 Using a pretrained model",
+    "subsection": "8.3.1 Feature extraction with a pretrained model",
+    "main_topic": "Shape of the extracted Xception features and the small classifier (global average pooling, Dense 256, dropout, sigmoid output) trained on them, plus the start of the plotting code.",
+    "central_idea": "The precomputed features have shape (2000, 6, 6, 2048); a tiny model that averages away the 6x6 spatial grid and applies two Dense layers with dropout can be trained on them in under a second per epoch on CPU.",
+    "importance": "It shows the payoff of caching: once the expensive backbone has run, training the new head is nearly free. It also introduces GlobalAveragePooling2D as a compact alternative to Flatten for collapsing feature maps.",
+    "learning_objectives": [
+      "Explain why the labels had to be separated from images before calling predict().",
+      "Interpret the feature tensor shape (2000, 6, 6, 2048).",
+      "Describe each layer of Listing 8.26 and compute its parameter count.",
+      "Explain the role of ModelCheckpoint with save_best_only=True and monitor=\"val_loss\".",
+      "Explain why training is so fast in this setup."
+    ],
+    "prerequisites": [
+      "Listing 8.25 feature extraction (p.283)",
+      "Functional API (keras.Input, keras.Model)",
+      "Binary classification with sigmoid and binary crossentropy",
+      "Dropout as regularization",
+      "Callbacks such as ModelCheckpoint (used in section 8.2)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page first explains a detail of Listing 8.25 (p.283): `predict()` expects **only images**, but the datasets yield `(images, labels)` batches, which is why the helper loop splits them and collects labels separately.\n\nThe extracted features have shape `(samples, 6, 6, 2048)`; concretely `train_features.shape` is `(2000, 6, 6, 2048)`: 2,000 training images, each represented by a 6 x 6 grid of 2,048-channel feature vectors from the Xception backbone.\n\n**Listing 8.26** defines and trains the new densely connected classifier with the Functional API:\n\n- `keras.Input(shape=(6, 6, 2048))`\n- `GlobalAveragePooling2D()` — per the callout, it *averages the spatial dimensions to flatten the feature map*, producing a 2,048-vector per image.\n- `Dense(256, activation=\"relu\")`, then `Dropout(0.25)` for regularization.\n- `Dense(1, activation=\"sigmoid\")` for the dog/cat probability.\n- Compiled with `binary_crossentropy` loss, `adam` optimizer and `accuracy` metric.\n- A `ModelCheckpoint` callback saves the model with the lowest `val_loss` to `feature_extraction.keras`.\n- `model.fit` runs 10 epochs on `train_features`/`train_labels`, validating on `val_features`/`val_labels`.\n\nTraining is very fast: only two `Dense` layers need to be processed, so an epoch takes **less than 1 second even on CPU**. The page then begins **Listing 8.27** to plot loss and accuracy curves (figure 8.13), extracting `acc` and `val_acc` from `history.history`; the remainder of the plotting code is on p.285.",
+  "paragraphs": [
+    {
+      "ref": "p284_e03",
+      "excerpt": "Importantly, predict() only expects images, not labels, but our current dataset yields batches",
+      "what_it_says": "`predict()` takes only images as input, while the dataset yields batches of both images and labels.",
+      "what_it_means": "This justifies the structure of Listing 8.25: the loop unpacks `(images, labels)`, feeds only images to the preprocessor and `conv_base.predict()`, and stores labels separately in the same order so they stay aligned with the features.",
+      "why_it_matters": "Keeping features and labels aligned is essential; a mismatch would produce a classifier trained on wrong targets without any error being raised.",
+      "terminology": [
+        {"term": "predict()", "meaning": "Inference-mode forward pass returning model outputs as NumPy arrays."}
+      ],
+      "connections": ["p.283: Listing 8.25 contains the loop this sentence explains."]
+    },
+    {
+      "ref": "p284_e04",
+      "excerpt": "The extracted features are currently of shape (samples, 6, 6, 2048):",
+      "what_it_says": "Each image is now represented by a 6 x 6 x 2048 feature tensor; for the training set the shape is `(2000, 6, 6, 2048)`.",
+      "what_it_means": "Xception has reduced the 180 x 180 spatial grid to 6 x 6 (a factor of 30 per side) while expanding 3 color channels to 2,048 learned feature channels. Each of the 36 positions is a 2,048-dimensional description of a region of the image.",
+      "why_it_matters": "The shape determines how the classifier must start: its `Input` must be `(6, 6, 2048)`, and something must collapse the spatial axes before the Dense layers.",
+      "terminology": [
+        {"term": "feature map", "meaning": "A spatial grid of feature vectors output by a convolutional layer."}
+      ],
+      "connections": ["p.283: ImageConverter set image_size=(180, 180), the input resolution that yields the 6x6 grid."]
+    },
+    {
+      "ref": "p284_e06",
+      "excerpt": "At this point, you can define your densely connected classifier (note the use of dropout",
+      "what_it_says": "Define a densely connected classifier, which uses dropout for regularization, and train it on the recorded features and labels.",
+      "what_it_means": "The new head is the only part that learns. Because there is no data augmentation in this approach, dropout is the main defense against overfitting.",
+      "why_it_matters": "Sets up the experiment whose curves (p.285) will show that dropout alone does not prevent overfitting here.",
+      "terminology": [
+        {"term": "dropout", "meaning": "Randomly zeroes a fraction of activations during training (here 25%) to reduce co-adaptation and overfitting."}
+      ],
+      "connections": ["p.285: the curves show overfitting almost from the start despite dropout."]
+    },
+    {
+      "ref": "p284_e09",
+      "excerpt": "Training is very fast because you only have to deal with two Dense layers",
+      "what_it_says": "Training is very fast because only two Dense layers must be processed; an epoch takes less than 1 second even on CPU. Next, the loss and accuracy curves are plotted (figure 8.13).",
+      "what_it_means": "All the heavy convolutional computation happened once during feature extraction. Each epoch now processes 2,000 vectors of length 2,048 through about half a million parameters, a trivial workload.",
+      "why_it_matters": "This is the concrete payoff of the 'fast and cheap' option described on p.283.",
+      "terminology": [],
+      "connections": ["p.283: option 1 is fast because the base runs only once per image.", "p.285: figure 8.13 shows the resulting curves."]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "global_average_pooling",
+      "name": "Global average pooling",
+      "definition": "A layer that averages each channel of a feature map over all spatial positions, turning (H, W, C) into (C,).",
+      "intuition": "For each detector channel, ask 'how strongly, on average, is this feature present anywhere in the image?'",
+      "technical": "For input $X\\in\\mathbb{R}^{6\\times6\\times2048}$, output $z_c = \\frac{1}{36}\\sum_{i,j} X_{i,j,c}$. No trainable parameters.",
+      "significance": "Collapses the spatial grid with far fewer downstream parameters than Flatten (2,048 inputs vs 73,728) and some built-in translation invariance.",
+      "example": "`layers.GlobalAveragePooling2D()(inputs)` in Listing 8.26; callout: 'Averages spatial dimensions to flatten the feature map'.",
+      "misconception": "That it is the same as Flatten; Flatten keeps every position separately, GAP averages them.",
+      "related": ["pooling", "dense_layer"],
+      "source": "book"
+    },
+    {
+      "id": "dropout",
+      "name": "Dropout",
+      "definition": "Randomly setting a fraction of a layer's outputs to zero during training.",
+      "intuition": "Prevents the network from relying on any single feature.",
+      "technical": "`Dropout(0.25)` zeroes 25% of the 256 activations each training step and scales the rest by 1/0.75; inactive at inference.",
+      "significance": "The only regularizer in this fast feature-extraction model.",
+      "example": "Placed between Dense(256) and the sigmoid output.",
+      "misconception": "That dropout alone suffices on small image datasets; p.285 shows overfitting anyway.",
+      "related": ["regularization", "overfitting"],
+      "source": "book"
+    },
+    {
+      "id": "model_checkpoint",
+      "name": "ModelCheckpoint callback",
+      "definition": "A Keras callback that saves the model during training.",
+      "intuition": "Keep a snapshot of the best version, not just the last one.",
+      "technical": "With `save_best_only=True, monitor=\"val_loss\"`, it overwrites `feature_extraction.keras` only when validation loss improves.",
+      "significance": "Lets you later reload the best-epoch model for test evaluation (p.285).",
+      "example": "`keras.callbacks.ModelCheckpoint(filepath=\"feature_extraction.keras\", save_best_only=True, monitor=\"val_loss\")`.",
+      "misconception": "That `model` after fit is the best model; it is the last-epoch model, the best one is on disk.",
+      "related": ["validation_set", "overfitting"],
+      "source": "book"
+    },
+    {
+      "id": "feature_caching",
+      "name": "Precomputed (cached) feature extraction",
+      "definition": "Training a classifier on backbone outputs computed once in advance.",
+      "intuition": "Do the expensive reading once, then train on the notes.",
+      "technical": "Training cost per epoch is just the head: here about 525k parameters on 2,000 samples.",
+      "significance": "Under 1 second per epoch on CPU.",
+      "example": "`model.fit(train_features, train_labels, epochs=10, ...)`.",
+      "misconception": "That it is always the best approach; it forbids augmentation, leading to overfitting.",
+      "related": ["transfer_learning", "data_augmentation"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Global average pooling",
+      "latex": "z_c = \\frac{1}{H W}\\sum_{i=1}^{H}\\sum_{j=1}^{W} X_{i,j,c}, \\qquad H=W=6,\\; c=1,\\dots,2048",
+      "source_text": "layers.GlobalAveragePooling2D()  (callout: \"Averages spatial dimensions to flatten the feature map\")",
+      "variables": [
+        {"symbol": "X_{i,j,c}", "meaning": "Feature value at spatial position (i, j) and channel c of the 6x6x2048 Xception output."},
+        {"symbol": "H, W", "meaning": "Spatial height and width of the feature map (6 and 6)."},
+        {"symbol": "z_c", "meaning": "Pooled value of channel c; the output vector z has 2,048 entries."}
+      ],
+      "operations": "Sum over the 36 spatial positions for each channel and divide by 36.",
+      "purpose": "Convert the spatial feature map to a fixed-length vector suitable for Dense layers.",
+      "interpretation": "Each $z_c$ measures the average activation of one learned visual detector over the whole image.",
+      "intuition": "Location is discarded; only 'how much of each feature' remains.",
+      "numerical_example": "If channel 7 is 1.2 at 3 of the 36 positions and 0 elsewhere, $z_7 = 3.6/36 = 0.1$.",
+      "source": "ai_explanation",
+      "book_ref": "p.284"
+    },
+    {
+      "id": "m2",
+      "title": "Classifier head and binary crossentropy",
+      "latex": "\\hat{y} = \\sigma\\big(w_2^{\\top}\\,\\operatorname{dropout}(\\operatorname{relu}(W_1 z + b_1)) + b_2\\big),\\quad \\mathcal{L} = -\\big[y\\log\\hat{y} + (1-y)\\log(1-\\hat{y})\\big]",
+      "source_text": "Dense(256, activation=\"relu\") -> Dropout(0.25) -> Dense(1, activation=\"sigmoid\"); loss=\"binary_crossentropy\"",
+      "variables": [
+        {"symbol": "z", "meaning": "2,048-dim pooled feature vector."},
+        {"symbol": "W_1, b_1", "meaning": "Weights (256 x 2048) and bias (256) of the hidden Dense layer."},
+        {"symbol": "w_2, b_2", "meaning": "Weights (256) and bias (scalar) of the output layer."},
+        {"symbol": "\\sigma", "meaning": "Sigmoid function, mapping a score to a probability in (0, 1)."},
+        {"symbol": "y", "meaning": "True label (0 or 1, cat or dog)."},
+        {"symbol": "\\hat{y}", "meaning": "Predicted probability of the positive class."}
+      ],
+      "operations": "Affine map, ReLU, dropout (training only), affine map, sigmoid; then the log-loss against the label.",
+      "purpose": "Writes Listing 8.26's model and loss as formulas.",
+      "interpretation": "The head learns a nonlinear decision on top of fixed Xception features.",
+      "intuition": "Confident wrong predictions are punished heavily by the log.",
+      "numerical_example": "If $y=1$ and $\\hat y=0.9$, $\\mathcal L = -\\log 0.9 \\approx 0.105$; if $\\hat y = 0.1$, $\\mathcal L \\approx 2.303$.",
+      "source": "ai_explanation",
+      "book_ref": "p.284"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Checking the extracted feature shape",
+      "original_code": ">>> train_features.shape\n(2000, 6, 6, 2048)",
+      "language": "python",
+      "what_it_does": "Displays the shape of the training features produced by Listing 8.25.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Interactive query of the NumPy array's shape."},
+        {"lines": "2", "explanation": "2,000 samples, each a 6 x 6 spatial grid with 2,048 channels."}
+      ],
+      "inputs_outputs": "Input: `train_features`. Output: the tuple `(2000, 6, 6, 2048)`.",
+      "algorithm": "Attribute lookup.",
+      "theory_link": "Confirms what the backbone outputs and dictates the classifier's input shape.",
+      "parameters": [],
+      "pitfalls": ["Shape depends on the input image_size; a different size would change the 6 x 6 grid."]
+    },
+    {
+      "id": "c2",
+      "listing": "8.26",
+      "title": "Defining and training the densely connected classifier",
+      "original_code": "inputs = keras.Input(shape=(6, 6, 2048))\nx = layers.GlobalAveragePooling2D()(inputs)\nx = layers.Dense(256, activation=\"relu\")(x)\nx = layers.Dropout(0.25)(x)\noutputs = layers.Dense(1, activation=\"sigmoid\")(x)\nmodel = keras.Model(inputs, outputs)\nmodel.compile(\n    loss=\"binary_crossentropy\",\n    optimizer=\"adam\",\n    metrics=[\"accuracy\"],\n)\n\ncallbacks = [\n    keras.callbacks.ModelCheckpoint(\n        filepath=\"feature_extraction.keras\",\n        save_best_only=True,\n        monitor=\"val_loss\",\n    )\n]\nhistory = model.fit(\n    train_features,\n    train_labels,\n    epochs=10,\n    validation_data=(val_features, val_labels),\n    callbacks=callbacks,\n)",
+      "language": "python",
+      "what_it_does": "Builds a small Functional-API classifier on top of cached Xception features, compiles it for binary classification, and trains it for 10 epochs while saving the best model by validation loss.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Input matches the feature shape (6, 6, 2048)."},
+        {"lines": "2", "explanation": "GlobalAveragePooling2D averages spatial dimensions to flatten the feature map (book callout), giving a 2,048-vector."},
+        {"lines": "3", "explanation": "Hidden Dense layer with 256 ReLU units: 2048*256 + 256 = 524,544 parameters."},
+        {"lines": "4", "explanation": "Dropout with rate 0.25 for regularization."},
+        {"lines": "5", "explanation": "Single sigmoid unit (257 parameters) outputs the probability of class 1."},
+        {"lines": "6", "explanation": "Wraps inputs and outputs into a Model."},
+        {"lines": "7-11", "explanation": "Binary crossentropy loss, Adam optimizer, accuracy metric."},
+        {"lines": "13-19", "explanation": "ModelCheckpoint keeps only the best model (lowest val_loss) in feature_extraction.keras."},
+        {"lines": "20-26", "explanation": "Fits for 10 epochs on cached features with validation on val_features/val_labels; history records the metrics per epoch."}
+      ],
+      "inputs_outputs": "Inputs: `train_features (2000, 6, 6, 2048)`, `train_labels (2000,)`, plus validation arrays. Outputs: a trained model, a `history` object, and the best checkpoint on disk.",
+      "algorithm": "Mini-batch gradient descent with Adam on the head only (the backbone is not part of this model at all).",
+      "theory_link": "Second half of fast feature extraction: training a new classifier on top of reused representations.",
+      "parameters": [
+        {"name": "Dense(256)", "role": "Capacity of the hidden layer."},
+        {"name": "Dropout(0.25)", "role": "Fraction of hidden activations dropped during training."},
+        {"name": "epochs=10", "role": "Number of passes over the cached features."},
+        {"name": "monitor=\"val_loss\"", "role": "Quantity used to decide which checkpoint is best."}
+      ],
+      "pitfalls": [
+        "Without augmentation the head overfits quickly (p.285); rely on the checkpoint rather than the final weights.",
+        "The model expects features, not images; to classify raw images you must apply preprocessor and conv_base first."
+      ]
+    },
+    {
+      "id": "c3",
+      "listing": "8.27",
+      "title": "Plotting the results (beginning)",
+      "original_code": "import matplotlib.pyplot as plt\n\nacc = history.history[\"accuracy\"]\nval_acc = history.history[\"val_accuracy\"]",
+      "language": "python",
+      "what_it_does": "Imports matplotlib and extracts per-epoch training and validation accuracy from the training history. The listing continues on p.285 with the loss lists and the plotting calls.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Imports the plotting library."},
+        {"lines": "3-4", "explanation": "`history.history` is a dict of metric name -> list of per-epoch values; `val_` prefixes denote validation metrics."}
+      ],
+      "inputs_outputs": "Input: `history` from Listing 8.26. Output: two lists of 10 accuracy values each.",
+      "algorithm": "Dictionary lookups.",
+      "theory_link": "Comparing training and validation curves is how overfitting is diagnosed (figure 8.13, p.285).",
+      "parameters": [],
+      "pitfalls": ["Metric keys must match the names given in compile (here \"accuracy\")."]
+    }
+  ],
+  "deeper": [
+    {
+      "title": "GlobalAveragePooling2D vs Flatten: parameter count",
+      "kind": "numerical",
+      "body": "Beyond the book: Flattening the (6, 6, 2048) features would give $6\\cdot6\\cdot2048 = 73{,}728$ inputs, and `Dense(256)` would then need $73{,}728\\times256+256 = 18{,}874{,}624$ parameters. With global average pooling, the Dense layer sees 2,048 inputs and needs only $2048\\times256+256 = 524{,}544$ parameters, 36x fewer. Adding the output layer ($256+1=257$) gives a total of **524,801** trainable parameters. With only 2,000 training samples, the smaller head is far less prone to memorization.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Why under 1 second per epoch?",
+      "kind": "breakdown",
+      "body": "Per epoch, the model processes 2,000 samples. The dominant cost is the 2048 x 256 matrix multiply: about $2000 \\times 2048 \\times 256 \\approx 10^9$ multiply-adds forward, roughly three times that with the backward pass. Modern CPUs do tens of GFLOP/s, so an epoch takes well under a second, matching the book's claim. By contrast, a single forward pass of Xception on a 180x180 image costs billions of operations by itself (AI estimate).",
+      "source": "ai_explanation"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "widget",
+      "title": "Listing 8.26 classifier on Xception features",
+      "why": "Click each layer to see output shapes and Dense parameter counts for the exact model in Listing 8.26.",
+      "widget": "nn_architecture",
+      "params": {
+        "layers": [
+          {"name": "features", "type": "input", "shape": "(None, 6, 6, 2048)"},
+          {"name": "GlobalAveragePooling2D", "type": "pool", "shape": "(None, 2048)"},
+          {"name": "Dense", "type": "dense", "units": 256, "activation": "relu", "shape": "(None, 256)"},
+          {"name": "Dropout(0.25)", "type": "dropout", "shape": "(None, 256)"},
+          {"name": "Dense", "type": "output", "units": 1, "activation": "sigmoid", "shape": "(None, 1)"}
+        ]
+      }
+    },
+    {
+      "id": "v2",
+      "type": "widget",
+      "title": "Dropout at rate 0.25",
+      "why": "Listing 8.26 inserts Dropout(0.25) after the 256-unit Dense layer; resample masks to see a quarter of units dropped and the survivors scaled by 1/0.75.",
+      "widget": "dropout",
+      "params": {"units": 16, "rate": 0.25}
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "GlobalAveragePooling2D has trainable weights.",
+      "correction": "It only averages; it has zero parameters. All 524,801 parameters are in the two Dense layers."
+    },
+    {
+      "claim": "The Xception backbone is trained here too.",
+      "correction": "The model in Listing 8.26 takes precomputed features as input; the backbone is not part of it, which is why training is so fast."
+    },
+    {
+      "claim": "After `fit`, `model` holds the best weights.",
+      "correction": "`model` holds last-epoch weights; the best model by val_loss is saved in feature_extraction.keras and is reloaded for testing on p.285."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 283, "note": "Listing 8.25 produced train_features, val_features and test_features."},
+      {"page": 269, "note": "The from-scratch model also ended with a sigmoid Dense(1) and binary crossentropy."}
+    ],
+    "later": [
+      {"page": 285, "note": "Rest of Listing 8.27, figure 8.13 (overfitting from the start), and test evaluation of the saved checkpoint."},
+      {"page": 286, "note": "Feature extraction with data augmentation, to fight the overfitting seen here."}
+    ],
+    "prerequisites": [
+      {"page": 283, "note": "How the features were computed."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 285, "note": "Continuation of Listing 8.27 and loading feature_extraction.keras for evaluation."}
+    ],
+    "related_figures": [
+      {"page": 285, "note": "Figure 8.13: training and validation metrics for plain feature extraction."}
+    ]
+  },
+  "takeaways": [
+    "predict() takes only images, so the extraction loop keeps labels separately and aligned.",
+    "Xception features for 180x180 inputs have shape (6, 6, 2048); the training set gives (2000, 6, 6, 2048).",
+    "The head: GlobalAveragePooling2D -> Dense(256, relu) -> Dropout(0.25) -> Dense(1, sigmoid), trained with binary crossentropy and Adam.",
+    "ModelCheckpoint saves the lowest-val_loss model to feature_extraction.keras.",
+    "Training takes under 1 second per epoch on CPU because only two Dense layers are involved."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "What does GlobalAveragePooling2D do to the (6, 6, 2048) feature tensor in Listing 8.26?",
+      "options": [
+        "Reshapes it into a 73,728-dimensional vector",
+        "Averages over the 6x6 spatial positions, producing a 2,048-dimensional vector",
+        "Takes the maximum over channels, producing a 6x6 map",
+        "Applies a learned 1x1 convolution"
+      ],
+      "answer": "Averages over the 6x6 spatial positions, producing a 2,048-dimensional vector",
+      "explanation": "The callout says it averages spatial dimensions to flatten the feature map. Option 1 describes Flatten; option 3 pools over the wrong axis with max; option 4 would add weights, but GAP has none.",
+      "page_refs": [284]
+    },
+    {
+      "id": "q2",
+      "type": "math",
+      "question": "Compute the number of trainable parameters in the model of Listing 8.26.",
+      "options": [],
+      "answer": "Dense(256): 2048*256 + 256 = 524,544; Dense(1): 256 + 1 = 257; total 524,801 (pooling and dropout have none).",
+      "explanation": "A Dense layer has inputs x units weights plus units biases; GlobalAveragePooling2D outputs 2,048 values.",
+      "page_refs": [284]
+    },
+    {
+      "id": "q3",
+      "type": "short",
+      "question": "Why does the feature-extraction loop in Listing 8.25 separate labels from images?",
+      "options": [],
+      "answer": "Because predict() only expects images, but the dataset yields (images, labels) batches; the labels are collected separately to stay aligned with the features.",
+      "explanation": "Stated in the first sentence of the page.",
+      "page_refs": [283, 284]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "What does the ModelCheckpoint callback in Listing 8.26 save?",
+      "options": [
+        "The model after every epoch to separate files",
+        "Only the model with the lowest validation loss seen so far",
+        "Only the model with the highest training accuracy",
+        "The extracted features"
+      ],
+      "answer": "Only the model with the lowest validation loss seen so far",
+      "explanation": "save_best_only=True with monitor=\"val_loss\" overwrites feature_extraction.keras only when val_loss improves. It does not save every epoch, does not use training accuracy, and does not save features.",
+      "page_refs": [284]
+    },
+    {
+      "id": "q5",
+      "type": "conceptual",
+      "question": "Why is an epoch so fast here compared with the from-scratch ConvNet of section 8.2?",
+      "options": [],
+      "answer": "Because the convolutional work was done once during feature extraction; training only involves two Dense layers on 2,048-dimensional vectors, so an epoch takes under a second even on CPU.",
+      "explanation": "The page attributes the speed to dealing with only two Dense layers.",
+      "page_refs": [283, 284]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "What does the shape (2000, 6, 6, 2048) tell you about each training image's representation?",
+      "options": [],
+      "answer": "There are 2,000 images; each is described by a 6x6 grid of positions, each position holding a 2,048-dimensional feature vector.",
+      "explanation": "Interpretation of the printed train_features.shape.",
+      "page_refs": [284]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Could you rewrite Listing 8.26 from memory and justify each of its five layers?",
+      "options": [],
+      "answer": "Input(6,6,2048); GlobalAveragePooling2D to collapse space; Dense(256, relu) for a hidden representation; Dropout(0.25) to regularize; Dense(1, sigmoid) for the binary probability.",
+      "explanation": "Self-check on the structure of the head.",
+      "page_refs": [284]
+    }
+  ]
+}

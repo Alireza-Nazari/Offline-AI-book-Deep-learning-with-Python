@@ -1,0 +1,367 @@
+{
+  "page_id": "page_241",
+  "pdf_page": 241,
+  "printed_page": "217",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:29:31Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean. Both code blocks match the image; the callouts for the train_step code were split into fragments by the extractor and were reassembled from the image."
+  },
+  "overview": {
+    "title": "The TensorFlow train_step and the PyTorch gradient model",
+    "chapter": "7 A deep dive on Keras",
+    "section": "7.4 Writing your own training and evaluation loops",
+    "subsection": "7.4.2 Writing custom training step functions",
+    "main_topic": "A working TensorFlow training step built on GradientTape, and the three PyTorch mechanisms (backward, .grad, zero_grad) a PyTorch training step relies on",
+    "central_idea": "In TensorFlow, wrapping the forward pass and loss in a GradientTape turns the pseudocode into real code. In PyTorch, Keras models are torch.nn.Module instances, so gradients are produced by loss.backward(), read from weight.value.grad, and must be cleared with model.zero_grad() because backward() accumulates.",
+    "importance": "This is the first runnable custom training step in the chapter, and the PyTorch mental model introduced here is needed for the PyTorch code on p.242 and for the custom train_step() with fit() later (p.251).",
+    "learning_objectives": [
+      "Read and write the TensorFlow train_step using tf.GradientTape",
+      "Run a training step on a single batch of 32 MNIST samples",
+      "Explain how Keras models on the PyTorch backend expose the torch.nn.Module API",
+      "Describe the three facts of PyTorch autograd: one-time graph, backward() populating .grad, and gradient accumulation requiring zero_grad()"
+    ],
+    "prerequisites": [
+      "The pseudocode train_step and the TF setup objects (p.240)",
+      "GradientTape from chapter 3 (p.96)",
+      "PyTorch autograd and Module from chapter 3 (pp.101–105)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page starts with the **TensorFlow training step**, whose setup (model, `loss_fn`, `optimizer`) was on p.240. The function opens a `tf.GradientTape()` as `tape`. Inside the scope it runs the forward pass with `training=True` and computes the loss. Outside the scope it calls `tape.gradient(loss, model.trainable_weights)` and hands the gradients to `optimizer.apply(gradients, model.trainable_weights)`. It returns the loss. Apart from the `with` block, it is the pseudocode from p.240 line for line, with the imaginary `get_gradients_of()` replaced by `tape.gradient`.\n\nThe authors run it once on a single batch: `batch_size = 32`, then the first 32 `train_images` and `train_labels`, then `loss = train_step(inputs, targets)`. \"Easy enough!\"\n\nNext comes the **PyTorch training step function**. On the PyTorch backend, every Keras layer and model *inherits from* `torch.nn.Module` and exposes the native `Module` API. So the model, its trainable weights and the loss tensor are all \"aware of each other\". They interact through three methods: `loss.backward()`, `weight.value.grad` and `model.zero_grad()`.\n\nThe authors repeat chapter 3's mental model in three bullets:\n\n- Each forward pass builds a **one-time computation graph** of what was just computed.\n- Calling `.backward()` on a scalar node (such as the loss) runs the graph backward and fills a `tensor.grad` attribute on every tensor involved that has `requires_grad=True`. That includes the trainable parameters.\n- To clear `.grad`, set `tensor.grad = None`. More conveniently, call `model.zero_grad()`, which reaches every variable the model tracks. This is **critical**, because `backward()` is **additive**: if you skip it, gradients pile up across steps and \"training won't proceed.\"\n\nThe PyTorch code that chains these steps is on p.242.",
+  "paragraphs": [
+    {
+      "ref": "p241_e04",
+      "excerpt": "Let’s run it for a single step:",
+      "what_it_says": "This introduces a one-batch test of the TensorFlow train_step: the first 32 training images and labels go in and the loss comes back.",
+      "what_it_means": "One call does one gradient update. A full loop (built later in the section) would call it repeatedly over all batches and epochs. Running a single step is a quick way to check that the shapes and APIs fit together. The next line, \"Easy enough! Let's do PyTorch next.\", moves on to the PyTorch section.",
+      "why_it_matters": "It shows that a training step is an ordinary Python function: no `compile()` or `fit()` is needed to train.",
+      "connections": ["p.240: the model, loss_fn and optimizer used here were created on the previous page"]
+    },
+    {
+      "ref": "p241_e08",
+      "excerpt": "When you use the PyTorch backend, all of your Keras layers and models",
+      "what_it_says": "On the PyTorch backend, Keras layers and models inherit from `torch.nn.Module`. So the model, its trainable weights and the loss tensor interact through `loss.backward()`, `weight.value.grad` and `model.zero_grad()`.",
+      "what_it_means": "Keras 3 is not hiding PyTorch here: a Keras model *is* a PyTorch module. Keras variables wrap a `torch.nn.Parameter`, reached through `.value`, so the PyTorch gradient is `weight.value.grad`. Calling the model records the computation in PyTorch's autograd graph like any other module.",
+      "why_it_matters": "This is why PyTorch gradient retrieval looks so different from TensorFlow's. There is no tape object. The gradients appear as side effects on the parameters themselves.",
+      "technical_idea": "The `.value` step matters: a `keras.Variable` is not itself a torch tensor, so `weight.grad` would not work. You need `weight.value.grad`.",
+      "terminology": [
+        {"term": "torch.nn.Module", "meaning": "PyTorch's base class for layers and models. It holds parameters and implements forward()."},
+        {"term": "weight.value.grad", "meaning": "The PyTorch gradient tensor stored on the torch parameter underlying a Keras variable."}
+      ],
+      "connections": ["p.103: torch.nn.Module introduced in chapter 3", "p.251: the same three methods used in a custom Model.train_step() on PyTorch"]
+    },
+    {
+      "ref": "p241_e09",
+      "excerpt": "As a reminder from chapter 3, the mental model you’ve got",
+      "what_it_says": "This introduces the three-bullet mental model of PyTorch autograd from chapter 3.",
+      "what_it_means": "The authors present PyTorch's implicit gradient flow as something to keep in mind as a model, in the spirit of their chapter 3 advice (p.105) to treat backward–step–zero_grad as a \"magic incantation\".",
+      "why_it_matters": "Most PyTorch training bugs come from getting one of these three facts wrong.",
+      "connections": ["p.105: the 'spooky action at a distance' remark and the warning that forgetting zero_grad() is a common bug"]
+    },
+    {
+      "ref": "p241_e10",
+      "excerpt": "With each forward pass, PyTorch builds up a one-time computation graph",
+      "what_it_says": "Each forward pass builds a fresh, single-use computation graph that records what was just computed.",
+      "what_it_means": "PyTorch uses *define-by-run* autodiff: the graph is not declared ahead of time. It is created while operations run, and by default it is freed after `backward()`. The next forward pass builds a new one.",
+      "why_it_matters": "This is why control flow such as Python `if` statements and loops works naturally in PyTorch models: the graph follows whatever actually ran.",
+      "technical_idea": "Beyond the book: calling `backward()` a second time on the same graph raises an error unless `retain_graph=True` is passed, because the graph's buffers have been freed.",
+      "terminology": [
+        {"term": "computation graph", "meaning": "A record of the operations and intermediate tensors connecting inputs and parameters to an output."}
+      ],
+      "connections": ["p.101: computing gradients with .backward() in chapter 3"]
+    },
+    {
+      "ref": "p241_e11",
+      "excerpt": "Calling .backward() on any given scalar node of this graph (like your",
+      "what_it_says": "`.backward()` on a scalar node runs the graph backward from that node and fills `tensor.grad` on every involved tensor with `requires_grad=True`, including the trainable parameters, with the gradient of that node with respect to the tensor.",
+      "what_it_means": "For a scalar loss $L$, after `L.backward()` each parameter $w$ holds $\\partial L/\\partial w$ in `w.grad`. The node has to be scalar because PyTorch's default `backward()` assumes an upstream gradient of 1. For a non-scalar output you would have to pass one explicitly.",
+      "why_it_matters": "This is PyTorch's version of `get_gradients_of()`. Gradients are written onto the parameters rather than returned to you.",
+      "terminology": [
+        {"term": "requires_grad", "meaning": "A tensor flag telling autograd to track operations on it and compute its gradient."},
+        {"term": "tensor.grad", "meaning": "Attribute where backward() stores (accumulates) the gradient."}
+      ],
+      "connections": ["p.101: listing 3.26, where square(3.0).backward() gives grad 6"]
+    },
+    {
+      "ref": "p241_e12",
+      "excerpt": "To clear the contents of that tensor.grad attribute, you should call",
+      "what_it_says": "Clear gradients with `tensor.grad = None`, or with `model.zero_grad()` for all model variables at once. This is critical because `backward()` is additive: without clearing, gradients accumulate and training won't proceed.",
+      "what_it_means": "PyTorch *adds* new gradients to whatever is already in `.grad`. After $k$ steps without clearing, `.grad` holds the sum of $k$ gradients, each taken at a different point in weight space. That is not the current gradient, so the updates become wrong and grow larger.",
+      "why_it_matters": "Forgetting `zero_grad()` does not raise an error; training just quietly misbehaves. The book calls this a major and common bug (p.105).",
+      "technical_idea": "Beyond the book: accumulation is a deliberate feature. It is how *gradient accumulation* simulates a large batch by summing gradients over several small batches before one optimizer step.",
+      "terminology": [
+        {"term": "zero_grad()", "meaning": "Module method that resets .grad on all tracked parameters (in recent PyTorch it sets them to None)."}
+      ],
+      "connections": ["p.103: chapter 3 resets W.grad and b.grad by setting them to None", "p.105: model.zero_grad() as the module-level equivalent"]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "gradient_tape",
+      "name": "GradientTape",
+      "definition": "TensorFlow's context manager that records operations so gradients can be computed afterwards.",
+      "intuition": "Press record, run the forward pass and loss, stop recording, then ask the tape for derivatives.",
+      "technical": "`with tf.GradientTape() as tape:` wraps the forward pass and loss; `tape.gradient(loss, model.trainable_weights)` returns a list of gradients in the same order as the weights.",
+      "significance": "Turns the p.240 pseudocode into runnable TensorFlow.",
+      "example": "The train_step on this page.",
+      "misconception": "The gradient call does not need to be inside the `with` block; only the computations to differentiate do.",
+      "related": ["autodiff", "train_step"],
+      "source": "book"
+    },
+    {
+      "id": "train_step",
+      "name": "Training step function",
+      "definition": "A function that runs one gradient update on one batch and returns the loss.",
+      "intuition": "One iteration of the loop that fit() runs.",
+      "technical": "In TF: tape → forward → loss → tape.gradient → optimizer.apply → return loss.",
+      "significance": "Called here once on a batch of 32. Later it is wrapped in a loop and in fit().",
+      "example": "`loss = train_step(train_images[:32], train_labels[:32])`.",
+      "misconception": "One call is one update on one batch, not an epoch.",
+      "related": ["gradient_tape", "optimizer"],
+      "source": "book"
+    },
+    {
+      "id": "pytorch_autograd",
+      "name": "PyTorch autograd (define-by-run)",
+      "definition": "PyTorch's autodiff: a one-time graph is built during each forward pass, and backward() fills .grad on tensors that require gradients.",
+      "intuition": "Gradients appear on the parameters themselves as a side effect, rather than being returned by a function.",
+      "technical": "`loss.backward()` → `w.grad` holds $\\partial L/\\partial w$. Gradients accumulate across calls until cleared.",
+      "significance": "Explains why the PyTorch train_step needs `zero_grad()` and reads `weight.value.grad`.",
+      "example": "On p.101, `torch.square(x)` at x=3 followed by backward() gives `x.grad == 6`.",
+      "misconception": "backward() does not overwrite .grad; it adds to it.",
+      "related": ["autodiff", "backpropagation", "gradient_accumulation"],
+      "source": "book"
+    },
+    {
+      "id": "gradient_accumulation",
+      "name": "Gradient accumulation (additivity of backward)",
+      "definition": "Successive backward() calls sum their gradients into .grad.",
+      "intuition": "Like a running total that keeps growing until you clear it.",
+      "technical": "After two backward passes without clearing, .grad = g1 + g2. The book stresses calling model.zero_grad() at every step.",
+      "significance": "Forgetting to clear gives wrong updates and training that doesn't proceed (book). Beyond the book: used on purpose, it lets you simulate large batches.",
+      "example": "If each step's true gradient is 0.2, without clearing .grad reads 0.2, 0.4, 0.6, ...",
+      "misconception": "Deliberate accumulation is a legitimate technique; leaving gradients uncleared by accident is a bug.",
+      "related": ["pytorch_autograd"],
+      "source": "book"
+    },
+    {
+      "id": "keras_on_torch_module",
+      "name": "Keras models as torch.nn.Module",
+      "definition": "On the PyTorch backend, Keras layers and models inherit from torch.nn.Module and expose its API.",
+      "intuition": "The Keras model is a native PyTorch object as well as a Keras one.",
+      "technical": "Methods such as `zero_grad()` come from Module. Keras variables wrap torch parameters, reached through `.value`.",
+      "significance": "Lets you mix Keras models into PyTorch code and use PyTorch autograd directly.",
+      "example": "`model.zero_grad()` called on a Keras model.",
+      "misconception": "This is not a conversion step; the inheritance is automatic once the backend is torch.",
+      "related": ["keras_model", "pytorch_autograd"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Gradient accumulation when .grad is not cleared",
+      "latex": "w.\\mathrm{grad}^{(k)} = \\sum_{t=1}^{k} \\frac{\\partial L_t}{\\partial w}\\Big|_{w = w_t}",
+      "source_text": "calls to backward() are additive: if you don’t clear the gradients at each step, the gradient values will accumulate",
+      "variables": [
+        {"symbol": "w", "meaning": "a trainable parameter"},
+        {"symbol": "L_t", "meaning": "the loss on batch t"},
+        {"symbol": "w_t", "meaning": "the value of w at step t"},
+        {"symbol": "k", "meaning": "number of backward() calls since the last clear"}
+      ],
+      "operations": "Each backward() adds the current batch gradient to the stored .grad.",
+      "purpose": "Shows why the update becomes wrong if zero_grad() is forgotten. The book states this in words; the formula is ours.",
+      "interpretation": "With clearing, k=1 and .grad is the current gradient. Without it, the optimizer steps along a sum of stale gradients.",
+      "intuition": "The step size effectively grows with every iteration and points in an outdated direction.",
+      "numerical_example": "Three steps with gradients 0.2, 0.18, 0.15 and no clearing: .grad = 0.2, then 0.38, then 0.53. With SGD (η = 0.1) the third update is 0.053 instead of 0.015.",
+      "source": "ai_explanation",
+      "book_ref": "p.241"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "TensorFlow train_step",
+      "original_code": "def train_step(inputs, targets):\n    with tf.GradientTape() as tape:\n        predictions = model(inputs, training=True)\n        loss = loss_fn(targets, predictions)\n    gradients = tape.gradient(loss, model.trainable_weights)\n    optimizer.apply(gradients, model.trainable_weights)\n    return loss",
+      "language": "python",
+      "what_it_does": "Runs one supervised gradient update on one batch with the TensorFlow backend and returns the batch loss.",
+      "line_explanations": [
+        {"lines": "2", "explanation": "Opens a GradientTape (book callout). Everything computed inside the block is recorded."},
+        {"lines": "3-4", "explanation": "Runs the forward pass in training mode and computes the loss, both inside the tape so the path from weights to loss is recorded."},
+        {"lines": "5", "explanation": "Retrieves the gradients from the tape (book callout), only for trainable weights."},
+        {"lines": "6", "explanation": "Updates the model's trainable weights based on the gradients (book callout)."},
+        {"lines": "7", "explanation": "Returns the loss tensor so the caller can log it."}
+      ],
+      "inputs_outputs": "Inputs: a batch of MNIST images and integer labels. Output: a scalar loss tensor. Side effect: weights updated.",
+      "algorithm": "Reverse-mode autodiff with a tape, followed by an Adam update.",
+      "theory_link": "A direct concrete version of the p.240 pseudocode.",
+      "parameters": [
+        {"name": "model.trainable_weights", "role": "Variables to differentiate and update"},
+        {"name": "training=True", "role": "Training-mode behavior for Dropout and BatchNorm"}
+      ],
+      "pitfalls": [
+        "Computing the loss outside the `with` block makes `tape.gradient` return None.",
+        "Beyond the book: this function runs eagerly. Wrapping it in `tf.function` would compile it for speed (the book handles compilation later in the section)."
+      ]
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Running one training step on a batch of 32",
+      "original_code": "batch_size = 32\ninputs = train_images[:batch_size]\ntargets = train_labels[:batch_size]\nloss = train_step(inputs, targets)",
+      "language": "python",
+      "what_it_does": "Takes the first 32 MNIST training samples and runs one update with train_step.",
+      "line_explanations": [
+        {"lines": "1-3", "explanation": "Slices the first 32 images and labels. `train_images` and `train_labels` come from the MNIST loading code earlier in the chapter."},
+        {"lines": "4", "explanation": "One gradient step; the batch loss is stored in `loss`."}
+      ],
+      "inputs_outputs": "Input: 32 images and labels. Output: the scalar loss.",
+      "algorithm": "A single mini-batch update.",
+      "theory_link": "One iteration of the loop that fit() would run over all batches.",
+      "parameters": [
+        {"name": "batch_size", "role": "Number of samples in the batch (32)"}
+      ],
+      "pitfalls": [
+        "Calling this repeatedly on the same 32 samples would overfit those samples. A real loop iterates over shuffled batches."
+      ]
+    }
+  ],
+  "deeper": [
+    {
+      "title": "TF versus PyTorch: where do the gradients live?",
+      "kind": "alternative",
+      "body": "- **TensorFlow**: gradients are *returned* by `tape.gradient(...)` as a list. No state is left behind; each step uses a new tape.\n- **PyTorch**: gradients are *stored* on the parameters (`weight.value.grad`) by `loss.backward()`, and they stay there until you clear them.\n\nThat is why only PyTorch needs a `zero_grad()` step. A TensorFlow tape is discarded after use, so there is nothing to accumulate.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Analogy: the scratchpad that never erases itself",
+      "kind": "analogy",
+      "body": "PyTorch's `.grad` is like a whiteboard where every new calculation is added to whatever is already written. `zero_grad()` is wiping the board before the next calculation. If you forget, your next answer is the sum of all your previous ones.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "TensorFlow vs PyTorch gradient flow in a training step",
+      "why": "Contrasts the TF train_step on this page with the PyTorch mental model described in its three bullets.",
+      "mermaid": "flowchart TB\n  subgraph TF[TensorFlow]\n    T1[\"with GradientTape() as tape\"] --> T2[\"forward + loss (recorded)\"]\n    T2 --> T3[\"tape.gradient(loss, trainable_weights)\"]\n    T3 --> T4[\"optimizer.apply\"]\n  end\n  subgraph PT[PyTorch]\n    P1[\"forward pass builds one-time graph\"] --> P2[\"loss.backward()\"]\n    P2 --> P3[\"weight.value.grad populated (additive)\"]\n    P3 --> P4[\"optimizer.apply\"]\n    P4 --> P5[\"model.zero_grad()\"]\n    P5 -.next step.-> P1\n  end"
+    }
+  ],
+  "misconceptions": [
+    {"claim": "In PyTorch, calling backward() replaces the previous gradient.", "correction": "backward() is additive. Without zero_grad(), gradients accumulate and, as the book says, training won't proceed."},
+    {"claim": "tape.gradient must be called inside the GradientTape block.", "correction": "In the book's code it is called after the block. Only the forward pass and loss need to be recorded inside."},
+    {"claim": "With the PyTorch backend you must convert your Keras model to a PyTorch module.", "correction": "Keras layers and models already inherit from torch.nn.Module on that backend."}
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 240, "note": "Pseudocode train_step and TF setup (model, loss_fn, optimizer)"},
+      {"page": 101, "note": "Computing gradients with .backward() and gradient accumulation in chapter 3"},
+      {"page": 103, "note": "Resetting .grad to None and the torch.nn.Module class"},
+      {"page": 105, "note": "model.zero_grad() and the backward–step–zero_grad 'incantation'"}
+    ],
+    "later": [
+      {"page": 242, "note": "The PyTorch train_step code and the start of the JAX version"},
+      {"page": 251, "note": "train_step() metrics handling with PyTorch, inside a Model subclass"}
+    ],
+    "prerequisites": [
+      {"page": 240, "note": "The pseudocode this page implements"},
+      {"page": 96, "note": "GradientTape usage in chapter 3"}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 96, "note": "Chapter 3's TF training-step function (listing 3.20)"},
+      {"page": 101, "note": "Listing 3.26, computing a gradient with .backward()"}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "The TF train_step is the pseudocode with the forward pass and loss inside a GradientTape and tape.gradient in place of get_gradients_of().",
+    "A training step is an ordinary function. Calling it once on 32 samples does one update.",
+    "On the PyTorch backend, Keras models are torch.nn.Module instances that use loss.backward(), weight.value.grad and model.zero_grad().",
+    "PyTorch builds a one-time graph per forward pass; backward() populates .grad on tensors with requires_grad=True.",
+    "backward() is additive, so clear gradients every step or training won't proceed."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "In the TensorFlow train_step, which lines must be inside the GradientTape scope?",
+      "options": [
+        "Only optimizer.apply",
+        "The forward pass and the loss computation",
+        "tape.gradient and optimizer.apply",
+        "All five lines including return loss"
+      ],
+      "answer": "The forward pass and the loss computation",
+      "explanation": "The tape must record the computation from weights to loss. In the book's code tape.gradient and optimizer.apply come after the block. The other options put the gradient call or update inside, or leave the computation outside, so they do not match the code.",
+      "page_refs": [241]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "Name the three methods through which a Keras model, its weights and the loss interact on the PyTorch backend.",
+      "options": [],
+      "answer": "loss.backward(), weight.value.grad, and model.zero_grad().",
+      "explanation": "Stated directly in the PyTorch subsection.",
+      "page_refs": [241]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "Why does PyTorch need model.zero_grad() at each step while the TensorFlow version has no equivalent?",
+      "options": [],
+      "answer": "PyTorch stores gradients on the tensors and backward() adds to them, so old gradients have to be cleared. TensorFlow's tape.gradient returns new gradients from a fresh tape each step, so there is nothing to clear.",
+      "explanation": "The additivity is from the book; the contrast with TF is our explanation based on how the two APIs work.",
+      "page_refs": [241]
+    },
+    {
+      "id": "q4",
+      "type": "math",
+      "question": "A parameter receives gradients 0.5, 0.4 and 0.3 on three consecutive steps and zero_grad() is never called. What does .grad hold after the third backward()? What should it hold?",
+      "options": [],
+      "answer": "It holds 0.5 + 0.4 + 0.3 = 1.2. It should hold 0.3, the current step's gradient.",
+      "explanation": "backward() is additive (book), so the values sum.",
+      "page_refs": [241]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "Which tensors get their .grad populated when you call loss.backward()?",
+      "options": [
+        "Only the loss tensor",
+        "All tensors involved in computing the loss that have requires_grad=True",
+        "All tensors in memory",
+        "Only tensors created inside torch.no_grad()"
+      ],
+      "answer": "All tensors involved in computing the loss that have requires_grad=True",
+      "explanation": "That is the book's statement. The loss itself is the starting node; unrelated tensors are untouched; no_grad blocks disable tracking.",
+      "page_refs": [241]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "What does the single-step demo pass to train_step, and what does it get back?",
+      "options": [],
+      "answer": "The first 32 training images and labels (batch_size = 32). It gets back the loss for that batch.",
+      "explanation": "See the second code block and the `return loss` line.",
+      "page_refs": [241]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Could you rewrite the TF train_step from memory and explain why only trainable_weights appear in it?",
+      "options": [],
+      "answer": "Yes if you can reproduce the seven lines and explain that non-trainable weights (such as BatchNorm statistics) are not updated by gradients.",
+      "explanation": "Compare with the code at the top of the page and with p.240.",
+      "page_refs": [240, 241]
+    }
+  ]
+}

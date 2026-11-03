@@ -1,0 +1,186 @@
+{
+ "page_id": "page_119", "pdf_page": 119, "printed_page": "95", "book_id": "dlwp3",
+ "generation": {"status": "complete", "model": "claude-opus-5-5", "generated_at": "2026-11-03T07:57:20Z",
+  "confidence": "high",
+  "review_flags": [
+   "The final snippet passes activation=\"relu\" (a string) to SimpleDense. Listing 3.33's SimpleDense calls self.activation(y) directly, so a string would raise TypeError ('str' object is not callable) unless the layer resolved names, e.g. with keras.activations.get. Reproduced verbatim; flagged as a pitfall marked 'beyond the book'.",
+   "The last code block continues onto p.120 (closing layers and brackets). Only this page's lines are reproduced."
+  ],
+  "extraction_quality": "Good. The code snippets match the image. Element p119_e07 merges two printed paragraphs ('If we were to reimplement…' and 'In the Keras SimpleDense…'), which get separate notes."},
+ "overview": {
+  "title": "Why build(): automatic shape inference vs NaiveDense",
+  "chapter": "3 Introduction to TensorFlow, PyTorch, JAX, and Keras",
+  "section": "3.6 Introduction to Keras",
+  "subsection": "3.6.2 Layers: The building blocks of deep learning",
+  "main_topic": "How Keras layers infer input shapes, the burden of explicit input sizes in chapter 2's NaiveDense, and the base Layer.__call__() that builds on first call",
+  "central_idea": "Keras layers infer their input shape from the first inputs they see. Chapter 2's NaiveDense needed input_size in its constructor, which forces every layer to know the previous layer's output size. Keras moves weight creation into build(input_shape), which the base __call__ runs automatically once before delegating to call(). The four-layer model then needs only output sizes.",
+  "importance": "This page gives the actual reason for the build()/call() split in Listing 3.33. It is a core design idea of Keras and is needed for writing custom layers correctly.",
+  "learning_objectives": [
+   "Explain why passing input sizes explicitly to constructors is fragile",
+   "Read the schematic Layer.__call__() and trace when build() and call() run",
+   "Rewrite a NaiveSequential model as a Keras Sequential that uses shape inference",
+   "Compute weight shapes in a stack of dense layers from output sizes alone"
+  ],
+  "prerequisites": [
+   "SimpleDense, Listing 3.33 (p.117)",
+   "Calling layers and the Sequential example (p.118)",
+   "NaiveDense and NaiveSequential from chapter 2"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "Following the Sequential example on p.118, the page notes that **the layers received no information about their input shapes**. They **inferred their input shape as the shape of the first inputs they see**.\n\n**The alternative is worse.** Chapter 2's toy `NaiveDense` needed the input size passed to its constructor so it could create its weights. A model then looks like\n\n`NaiveSequential([NaiveDense(input_size=784, output_size=32, \"relu\"), NaiveDense(32→64, \"relu\"), NaiveDense(64→32, \"relu\"), NaiveDense(32→10, \"softmax\")])`,\n\nwhere every layer must be told the previous layer's output size. It gets worse when a layer's output shape follows a complex rule, such as `(batch, input_size * 2 if input_size % 2 == 0 else input_size * 3)`. Then you would have to work that rule out by hand for the next layer.\n\n**The Keras solution.** Reimplementing NaiveDense with automatic shape inference gives exactly `SimpleDense` with its `build()` and `call()` methods. Weights are no longer created in the constructor but in a dedicated state-creation method, `build()`, which receives **the first input shape seen by the layer**. `build()` runs automatically the first time the layer is called through `__call__()`. That is why the computation lives in a separate `call()` instead of in `__call__()` directly. Schematically, the base layer's `__call__` is:\n\n```\nif not self.built:\n    self.build(inputs.shape)\n    self.built = True\nreturn self.call(inputs)\n```\n\nWith automatic shape inference, the earlier model becomes `keras.Sequential([SimpleDense(32, activation=\"relu\"), SimpleDense(64, activation=\"relu\"), SimpleDense(32, activation=\"relu\"), …])`, giving only output sizes. The listing continues on p.120.",
+ "paragraphs": [
+  {"ref": "p119_e03", "excerpt": "The layers didn’t receive any information about the shape of their inputs.",
+   "what_it_says": "In the p.118 Sequential model, the layers got no input-shape information. They inferred it as the shape of the first inputs they see.",
+   "what_it_means": "The shape is fixed on first contact with data. After that, the layer's weights have definite shapes.",
+   "why_it_matters": "It states the principle of automatic shape inference.",
+   "terminology": [{"term": "automatic shape inference", "meaning": "Determining a layer's input shape (and thus its weight shapes) from the first input it processes."}],
+   "connections": ["p.118: the Sequential model of Dense(32, relu) and Dense(32)."]},
+  {"ref": "p119_e04", "excerpt": "In the toy version of a Dense layer that we’ve implemented in",
+   "what_it_says": "Chapter 2's NaiveDense required its input size in the constructor to create weights. That is not ideal: every layer must be made aware of the previous layer's shape, as in the NaiveSequential model shown.",
+   "what_it_means": "Each `input_size` duplicates information already given as the previous layer's `output_size` (32, 64, 32). Change one layer's width and you must also edit the next layer.",
+   "why_it_matters": "This duplication is the problem build() solves.",
+   "terminology": [{"term": "NaiveSequential / NaiveDense", "meaning": "Chapter 2's from-scratch model and dense-layer classes."}],
+   "connections": ["Chapter 2: NaiveDense and NaiveSequential (from-scratch implementations)."]},
+  {"ref": "p119_e06", "excerpt": "It would be even worse when the rules used by a layer",
+   "what_it_says": "It gets worse when a layer's output-shape rule is complex, e.g. outputs of shape (batch, input_size * 2 if input_size % 2 == 0 else input_size * 3).",
+   "what_it_means": "With explicit sizes, you would have to evaluate that rule yourself to set the next layer's input_size. With inference, the next layer just looks at the tensor it receives.",
+   "why_it_matters": "Real layers such as convolutions with strides and padding, or reshapes, have nontrivial shape rules, so inference matters a lot in practice. (The examples are beyond the book.)",
+   "terminology": [],
+   "connections": []},
+  {"ref": "p119_e07", "excerpt": "If we were to reimplement our NaiveDense layer as a Keras layer",
+   "what_it_says": "Reimplementing NaiveDense as a Keras layer with automatic shape inference would give exactly SimpleDense, with its build() and call() methods.",
+   "what_it_means": "Listing 3.33 is the shape-inferring version of NaiveDense.",
+   "why_it_matters": "It connects chapter 2 to the Keras design.",
+   "terminology": [],
+   "connections": ["p.117: Listing 3.33."]},
+  {"ref": "p119_e07", "excerpt": "In the Keras SimpleDense, we no longer create weights in the constructor",
+   "what_it_says": "SimpleDense creates its weights not in the constructor but in build(), which receives the first input shape seen. build() runs automatically on the layer's first call via __call__(), which is why the computation goes in a separate call() method. A schematic __call__ follows.",
+   "what_it_means": "__call__ is the base class's fixed entry point, and build and call are the hooks a subclass fills in. If you put your computation in __call__ yourself, you would override the build step and lose shape inference.",
+   "why_it_matters": "It gives the practical rule restated on p.120: when implementing layers, put the forward pass in call().",
+   "technical_idea": "This is lazy initialization guarded by a `built` flag, so build runs exactly once.",
+   "terminology": [{"term": "self.built", "meaning": "Boolean flag recording whether the layer's weights have been created."}, {"term": "state-creation method", "meaning": "build(), the method responsible for creating the layer's weights."}],
+   "connections": ["p.120: __call__ also handles eager vs graph routing and masking; put the forward pass in call()."]},
+  {"ref": "p119_e09", "excerpt": "With automatic shape inference, our previous example becomes simple and neat:",
+   "what_it_says": "With shape inference, the NaiveSequential example becomes a keras.Sequential of SimpleDense layers given only output sizes.",
+   "what_it_means": "The widths 32, 64, 32 (and the final layer on p.120) are all that's needed. Input sizes are discovered at the first call.",
+   "why_it_matters": "It shows directly how much the design simplifies model code.",
+   "terminology": [],
+   "connections": ["p.120: the rest of the snippet."]}
+ ],
+ "concepts": [
+  {"id": "automatic_shape_inference", "name": "Automatic shape inference", "definition": "Layers infer their input shape as the shape of the first inputs they see, and create weights accordingly.", "intuition": "Each brick measures the brick below it when they are first snapped together.", "technical": "Implemented by Layer.__call__: if not built, build(inputs.shape) and set built = True; then return call(inputs).", "significance": "It removes duplicated size information and avoids hand-computing complex output shapes.", "example": "keras.Sequential([SimpleDense(32), SimpleDense(64), …]) needs no input sizes.", "misconception": "Shape inference doesn't let a built layer accept inputs of any size. After the first build, the non-batch input dimensions are fixed by the weights.", "related": ["keras_layer", "sequential_model"], "source": "book"},
+  {"id": "keras_layer", "name": "Layer.__call__ / build / call contract", "definition": "Calling a layer runs the base __call__, which builds the layer once from the input shape and then runs call().", "intuition": "__call__ is a receptionist that makes sure your room (weights) is ready before sending you to the meeting (computation).", "technical": "`def __call__(self, inputs): if not self.built: self.build(inputs.shape); self.built = True; return self.call(inputs)` (schematic, per the book).", "significance": "It explains where to put code in custom layers.", "example": "SimpleDense(32)(x) builds W from x.shape on the first call.", "misconception": "The real __call__ does more than this schematic: eager/graph routing and masking (p.120).", "related": ["automatic_shape_inference"], "source": "book"},
+  {"id": "sequential_model", "name": "Sequential model", "definition": "A Keras model that is a linear stack of layers mapping a single input to a single output.", "intuition": "It is a conveyor belt of layers.", "technical": "keras.Sequential([...layers]) applies the layers in order; each infers its input shape from its predecessor's output.", "significance": "It is the simplest way to build models in Keras.", "example": "keras.Sequential([SimpleDense(32, ...), SimpleDense(64, ...), SimpleDense(32, ...), ...]).", "misconception": "Sequential can't express branches or multiple inputs; those need the Functional API or subclassing (p.120).", "related": ["keras_model", "functional_api"], "source": "book"}
+ ],
+ "math": [
+  {"id": "m1", "title": "A complex output-shape rule (hypothetical layer)", "latex": "\\text{output shape} = \\left(\\text{batch},\\; \\begin{cases} 2\\,d_{in} & \\text{if } d_{in} \\bmod 2 = 0 \\\\ 3\\,d_{in} & \\text{otherwise} \\end{cases}\\right)", "source_text": "(batch, input_size * 2 if input_size % 2 == 0 else input_size * 3)",
+   "variables": [
+    {"symbol": "d_{in}", "meaning": "input_size, the layer's input feature dimension"},
+    {"symbol": "\\text{batch}", "meaning": "Batch dimension, passed through unchanged"}
+   ],
+   "operations": "A parity test on the input size, then multiplication by 2 or 3.",
+   "purpose": "A made-up example showing why hand-propagating sizes between layers becomes painful.",
+   "interpretation": "The next layer's input size depends on a computation over this layer's input size. With explicit constructors you would have to do that computation yourself.",
+   "intuition": "Shape bookkeeping grows with every nontrivial layer; inference automates it.",
+   "numerical_example": "$d_{in}=64$ (even) gives 128 outputs; $d_{in}=33$ (odd) gives 99 outputs. A following NaiveDense would need input_size=128 or 99 respectively.",
+   "source": "book", "book_ref": "p.119"}
+ ],
+ "code": [
+  {"id": "c1", "listing": null, "title": "NaiveSequential model with explicit input sizes (chapter 2 style)",
+   "original_code": "model = NaiveSequential(\n    [\n        NaiveDense(input_size=784, output_size=32, activation=\"relu\"),\n        NaiveDense(input_size=32, output_size=64, activation=\"relu\"),\n        NaiveDense(input_size=64, output_size=32, activation=\"relu\"),\n        NaiveDense(input_size=32, output_size=10, activation=\"softmax\"),\n    ]\n)",
+   "language": "python",
+   "what_it_does": "Defines a four-layer MLP, 784 → 32 → 64 → 32 → 10, where each layer must be given its input size explicitly.",
+   "line_explanations": [
+    {"lines": "3", "explanation": "First layer: 784 inputs (a flattened 28×28 image) to 32 units, ReLU."},
+    {"lines": "4", "explanation": "input_size=32 must repeat the previous output_size."},
+    {"lines": "5", "explanation": "input_size=64 repeats the previous output_size again."},
+    {"lines": "6", "explanation": "Output layer: 32 to 10 classes with softmax."}
+   ],
+   "inputs_outputs": "(batch, 784) → (batch, 10) class probabilities.",
+   "algorithm": "A stack of dense layers with eagerly created weights.",
+   "theory_link": "It illustrates the redundancy that automatic shape inference removes.",
+   "parameters": [{"name": "input_size", "role": "Must equal the previous layer's output_size; redundant information."}, {"name": "output_size", "role": "Layer width."}],
+   "pitfalls": ["Changing output_size=64 to 128 in line 4 without updating input_size in line 5 breaks the model with a shape mismatch.", "The page writes activations as strings; chapter 2's NaiveDense may have taken functions. This is illustrative code showing the shape problem."]},
+  {"id": "c2", "listing": null, "title": "Schematic Layer.__call__()",
+   "original_code": "def __call__(self, inputs):\n    if not self.built:\n        self.build(inputs.shape)\n        self.built = True\n    return self.call(inputs)",
+   "language": "python",
+   "what_it_does": "Shows how the base layer builds itself from the first input's shape exactly once and then delegates the forward pass to call().",
+   "line_explanations": [
+    {"lines": "2", "explanation": "Checks whether weights have been created yet."},
+    {"lines": "3", "explanation": "Calls build() with the shape of the first input seen."},
+    {"lines": "4", "explanation": "Marks the layer as built so later calls skip building."},
+    {"lines": "5", "explanation": "Runs the user-defined forward computation."}
+   ],
+   "inputs_outputs": "inputs tensor → output of call(inputs).",
+   "algorithm": "Lazy initialization guarded by a flag.",
+   "theory_link": "This is why the forward pass goes in call() rather than in __call__().",
+   "parameters": [{"name": "self.built", "role": "Flag that is False until build() has run."}],
+   "pitfalls": ["This is a simplification. The real __call__ also handles eager/graph routing and masking (p.120).", "Overriding __call__ in a subclass would bypass this logic."]},
+  {"id": "c3", "listing": null, "title": "The same model with SimpleDense and shape inference (continues on p.120)",
+   "original_code": "model = keras.Sequential(\n    [\n        SimpleDense(32, activation=\"relu\"),\n        SimpleDense(64, activation=\"relu\"),\n        SimpleDense(32, activation=\"relu\"),",
+   "language": "python",
+   "what_it_does": "Begins rewriting the NaiveSequential model with SimpleDense layers that specify only output sizes. The remaining line(s), presumably the 10-unit output layer, and the closing brackets are on p.120.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "A Keras Sequential model taking a list of layers."},
+    {"lines": "3-5", "explanation": "Widths 32, 64, 32; input sizes are inferred at the first call."}
+   ],
+   "inputs_outputs": "Once complete and called on (batch, 784): the weights are built as (784, 32), (32, 64), (64, 32), and so on.",
+   "algorithm": "Chained lazy builds.",
+   "theory_link": "Automatic shape inference in practice.",
+   "parameters": [{"name": "units (positional)", "role": "Output width of each SimpleDense."}],
+   "pitfalls": ["Beyond the book: Listing 3.33's SimpleDense calls self.activation(y) directly, so passing the string \"relu\" would fail with TypeError when called. Pass keras.ops.relu (as on p.118), or resolve names in __init__ with keras.activations.get(activation)."],
+   "illustrative_code": "# AI-written: a SimpleDense that accepts string activations\nclass SimpleDense(keras.Layer):\n    def __init__(self, units, activation=None):\n        super().__init__()\n        self.units = units\n        self.activation = keras.activations.get(activation)  # 'relu' -> function, None -> linear\n    # build() and call() as in Listing 3.33"}
+ ],
+ "deeper": [
+  {"title": "Weight shapes resolved by inference", "kind": "numerical", "body": "For the NaiveSequential widths, assuming the final 10-unit softmax layer appears on p.120 as in the naive version:\n\n| Layer | W | b | params |\n|---|---|---|---|\n| 784→32 | (784, 32) | (32,) | 25,120 |\n| 32→64 | (32, 64) | (64,) | 2,112 |\n| 64→32 | (64, 32) | (32,) | 2,080 |\n| 32→10 | (32, 10) | (10,) | 330 |\n\nThe total is **29,642**. In the Keras version, only the second column's *column* counts are written by you; the row counts come from inference. (Our computation.)", "source": "ai_explanation"},
+  {"title": "Explicit sizes vs inference", "kind": "alternative", "body": "Explicit sizes (NaiveDense) let you create weights immediately and inspect them before any data arrives. Inference (Keras) defers that until the first call. Beyond the book: Keras also lets you build early when you need to, e.g. by giving the model an `Input` shape or calling `model.build(input_shape)`, so you get the benefits of both.", "source": "ai_explanation"},
+  {"title": "Measuring analogy", "kind": "analogy", "body": "NaiveDense is like ordering curtains by typing in the window's width yourself, for every window, in order. SimpleDense is a curtain that measures the window when you first hang it.", "source": "analogy"}
+ ],
+ "visualizations": [
+  {"id": "v1", "type": "widget", "title": "The 784 → 32 → 64 → 32 → 10 model", "why": "The NaiveSequential snippet gives every input and output size. Click each layer to see the parameter counts that SimpleDense would infer automatically.", "widget": "nn_architecture", "params": {"layers": [{"name": "input", "type": "input", "shape": "(None, 784)"}, {"name": "Dense 32", "type": "dense", "units": 32, "activation": "relu"}, {"name": "Dense 64", "type": "dense", "units": 64, "activation": "relu"}, {"name": "Dense 32", "type": "dense", "units": 32, "activation": "relu"}, {"name": "Dense 10", "type": "output", "units": 10, "activation": "softmax"}]}},
+  {"id": "v2", "type": "mermaid", "title": "Schematic Layer.__call__()", "why": "Flowchart of the __call__ code on this page.", "mermaid": "flowchart TD\n  A[\"layer(inputs)\"] --> B{\"self.built?\"}\n  B -- no --> C[\"self.build(inputs.shape)\"]\n  C --> D[\"self.built = True\"]\n  D --> E[\"return self.call(inputs)\"]\n  B -- yes --> E"}
+ ],
+ "misconceptions": [
+  {"claim": "build() must be called manually before using a layer.", "correction": "The base __call__ calls it automatically the first time the layer is called."},
+  {"claim": "Putting the forward pass directly in __call__ is equivalent.", "correction": "It would bypass the automatic build step; that is why the book uses a separate call()."},
+  {"claim": "Shape inference means each Keras layer guesses its shape from its constructor arguments.", "correction": "It uses the shape of the first actual input it receives."},
+  {"claim": "The schematic __call__ is the full implementation.", "correction": "It's schematic. The real one also handles eager/graph routing and masking (p.120)."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 118, "note": "Calling SimpleDense; layer compatibility; the Dense(32) Sequential example."},
+   {"page": 117, "note": "Listing 3.33 with build() and call()."}
+  ],
+  "later": [
+   {"page": 120, "note": "End of the SimpleDense Sequential snippet; other duties of __call__; from layers to models."},
+   {"page": 127, "note": "Summary of the Layer class."}
+  ],
+  "prerequisites": [
+   {"page": 117, "note": "SimpleDense."},
+   {"page": 118, "note": "Using layers as functions."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 117, "note": "Listing 3.33."},
+   {"page": 120, "note": "Continuation of the Sequential snippet."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "Keras layers infer their input shape from the first input they see.",
+  "Explicit input sizes (NaiveDense) duplicate information and break when widths change or output-shape rules are complex.",
+  "build(input_shape) creates weights; the base __call__ runs it once, sets built = True, then calls call().",
+  "Put the forward pass in call(), not __call__().",
+  "With inference, models specify only output widths: Sequential([SimpleDense(32), SimpleDense(64), …])."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "In the schematic __call__, what happens on the second call to a layer?", "options": ["build() and call() both run again", "Only build() runs", "Only call() runs", "Neither runs; the cached output is returned"], "answer": "Only call() runs", "explanation": "After the first call self.built is True, so the build branch is skipped and call(inputs) runs. Weights are not rebuilt, and outputs are not cached.", "page_refs": [119]},
+  {"id": "q2", "type": "short", "question": "Why was NaiveDense's design (input_size in the constructor) not ideal?", "options": [], "answer": "Each layer must be told the previous layer's output shape, which duplicates information and is error-prone, especially when output-shape rules are complex.", "explanation": "From the NaiveSequential paragraph and the complex-rule example.", "page_refs": [119]},
+  {"id": "q3", "type": "math", "question": "A hypothetical layer outputs (batch, input_size * 2 if input_size % 2 == 0 else input_size * 3). If it receives input_size 64 and then feeds a NaiveDense, what input_size must that NaiveDense be given? And for input_size 33?", "options": [], "answer": "128 for input_size 64; 99 for input_size 33.", "explanation": "64 is even, so ×2; 33 is odd, so ×3. With shape inference you would not need to compute this.", "page_refs": [119]},
+  {"id": "q4", "type": "conceptual", "question": "Why does Keras define the computation in call() rather than directly in __call__()?", "options": [], "answer": "Because __call__ is the base class's entry point that first runs build() (once, with the input shape) and then delegates to call(). Overriding __call__ would skip automatic weight creation.", "explanation": "The page states this directly: 'that's why we defined the computation in a separate call() method rather than in the __call__() method directly!'", "page_refs": [119]},
+  {"id": "q5", "type": "mcq", "question": "What argument does build() receive?", "options": ["The number of units", "The first input shape seen by the layer", "The previous layer object", "The loss function"], "answer": "The first input shape seen by the layer", "explanation": "build() receives the first input shape (inputs.shape in __call__). Units come from the constructor, and neither the previous layer nor the loss is passed.", "page_refs": [119]},
+  {"id": "q6", "type": "math", "question": "For the NaiveSequential model, how many parameters does the 32 → 64 layer have?", "options": [], "answer": "32·64 + 64 = 2,112.", "explanation": "A dense layer has input_size × output_size weights plus output_size biases.", "page_refs": [119]},
+  {"id": "q7", "type": "self", "question": "Can you explain, without looking, the four lines of the schematic __call__ and what would go wrong if self.built = True were omitted?", "options": [], "answer": "Without the flag, build() would run on every call, recreating (re-initializing) the weights each time, so the layer could never keep learned values.", "explanation": "A self-check of the lazy-build mechanism.", "page_refs": [119]}
+ ]
+}

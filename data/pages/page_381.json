@@ -1,0 +1,337 @@
+{
+ "page_id": "page_381", "pdf_page": 381, "printed_page": "357", "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:05:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Minor naming inconsistency in the book: the sidebar says 'You can also pass a `target` array to timeseries_dataset_from_array()', but the argument (as used in the code below it and in the next sentence) is named `targets`."
+  ],
+  "extraction_quality": "Clean. The sidebar from p.380 continues at the top of this page; the extractor split one sentence across p381_e05 and p381_e06. The callouts were matched to code lines using the page image. The parameter list continues on p.382 (start_index/end_index bullets)."
+ },
+ "overview": {
+  "title": "How timeseries_dataset_from_array builds windows and targets",
+  "chapter": "13 Timeseries forecasting",
+  "section": "13.2 A temperature forecasting example",
+  "subsection": "13.2.1 Preparing the data",
+  "main_topic": "A toy example of keras.utils.timeseries_dataset_from_array with integers 0-9, how to align a targets array by offsetting it, and the parameter values for the Jena datasets: sampling_rate = 6, sequence_length = 120 and delay = sampling_rate * (sequence_length + 24 - 1).",
+  "central_idea": "The utility slides a window of sequence_length steps along data and pairs the window starting at data[N] with targets[N]. To forecast k steps after the start, pass targets as the same series shifted by k. For Jena, keeping one point per hour over 120 hours and shifting targets by 858 raw steps gives the temperature 24 hours after the window ends.",
+  "importance": "Off-by-one mistakes in aligning inputs and targets are the most common bug in forecasting code. This page defines exactly what every sample in chapter 13 contains.",
+  "learning_objectives": [
+   "List the sequences that sequence_length=3 produces from [0 1 2 3 4 5 6].",
+   "Explain how the first entry of targets aligns with the first sequence.",
+   "Trace the dummy example and its printed output, including batching by 2.",
+   "Interpret sampling_rate, sequence_length and delay for the Jena data.",
+   "Derive delay = 6 x (120 + 24 - 1) = 858 and check that it gives a target 24 hours after the last input step."
+  ],
+  "prerequisites": [
+   "p.380: the motivation for generating windows on the fly",
+   "NumPy slicing such as a[:-3] and a[3:]",
+   "Batches and tf.data-style iteration over (inputs, targets)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The sidebar on `timeseries_dataset_from_array()` (begun on p.380) gives a concrete example. With `data = [0 1 2 3 4 5 6]` and `sequence_length=3`, the generated samples are `[0 1 2]`, `[1 2 3]`, `[2 3 4]`, `[3 4 5]`, `[4 5 6]`: every window of three consecutive steps, sliding by one.\n\nYou can also pass a **targets** array. Its **first entry must be the desired target for the first sequence**. For forecasting, simply pass the same series as `data`, **offset** by some amount. To predict the next step after a 3-step window, use `targets = [3 4 5 6 ...]`.\n\nThe code builds `int_sequence = np.arange(10)` (sorted integers 0-9), then calls `keras.utils.timeseries_dataset_from_array` with `data=int_sequence[:-3]` (sequences are sampled from `[0 1 2 3 4 5 6]`), `targets=int_sequence[3:]` (the target for the sequence starting at `data[N]` is `data[N + 3]`), `sequence_length=3` and `batch_size=2`. Iterating over the batches and printing each row gives\n\n```\n[0, 1, 2] 3\n[1, 2, 3] 4\n[2, 3, 4] 5\n[3, 4, 5] 6\n[4, 5, 6] 7\n```\n\nThe book will use the utility to build three datasets (training, validation, test) with these parameters:\n\n- `sampling_rate = 6`: keep one data point out of six, i.e. one per hour.\n- `sequence_length = 120`: look back five days (120 hours).\n- `delay = sampling_rate * (sequence_length + 24 - 1)`: the target is the temperature 24 hours after the end of the sequence.\n\nNumerically, delay = 6 x 143 = 858 raw (10-minute) steps. A window starting at raw index $i$ ends at $i + 6 \\times 119 = i + 714$, and its target is at $i + 858$, exactly 144 steps (24 hours) later. The `start_index`/`end_index` settings that confine each dataset to its split follow on p.382.",
+ "paragraphs": [
+  {
+   "ref": "p381_e03",
+   "excerpt": "Let’s say you’re using data = [0 1 2 3 4 5 6] and sequence_length=3",
+   "what_it_says": "From data [0 1 2 3 4 5 6] with sequence_length=3, the function generates [0 1 2], [1 2 3], [2 3 4], [3 4 5], [4 5 6].",
+   "what_it_means": "The windows slide one step at a time (the default sequence_stride=1) and every full-length window is generated. A series of length n gives n - L + 1 windows of length L: here 7 - 3 + 1 = 5.",
+   "why_it_matters": "It shows the redundancy mentioned on p.380: consecutive windows share L - 1 elements. With the Jena data, each window shares 119 of its 120 hourly points with its neighbour (when the start moves by one hour).",
+   "technical_idea": "Number of windows = $n - (L-1)\\,r$ for sampling rate $r$ and stride 1 (here $r = 1$).",
+   "terminology": [
+    {"term": "sequence_length", "meaning": "Number of timesteps in each generated window."},
+    {"term": "sequence", "meaning": "One generated window (one input sample)."}
+   ],
+   "connections": [
+    "p.380: the sidebar introducing timeseries_dataset_from_array and the term 'sequences'.",
+    "p.380: sample N and N + 1 share most of their timesteps."
+   ]
+  },
+  {
+   "ref": "p381_e04",
+   "excerpt": "You can also pass a target array to timeseries_dataset_from_array(). The first entry",
+   "what_it_says": "A targets array can also be passed. Its first entry should be the target for the first generated sequence. For forecasting, use the same array as data, offset by some amount.",
+   "what_it_means": "Alignment is by index: sequence number N (which starts at data[N]) is paired with targets[N]. The function does not know anything about 'the future'. You encode the forecast horizon by shifting the targets array. Offsetting by k means the window starting at time N is paired with the value at time N + k.",
+   "why_it_matters": "This is how the 24-hour horizon is built into the Jena datasets: targets=temperature[delay:] with a matching data=raw_data[:-delay] (Listing 13.7, p.382).",
+   "technical_idea": "To predict the value right after a window of length L, the offset is L. To predict h steps after the end, it is L + h - 1. With subsampling rate r, both are multiplied by r, giving the delay formula below.",
+   "terminology": [
+    {"term": "targets", "meaning": "Array whose N-th entry is the label for the sequence starting at data[N]."},
+    {"term": "offset", "meaning": "The shift between the start of a window and its target index."}
+   ],
+   "connections": [
+    "p.382: Listing 13.7 passes targets=temperature[delay:].",
+    "p.380: the problem formulation (five days in, temperature 24 hours later)."
+   ]
+  },
+  {
+   "ref": "p381_e05",
+   "excerpt": "For instance, with data = [0 1 2 3 4 5 6 ...] and sequence_length=3, you could",
+   "what_it_says": "With data [0 1 2 3 4 5 6 ...] and sequence_length=3, passing targets = [3 4 5 6 ...] creates a dataset that predicts the next step in the series. The book then tries it in code. (The sentence is split across elements p381_e05 and p381_e06.)",
+   "what_it_means": "For the window [0 1 2] the next value is 3, which is targets[0]. For [1 2 3] it is 4, targets[1], and so on. The targets array is just data shifted by sequence_length = 3.",
+   "why_it_matters": "This is the simplest forecasting setup (one step ahead) and makes the general rule concrete before the multi-hour Jena case.",
+   "connections": [
+    "p.381: the code that follows implements exactly this with np.arange(10)."
+   ]
+  },
+  {
+   "ref": "p381_e10",
+   "excerpt": "We’ll use timeseries_dataset_from_array to instantiate three datasets: one for training",
+   "what_it_says": "The utility will be used to build three datasets (training, validation and test), with the parameter values listed next.",
+   "what_it_means": "All three datasets come from the same normalized raw_data and temperature arrays; they differ only in which index range they draw windows from (p.382).",
+   "why_it_matters": "Using one function with shared parameters guarantees that all splits have identical sample definitions, so validation and test scores are comparable to training.",
+   "connections": [
+    "p.379: the 50/25/25 chronological split.",
+    "p.382: Listing 13.7 instantiates the three datasets."
+   ]
+  },
+  {
+   "ref": "p381_e12",
+   "excerpt": "sampling_rate = 6 — Observations will be sampled at one data point per hour",
+   "what_it_says": "sampling_rate = 6 keeps one data point out of six, giving one observation per hour.",
+   "what_it_means": "Within a window, consecutive kept points are 6 raw rows (60 minutes) apart. This reduces the sequence to 120 steps for five days instead of 720, which is cheaper and less redundant. Consecutive 10-minute readings carry little extra information for a 24-hour forecast.",
+   "why_it_matters": "It fixes the input length the models see: 120 timesteps of 14 features.",
+   "terminology": [
+    {"term": "sampling_rate", "meaning": "Period, in rows, between successive timesteps inside a sequence."}
+   ],
+   "connections": [
+    "p.378: six records per hour (24 x 6 = 144 per day)."
+   ]
+  },
+  {
+   "ref": "p381_e13",
+   "excerpt": "sequence_length = 120 — Observations will go back five days (120 hours).",
+   "what_it_says": "sequence_length = 120 means each input covers the past five days, at one point per hour.",
+   "what_it_means": "In raw rows, a window starting at i covers indices i, i+6, ..., i+714, a span of 715 rows (just under five days, since there are 120 points with 119 gaps of one hour each).",
+   "why_it_matters": "Five days is long enough to include several daily cycles (p.379) and the recent weather trend.",
+   "connections": [
+    "p.380: 'given data covering the previous five days and sampled once per hour'."
+   ]
+  },
+  {
+   "ref": "p381_e14",
+   "excerpt": "delay = sampling_rate * (sequence_length + 24 - 1) — The target for a sequence",
+   "what_it_says": "delay = sampling_rate * (sequence_length + 24 - 1), so the target for a sequence is the temperature 24 hours after the end of the sequence.",
+   "what_it_means": "In hours, the target is at start + (120 - 1) + 24 = start + 143. In raw rows, that is multiplied by 6: 858. The '- 1' is there because the last input point is at offset sequence_length - 1, not sequence_length.",
+   "why_it_matters": "This single number is used to shift the arrays: data=raw_data[:-delay] and targets=temperature[delay:] (p.382). A wrong delay would silently change the forecasting horizon.",
+   "technical_idea": "Target index for the window starting at i: $i + r(L + h - 1)$ with $r=6$, $L=120$, $h=24$ hours.",
+   "terminology": [
+    {"term": "delay", "meaning": "Offset, in raw rows, between the start of a window and its target."}
+   ],
+   "connections": [
+    "p.382: delay is used in Listing 13.7.",
+    "p.383: the commonsense baseline compares the last input temperature with the target 24 hours later."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "timeseries_dataset_from_array",
+   "name": "keras.utils.timeseries_dataset_from_array",
+   "definition": "A Keras utility that returns a dataset of sliding windows (sequences) from an array, optionally paired with index-aligned targets.",
+   "intuition": "A window factory: give it a long series and window settings, get batches of windows.",
+   "technical": "Window N starts at data[N] (stride 1) and contains sequence_length points spaced sampling_rate rows apart; its target is targets[N]. Batches of batch_size; shuffle optional.",
+   "significance": "Builds every dataset in chapter 13 without materializing the overlapping windows.",
+   "example": "np.arange(10) with data=[:-3], targets=[3:], sequence_length=3 gives [0,1,2] paired with 3, and so on.",
+   "misconception": "The function computes future targets automatically. You must shift the targets array yourself.",
+   "related": ["sliding_window", "timeseries_forecasting"],
+   "source": "book"
+  },
+  {
+   "id": "sliding_window",
+   "name": "Sliding-window samples",
+   "definition": "Fixed-length windows extracted at successive offsets of a series.",
+   "intuition": "A frame sliding one step along a strip of numbers.",
+   "technical": "n - L + 1 windows from a length-n series with stride 1 and no subsampling.",
+   "significance": "Turns one long series into many training samples.",
+   "example": "[0 1 2], [1 2 3], ..., [4 5 6].",
+   "misconception": "Windows are independent. Consecutive windows share L - 1 elements.",
+   "related": ["timeseries_dataset_from_array"],
+   "source": "book"
+  },
+  {
+   "id": "forecast_horizon",
+   "name": "Forecast horizon and target offset",
+   "definition": "How far after the input window the target lies, implemented as an index offset between data and targets.",
+   "intuition": "Shift the answer sheet so each question lines up with the answer from the future.",
+   "technical": "offset = r(L + h - 1): r = sampling rate, L = sequence length, h = horizon in subsampled steps after the last input.",
+   "significance": "Determines what the model is actually predicting; errors here change the task silently.",
+   "example": "Jena: 6 x (120 + 24 - 1) = 858 rows, i.e. 24 hours after the last input hour.",
+   "misconception": "The offset is just L x r. That would predict the step right after the window (h = 1), not 24 hours ahead.",
+   "related": ["timeseries_dataset_from_array"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "The delay (target offset) for the Jena datasets",
+   "latex": "\\text{delay} = r\\,(L + 24 - 1) = 6 \\times (120 + 23) = 858",
+   "source_text": "delay = sampling_rate * (sequence_length + 24 - 1)",
+   "variables": [
+    {"symbol": "r", "meaning": "sampling_rate = 6 raw rows per kept point (one point per hour)"},
+    {"symbol": "L", "meaning": "sequence_length = 120 kept points (five days of hours)"},
+    {"symbol": "24", "meaning": "Forecast horizon in hours after the last input point"},
+    {"symbol": "\\text{delay}", "meaning": "Offset in raw 10-minute rows between a window's first row and its target row"}
+   ],
+   "operations": "Add the horizon to the index of the window's last point (L - 1), then convert hours to raw rows by multiplying by r.",
+   "purpose": "Used to shift data and targets so that targets[N] is the temperature 24 hours after the window starting at row N ends.",
+   "interpretation": "Window rows: i, i+6, ..., i+714. Target row: i+858 = (i+714) + 144, and 144 rows is 24 hours.",
+   "intuition": "Count to the last hour of the window (119 hours after the start), then add 24 hours: 143 hours, or 858 ten-minute rows.",
+   "numerical_example": "For the first training window ($i=0$): input rows 0, 6, ..., 714 (from Jan 1 to about Jan 5, 2009), target row 858, which is 858/144 = 5.96 days after the first row and exactly 1 day after row 714.",
+   "source": "book",
+   "book_ref": "p.381"
+  },
+  {
+   "id": "m2",
+   "title": "Window and target alignment",
+   "latex": "\\mathbf{x}^{(N)} = \\big(d_{N},\\, d_{N+r},\\, \\dots,\\, d_{N+(L-1)r}\\big), \\qquad y^{(N)} = \\text{targets}_{N}",
+   "source_text": "The target for the sequence that starts at data[N] will be data[N + 3].",
+   "variables": [
+    {"symbol": "d_t", "meaning": "Row t of the data array"},
+    {"symbol": "N", "meaning": "Start index of the window (the sample number, with stride 1)"},
+    {"symbol": "r", "meaning": "sampling_rate (1 in the toy example, 6 for Jena)"},
+    {"symbol": "L", "meaning": "sequence_length"}
+   ],
+   "operations": "Gather every r-th row, starting at N, L times; pick targets at the same index N.",
+   "purpose": "States exactly which values form each input and its label.",
+   "interpretation": "If targets = data shifted by k, then $y^{(N)} = d_{N+k}$. In the toy example k = 3 = L, so the target is the next value after the window.",
+   "intuition": "Inputs and targets are indexed by where the window starts.",
+   "numerical_example": "Toy example: N = 2 gives $\\mathbf{x} = (2, 3, 4)$ and $y = \\text{int\\_sequence}[3:][2] = 5$, matching the printed line `[2, 3, 4] 5`.",
+   "source": "book",
+   "book_ref": "p.381"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Toy example of timeseries_dataset_from_array with integers 0-9",
+   "original_code": "import numpy as np\nimport keras\nint_sequence = np.arange(10)\ndummy_dataset = keras.utils.timeseries_dataset_from_array(\n    data=int_sequence[:-3],\n    targets=int_sequence[3:],\n    sequence_length=3,\n    batch_size=2,\n)\nfor inputs, targets in dummy_dataset:\n    for i in range(inputs.shape[0]):\n        print([int(x) for x in inputs[i]], int(targets[i]))",
+   "language": "python",
+   "what_it_does": "Builds a dataset of 3-step windows over 0-6, each paired with the next integer, batched by 2, and prints every (window, target) pair.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Imports NumPy and Keras."},
+    {"lines": "3", "explanation": "Callout: 'Generate an array of sorted integers from 0 to 9.'"},
+    {"lines": "5", "explanation": "data=int_sequence[:-3] is [0 1 2 3 4 5 6]. Callout: 'The sequences we generate will be sampled from [0 1 2 3 4 5 6].'"},
+    {"lines": "6", "explanation": "targets=int_sequence[3:] is [3 4 5 6 7 8 9]. Callout: 'The target for the sequence that starts at data[N] will be data[N + 3].'"},
+    {"lines": "7", "explanation": "Callout: 'The sequences will be 3 steps long.'"},
+    {"lines": "8", "explanation": "Callout: 'The sequences will be batched in batches of size 2.' Five sequences give batches of 2, 2 and 1."},
+    {"lines": "10-12", "explanation": "Loops over batches, then over the rows of each batch, converting tensor elements to Python ints for printing."}
+   ],
+   "inputs_outputs": "Input: the integers 0-9. Output (printed): [0, 1, 2] 3 / [1, 2, 3] 4 / [2, 3, 4] 5 / [3, 4, 5] 6 / [4, 5, 6] 7. inputs batches have shape (2, 3) (the last one (1, 3)), and targets batches have shape (2,).",
+   "algorithm": "Sliding window with stride 1, index-aligned targets, batching.",
+   "theory_link": "Shows the general recipe: data and targets are the same series, with targets shifted by the forecast offset.",
+   "parameters": [
+    {"name": "data", "role": "Array the windows are drawn from."},
+    {"name": "targets", "role": "Index-aligned labels; targets[N] goes with the window starting at data[N]."},
+    {"name": "sequence_length", "role": "Window length (3)."},
+    {"name": "batch_size", "role": "Windows per batch (2)."}
+   ],
+   "pitfalls": [
+    "Targets 8 and 9 are never used: only 5 windows fit in data, so only targets[0..4] are paired.",
+    "Why data=int_sequence[:-3]? Without trimming, windows near the end would have no valid target. Trimming data and shifting targets by the same amount keeps them aligned.",
+    "The output is in order because shuffle defaults to False; with shuffle=True (as in Listing 13.7) the pairs come in random order but stay correctly matched."
+   ],
+   "illustrative_code": "# AI-written (not from the book): a plain-NumPy equivalent of the alignment\nimport numpy as np\nseq = np.arange(10)\nL, k = 3, 3\ndata, targets = seq[:-k], seq[k:]\nfor n in range(len(data) - L + 1):\n    print(list(data[n:n + L]), targets[n])"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Printed output of the toy example",
+   "original_code": "[0, 1, 2] 3\n[1, 2, 3] 4\n[2, 3, 4] 5\n[3, 4, 5] 6\n[4, 5, 6] 7",
+   "language": "text",
+   "what_it_does": "Shows the five generated (sequence, target) pairs: each window of three consecutive integers with the integer that follows it.",
+   "line_explanations": [
+    {"lines": "1-5", "explanation": "Window starting at N = 0..4, paired with N + 3."}
+   ],
+   "inputs_outputs": "Output of the loop above.",
+   "algorithm": "None.",
+   "theory_link": "Confirms the rule 'the target for the sequence that starts at data[N] will be data[N + 3]'.",
+   "parameters": [],
+   "pitfalls": [
+    "The output does not show batch boundaries: the first two lines come from batch 1, the next two from batch 2, and the last from a batch of size 1."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Deriving the delay formula step by step",
+   "kind": "step_by_step",
+   "body": "1. Work in hours first. A window has $L = 120$ hourly points at hours $0, 1, \\dots, 119$ after its start.\n2. The last input is at hour $L - 1 = 119$.\n3. The target is 24 hours later: hour $119 + 24 = 143 = L + 24 - 1$.\n4. Convert to raw 10-minute rows: multiply by $r = 6$, giving $858$.\n5. Shift arrays by that amount: `targets = temperature[858:]` and `data = raw_data[:-858]`, so `targets[N]` is `temperature[N + 858]`.\n\nCheck: the window starting at row N ends at row $N + 714$, and $858 - 714 = 144$ rows, which is 24 hours.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "What if you forget the '- 1'?",
+   "kind": "numerical",
+   "body": "With `delay = 6 * (120 + 24) = 864`, the target would be 25 hours after the last input instead of 24. The task would be slightly harder, the commonsense baseline (p.383), if computed with the right offset, would no longer match the dataset, and you would be comparing models on a subtly different problem. Off-by-one errors like this produce no exceptions, only wrong numbers.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Analogy: answer key shifted against the question sheet",
+   "kind": "analogy",
+   "body": "Imagine the series written on two identical strips of paper. One strip is the questions, the other the answers. Slide the answer strip left by k cells, and the cell under each question's starting point now shows what happens k steps later. timeseries_dataset_from_array just reads windows from the top strip and the aligned cell from the bottom strip.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "svg",
+   "title": "Windows and targets in the toy example",
+   "why": "Shows the five 3-step windows over [0 1 2 3 4 5 6] and their targets data[N + 3], exactly the printed output on this page.",
+   "svg": "<svg viewBox=\"0 0 420 210\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"monospace\" font-size=\"13\" fill=\"currentColor\"><text x=\"10\" y=\"18\">int_sequence = 0..9</text><g text-anchor=\"middle\"><g fill=\"none\" stroke=\"currentColor\"><rect x=\"10\" y=\"28\" width=\"30\" height=\"24\"/><rect x=\"40\" y=\"28\" width=\"30\" height=\"24\"/><rect x=\"70\" y=\"28\" width=\"30\" height=\"24\"/><rect x=\"100\" y=\"28\" width=\"30\" height=\"24\"/><rect x=\"130\" y=\"28\" width=\"30\" height=\"24\"/><rect x=\"160\" y=\"28\" width=\"30\" height=\"24\"/><rect x=\"190\" y=\"28\" width=\"30\" height=\"24\"/><rect x=\"220\" y=\"28\" width=\"30\" height=\"24\" stroke-dasharray=\"3 2\"/><rect x=\"250\" y=\"28\" width=\"30\" height=\"24\" stroke-dasharray=\"3 2\"/><rect x=\"280\" y=\"28\" width=\"30\" height=\"24\" stroke-dasharray=\"3 2\"/></g><text x=\"25\" y=\"45\">0</text><text x=\"55\" y=\"45\">1</text><text x=\"85\" y=\"45\">2</text><text x=\"115\" y=\"45\">3</text><text x=\"145\" y=\"45\">4</text><text x=\"175\" y=\"45\">5</text><text x=\"205\" y=\"45\">6</text><text x=\"235\" y=\"45\">7</text><text x=\"265\" y=\"45\">8</text><text x=\"295\" y=\"45\">9</text></g><text x=\"320\" y=\"45\" font-size=\"11\">dashed: not in data</text><g fill=\"currentColor\" fill-opacity=\"0.18\"><rect x=\"10\" y=\"66\" width=\"90\" height=\"18\"/><rect x=\"40\" y=\"90\" width=\"90\" height=\"18\"/><rect x=\"70\" y=\"114\" width=\"90\" height=\"18\"/><rect x=\"100\" y=\"138\" width=\"90\" height=\"18\"/><rect x=\"130\" y=\"162\" width=\"90\" height=\"18\"/></g><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"100\" y=\"66\" width=\"30\" height=\"18\"/><rect x=\"130\" y=\"90\" width=\"30\" height=\"18\"/><rect x=\"160\" y=\"114\" width=\"30\" height=\"18\"/><rect x=\"190\" y=\"138\" width=\"30\" height=\"18\"/><rect x=\"220\" y=\"162\" width=\"30\" height=\"18\"/></g><g font-size=\"12\"><text x=\"330\" y=\"80\">[0,1,2] -&gt; 3</text><text x=\"330\" y=\"104\">[1,2,3] -&gt; 4</text><text x=\"330\" y=\"128\">[2,3,4] -&gt; 5</text><text x=\"330\" y=\"152\">[3,4,5] -&gt; 6</text><text x=\"330\" y=\"176\">[4,5,6] -&gt; 7</text></g><text x=\"10\" y=\"202\" font-size=\"11\">shaded = window (sequence_length=3), outlined = target data[N+3]</text></svg>"
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "One Jena sample in raw-row indices",
+   "why": "Applies sampling_rate = 6, sequence_length = 120 and delay = 858 from the bullet list to a window starting at row i.",
+   "mermaid": "flowchart LR\n A[\"row i (hour 0)\"] -->|\"every 6 rows (1 h), 120 points\"| B[\"row i+714 (hour 119, last input)\"]\n B -->|\"+144 rows = 24 h\"| C[\"target: temperature[i+858]\"]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "timeseries_dataset_from_array automatically predicts the step after each window.", "correction": "It only pairs window N with targets[N]; the forecasting offset comes entirely from how you shift the targets array."},
+  {"claim": "delay = sampling_rate * (sequence_length + 24) would give a 24-hour horizon.", "correction": "The last input sits at offset sequence_length - 1, so the 24-hour target needs sequence_length + 24 - 1, i.e. 858 rows, not 864."},
+  {"claim": "sampling_rate = 6 means windows start every 6 rows.", "correction": "sampling_rate is the spacing of points inside a window. Windows still start at every row (the default sequence stride of 1)."},
+  {"claim": "All ten targets in int_sequence[3:] are used.", "correction": "Only 5 windows fit in data, so only targets 3-7 are used; 8 and 9 are ignored."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 380, "note": "Sidebar start: windows called 'sequences'; samples generated on the fly; problem formulation."},
+   {"page": 378, "note": "Six records per hour, 144 per day."},
+   {"page": 379, "note": "The 50/25/25 chronological split."}
+  ],
+  "later": [
+   {"page": 382, "note": "start_index/end_index for each split and Listing 13.7 with data=raw_data[:-delay], targets=temperature[delay:], batch_size=256, shuffle=True."},
+   {"page": 383, "note": "Listing 13.8 inspects the dataset; the commonsense baseline begins."},
+   {"page": 389, "note": "RNNs process these 120-step sequences one timestep at a time."}
+  ],
+  "prerequisites": [
+   {"page": 380, "note": "Why generating windows on the fly is preferable."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 382, "note": "Listing 13.7 uses the same function with the Jena parameters."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "timeseries_dataset_from_array slides a window of sequence_length steps (stride 1) along data; sequence N starts at data[N].",
+  "targets[N] is the label for sequence N; for forecasting, pass the same series shifted by the offset.",
+  "Toy example: data = 0..6, targets = 3..9, length 3 gives [0,1,2] paired with 3, up to [4,5,6] with 7.",
+  "Jena parameters: sampling_rate = 6 (hourly), sequence_length = 120 (five days), delay = 6 x (120 + 24 - 1) = 858 rows.",
+  "The '- 1' makes the target exactly 24 hours after the last input hour."
+ ],
+ "questions": [
+  {"id": "q1", "type": "short", "question": "List the sequences generated from data = [0 1 2 3 4 5 6] with sequence_length=4.", "options": [], "answer": "[0 1 2 3], [1 2 3 4], [2 3 4 5], [3 4 5 6]: four windows.", "explanation": "n - L + 1 = 7 - 4 + 1 = 4 windows, sliding by one step, as in the book's example with length 3.", "page_refs": [381]},
+  {"id": "q2", "type": "math", "question": "Compute delay for sampling_rate = 6, sequence_length = 120 and a 24-hour horizon. How many rows after the window's last input is the target?", "options": [], "answer": "delay = 6 x 143 = 858; the last input is at row offset 714, so the target is 144 rows (24 hours) after it.", "explanation": "Last input offset = 6 x (120 - 1) = 714; 858 - 714 = 144 rows = 24 x 6.", "page_refs": [381]},
+  {"id": "q3", "type": "mcq", "question": "In the dummy example, what target is paired with the sequence starting at data[N]?", "options": ["data[N]", "data[N + 2]", "data[N + 3]", "data[N + 1]"], "answer": "data[N + 3]", "explanation": "targets=int_sequence[3:] shifts by 3, as the callout says. data[N + 2] is the last element of the window, and data[N] and data[N + 1] are inside it.", "page_refs": [381]},
+  {"id": "q4", "type": "mcq", "question": "What does sampling_rate = 6 do in the Jena datasets?", "options": ["Starts a new window every 6 rows", "Keeps one data point out of six inside each window, giving one point per hour", "Uses 6 features out of 14", "Batches 6 windows together"], "answer": "Keeps one data point out of six inside each window, giving one point per hour", "explanation": "This is the book's definition. Window starts still advance by one row, features are not reduced, and the batch size is 256 (p.382).", "page_refs": [381, 382]},
+  {"id": "q5", "type": "conceptual", "question": "Why does the dummy example pass data=int_sequence[:-3] rather than the full int_sequence?", "options": [], "answer": "So that every generated window has a valid target. Trimming the last 3 elements of data matches the 3-element shift of targets, keeping the arrays aligned; windows that would need targets beyond 9 are never generated.", "explanation": "The same pattern appears in Listing 13.7 as raw_data[:-delay] with temperature[delay:].", "page_refs": [381, 382]},
+  {"id": "q6", "type": "short", "question": "How many batches does dummy_dataset yield, and what sizes are they?", "options": [], "answer": "Three batches, of sizes 2, 2 and 1 (five sequences in total).", "explanation": "batch_size=2 and there are 5 windows; the last batch is partial.", "page_refs": [381]},
+  {"id": "q7", "type": "self", "question": "Could you write the delay for a model that uses 3 days of data sampled every 2 hours to predict the temperature 12 hours ahead, at 10-minute raw resolution?", "options": [], "answer": "r = 12 rows, L = 36 points, horizon = 6 subsampled steps: delay = 12 x (36 + 6 - 1) = 492 rows.", "explanation": "This generalizes the book's formula delay = r x (L + h - 1), with the horizon h counted in subsampled steps.", "page_refs": [381]}
+ ]
+}

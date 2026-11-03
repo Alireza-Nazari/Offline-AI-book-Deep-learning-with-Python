@@ -1,0 +1,325 @@
+{
+ "page_id": "page_507",
+ "pdf_page": 507,
+ "printed_page": "483",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T09:55:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. Figure 16.3 is an image; bar heights were read from the page image (approximate, e.g. 'that' about 0.83 / 0.57 / 0.36 at temperatures 0.5 / 1.0 / 2.0) and are consistent with a single distribution rescaled by temperature. The last body paragraph (p507_e08) continues on p.508. compiled_generate here is the sample_fn version from p.505, and partial was imported on p.506."
+ },
+ "overview": {
+  "title": "Top-K sampling: figure and code",
+  "chapter": "16 Text generation",
+  "section": "16.2 Training a mini-GPT",
+  "subsection": "16.2.4 Sampling strategies",
+  "main_topic": "Figure 16.3 comparing greedy, top-K and random sampling on one next-token distribution at three temperatures; a top_k sampling function built from keras.ops.top_k and keras.random.categorical; mini-GPT outputs with K = 5 and K = 20; how top-K differs from temperature",
+  "central_idea": "Top-K sampling keeps only the K most likely tokens and samples among them, a middle ground between greedy search (K = 1) and sampling from the full distribution. Temperature reshapes probabilities but never rules any token out; top-K sets everything outside the K candidates to zero probability.",
+  "importance": "Top-K (often combined with temperature) is one of the standard decoding controls in real LLM APIs, and this page shows how to implement it in a few lines of backend-agnostic Keras code.",
+  "learning_objectives": [
+   "Read figure 16.3: how temperature reshapes a distribution and which tokens greedy, top-3 and random sampling can choose",
+   "Implement top-K sampling with ops.top_k, keras.random.categorical and ops.take_along_axis",
+   "Explain why sorted=False is fine and why index mapping with take_along_axis is necessary",
+   "Compare the effect of K = 5 and K = 20 on generated text",
+   "Distinguish the effect of temperature from that of a top-K cutoff"
+  ],
+  "prerequisites": [
+   "Logits and softmax (p.502)",
+   "compiled_generate with a sample_fn argument (p.505)",
+   "random_sample and temperature (p.506)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Figure 16.3** shows one next-token distribution over six candidate words, *that, to, is, and, on, for*, drawn at three temperatures (0.5, 1.0, 2.0). At temperature 1.0, *that* has probability about 0.57, *to* about 0.21, *is* about 0.13 and the rest under 0.05. Lowering the temperature to 0.5 sharpens it (*that* about 0.83); raising it to 2.0 flattens it (*that* about 0.36, the tail around 0.08-0.10). Under the axis, three brackets mark which tokens each strategy can pick: **Greedy** only *that*, **Top-K (k=3)** *that, to, is*, **Random** all of them. Top-K is a middle ground between greedy and random (as stated at the end of p.506).\n\nThe code uses `keras.ops.top_k` to find the top K elements of an array. `top_k(preds, k=5, temperature=1.0)` divides the logits by the temperature, takes the K largest values and their vocabulary indices (`sorted=False`), samples one position among those K with `keras.random.categorical` (which applies softmax to the given logits), and maps that position back to a vocabulary id with `ops.take_along_axis`.\n\nTwo runs are shown with `compiled_generate(prompt, partial(top_k, k=5))` and `k=20`. With **K = 5** the text reads like a coherent first-person forum post (\"I'm not going to be able to do anything for a few months...\"); with **K = 20** it is more varied and less grounded (\"advice and guidance from the Audi Bank in 2015... a great year for you in 2017\").\n\nThe page ends by contrasting the two controls: a low temperature makes likely tokens more likely but **does not rule any token out**; top-K sampling (continued on p.508) zeros out everything outside the K candidates.",
+ "paragraphs": [
+  {
+   "ref": "p507_e03",
+   "excerpt": "Figure 16.3 Greedy, top-K, and random sampling strategies shown on the same probability distribution",
+   "what_it_says": "A bar chart of probabilities for six next-token candidates (that, to, is, and, on, for) at temperatures 0.5, 1.0 and 2.0, with brackets showing which tokens greedy, top-K (k=3) and random sampling consider.",
+   "what_it_means": "The bars at different temperatures are consistent with p_i(T) proportional to p_i^(1/T): squaring the T = 1.0 probabilities and renormalizing gives the T = 0.5 bars (0.57 -> about 0.84), and taking square roots gives the T = 2.0 bars (0.57 -> about 0.36). Greedy always picks 'that'. Top-3 samples among 'that', 'to', 'is' after renormalizing their probabilities (at T = 1: about 0.63, 0.23, 0.14). Random sampling can pick any token, including the unlikely tail.",
+   "why_it_matters": "It visualizes both knobs at once: temperature changes bar heights; strategy changes which bars are eligible.",
+   "technical_idea": "Temperature and truncation (top-K) are independent operations and can be combined, as p.508 does.",
+   "terminology": [
+    {"term": "Top-K sampling", "meaning": "Sampling the next token only among the K most probable tokens, with probabilities renormalized over that set."},
+    {"term": "Temperature", "meaning": "Divisor applied to logits before softmax; < 1 sharpens, > 1 flattens the distribution."}
+   ],
+   "connections": [
+    "p.506: introduces temperature and top-K and refers to this figure",
+    "p.505: greedy search and random sampling"
+   ]
+  },
+  {
+   "ref": "p507_e04",
+   "excerpt": "Let\u2019s try this out in code. We can use `keras.ops.top_k` to find",
+   "what_it_says": "keras.ops.top_k finds the top K elements of an array, which is used to implement top-K sampling. The following code defines top_k(preds, k=5, temperature=1.0).",
+   "what_it_means": "ops.top_k returns two arrays: the K largest values and their positions in the input. Because the input is a vector of 32,000 logits indexed by token id, the positions are token ids. Sampling happens in the reduced K-dimensional space and is then mapped back to the vocabulary.",
+   "why_it_matters": "Using keras.ops keeps the sampler backend-agnostic (JAX, TensorFlow, PyTorch).",
+   "terminology": [
+    {"term": "keras.ops.top_k", "meaning": "Returns (values, indices) of the k largest entries along the last axis; sorted controls whether they are returned in descending order."},
+    {"term": "ops.take_along_axis", "meaning": "Gathers entries of an array at the given indices along an axis."}
+   ],
+   "connections": [
+    "p.505: sampling functions map a model's predictions to a choice of next token"
+   ]
+  },
+  {
+   "ref": "p507_e06",
+   "excerpt": "We can try a few different variations of top-K to see how it",
+   "what_it_says": "Introduces runs with K = 5 and K = 20.",
+   "what_it_means": "functools.partial fixes k (and optionally temperature) so the result has the single-argument signature sample_fn(preds) that compiled_generate expects. Smaller K is closer to greedy (more conservative, more coherent); larger K is closer to full random sampling (more diverse, more drift). The K = 5 sample stays on a single first-person theme; the K = 20 sample jumps between banks, years and evaluations.",
+   "why_it_matters": "K is a tunable trade-off between coherence and diversity.",
+   "terminology": [
+    {"term": "functools.partial", "meaning": "Creates a new function with some arguments pre-filled."}
+   ],
+   "connections": [
+    "p.506: partial(random_sample, temperature=...) used the same way",
+    "p.508: K = 5 combined with temperature 0.5"
+   ]
+  },
+  {
+   "ref": "p507_e08",
+   "excerpt": "Passing a top-K cutoff is different than temperature sampling. Passing a low temperature",
+   "what_it_says": "A top-K cutoff differs from temperature: a low temperature makes likely tokens more likely but does not rule any token out, whereas top-K (sentence finished on p.508) zeros out the probability of anything outside the K candidates.",
+   "what_it_means": "Temperature is a smooth reshaping: since exp(z/T) > 0 for every finite logit, every token keeps a nonzero probability, however tiny. Over 32,000 tokens, the long tail of individually tiny probabilities can add up to a real chance of picking garbage at each step. Top-K is a hard truncation that removes that tail entirely.",
+   "why_it_matters": "Explains why the two are often combined: truncate the tail with K, then tune the shape of what remains with T.",
+   "terminology": [
+    {"term": "Long tail", "meaning": "The many low-probability tokens of the vocabulary whose combined mass can be significant."}
+   ],
+   "connections": [
+    "p.508: completion of this paragraph and combined top-K + temperature example",
+    "p.506: high temperature produced non-English gibberish"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "top_k_sampling",
+   "name": "Top-K sampling",
+   "definition": "Restricting next-token sampling to the K highest-probability tokens and renormalizing among them.",
+   "intuition": "Shortlist the K best candidates, then roll a weighted die among them.",
+   "technical": "p'_i = exp(z_i/T) / sum_{j in TopK} exp(z_j/T) for i in TopK, else 0. K = 1 is greedy search; K = V is plain sampling.",
+   "significance": "Removes the unreliable long tail while keeping diversity; a standard decoding option in LLM toolkits.",
+   "example": "Figure 16.3 at T = 1: top-3 probabilities become 0.63, 0.23, 0.14 for 'that', 'to', 'is'.",
+   "misconception": "A fixed K does not adapt to how confident the model is: when the model is nearly certain, K = 20 still allows 19 alternatives; when it is very uncertain, K = 5 may cut good options.",
+   "related": ["sampling_temperature", "greedy_decoding", "softmax"],
+   "source": "book"
+  },
+  {
+   "id": "sampling_temperature",
+   "name": "Sampling temperature",
+   "definition": "A scalar T dividing the logits before softmax to control how peaked the distribution is.",
+   "intuition": "Low T: confident and repetitive; high T: adventurous and chaotic.",
+   "technical": "softmax(z/T)_i is proportional to p_i^(1/T). T -> 0 approaches greedy; T -> infinity approaches uniform. No token's probability ever becomes exactly zero.",
+   "significance": "Figure 16.3 shows its effect; p.506 shows the extremes in generated text.",
+   "example": "T = 0.5 squares probabilities before renormalizing: 0.57 -> about 0.84 for 'that'.",
+   "misconception": "Low temperature is not the same as top-K: it shrinks the tail but never removes it.",
+   "related": ["softmax", "top_k_sampling"],
+   "source": "book"
+  },
+  {
+   "id": "sampling_strategy",
+   "name": "Sampling strategy",
+   "definition": "The rule that turns the model's next-token distribution into an actual choice.",
+   "intuition": "The model proposes odds; the strategy decides how to bet.",
+   "technical": "Implemented as a sample_fn(preds) -> token id passed to compiled_generate (p.505): greedy_search, random_sample, top_k.",
+   "significance": "The same trained model can produce very different text depending only on the strategy.",
+   "example": "Greedy loops (p.503); random wanders (p.506); top-K is in between (this page).",
+   "misconception": "Better sampling cannot add knowledge the model lacks; it only changes how existing probabilities are used.",
+   "related": ["greedy_decoding", "top_k_sampling", "language_model"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Temperature-scaled softmax (the bars of figure 16.3)",
+   "latex": "p_i(T) = \\frac{e^{z_i / T}}{\\sum_{j} e^{z_j / T}} \\;\\propto\\; p_i(1)^{1/T}",
+   "source_text": "preds = preds / temperature (then softmax inside keras.random.categorical)",
+   "variables": [
+    {"symbol": "z_i", "meaning": "Logit for token i"},
+    {"symbol": "T", "meaning": "Temperature (0.5, 1.0, 2.0 in figure 16.3)"},
+    {"symbol": "p_i(T)", "meaning": "Sampling probability of token i at temperature T"}
+   ],
+   "operations": "Divide logits by T, exponentiate, normalize. Equivalently raise the T = 1 probabilities to the power 1/T and renormalize.",
+   "purpose": "Explains the three bar colors in figure 16.3 and the first line of top_k().",
+   "interpretation": "T < 1 exaggerates differences between logits; T > 1 shrinks them.",
+   "intuition": "Temperature zooms the contrast of the distribution in or out.",
+   "numerical_example": "Reading the T = 1 bars as $[0.57, 0.21, 0.13, 0.045, 0.025, 0.025]$: at $T = 0.5$ the squared, renormalized values are about $[0.84, 0.11, 0.04, 0.005, 0.002, 0.002]$; at $T = 2$ the square-rooted, renormalized values are about $[0.36, 0.22, 0.17, 0.10, 0.08, 0.08]$, matching the figure.",
+   "source": "book",
+   "book_ref": "p.506"
+  },
+  {
+   "id": "m2",
+   "title": "Top-K renormalization",
+   "latex": "p_i^{\\text{top-}K} = \\begin{cases} \\dfrac{e^{z_i/T}}{\\sum_{j \\in \\mathcal{K}} e^{z_j/T}} & i \\in \\mathcal{K} \\\\ 0 & \\text{otherwise} \\end{cases}, \\qquad \\mathcal{K} = \\text{indices of the } K \\text{ largest } z_j",
+   "source_text": "top_preds, top_indices = ops.top_k(preds, k=k, sorted=False); keras.random.categorical(top_preds[None, :], num_samples=1)",
+   "variables": [
+    {"symbol": "\\mathcal{K}", "meaning": "Set of the K highest-scoring token ids (top_indices)"},
+    {"symbol": "K", "meaning": "Number of candidates kept (k)"},
+    {"symbol": "p_i^{\\text{top-}K}", "meaning": "Probability of sampling token i under top-K"}
+   ],
+   "operations": "Keep K logits, apply softmax only over them (categorical does this), so the kept probabilities are rescaled to sum to 1 and the rest are zero.",
+   "purpose": "Formalizes 'zeros out the probability of anything outside the K candidates'.",
+   "interpretation": "Relative odds among the kept tokens are unchanged; only the tail is removed.",
+   "intuition": "Cut the tail, then stretch the remaining bars to fill 100%.",
+   "numerical_example": "Figure 16.3, $K = 3$, $T = 1$: kept mass $0.57 + 0.21 + 0.13 = 0.90$; renormalized $\\approx [0.63, 0.23, 0.14]$. At $T = 0.5$: $\\approx [0.85, 0.11, 0.04]$.",
+   "source": "inference",
+   "book_ref": "p.507"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "A top-K sampling function",
+   "original_code": "def top_k(preds, k=5, temperature=1.0):\n    preds = preds / temperature\n    top_preds, top_indices = ops.top_k(preds, k=k, sorted=False)\n    choice = keras.random.categorical(top_preds[None, :], num_samples=1)[0]\n    return ops.take_along_axis(top_indices, choice, axis=-1)",
+   "language": "python",
+   "what_it_does": "Given a vector of next-token logits, returns a token id sampled from the K most likely tokens after temperature scaling.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "preds is the 32,000-long logit vector for the next position (prediction[0, i - 1] in compiled_generate, p.505)."},
+    {"lines": "2", "explanation": "Temperature scaling. Since T > 0, division preserves the order of logits, so the top-K set is the same for any temperature; only the relative odds inside it change."},
+    {"lines": "3", "explanation": "ops.top_k returns the K largest logits and their indices (token ids). sorted=False skips sorting, which is cheaper and harmless because the values and indices stay paired."},
+    {"lines": "4", "explanation": "keras.random.categorical expects 2-D logits (batch, classes), hence top_preds[None, :] with shape (1, K). It applies softmax and draws one sample: an index in 0..K-1, shape (1, 1); [0] gives shape (1,)."},
+    {"lines": "5", "explanation": "Maps the position within the shortlist back to the vocabulary: top_indices[choice]. Returns a length-1 array holding the token id, which compiled_generate converts with np.array(next_token).item() (p.505)."}
+   ],
+   "inputs_outputs": "Input: logits of shape (vocab_size,), k, temperature. Output: array of shape (1,) containing a token id.",
+   "algorithm": "Scale by 1/T -> select top K -> softmax over K -> sample -> gather the token id.",
+   "theory_link": "Truncated sampling from the model's categorical next-token distribution (figure 16.3's 'Top-K' bracket).",
+   "parameters": [
+    {"name": "k", "role": "Size of the candidate set; k=1 reduces to greedy, larger k approaches full random sampling."},
+    {"name": "temperature", "role": "Sharpens (< 1) or flattens (> 1) the distribution among the K candidates."},
+    {"name": "sorted", "role": "Whether ops.top_k returns values in descending order; not needed for sampling."}
+   ],
+   "pitfalls": [
+    "Forgetting take_along_axis would return a position in 0..K-1 instead of a token id, producing nonsense tokens.",
+    "categorical needs a 2-D input; passing the 1-D top_preds directly fails or misbehaves.",
+    "temperature must be positive; T = 0 divides by zero (use greedy search instead).",
+    "Without a seed, each call samples differently, so outputs are not reproducible run to run."
+   ],
+   "illustrative_code": "# AI-written: the same logic in NumPy, for intuition\nimport numpy as np\ndef top_k_numpy(logits, k=5, temperature=1.0, rng=np.random.default_rng(0)):\n    z = logits / temperature\n    idx = np.argpartition(-z, k)[:k]          # ids of the k largest logits\n    p = np.exp(z[idx] - z[idx].max())\n    p /= p.sum()                              # softmax over the shortlist only\n    return idx[rng.choice(k, p=p)]"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Generating with K = 5 and K = 20",
+   "original_code": ">>> compiled_generate(prompt, partial(top_k, k=5))\nA piece of advice that I can't help it. I'm not going to be able to do anything\nfor a few months, but I'm trying to get a little better. It's a little too much.\nI have a few other questions on this site, but I'm sure I\n>>> compiled_generate(prompt, partial(top_k, k=20))\nA piece of advice and guidance from the Audi Bank in 2015. With all the above,\nit's not just a bad idea, but it's very good to see that is going to be a great\nyear for you in 2017.\nThat's really going to",
+   "language": "python",
+   "what_it_does": "Generates 64-token continuations of 'A piece of advice' with top-K sampling at K = 5 and K = 20 (temperature 1.0).",
+   "line_explanations": [
+    {"lines": "1-4", "explanation": "K = 5: locally coherent first-person text in a forum/blog register ('questions on this site'); no repetition loop, unlike greedy decoding (p.503)."},
+    {"lines": "5-9", "explanation": "K = 20: more diverse vocabulary and topics (a bank, two different years) and weaker coherence ('it's not just a bad idea, but it's very good')."}
+   ],
+   "inputs_outputs": "Input: prompt and a sampling function with one argument. Output: generated text; different on every run because sampling is random.",
+   "algorithm": "compiled_generate (p.505) calling top_k at every step.",
+   "theory_link": "Increasing K moves the strategy along the greedy-to-random spectrum of figure 16.3.",
+   "parameters": [
+    {"name": "partial(top_k, k=...)", "role": "Freezes k so the function matches the sample_fn(preds) interface."}
+   ],
+   "pitfalls": [
+    "Your outputs will differ: they depend on your trained weights and random draws.",
+    "Two samples are anecdotes; judging K properly requires many generations."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why temperature alone leaves risk in the tail",
+   "kind": "numerical",
+   "body": "Suppose the top token has probability 0.5 and the remaining 0.5 is spread over 31,999 tokens, most of them nonsense in context. Even if each tail token is tiny, their combined 50% means plain sampling picks a tail token half the time. Lowering T to 0.5 squares and renormalizes: the top token's share grows a lot, but the tail still has nonzero total mass. Top-K with K = 5 sets that tail mass to exactly zero. This is the formal content of 'it does not rule any token out'. (Illustrative numbers, not from the book.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Beyond the book: top-p (nucleus) sampling",
+   "kind": "alternative",
+   "body": "A fixed K ignores how peaked the distribution is. **Top-p** sampling instead keeps the smallest set of tokens whose cumulative probability exceeds p (e.g. 0.9). For figure 16.3 at T = 1, p = 0.9 would keep *that, to, is* (cumulative ~0.90); for a flat distribution it would keep many more tokens, for a confident one perhaps a single token. The book mentions only that 'there are many more approaches' (p.508); KerasHub provides several samplers, used via `compile(sampler=...)` on p.510.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Reading the brackets in figure 16.3",
+   "kind": "breakdown",
+   "body": "- **Greedy** (bracket over *that*): deterministic, always the tallest bar, regardless of temperature.\n- **Top-K, k = 3** (bracket over *that, to, is*): random, but only among three tokens; the temperature changes their relative odds.\n- **Random** (arrow over all tokens and beyond): any token in the vocabulary, including the tail; the arrow continuing past *for* hints at the rest of the 32,000-token vocabulary.",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Temperature on figure 16.3's distribution",
+   "why": "Logits chosen so that temperature 1 reproduces the bars of figure 16.3 (that, to, is, and, on, for). Set the temperature to 0.5 and 2.0 to reproduce the other two bar series.",
+   "widget": "softmax_temperature",
+   "params": {"logits": [-0.56, -1.57, -2.07, -3.09, -3.68, -3.68], "labels": ["that", "to", "is", "and", "on", "for"], "temperature": 1}
+  },
+  {
+   "id": "v2",
+   "type": "chart",
+   "title": "Full distribution vs. top-3 after renormalization (T = 1.0)",
+   "why": "Shows what top-K (k=3) does to the distribution of figure 16.3: the three kept tokens are rescaled to sum to 1 and the others drop to zero, unlike temperature, which never zeros a token.",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": ["that", "to", "is", "and", "on", "for"],
+     "datasets": [
+      {"label": "Full distribution (T=1.0, read from figure 16.3)", "data": [0.571, 0.207, 0.126, 0.045, 0.025, 0.025]},
+      {"label": "Low temperature (T=0.5)", "data": [0.84, 0.111, 0.041, 0.005, 0.002, 0.002]},
+      {"label": "Top-K, k=3 (T=1.0), renormalized", "data": [0.631, 0.229, 0.14, 0, 0, 0]}
+     ]
+    },
+    "options": {
+     "scales": {"y": {"min": 0, "max": 1, "title": {"display": true, "text": "Probability"}}},
+     "plugins": {"legend": {"display": true}}
+    }
+   }
+  }
+ ],
+ "misconceptions": [
+  {"claim": "A low temperature and a small K do the same thing.", "correction": "Low temperature reshapes the distribution but every token keeps nonzero probability; top-K zeros out everything outside the K candidates."},
+  {"claim": "Temperature changes which tokens are in the top K.", "correction": "Dividing all logits by the same positive T preserves their order, so the top-K set is unchanged; only probabilities within it change."},
+  {"claim": "The index returned by keras.random.categorical is the token id.", "correction": "It is a position within the K shortlist; ops.take_along_axis maps it back to the token id."},
+  {"claim": "Larger K always gives better text.", "correction": "Larger K adds diversity but also lets in less plausible tokens; the K = 20 sample is less coherent than K = 5."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 506, "note": "random_sample with temperature; introduction of top-K and the reference to figure 16.3."},
+   {"page": 505, "note": "compiled_generate(prompt, sample_fn) and greedy_search; keras.random.categorical applies softmax and samples."},
+   {"page": 503, "note": "Greedy output stuck in a loop."},
+   {"page": 502, "note": "Logits and softmax."}
+  ],
+  "later": [
+   {"page": 508, "note": "End of the temperature vs. top-K contrast, top-5 at temperature 0.5, beam search, and the limits of mini-GPT."},
+   {"page": 510, "note": "Gemma's generate() can be compiled with different samplers (sampler='greedy')."}
+  ],
+  "prerequisites": [
+   {"page": 502, "note": "What logits are."}
+  ],
+  "related_math": [
+   {"page": 506, "note": "Temperature divides the logits before softmax."}
+  ],
+  "related_code": [
+   {"page": 506, "note": "random_sample, the K = vocabulary-size special case of top_k."}
+  ],
+  "related_figures": [
+   {"page": 507, "note": "Figure 16.3 on this page."}
+  ]
+ },
+ "takeaways": [
+  "Figure 16.3: greedy picks only the top token, top-K samples among the K best, random samples from everything; temperature reshapes the bars.",
+  "Temperature scaling corresponds to raising probabilities to the power 1/T and renormalizing.",
+  "top_k() = scale logits by 1/T, ops.top_k, keras.random.categorical over the shortlist, then take_along_axis back to token ids.",
+  "K = 5 gives more coherent text, K = 20 more diverse but less coherent text.",
+  "Low temperature never rules a token out; top-K zeros out everything outside the candidates, and the two can be combined."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "In figure 16.3, which tokens can top-K sampling with k = 3 output?", "options": ["Only 'that'", "'that', 'to' and 'is'", "Any of the six tokens", "'and', 'on' and 'for'"], "answer": "'that', 'to' and 'is'", "explanation": "The Top-K (k=3) bracket spans the three most probable tokens. Only 'that' is greedy; all tokens is random sampling; the last three are the least likely.", "page_refs": [507]},
+  {"id": "q2", "type": "math", "question": "At temperature 1.0, the top three tokens have probabilities 0.57, 0.21 and 0.13. What are their probabilities under top-3 sampling?", "options": [], "answer": "About 0.63, 0.23 and 0.14 (each divided by 0.91).", "explanation": "Top-K keeps relative odds and renormalizes over the kept set: 0.57/0.91 = 0.63, 0.21/0.91 = 0.23, 0.13/0.91 = 0.14.", "page_refs": [507]},
+  {"id": "q3", "type": "short", "question": "Why does top_k() need ops.take_along_axis at the end?", "options": [], "answer": "keras.random.categorical returns a position within the K-element shortlist; take_along_axis maps it to the corresponding vocabulary token id stored in top_indices.", "explanation": "Sampling happens over top_preds (length K), so its output index is in 0..K-1, not a token id.", "page_refs": [507]},
+  {"id": "q4", "type": "conceptual", "question": "Explain the difference between a low temperature and a top-K cutoff, as the page describes it.", "options": [], "answer": "Low temperature makes likely tokens more likely but leaves every token with nonzero probability; top-K sets the probability of all tokens outside the K candidates to zero.", "explanation": "Since exp(z/T) is always positive, temperature cannot eliminate tokens; top-K is a hard truncation.", "page_refs": [507, 508]},
+  {"id": "q5", "type": "mcq", "question": "Does the temperature argument of top_k() change which tokens are in the top K?", "options": ["Yes, low temperatures shrink the set", "Yes, high temperatures add tokens to the set", "No, dividing all logits by the same positive number preserves their order", "Only when sorted=False"], "answer": "No, dividing all logits by the same positive number preserves their order", "explanation": "Order-preserving scaling leaves the K largest logits unchanged; temperature only changes the odds among them. sorted only affects output order.", "page_refs": [507]},
+  {"id": "q6", "type": "conceptual", "question": "Compare the K = 5 and K = 20 samples. What does this suggest about the role of K?", "options": [], "answer": "K = 5 stays coherent and on topic; K = 20 is more varied but drifts (banks, 2015, 2017). K trades coherence for diversity.", "explanation": "Larger K admits less likely tokens at every step, and errors compound across a 64-token generation.", "page_refs": [507]},
+  {"id": "q7", "type": "short", "question": "What values of k make top_k() equivalent to greedy search and to random_sample from p.506?", "options": [], "answer": "k = 1 gives greedy search; k = vocabulary size (32,000) gives random_sample.", "explanation": "With one candidate the choice is deterministic (the argmax); with all candidates nothing is truncated.", "page_refs": [507, 506, 505]},
+  {"id": "q8", "type": "self", "question": "Can you sketch figure 16.3 from memory and mark how the three temperature series and the three strategy brackets relate?", "options": [], "answer": "Self-check.", "explanation": "If you can reproduce it, you understand both decoding knobs: distribution shape (temperature) and candidate set (strategy).", "page_refs": [507]}
+ ]
+}

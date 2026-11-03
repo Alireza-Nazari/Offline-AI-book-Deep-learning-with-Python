@@ -1,0 +1,559 @@
+{
+ "page_id": "page_576",
+ "pdf_page": 576,
+ "printed_page": "552",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:40:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. Two code elements: an ASCII device grid (not Python) and the DeviceMesh constructor with two printed callouts. e14 contains two printed paragraphs ('A device mesh doesn't have to be 2D...' and 'Let's make a 2 x 4 device mesh'). The last sentence leads into the code at the top of p.577."
+ },
+ "overview": {
+  "title": "Multi-GPU speedups and the DeviceMesh API",
+  "chapter": "18 Best practices for the real world",
+  "section": "18.2 Scaling up model training with multiple devices",
+  "subsection": "18.2.2 Distributed training in practice",
+  "main_topic": "Real-world scaling efficiency of data parallelism, and organising devices into a named 2-D grid (device mesh) for mixed data/model parallelism",
+  "central_idea": "N GPUs give somewhat less than N-times speedup (about 2x, 3.8x, 7.3x for 2, 4, 8 GPUs) because merging updates costs time, and only if the global batch keeps every GPU busy. For model parallelism Keras starts from a device mesh: a grid of devices whose axes you name, typically one 'data' axis and one 'model' axis.",
+  "importance": "The speedup numbers set realistic expectations. DeviceMesh is the first of the two building blocks (with LayoutMap, p.577) of Keras's general distribution API.",
+  "learning_objectives": [
+   "Compute scaling efficiency from the quoted speedups.",
+   "Explain why too small a global batch hurts multi-GPU scaling.",
+   "Define a device mesh and its axes.",
+   "Map the 8-GPU grid to a DeviceMesh(shape=(2, 4), axis_names=[\"data\", \"model\"])."
+  ],
+  "prerequisites": [
+   "Data parallelism and synchronous gradient averaging (p.573)",
+   "Figure 18.2 (p.575)",
+   "Tensor shapes and axes (chapter 2)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Speedup.** Ideally, N GPUs would train N times faster. In practice, distribution adds overhead, mainly the time to merge the weight updates from different devices. The book's figures:\n\n- 2 GPUs: close to **2x**\n- 4 GPUs: about **3.8x**\n- 8 GPUs: about **7.3x**\n\nThese assume a **global batch large enough** to keep every GPU fully used. If the batch is too small, each device's local batch cannot keep its GPU busy.\n\n**Model parallelism with JAX.** Keras also offers tools to fully customise distribution, including model-parallel training and any mixture of data and model parallelism.\n\n**The DeviceMesh API.** A **device mesh** is a grid of devices. The page draws eight GPUs as a grid with two columns (gpu:0-3 and gpu:4-7) and four rows. The idea is to group devices along **axes**: typically one axis for data parallelism and one for model parallelism. As in figure 18.2, the horizontal axis (across the two replicas) is the data axis, and the vertical axis (within a replica) is the model axis. Meshes can have any number of dimensions, but in practice you will only see 1-D and 2-D ones.\n\nIn Keras: `keras.distribution.DeviceMesh(shape=(2, 4), axis_names=[\"data\", \"model\"])`. This assumes eight devices in a 2 x 4 grid, and the callout recommends giving the axes meaningful names. The page ends by noting that you can also list the devices explicitly (code on p.577).",
+ "paragraphs": [
+  {
+   "ref": "p576_e03",
+   "excerpt": "In an ideal world, training on N GPUs would result in a speedup of factor",
+   "what_it_says": "Ideally N GPUs would give an N-times speedup, but distribution adds overhead, especially merging the weight deltas from different devices. The effective speedup depends on the number of GPUs: close to 2x with two, about 3.8x with four, and about 7.3x with eight.",
+   "what_it_means": "Scaling efficiency (speedup / N) is about 100%, 95% and 91%. The 'weight deltas' are the per-replica gradients that must be averaged (all-reduced) on every step. That communication grows with model size and does not shrink as you add GPUs, so its share of step time grows.",
+   "why_it_matters": "Expect slightly sub-linear but still large gains from data parallelism, and include communication cost in planning.",
+   "technical_idea": "Beyond the book: with ring all-reduce, each device sends and receives about 2(N-1)/N x (gradient size) per step, nearly constant in N, while compute per device stays the same if the local batch is fixed. Efficiency therefore drops slowly; latency and synchronisation (waiting for the slowest device) add more loss.",
+   "terminology": [
+    {
+     "term": "Speedup",
+     "meaning": "Single-device time / N-device time for the same amount of training."
+    },
+    {
+     "term": "Scaling efficiency",
+     "meaning": "Speedup divided by N; 1.0 means perfect linear scaling."
+    }
+   ],
+   "connections": [
+    "p.573: gradient averaging in synchronous training"
+   ]
+  },
+  {
+   "ref": "p576_e07",
+   "excerpt": "This assumes that you’re using a large-enough global batch size to keep each GPU",
+   "what_it_says": "The speedups assume a global batch large enough to keep each GPU fully used. If the batch is too small, the local batch size will not keep the GPUs busy.",
+   "what_it_means": "Local batch = global batch / N. Keeping the global batch fixed while adding GPUs shrinks each GPU's work until fixed overheads (kernel launches, communication) dominate. So you usually grow the global batch with N, as p.573 suggests ('just increase your batch size').",
+   "why_it_matters": "This is the most common reason people see disappointing multi-GPU speedups.",
+   "technical_idea": "Beyond the book: larger global batches usually need a proportionally larger learning rate (the book makes the same point for TPUs on p.580), and possibly warm-up.",
+   "terminology": [
+    {
+     "term": "Global batch size",
+     "meaning": "Total samples per optimizer step across all replicas."
+    },
+    {
+     "term": "Local batch size",
+     "meaning": "Samples processed by one replica per step."
+    }
+   ],
+   "connections": [
+    "p.580: increase the learning rate with very large batches; step fusing"
+   ]
+  },
+  {
+   "ref": "p576_e09",
+   "excerpt": "Keras also provides powerful tools for fully customizing how you want to do distributed",
+   "what_it_says": "Beyond DataParallel, Keras provides tools to fully customise distributed training, including model parallelism and any mixture of data and model parallelism.",
+   "what_it_means": "These are the DeviceMesh + LayoutMap + ModelParallel classes of keras.distribution, introduced over the next pages.",
+   "why_it_matters": "This moves from the one-liner to the general API needed for models that do not fit on one device.",
+   "connections": [
+    "p.577: LayoutMap",
+    "p.578: setting the model-parallel distribution"
+   ]
+  },
+  {
+   "ref": "p576_e11",
+   "excerpt": "First, you need to understand the concept of a device mesh. A device mesh",
+   "what_it_says": "First, understand the device mesh: simply a grid of devices. The example shows eight GPUs drawn as a grid with gpu:0-gpu:3 in the left column and gpu:4-gpu:7 in the right.",
+   "what_it_means": "The mesh gives devices coordinates. Each column of the drawing is one replica group (as in figure 18.2), and each row position within a column is one model shard.",
+   "why_it_matters": "Sharding decisions are expressed in terms of mesh axes, not individual device names.",
+   "terminology": [
+    {
+     "term": "Device mesh",
+     "meaning": "A logical n-dimensional arrangement of devices with named axes, used to describe how tensors are split or replicated."
+    }
+   ],
+   "connections": [
+    "p.575: figure 18.2 has the same two-groups-of-four structure"
+   ]
+  },
+  {
+   "ref": "p576_e13",
+   "excerpt": "The big idea is to separate devices into groups, organized along axes. Typically, one",
+   "what_it_says": "The idea is to group devices along axes: typically one axis for data parallelism and one for model parallelism. As in figure 18.2, the devices form a grid in which the horizontal axis handles data parallelism and the vertical axis handles model parallelism.",
+   "what_it_means": "Moving horizontally takes you to the same model shard in another replica, so those devices hold identical weights and different data, and their gradients are averaged. Moving vertically takes you to another shard of the same replica, so those devices see the same data and hold different weights.",
+   "why_it_matters": "Knowing which communication happens along which axis is how you reason about the cost of a layout.",
+   "technical_idea": "Beyond the book: gradient all-reduce runs along the data axis, and activation exchange (all-gather/reduce-scatter) runs along the model axis. Placing the model axis on the fastest links (e.g., GPUs within one node) is standard practice.",
+   "connections": [
+    "p.577: axis 0 = data (size 2), axis 1 = model (size 4)"
+   ]
+  },
+  {
+   "ref": "p576_e14",
+   "excerpt": "A device mesh doesn’t have to be 2D—it could be any shape you want. In",
+   "what_it_says": "A device mesh can have any shape, but in practice you only see 1-D and 2-D meshes. Then: let's make a 2 x 4 device mesh in Keras.",
+   "what_it_means": "A 1-D mesh is pure data parallelism (or pure model parallelism). A 2-D mesh combines the two. The code creates shape (2, 4) with axis names \"data\" and \"model\".",
+   "why_it_matters": "The shape tuple must multiply to the device count (2 x 4 = 8).",
+   "connections": [
+    "p.577: same mesh with an explicit devices list"
+   ]
+  },
+  {
+   "ref": "p576_e16",
+   "excerpt": "Mind you, you can also explicitly specify the devices you want to use:",
+   "what_it_says": "You can also explicitly specify the devices to use; the code follows at the top of p.577.",
+   "what_it_means": "Without a devices argument, Keras uses all available devices in their default order.",
+   "why_it_matters": "Explicit devices control which physical GPU goes to which mesh coordinate.",
+   "connections": [
+    "p.577: devices = [f\"gpu:{i}\" for i in range(8)]"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "scaling_efficiency",
+   "name": "Multi-GPU speedup and scaling efficiency",
+   "definition": "Speedup S(N) = T(1)/T(N); efficiency E(N) = S(N)/N.",
+   "intuition": "Adding workers helps, but meetings (synchronisation) take a share of the time.",
+   "technical": "For the book's numbers E = 1.0, 0.95, 0.91 for N = 2, 4, 8. Losses come from gradient merging and from under-used devices when local batches are small.",
+   "significance": "Sets realistic expectations and guides batch-size choice.",
+   "example": "8 GPUs at 7.3x: a 73-minute single-GPU run takes about 10 minutes.",
+   "misconception": "That adding GPUs with a fixed small batch keeps scaling. The local batch shrinks and GPUs sit idle.",
+   "related": [
+    "data_parallelism",
+    "batch_size"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "device_mesh",
+   "name": "Device mesh",
+   "definition": "A grid of devices with named axes; Keras class keras.distribution.DeviceMesh(shape, axis_names, devices=None).",
+   "intuition": "Seats in a classroom with row and column labels, so you can say 'split along the columns'.",
+   "technical": "Typically 2-D with a 'data' axis and a 'model' axis; sharding layouts refer to these axis names.",
+   "significance": "The coordinate system for all model-parallel layouts.",
+   "example": "DeviceMesh(shape=(2, 4), axis_names=[\"data\", \"model\"]).",
+   "misconception": "That the mesh must match physical wiring. It is a logical layout, though matching it to fast interconnects helps performance.",
+   "related": [
+    "layout_map",
+    "data_parallelism",
+    "model_parallelism"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "batch_size",
+   "name": "Global vs local batch size",
+   "definition": "Global batch = local batch x number of data-parallel replicas.",
+   "intuition": "Each worker needs a big enough pile to stay busy.",
+   "technical": "GPUs need large matrix operations to reach peak throughput; small local batches leave compute idle.",
+   "significance": "Must grow with device count to keep the speedups quoted.",
+   "example": "Global 512 on 8 GPUs means local 64.",
+   "misconception": "That batch size and device count are independent choices.",
+   "related": [
+    "scaling_efficiency"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Speedup and scaling efficiency",
+   "latex": "S(N) = \\frac{T(1)}{T(N)}, \\qquad E(N) = \\frac{S(N)}{N}: \\quad E(2)\\approx 1.0,\\; E(4)\\approx \\tfrac{3.8}{4} = 0.95,\\; E(8)\\approx \\tfrac{7.3}{8} \\approx 0.91",
+   "source_text": "In an ideal world, training on N GPUs would result in a speedup of factor N ... With two GPUs, the speedup stays close to 2x. With four, the speedup is around 3.8x. With eight, it's around 7.3x.",
+   "variables": [
+    {
+     "symbol": "N",
+     "meaning": "number of GPUs"
+    },
+    {
+     "symbol": "T(N)",
+     "meaning": "wall-clock time of the training run on N GPUs"
+    },
+    {
+     "symbol": "S(N)",
+     "meaning": "speedup over one GPU"
+    },
+    {
+     "symbol": "E(N)",
+     "meaning": "scaling efficiency"
+    }
+   ],
+   "operations": "Ratios of run times; efficiency divides by the ideal speedup.",
+   "purpose": "Turns the book's bullet list into a single efficiency measure.",
+   "interpretation": "About 9% of the ideal is lost to overhead at 8 GPUs.",
+   "intuition": "Each extra GPU adds a little less than a full GPU of throughput.",
+   "numerical_example": "A 2-hour (120-minute) single-GPU training run: 2 GPUs about 60 min, 4 GPUs about 120/3.8 = 31.6 min, 8 GPUs about 120/7.3 = 16.4 min.",
+   "source": "book",
+   "book_ref": "p.576"
+  },
+  {
+   "id": "m2",
+   "title": "Mesh size and local batch",
+   "latex": "\\#\\text{devices} = \\prod_k \\text{shape}_k = 2\\times 4 = 8, \\qquad b_{\\text{local}} = \\frac{b_{\\text{global}}}{\\text{shape}_{\\text{data}}}",
+   "source_text": "Let's make a 2 x 4 device mesh in Keras: ... shape=(2, 4), axis_names=[\"data\", \"model\"]",
+   "variables": [
+    {
+     "symbol": "\\text{shape}_k",
+     "meaning": "size of mesh axis k"
+    },
+    {
+     "symbol": "\\text{shape}_{\\text{data}}",
+     "meaning": "size of the 'data' axis (2), i.e., the number of replicas"
+    },
+    {
+     "symbol": "b_{\\text{global}}, b_{\\text{local}}",
+     "meaning": "global and per-replica batch sizes"
+    }
+   ],
+   "operations": "Product of axis sizes; division of the batch by the data-axis size.",
+   "purpose": "Links the mesh shape to device count and to how each batch is split.",
+   "interpretation": "With a 2 x 4 mesh only 2 replicas exist, so a global batch of 128 becomes local batches of 64, each processed jointly by 4 GPUs.",
+   "intuition": "Only the data axis divides the batch; the model axis divides the weights.",
+   "source": "inference",
+   "book_ref": "p.576-577"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Eight GPUs as a device grid",
+   "original_code": "gpu:0   |   gpu:4\n--------|---------\ngpu:1   |   gpu:5\n--------|---------\ngpu:2   |   gpu:6\n--------|---------\ngpu:3   |   gpu:7",
+   "language": "text",
+   "what_it_does": "Not executable code: an ASCII picture of eight GPUs arranged as a grid with two columns and four rows.",
+   "line_explanations": [
+    {
+     "lines": "1-7",
+     "explanation": "Left column gpu:0-3 (one replica group), right column gpu:4-7 (the other). The horizontal direction (across columns) is the data axis; the vertical direction (down a column) is the model axis."
+    }
+   ],
+   "inputs_outputs": "N/A (diagram).",
+   "algorithm": "N/A.",
+   "theory_link": "Same arrangement as figure 18.2 (p.575).",
+   "parameters": [],
+   "pitfalls": [
+    "The drawing has 4 rows x 2 columns, but the Keras mesh is shape (2, 4): axis 0 (data, size 2) corresponds to the columns of the drawing, and axis 1 (model, size 4) to the rows."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Creating a 2 x 4 DeviceMesh",
+   "original_code": "device_mesh = keras.distribution.DeviceMesh(\n    shape=(2, 4),\n    axis_names=[\"data\", \"model\"],\n)",
+   "language": "python",
+   "what_it_does": "Creates a logical mesh of eight devices with a size-2 'data' axis and a size-4 'model' axis.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Constructs a keras.distribution.DeviceMesh."
+    },
+    {
+     "lines": "2",
+     "explanation": "shape=(2, 4): eight devices as a 2 x 4 grid (callout: 'We assume eight devices, organized as a 2 x 4 grid')."
+    },
+    {
+     "lines": "3",
+     "explanation": "axis_names=[\"data\", \"model\"]: names used later by LayoutMap entries (callout: 'It's convenient to give your axes meaningful names!')."
+    },
+    {
+     "lines": "4",
+     "explanation": "Closes the call; devices default to all available ones."
+    }
+   ],
+   "inputs_outputs": "Output: a DeviceMesh object (no computation happens yet).",
+   "algorithm": "Reshape the device list into the given grid shape and attach axis names.",
+   "theory_link": "Implements the mixed parallelism of p.574: 2 replicas x 4 shards.",
+   "parameters": [
+    {
+     "name": "shape",
+     "role": "mesh dimensions; product must equal device count"
+    },
+    {
+     "name": "axis_names",
+     "role": "one name per mesh dimension, referenced by layouts"
+    }
+   ],
+   "pitfalls": [
+    "If the machine does not have exactly 8 devices, the shape will not match.",
+    "Axis names must match the strings used in the LayoutMap later (\"model\")."
+   ],
+   "illustrative_code": "# AI-written: how devices map to mesh coordinates (row-major reshape)\nimport numpy as np\ndevs = np.array([f'gpu:{i}' for i in range(8)]).reshape(2, 4)\nprint(devs)\n# [['gpu:0' 'gpu:1' 'gpu:2' 'gpu:3']   <- data index 0 (replica 0)\n#  ['gpu:4' 'gpu:5' 'gpu:6' 'gpu:7']]  <- data index 1 (replica 1)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Where the speedup is lost",
+   "kind": "breakdown",
+   "body": "Beyond the book. Per training step on N data-parallel GPUs: compute time is about constant (fixed local batch); the gradient all-reduce moves about 2 x (N-1)/N x P values (P = number of parameters), which approaches 2P; and every step waits for the slowest GPU. Communication can overlap with the backward pass (gradients of late layers are sent while early layers are still computing), which is why efficiency stays above 90% at 8 GPUs. Across machines with slower networks, efficiency drops further.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why name the mesh axes?",
+   "kind": "analogy",
+   "body": "Analogy: a spreadsheet is easier to work with when the columns are called 'date' and 'price' instead of 'A' and 'B'. With named axes, a layout can say 'shard this dimension along model' independently of how many devices that axis has, so the same LayoutMap works on a 2 x 4 mesh or a 4 x 8 one.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Ideal vs reported multi-GPU speedup",
+   "why": "Plots the three speedups listed on the page against perfect linear scaling.",
+   "chart": {
+    "type": "line",
+    "data": {
+     "labels": [
+      "1",
+      "2",
+      "4",
+      "8"
+     ],
+     "datasets": [
+      {
+       "label": "Ideal (N x)",
+       "data": [
+        1,
+        2,
+        4,
+        8
+       ],
+       "borderDash": [
+        6,
+        4
+       ]
+      },
+      {
+       "label": "Reported in the book",
+       "data": [
+        1,
+        2,
+        3.8,
+        7.3
+       ]
+      }
+     ]
+    },
+    "options": {
+     "plugins": {
+      "title": {
+       "display": true,
+       "text": "Speedup vs number of GPUs"
+      }
+     },
+     "scales": {
+      "x": {
+       "title": {
+        "display": true,
+        "text": "GPUs"
+       }
+      },
+      "y": {
+       "title": {
+        "display": true,
+        "text": "Speedup"
+       },
+       "beginAtZero": true
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "The 2 x 4 device mesh and its named axes",
+   "why": "Shows the DeviceMesh(shape=(2, 4), axis_names=[\"data\", \"model\"]) from the page: two data-axis rows (replicas), four model-axis positions (shards).",
+   "mermaid": "flowchart LR\n  subgraph D0[\"data = 0 (replica 0)\"]\n    direction TB\n    a0[\"gpu:0 model=0\"] --- a1[\"gpu:1 model=1\"] --- a2[\"gpu:2 model=2\"] --- a3[\"gpu:3 model=3\"]\n  end\n  subgraph D1[\"data = 1 (replica 1)\"]\n    direction TB\n    b0[\"gpu:4 model=0\"] --- b1[\"gpu:5 model=1\"] --- b2[\"gpu:6 model=2\"] --- b3[\"gpu:7 model=3\"]\n  end\n  a0 -.-|\"gradient averaging along data axis\"| b0"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "8 GPUs always make training 8 times faster.",
+   "correction": "The book reports about 7.3x, and only with a global batch large enough to keep every GPU busy."
+  },
+  {
+   "claim": "You can keep the same batch size when adding GPUs and get the same speedups.",
+   "correction": "The local batch would shrink and GPUs would be under-used; the global batch should grow with the device count."
+  },
+  {
+   "claim": "Device meshes are usually 3-D or higher.",
+   "correction": "They can have any shape, but the book says in practice you only see 1-D and 2-D meshes."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 573,
+    "note": "Synchronous gradient averaging, the overhead source here."
+   },
+   {
+    "page": 575,
+    "note": "Figure 18.2 and DataParallel."
+   },
+   {
+    "page": 574,
+    "note": "2 replicas x 4 devices."
+   }
+  ],
+  "later": [
+   {
+    "page": 577,
+    "note": "DeviceMesh with explicit devices; LayoutMap."
+   },
+   {
+    "page": 578,
+    "note": "Variable paths and setting the model-parallel distribution."
+   },
+   {
+    "page": 580,
+    "note": "Large batches on TPU and learning rate; step fusing."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 50,
+    "note": "Batch axis."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 577,
+    "note": "DeviceMesh(..., devices=devices)."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 575,
+    "note": "Figure 18.2: horizontal = data axis, vertical = model axis."
+   }
+  ]
+ },
+ "takeaways": [
+  "Data-parallel speedups are slightly sub-linear: about 2x, 3.8x, 7.3x on 2, 4, 8 GPUs.",
+  "The overhead comes mainly from merging per-device updates.",
+  "Keep the global batch large enough that each GPU's local batch saturates it.",
+  "A device mesh is a grid of devices with named axes, usually 'data' and 'model'.",
+  "DeviceMesh(shape=(2, 4), axis_names=[\"data\", \"model\"]) gives 2 replicas of 4-way model sharding."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "math",
+   "question": "Using the book's numbers, what is the scaling efficiency on 4 and on 8 GPUs?",
+   "options": [],
+   "answer": "4 GPUs: 3.8 / 4 = 0.95 (95%). 8 GPUs: 7.3 / 8 = 0.9125 (about 91%).",
+   "explanation": "Efficiency = speedup / N (math m1).",
+   "page_refs": [
+    576
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "What does the book identify as the main source of distribution overhead?",
+   "options": [
+    "Loading data from disk",
+    "Merging the weight deltas from different devices",
+    "Compiling the model",
+    "Python interpreter overhead"
+   ],
+   "answer": "Merging the weight deltas from different devices",
+   "explanation": "Stated directly. The other options are real overheads in general but not the one the book names.",
+   "page_refs": [
+    576
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why can multi-GPU training disappoint with a small batch size?",
+   "options": [],
+   "answer": "The global batch is split across GPUs. If it is small, each local batch is too small to saturate a GPU, so devices are under-used and fixed overheads dominate.",
+   "explanation": "From e07.",
+   "page_refs": [
+    576
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "In DeviceMesh(shape=(2, 4), axis_names=[\"data\", \"model\"]), how many model replicas are there?",
+   "options": [
+    "1",
+    "2",
+    "4",
+    "8"
+   ],
+   "answer": "2",
+   "explanation": "The data axis has size 2, so there are two replicas, each sharded over the 4 devices of the model axis (p.577). 4 is the model-sharding degree and 8 is the total device count.",
+   "page_refs": [
+    576,
+    577
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "In figure 18.2's grid, which axis handles data parallelism and which handles model parallelism?",
+   "options": [],
+   "answer": "Horizontal axis (across the two replica groups) = data parallelism; vertical axis (within a group) = model parallelism.",
+   "explanation": "As stated in e13.",
+   "page_refs": [
+    576
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Why is it useful to give mesh axes names like \"data\" and \"model\"?",
+   "options": [],
+   "answer": "Layouts can then refer to axes by meaning (e.g., shard a variable dimension along \"model\") rather than by position or device count, which keeps sharding specifications readable and portable.",
+   "explanation": "The callout says naming is convenient; the LayoutMap on p.577 uses the name \"model\".",
+   "page_refs": [
+    576,
+    577
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you choose a mesh shape for 16 GPUs where each replica needs 4 GPUs to fit the model?",
+   "options": [],
+   "answer": "shape=(4, 4) with axis_names=[\"data\", \"model\"]: 4 replicas, each sharded 4 ways.",
+   "explanation": "Product must be 16; the model axis is set by memory needs and the data axis gets the rest.",
+   "page_refs": [
+    576
+   ]
+  }
+ ]
+}

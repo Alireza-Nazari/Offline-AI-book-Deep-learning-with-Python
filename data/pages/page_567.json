@@ -1,0 +1,445 @@
+{
+ "page_id": "page_567",
+ "pdf_page": 567,
+ "printed_page": "543",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T10:10:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. The first code element completes the 'Objective maximization and minimization' sidebar from p.566. Callout text next to the search listing was extracted with truncated duplicates; it was rebuilt from the page image."
+ },
+ "overview": {
+  "title": "Custom objectives and launching tuner.search()",
+  "chapter": "18 Best practices for the real world",
+  "section": "18.1 Getting the most out of your models",
+  "subsection": "18.1.1 Hyperparameter optimization",
+  "main_topic": "Declaring the objective direction explicitly, preparing MNIST with a held-out validation split, and running the hyperparameter search with early stopping",
+  "central_idea": "tuner.search() takes the same arguments as fit() and runs it for every trial. You must give it validation data that is separate from the test set, and you can use many epochs with an EarlyStopping callback because you do not know in advance how long each configuration needs.",
+  "importance": "This page is where the search actually runs. It also restates the most important discipline of tuning: the test set must never guide the search, or the final test metrics become meaningless.",
+  "learning_objectives": [
+   "Write a kt.Objective with an explicit name and direction",
+   "Split MNIST into training, validation and test sets for tuning, and keep a copy of the full training set for later retraining",
+   "Explain why the test set must not be used as validation data during the search",
+   "Explain the combination of a large epoch count with an EarlyStopping callback in tuner.search()",
+   "Resume a crashed search with overwrite=False"
+  ],
+  "prerequisites": [
+   "The tuner constructor and objective sidebar (p.566)",
+   "MNIST preprocessing (flattening and scaling to [0, 1])",
+   "The EarlyStopping callback (p.233)",
+   "Validation versus test sets and information leaks (p.173)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the example that completes the sidebar from p.566. To use an objective whose direction KerasTuner cannot infer, you wrap it in `kt.Objective(name=..., direction=...)`. The **name** is the metric's key as it appears in the epoch logs (e.g. `\"val_accuracy\"`) and the **direction** is `\"min\"` or `\"max\"`. The object is passed as `objective=objective` to the tuner.\n\nThen the search is launched. The authors warn: **pass validation data, and do not use the test set as validation data**. Otherwise the search overfits to the test data and the test metrics can no longer be trusted.\n\nThe code loads MNIST, flattens the 28 × 28 images to 784-vectors and scales them to [0, 1]. It keeps copies of the full 60,000-sample training set (`x_train_full`, `y_train_full`) \"for later\", the final retraining on p.568–569. It then holds out the last 10,000 training samples as a validation set, leaving 50,000 for training. An `EarlyStopping(monitor=\"val_loss\", patience=5)` callback is created, and `tuner.search(...)` is called with `fit()`-style arguments: `batch_size=128`, `epochs=100`, the validation data, the callbacks and `verbose=2`. The callouts explain that `search()` simply passes these arguments down to `fit()` for each new model, and that the large epoch count plus early stopping is used because you don't know in advance how many epochs each configuration needs.\n\nThe last two paragraphs set expectations. This toy search on MNIST runs in a few minutes, but realistic searches often run overnight or for days. If the process crashes, you can restart it with `overwrite=False` so the tuner resumes from the trial logs on disk. Once the search finishes, you can query the best configurations and retrain high-performing models from them (p.568).",
+ "paragraphs": [
+  {
+   "ref": "p567_e04",
+   "excerpt": "Finally, let’s launch the search. Don’t forget to pass validation data and make sure",
+   "what_it_says": "Launch the search, passing validation data. Never use the test set as validation data, or you will quickly overfit to the test data and lose trust in your test metrics.",
+   "what_it_means": "The tuner selects configurations by their validation score, so the validation data is effectively 'trained on' at the hyperparameter level. If the test set plays that role, the selected model is chosen *because* it scores well on the test set, and its test score is no longer an unbiased estimate of performance on new data. A three-way split keeps one dataset (test) untouched until the very end.",
+   "why_it_matters": "This is the same information-leak argument as p.173, but amplified: an automated tuner makes dozens of selection decisions, so it leaks far more information than a human tweaking a few settings. The NOTE on p.569 returns to this point.",
+   "terminology": [
+    {
+     "term": "Validation data",
+     "meaning": "Held-out data used to compare and select configurations during development."
+    },
+    {
+     "term": "Test data",
+     "meaning": "Data used only once at the end to estimate generalization; it must not influence any decision."
+    }
+   ],
+   "connections": [
+    "p.173: tuning on validation performance leaks information about the validation set into the model",
+    "p.569: NOTE on validation-set overfitting during automated hyperparameter optimization"
+   ]
+  },
+  {
+   "ref": "p567_e06",
+   "excerpt": "The previous example will run in just a few minutes since we’re only looking",
+   "what_it_says": "The MNIST example finishes in minutes because the search space is small and the data is easy. Typical searches can run overnight or for days. If the search crashes, restart it with overwrite=False so it resumes from the trial logs saved on disk.",
+   "what_it_means": "Search cost is roughly (number of trials) × (executions per trial) × (cost of one training run). Realistic models and search spaces make each factor much larger. KerasTuner saves the state of each trial in the `directory` given to the tuner (p.566). With `overwrite=False`, a new tuner with the same directory and model-building function reloads that state and continues instead of starting over.",
+   "why_it_matters": "Multi-day jobs fail: machines get preempted, sessions time out. Built-in checkpointing of the search means a crash costs at most the trial in progress, not the whole search.",
+   "terminology": [
+    {
+     "term": "Trial logs",
+     "meaning": "Files in the tuner's directory recording each trial's hyperparameters, metrics and checkpoints, plus the search algorithm's state."
+    }
+   ],
+   "connections": [
+    "p.566: the overwrite and directory arguments and their callouts"
+   ]
+  },
+  {
+   "ref": "p567_e07",
+   "excerpt": "Once the search is complete, you can query the best hyperparameter configurations, which",
+   "what_it_says": "After the search, you can query the best hyperparameter configurations and use them to build high-performing models, which you then retrain.",
+   "what_it_means": "The output of the search is mainly a ranked list of configurations, not a final model. The usual workflow is to take the top configurations and retrain them, for example on more data and for a carefully chosen number of epochs, as the next pages show.",
+   "why_it_matters": "It sets up listing 18.3 (get_best_hyperparameters) and the retraining procedure on p.568–569, including the shortcut get_best_models.",
+   "terminology": [],
+   "connections": [
+    "p.568: listing 18.3 querying the top-4 hyperparameter configurations",
+    "p.569: retraining on the full training data, or reloading the best models directly"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "tuner_objective",
+   "name": "kt.Objective (named metric with direction)",
+   "definition": "An object telling the tuner which logged metric to optimize and whether to maximize or minimize it.",
+   "intuition": "A label on the scoreboard saying whether high or low scores win.",
+   "technical": "`kt.Objective(name, direction)`: `name` must match the key in the epoch logs (`val_` prefix for validation metrics), `direction` is \"min\" or \"max\". Required when KerasTuner cannot infer the direction, as with custom metrics.",
+   "significance": "A wrong direction silently makes the tuner search for the worst models.",
+   "example": "kt.Objective(name=\"val_auc\", direction=\"max\") or kt.Objective(name=\"val_mae\", direction=\"min\").",
+   "misconception": "That the name is the Python name of the metric object; it is the string key in the logs.",
+   "related": [
+    "hyperparameter_tuning"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "validation_set",
+   "name": "Train / validation / test split for tuning",
+   "definition": "Training data fits weights, validation data guides hyperparameter selection, and test data is used once at the end.",
+   "intuition": "Practice exams (validation) help you decide how to study. The real exam (test) must be unseen, or your grade means nothing.",
+   "technical": "Here: 50,000 train / 10,000 validation (last 10,000 of the original training set) / 10,000 test (MNIST's official test set). The full 60,000-sample training set is kept for the final retraining.",
+   "significance": "Protects the trustworthiness of the final test metric.",
+   "example": "x_train[:-10000] for training, x_train[-10000:] for validation.",
+   "misconception": "That because the model never trains on validation data, validation scores remain unbiased after tuning. Selection itself leaks information (p.173, p.569).",
+   "related": [
+    "overfitting",
+    "information_leak",
+    "hyperparameter_tuning"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "early_stopping",
+   "name": "Early stopping during the search",
+   "definition": "A callback that interrupts training when the monitored metric has not improved for `patience` epochs.",
+   "intuition": "Set a generous maximum (100 epochs) and let each model tell you when it is done improving.",
+   "technical": "`EarlyStopping(monitor=\"val_loss\", patience=5)` stops after 5 consecutive epochs without a new best val_loss. Different configurations converge at different speeds, so a fixed epoch count would under- or over-train many of them.",
+   "significance": "Saves compute across many trials and stops each model near its best epoch.",
+   "example": "A model whose val_loss is lowest at epoch 12 stops at epoch 17.",
+   "misconception": "That early stopping restores the best weights by default. Without restore_best_weights=True, Keras keeps the weights from the last epoch.",
+   "related": [
+    "overfitting",
+    "validation_set"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Specifying the objective direction with kt.Objective",
+   "original_code": "objective = kt.Objective(\n    name=\"val_accuracy\",\n    direction=\"max\",\n)\ntuner = kt.BayesianOptimization(\n    build_model,\n    objective=objective,\n    ...\n)",
+   "language": "python",
+   "what_it_does": "Creates an explicit objective (`val_accuracy`, to be maximized) and passes it to the BayesianOptimization tuner. The `...` stands for the other constructor arguments shown on p.566.",
+   "line_explanations": [
+    {
+     "lines": "1-4",
+     "explanation": "`kt.Objective`: `name` is the metric's name as found in the epoch logs; `direction` is \"min\" or \"max\". val_accuracy is built-in so this is redundant here, but the same pattern is required for custom metrics."
+    },
+    {
+     "lines": "5-9",
+     "explanation": "The tuner receives the Objective object instead of a string. The ellipsis elides max_trials, executions_per_trial, directory and overwrite."
+    }
+   ],
+   "inputs_outputs": "Input: metric name and direction. Output: a tuner configured to rank trials by that metric in that direction.",
+   "algorithm": "N/A: configuration.",
+   "theory_link": "Optimization requires a defined sign: the tuner minimizes or maximizes the objective.",
+   "parameters": [
+    {
+     "name": "name",
+     "role": "Logged metric key, e.g. 'val_accuracy'."
+    },
+    {
+     "name": "direction",
+     "role": "'min' or 'max'."
+    }
+   ],
+   "pitfalls": [
+    "The name must match the log key exactly, including the 'val_' prefix. A typo means the tuner cannot find the metric.",
+    "The `...` is not valid as a stand-in for the real arguments; replace it with the arguments from p.566."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Preparing MNIST and running tuner.search()",
+   "original_code": "(x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()\nx_train = x_train.reshape((-1, 28 * 28)).astype(\"float32\") / 255\nx_test = x_test.reshape((-1, 28 * 28)).astype(\"float32\") / 255\nx_train_full = x_train[:]\ny_train_full = y_train[:]\nnum_val_samples = 10000\nx_train, x_val = x_train[:-num_val_samples], x_train[-num_val_samples:]\ny_train, y_val = y_train[:-num_val_samples], y_train[-num_val_samples:]\ncallbacks = [\n    keras.callbacks.EarlyStopping(monitor=\"val_loss\", patience=5),\n]\ntuner.search(\n    x_train,\n    y_train,\n    batch_size=128,\n    epochs=100,\n    validation_data=(x_val, y_val),\n    callbacks=callbacks,\n    verbose=2,\n)",
+   "language": "python",
+   "what_it_does": "Loads and preprocesses MNIST, keeps a copy of the full training set, holds out 10,000 samples for validation, and runs the hyperparameter search with early stopping. Each trial is trained with these fit() arguments.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Loads MNIST: 60,000 training and 10,000 test images of shape (28, 28), with integer labels 0–9."
+    },
+    {
+     "lines": "2-3",
+     "explanation": "Flatten each image to a 784-vector (`-1` lets NumPy infer the sample count), cast to float32 and scale pixel values from [0, 255] to [0, 1], matching the Dense-input MLP of listing 18.1."
+    },
+    {
+     "lines": "4-5",
+     "explanation": "Keep the full 60,000-sample training set (callout: 'Reserves these for later') for the final retraining on p.569. The names keep pointing to the full data even after `x_train` is rebound on the next lines."
+    },
+    {
+     "lines": "6-8",
+     "explanation": "Set aside the last 10,000 training samples as the validation set (callout: 'Sets aside a validation set'). Training keeps the first 50,000."
+    },
+    {
+     "lines": "9-11",
+     "explanation": "An EarlyStopping callback that stops training once val_loss has not improved for 5 epochs."
+    },
+    {
+     "lines": "12-20",
+     "explanation": "`tuner.search` takes the same arguments as `fit()` and passes them to `fit()` for each new model. `epochs=100` is a generous upper bound; early stopping ends each run when it starts overfitting. `verbose=2` prints one line per epoch."
+    }
+   ],
+   "inputs_outputs": "Inputs: preprocessed training and validation arrays, fit() settings. Output: none returned; the tuner records each trial's results in its directory, ready for get_best_hyperparameters / get_best_models.",
+   "algorithm": "For each trial (≤ 20): propose hp → build_model(hp) → fit on 50k samples with validation on 10k, up to 100 epochs with early stopping (twice, executions_per_trial=2) → report averaged val_accuracy → update the Bayesian model.",
+   "theory_link": "Hold-out validation (chapter 5) as the feedback signal for gradient-free hyperparameter optimization; early stopping as a cheap capacity/duration control.",
+   "parameters": [
+    {
+     "name": "num_val_samples",
+     "role": "Size of the hold-out validation set (10,000)."
+    },
+    {
+     "name": "patience=5",
+     "role": "Epochs without val_loss improvement before stopping; aggressive, to save time during search."
+    },
+    {
+     "name": "epochs=100",
+     "role": "Upper bound on training length per run."
+    },
+    {
+     "name": "batch_size=128",
+     "role": "Mini-batch size passed to fit()."
+    },
+    {
+     "name": "validation_data",
+     "role": "Data used to compute val_accuracy (the objective) and val_loss (early stopping)."
+    }
+   ],
+   "pitfalls": [
+    "Never pass (x_test, y_test) as validation_data: test metrics would then be biased by selection.",
+    "Slicing the last 10,000 samples assumes the data is not ordered by class. MNIST's training set is shuffled, but for sorted data you would shuffle first (p.177).",
+    "The callback monitors val_loss while the objective is val_accuracy. They usually agree, but not always.",
+    "patience=5 can stop slow-converging configurations too early. The book raises this on p.568 and uses patience=10 when finding the best epoch."
+   ],
+   "illustrative_code": "# AI-written: resuming an interrupted search (same directory, same build_model)\ntuner = kt.BayesianOptimization(\n    build_model,\n    objective=\"val_accuracy\",\n    max_trials=20,\n    executions_per_trial=2,\n    directory=\"mnist_kt_test\",\n    overwrite=False,   # reload completed trials from disk\n)\ntuner.search(x_train, y_train, batch_size=128, epochs=100,\n             validation_data=(x_val, y_val), callbacks=callbacks, verbose=2)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Where each slice of MNIST goes",
+   "kind": "breakdown",
+   "body": "| Array | Samples | Role |\n|---|---|---|\n| `x_train` (after split) | 50,000 | weights during each trial |\n| `x_val` | 10,000 | `val_accuracy` objective + early stopping |\n| `x_test` | 10,000 | untouched until final evaluation (p.569) |\n| `x_train_full` | 60,000 | retraining the chosen configurations (p.569) |\n\nRetraining on `x_train_full` uses 60,000 / 50,000 = 1.2× the data, which is the '20% more' the book uses on p.568 to justify training for `int(best_epoch * 1.2)` epochs.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why a big epoch count plus early stopping beats a tuned epoch count here",
+   "kind": "step_by_step",
+   "body": "1. Configurations differ: 128 units with rmsprop may converge in 8 epochs, a larger model with adam may need 20.\n2. A fixed number of epochs would overtrain some trials and undertrain others, biasing the comparison.\n3. Setting `epochs=100` (more than any trial needs) and stopping at the first plateau gives each configuration roughly its own optimal training length.\n4. The cost is that `patience=5` is aggressive. Some models are stopped during a temporary plateau and slightly underfit. The book returns to this on p.568 and picks the final epoch count separately with patience 10.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "widget": "data_split",
+   "title": "The three-way MNIST split used for the search",
+   "why": "The page splits MNIST into 50,000 training, 10,000 validation and 10,000 test samples (70,000 total) and stresses that the test set must not be used as validation data.",
+   "params": {
+    "train": 0.714,
+    "val": 0.143,
+    "test": 0.143,
+    "n": 70000
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "widget": "training_curves",
+   "title": "What EarlyStopping does inside each trial",
+   "why": "Each trial runs with epochs=100 and EarlyStopping(patience=5). Move the best-epoch marker to see where validation loss bottoms out and training would stop a few epochs later.",
+   "params": {
+    "epochs": 30,
+    "overfit_from": 10,
+    "noise": 0.03
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Using the test set as validation data during the search is fine because the model never trains on it.",
+   "correction": "The tuner selects configurations based on that data, so test performance becomes an optimistically biased estimate. The book warns you would 'quickly start overfitting to your test data'."
+  },
+  {
+   "claim": "tuner.search() has its own special training API.",
+   "correction": "It takes the same arguments as fit() and passes them to fit() for each new model."
+  },
+  {
+   "claim": "epochs=100 means each trial trains for 100 epochs.",
+   "correction": "It is an upper bound. EarlyStopping ends a run once val_loss has not improved for 5 epochs."
+  },
+  {
+   "claim": "If a long search crashes you must start from scratch.",
+   "correction": "Recreate the tuner with overwrite=False and the same directory; it resumes from the trial logs on disk."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 566,
+    "note": "Tuner construction, search_space_summary(), and the start of the objective-direction sidebar."
+   },
+   {
+    "page": 564,
+    "note": "build_model (listing 18.1), the model each trial instantiates."
+   },
+   {
+    "page": 173,
+    "note": "Why three sets: tuning on validation data leaks information; the test set must stay untouched."
+   }
+  ],
+  "later": [
+   {
+    "page": 568,
+    "note": "Listing 18.3 retrieves the top-4 hyperparameter sets; picking the best epoch with patience=10."
+   },
+   {
+    "page": 569,
+    "note": "Retraining on x_train_full for int(best_epoch * 1.2) epochs, evaluating on x_test, and the get_best_models shortcut."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 233,
+    "note": "The EarlyStopping callback and how it interrupts training."
+   },
+   {
+    "page": 177,
+    "note": "Shuffle before splitting unless there is a temporal order; beware redundancy between splits."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 207,
+    "note": "The universal workflow's tuning phase, which points ahead to KerasTuner."
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "kt.Objective(name, direction) declares the metric (as named in the epoch logs) and whether to maximize or minimize it.",
+  "tuner.search() accepts fit() arguments and forwards them to fit() for every trial.",
+  "Hold out a validation set from the training data; never use the test set to guide the search.",
+  "Keep a copy of the full training set for the final retraining after the search.",
+  "Use a large epoch budget with EarlyStopping because each configuration needs a different number of epochs.",
+  "Real searches can take days; overwrite=False lets a crashed search resume from logs on disk."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What does the name argument of kt.Objective refer to?",
+   "options": [
+    "The Python variable holding the metric object",
+    "The metric's name as found in the epoch logs",
+    "The name of the tuner's log directory",
+    "The name of the hyperparameter being optimized"
+   ],
+   "answer": "The metric's name as found in the epoch logs",
+   "explanation": "The callout says the name is the metric's name 'as found in epoch logs', e.g. 'val_accuracy'. It is not a Python object, a directory or a hyperparameter.",
+   "page_refs": [
+    567
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "How many samples are used for training, validation and testing during the search, and which array is reserved for later?",
+   "options": [],
+   "answer": "50,000 train, 10,000 validation (the last 10,000 of the original training set), 10,000 test. x_train_full / y_train_full (all 60,000) are reserved for the final retraining.",
+   "explanation": "num_val_samples = 10000 is sliced off the end of the 60,000-sample training set; the test set is MNIST's official 10,000 samples.",
+   "page_refs": [
+    567,
+    569
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why would using the test set as validation data during the search make the test metrics untrustworthy?",
+   "options": [],
+   "answer": "The tuner picks configurations that score best on the validation data. If that is the test set, the chosen model is selected to fit the test set, so its test score overestimates performance on truly new data.",
+   "explanation": "Selection is a form of training at the hyperparameter level. This is the information-leak argument of p.173 and the validation-overfitting note on p.569.",
+   "page_refs": [
+    567,
+    173,
+    569
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "Why does the search use epochs=100 together with an EarlyStopping callback?",
+   "options": [
+    "Because MNIST always needs exactly 100 epochs",
+    "Because you don't know in advance how many epochs each model will need, so training stops when it starts overfitting",
+    "Because KerasTuner requires at least 100 epochs",
+    "To make each trial take the same amount of time"
+   ],
+   "answer": "Because you don't know in advance how many epochs each model will need, so training stops when it starts overfitting",
+   "explanation": "This is the callout's explanation. MNIST has no fixed epoch requirement, KerasTuner has no minimum, and early stopping makes trial durations vary.",
+   "page_refs": [
+    567
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "Your 3-day search crashes after 30 hours. What do you change to continue it?",
+   "options": [],
+   "answer": "Recreate the tuner with the same directory and model-building function but overwrite=False, then call tuner.search() again; it resumes from the trial logs on disk.",
+   "explanation": "Stated in the paragraph after the code and in the overwrite callout on p.566.",
+   "page_refs": [
+    567,
+    566
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "The early-stopping callback monitors val_loss while the tuner's objective is val_accuracy. Is that a problem?",
+   "options": [],
+   "answer": "Not usually. Both measure validation performance and tend to improve together, but they can diverge (a model can become overconfident, so val_loss rises while val_accuracy stays flat). In that case a run may stop slightly before its best val_accuracy.",
+   "explanation": "Beyond the book: loss is a smoother signal and is the conventional choice for early stopping, while accuracy is the metric the tuner ranks on.",
+   "page_refs": [
+    567
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you explain, without looking, what each of the four arrays x_train, x_val, x_test, x_train_full is used for in the full tuning workflow?",
+   "options": [],
+   "answer": "x_train: fit each trial; x_val: objective and early stopping; x_test: final evaluation only; x_train_full: retrain the selected configurations.",
+   "explanation": "See the breakdown table in the deeper section and p.569 for the retraining.",
+   "page_refs": [
+    567,
+    569
+   ]
+  }
+ ]
+}

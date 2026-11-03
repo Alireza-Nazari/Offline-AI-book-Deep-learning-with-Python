@@ -1,0 +1,310 @@
+{
+ "page_id": "page_369",
+ "pdf_page": 369,
+ "printed_page": "345",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:39:06Z",
+  "confidence": "high",
+  "review_flags": [
+   "Listing 12.13 is captioned 'Training the YOLO model', the same caption as Listing 12.12, but its code runs inference on one validation sample and draws the predictions; a caption such as 'Visualizing a YOLO prediction' would fit.",
+   "Callout typo: 'Loads the image from disk to view it a full size' should read 'at full size'."
+  ],
+  "extraction_quality": "Clean extraction of Listing 12.13, the figure caption, one paragraph and the one-line follow-up snippet. Figure 12.6 is a photo; its content (giraffe, label 'giraffe 0.16', shaded grid cells) was read from the page image."
+ },
+ "overview": {
+  "title": "Visualizing the trained YOLO model's predictions",
+  "chapter": "12 Object detection",
+  "section": "12.2 Training a YOLO model from scratch",
+  "subsection": "12.2.4 Training the YOLO model",
+  "main_topic": "Running the trained YOLO model on one validation image, converting its outputs (boxes and per-cell argmax labels) and drawing predictions above a confidence cutoff (Listing 12.13, figure 12.6)",
+  "central_idea": "After 4 epochs the model already places a plausible box around the giraffe and labels the right grid cells, but with only 0.16 confidence. A cutoff of 0.1 shows that one box; cutoff=None shows every box the model predicts (figure 12.7 on the next page).",
+  "importance": "This is the first look at what the from-scratch detector actually does. It shows how raw network outputs become a visual detection, and why the confidence threshold is a key knob when reading detector outputs.",
+  "learning_objectives": [
+   "Explain how val_dataset.rebatch(1) yields a single sample",
+   "Describe the shapes of preds['box'] and preds['class'] and how argmax produces a per-cell label map",
+   "Explain what the cutoff argument of draw_prediction does, including cutoff=None",
+   "Interpret figure 12.6: what the model gets right and what the 0.16 confidence means"
+  ],
+  "prerequisites": [
+   "draw_prediction from Listing 12.8 (p.365)",
+   "Model outputs: box (6, 6, 5) and class softmax (6, 6, 91) (p.362)",
+   "Confidence target defined as IoU (p.367)",
+   "Training in Listing 12.12 (p.368)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Listing 12.13** (captioned, somewhat confusingly, \"Training the YOLO model\") inspects the trained model on one image:\n\n1. `val_dataset.rebatch(1)` re-splits the validation batches of 16 into batches of 1, and `next(iter(...))` takes the first: an image tensor `x` of shape (1, 448, 448, 3) and its targets `y` (callout: *Rebatches our dataset to get a single sample instead of 16*).\n2. `model.predict(x)` returns a dict; `preds[\"box\"][0]` is the (6, 6, 5) box grid of that image.\n3. `np.argmax(preds[\"class\"][0], axis=-1)` turns the (6, 6, 91) softmax into a (6, 6) map of the most likely label per cell (callout: *Uses argmax to find the most likely label at each grid location*).\n4. `path = metadata[0][\"path\"]`: because the validation set is the first 500 batches in metadata order, the first validation sample is `metadata[0]`. The original file is reloaded so the image can be viewed at full size (callout).\n5. `draw_prediction(path, boxes, classes, cutoff=0.1)` shades grid cells by predicted class and draws only boxes with confidence at least 0.1.\n\n**Figure 12.6** shows a giraffe among trees, overlaid with the 6 x 6 grid. A block of cells around the giraffe is shaded in one class color, and a single box labeled **\"giraffe 0.16\"** frames the animal reasonably well. The text concludes that the model is *starting to understand box locations and class labels, though it is still not very accurate*.\n\nTo see everything the model outputs, the page calls `draw_prediction(path, boxes, classes, cutoff=None)`, which draws **every** predicted box, even those with zero confidence; the result is figure 12.7 on p.370.",
+ "paragraphs": [
+  {
+   "ref": "p369_e04",
+   "excerpt": "x, y = next(iter(val_dataset.rebatch(1)))",
+   "what_it_says": "Listing 12.13 takes one validation sample, predicts on it, extracts the box grid and argmax class map, and draws predictions with confidence at least 0.1 on the original image.",
+   "what_it_means": "Raw outputs need two post-processing steps before they are viewable: selecting the single image from the batch axis ([0]) and turning class probabilities into hard labels (argmax). The cutoff then filters boxes by confidence.",
+   "why_it_matters": "This is the minimal inference-and-visualization loop for a grid detector; real detectors add non-max suppression and calibrated thresholds on top.",
+   "technical_idea": "Each of the 36 cells always outputs a box; whether it is shown depends only on its confidence channel (index 4) versus the cutoff.",
+   "terminology": [
+    {"term": "rebatch(1)", "meaning": "tf.data transformation that changes the batch size of an already-batched dataset, here to 1."},
+    {"term": "argmax", "meaning": "Index of the largest value along an axis; here the most likely of 91 labels per cell."},
+    {"term": "cutoff", "meaning": "Confidence threshold for drawing a box."}
+   ],
+   "connections": [
+    "p.365: draw_prediction draws the class map and boxes with confidence >= cutoff",
+    "p.366: val_dataset = dataset.take(500), in metadata order, so its first sample is metadata[0]"
+   ]
+  },
+  {
+   "ref": "p369_e05",
+   "excerpt": "Figure 12.6 Predictions for our sample image",
+   "what_it_says": "The figure shows the sample giraffe image, the 6 x 6 grid with shaded cells for the predicted class, and one box labeled 'giraffe 0.16'.",
+   "what_it_means": "The model localized the giraffe and labeled it correctly, but its confidence is low. Since confidence is trained to match IoU (p.367), 0.16 means the model expects its box to overlap the true one only modestly.",
+   "why_it_matters": "It's a concrete picture of an undertrained detector: qualitatively right, quantitatively weak.",
+   "technical_idea": "White bands above and below the photo are padding added by draw_image so a non-square image fits the square grid (p.359).",
+   "terminology": [
+    {"term": "class probability map", "meaning": "The per-cell predicted labels shown as shaded cells."}
+   ],
+   "connections": [
+    "p.365: figure 12.5 drew the target for the same image",
+    "p.368: training stopped while validation loss was still falling"
+   ]
+  },
+  {
+   "ref": "p369_e06",
+   "excerpt": "We can see our model is starting to understand box locations and",
+   "what_it_says": "The model is starting to understand box locations and class labels but is still not very accurate. Next, every predicted box will be drawn (figure 12.7), even those with zero confidence.",
+   "what_it_means": "Dropping the threshold reveals what the model predicts in cells it considers empty, which helps diagnose whether confidences are uniformly low or well separated.",
+   "why_it_matters": "Looking at all raw outputs is a standard debugging step for detectors.",
+   "terminology": [],
+   "connections": [
+    "p.370: figure 12.7 shows every predicted box and the explanation that confidences are very low"
+   ]
+  },
+  {
+   "ref": "p369_e07",
+   "excerpt": "draw_prediction(path, boxes, classes, cutoff=None)",
+   "what_it_says": "The same drawing call with cutoff=None.",
+   "what_it_means": "In draw_prediction the condition is `if not cutoff or confidence >= cutoff`; with cutoff=None, `not cutoff` is True, so all 36 boxes are drawn.",
+   "why_it_matters": "Shows how one parameter switches between a cleaned-up view and the raw output.",
+   "technical_idea": "Note: cutoff=0 would also draw everything, since `not 0` is True.",
+   "terminology": [],
+   "connections": [
+    "p.365: the cutoff logic inside draw_prediction"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "confidence_threshold",
+   "name": "Confidence cutoff",
+   "definition": "A threshold on a detector's confidence score; only predictions at or above it are reported.",
+   "intuition": "A volume knob between 'show only what you're sure about' and 'show everything'.",
+   "technical": "draw_prediction tests box[4] >= cutoff for each of the 6 x 6 cells; None disables filtering.",
+   "significance": "Trades precision for recall; the book uses a low cutoff (0.1) because the model's confidences are low.",
+   "example": "cutoff=0.1 shows the 'giraffe 0.16' box; cutoff=0.2 would show nothing for this image (inference from the figure).",
+   "misconception": "A low confidence doesn't mean the box is wrong; here the box is plausible but confidence is low because training is incomplete.",
+   "related": ["intersection_over_union", "yolo_box_loss"],
+   "source": "book"
+  },
+  {
+   "id": "argmax_decoding",
+   "name": "Argmax decoding of class maps",
+   "definition": "Turning per-cell class probability vectors into a single predicted label per cell by taking the index of the maximum.",
+   "intuition": "Each cell votes for its most likely class.",
+   "technical": "np.argmax over axis -1 of a (6, 6, 91) array gives (6, 6) integers.",
+   "significance": "Produces the labels used to color cells and name boxes.",
+   "example": "classes = np.argmax(preds['class'][0], axis=-1).",
+   "misconception": "Argmax discards uncertainty; a cell at 30% giraffe and 29% zebra looks as certain as one at 99%.",
+   "related": ["softmax"],
+   "source": "book"
+  },
+  {
+   "id": "object_detection",
+   "name": "Object detection",
+   "definition": "Predicting bounding boxes and class labels for the objects in an image.",
+   "intuition": "Not just 'what' but 'where'.",
+   "technical": "Here a single-stage YOLO-style grid detector predicting one box per cell.",
+   "significance": "The task of chapter 12.",
+   "example": "Figure 12.6: a 'giraffe' box at confidence 0.16.",
+   "misconception": "A detector's raw output is not a short list of objects; it is a fixed grid of candidates that must be filtered.",
+   "related": ["intersection_over_union", "yolo_box_loss"],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "12.13",
+   "title": "Training the YOLO model (visualizing a prediction)",
+   "original_code": "x, y = next(iter(val_dataset.rebatch(1)))\npreds = model.predict(x)\nboxes = preds[\"box\"][0]\nclasses = np.argmax(preds[\"class\"][0], axis=-1)\npath = metadata[0][\"path\"]\ndraw_prediction(path, boxes, classes, cutoff=0.1)",
+   "language": "python",
+   "what_it_does": "Predicts on the first validation image, decodes boxes and labels, and draws boxes with confidence >= 0.1 over the full-size image.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Rebatch the validation set to size 1 and take the first element: x is (1, 448, 448, 3), y the matching targets (unused here). Callout: 'Rebatches our dataset to get a single sample instead of 16'."},
+    {"lines": "2", "explanation": "Run the model; preds is a dict with 'box' (1, 6, 6, 5) and 'class' (1, 6, 6, 91) NumPy arrays."},
+    {"lines": "3", "explanation": "Drop the batch axis: boxes is (6, 6, 5)."},
+    {"lines": "4", "explanation": "Most likely label per grid cell, shape (6, 6) (callout: 'Uses argmax to find the most likely label at each grid location')."},
+    {"lines": "5", "explanation": "The file path of the first validation sample, which is metadata[0]; the original image is reloaded from disk for display at full size (callout)."},
+    {"lines": "6", "explanation": "Draw the class map and boxes whose confidence is at least 0.1; result is figure 12.6."}
+   ],
+   "inputs_outputs": "Inputs: trained model, val_dataset, metadata. Output: a matplotlib figure (figure 12.6).",
+   "algorithm": "Fetch one sample -> forward pass -> select item 0 -> argmax classes -> threshold boxes by confidence -> draw.",
+   "theory_link": "Confidence approximates the IoU of the predicted box (p.367), so the cutoff filters by expected box quality.",
+   "parameters": [
+    {"name": "rebatch(1)", "role": "Batch size 1 for single-image inference."},
+    {"name": "axis=-1", "role": "Argmax over the 91 class probabilities."},
+    {"name": "cutoff=0.1", "role": "Minimum confidence for a box to be drawn; deliberately low."}
+   ],
+   "pitfalls": [
+    "metadata[0] matches x only because val_dataset was taken from the start of the unshuffled-at-this-point pipeline; if the dataset were shuffled after creation, the path would not match the predicted image.",
+    "The box values are in grid encoding; draw_prediction converts them with from_grid (p.364-365) before drawing.",
+    "No non-max suppression is applied, so overlapping duplicate boxes would all be drawn if above the cutoff."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Drawing every predicted box",
+   "original_code": "draw_prediction(path, boxes, classes, cutoff=None)",
+   "language": "python",
+   "what_it_does": "Draws all 36 predicted boxes regardless of confidence (figure 12.7, p.370).",
+   "line_explanations": [
+    {"lines": "1", "explanation": "cutoff=None makes `not cutoff` True inside draw_prediction, so every box is drawn with its (clipped-at-0) confidence in the label."}
+   ],
+   "inputs_outputs": "Same inputs as Listing 12.13; output figure 12.7.",
+   "algorithm": "Draw without filtering.",
+   "theory_link": "Reveals the full raw output of the grid detector.",
+   "parameters": [
+    {"name": "cutoff=None", "role": "Disables the confidence filter."}
+   ],
+   "pitfalls": [
+    "Labels show max(confidence, 0), so negative predicted confidences display as 0.00 (p.365)."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Reading 'giraffe 0.16'",
+   "kind": "step_by_step",
+   "body": "1. 'giraffe' is `coco_id_to_name(classes[yi, xi])` for the cell whose box passed the cutoff, i.e. the argmax label of that cell.\n2. 0.16 is that cell's confidence output, `boxes[yi, xi, 4]`.\n3. The loss trained confidence to match the IoU between the predicted and true box (p.367), so 0.16 is the model's own estimate that its box overlaps the truth with an IoU around 0.16.\n4. Visually the box fits better than that, which (inference) suggests the confidence head is lagging behind the localization head after only 4 epochs.",
+   "source": "inference"
+  },
+  {
+   "title": "From grid outputs to a final detection list",
+   "kind": "application",
+   "body": "Beyond the book. Production grid detectors do more than threshold: they (1) multiply confidence by class probability to get class-specific scores, (2) drop scores below a threshold, and (3) apply **non-max suppression**, keeping the highest-scoring box and removing others that overlap it with IoU above, say, 0.5. The book's draw_prediction only performs step 2, which is enough here because the model predicts at most one box per cell.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "From model outputs to drawable predictions",
+   "why": "Listing 12.13 goes from one (1, 448, 448, 3) image to (6, 6, 5) boxes and a (6, 6) argmax label map.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "x (rebatch 1)", "shape": [1, 448, 448, 3]},
+     {"op": "preds['class']", "shape": [1, 6, 6, 91]},
+     {"op": "argmax axis -1, [0]", "shape": [6, 6]},
+     {"op": "preds['box']", "shape": [1, 6, 6, 5]},
+     {"op": "[0]", "shape": [6, 6, 5]}
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {"claim": "Listing 12.13 trains the model (its caption says 'Training the YOLO model').", "correction": "It only runs inference and draws predictions; training happens in Listing 12.12."},
+  {"claim": "cutoff=None means no boxes are drawn.", "correction": "It disables filtering, so every box is drawn."},
+  {"claim": "The model only predicted one box for the giraffe image.", "correction": "It predicts a box in all 36 cells; only one exceeded the 0.1 cutoff."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 365, "note": "draw_prediction (Listing 12.8) and figure 12.5, the target for the same image."},
+   {"page": 366, "note": "val_dataset creation; first validation sample = metadata[0]."},
+   {"page": 368, "note": "Training in Listing 12.12; the model is undertrained."}
+  ],
+  "later": [
+   {"page": 370, "note": "Figure 12.7 (all boxes) and why confidences are low; ideas for improvement; RetinaNet."}
+  ],
+  "prerequisites": [
+   {"page": 362, "note": "Model output shapes."},
+   {"page": 367, "note": "Confidence as IoU."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 365, "note": "draw_prediction implementation."},
+   {"page": 364, "note": "from_grid used inside draw_prediction."}
+  ],
+  "related_figures": [
+   {"page": 365, "note": "Figure 12.5: ground-truth target for this image."},
+   {"page": 370, "note": "Figure 12.7: every predicted box."}
+  ]
+ },
+ "takeaways": [
+  "rebatch(1) + next(iter(...)) pulls a single validation image.",
+  "Boxes come out as a (6, 6, 5) grid; labels come from argmax over 91 classes per cell.",
+  "draw_prediction shows boxes with confidence >= cutoff; None shows all.",
+  "After 4 epochs the model boxes the giraffe correctly but with confidence only 0.16.",
+  "The model is starting to learn locations and labels but is not yet accurate."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What does `val_dataset.rebatch(1)` do in Listing 12.13?",
+   "options": ["Shuffles the validation set", "Re-splits the batches so each element holds a single sample", "Repeats the dataset once", "Removes the labels"],
+   "answer": "Re-splits the batches so each element holds a single sample",
+   "explanation": "The callout says it rebatches to get a single sample instead of 16. It doesn't shuffle, repeat or drop labels (y is still returned).",
+   "page_refs": [369]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "What is the shape of `classes` after the argmax, and what does each entry represent?",
+   "options": [],
+   "answer": "(6, 6); each entry is the index of the most likely of the 91 COCO labels for that grid cell.",
+   "explanation": "preds['class'][0] is (6, 6, 91) and argmax over axis -1 removes the last axis.",
+   "page_refs": [369]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why is `metadata[0]['path']` the correct image for the prediction?",
+   "options": [],
+   "answer": "Because val_dataset is dataset.take(500), the first batches in metadata order, so its first sample after rebatching is metadata[0].",
+   "explanation": "Listing 12.9 built the dataset from metadata in order and split validation off the front.",
+   "page_refs": [366, 369]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "In figure 12.6 the box is labeled 'giraffe 0.16'. What is 0.16?",
+   "options": ["The class probability of 'giraffe'", "The predicted confidence of that cell's box", "The IoU with the true box measured on the validation set", "The loss value"],
+   "answer": "The predicted confidence of that cell's box",
+   "explanation": "draw_prediction prints the box's confidence channel. It was trained toward IoU but is the model's prediction, not a measured IoU; the class probability is not printed.",
+   "page_refs": [365, 369]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "Why does the book use a cutoff of only 0.1?",
+   "options": [],
+   "answer": "Because the undertrained model outputs low confidences; a higher cutoff would hide even correct boxes.",
+   "explanation": "p.368 announces a low-confidence cutoff because the model is not a very good detector yet.",
+   "page_refs": [368, 369]
+  },
+  {
+   "id": "q6",
+   "type": "self",
+   "question": "Without looking, can you explain what happens inside draw_prediction when cutoff=None?",
+   "options": [],
+   "answer": "`not cutoff` is True, so the condition passes for every cell and all 36 boxes are drawn.",
+   "explanation": "This is the mechanism behind figure 12.7.",
+   "page_refs": [365, 369]
+  }
+ ]
+}

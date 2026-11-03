@@ -1,0 +1,428 @@
+{
+ "page_id": "page_071",
+ "pdf_page": 71,
+ "printed_page": "47",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-fable-5-1",
+  "generated_at": "2026-11-03T03:56:50Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction. Two code blocks (fg and fghj, the second followed by the chained grad identity) match the page image. The page references figures 2.21 and 2.22, which are printed on p.72."
+ },
+ "overview": {
+  "title": "The chain rule and computation graphs",
+  "chapter": "2 The mathematical building blocks of neural networks",
+  "section": "2.4 The engine of neural networks: Gradient-based optimization",
+  "subsection": "2.4.4 Chaining derivatives: The Backpropagation algorithm",
+  "main_topic": "Stating the chain rule for composed functions, naming its systematic application backpropagation, and introducing computation graphs as the data structure on which automatic differentiation operates",
+  "central_idea": "If y = f(g(x)) with intermediate x1 = g(x), then grad(y, x) == grad(y, x1) * grad(x1, x); longer chains multiply more factors. Applying this to a network's operations is backpropagation, and the natural representation for doing so is a computation graph: a directed acyclic graph of tensor operations that treats computation as data.",
+  "importance": "This page contains the one calculus identity behind all of deep learning training and introduces the abstraction (computation graphs) that lets frameworks such as TensorFlow, JAX and PyTorch differentiate any model automatically. It also sets up the scalar toy example (x, w, b, abs loss) worked through on p.72-74.",
+  "learning_objectives": [
+   "State the chain rule in the book's grad notation for two and for four chained functions.",
+   "Explain why the rule is called a 'chain' and how intermediate variables (x1, x2, x3) appear in it.",
+   "Define a computation graph and say why 'treating computation as data' is powerful.",
+   "Give the two example uses of computation graphs mentioned on the page (automatic distribution, automatic derivative generation).",
+   "Describe the simplified scalar graph (inputs x, y_true, parameters w, b, loss abs(y_true - y)) and the two gradients we want from it."
+  ],
+  "prerequisites": [
+   "Function composition y = fg(x) == f(g(x)) set up on p.70",
+   "grad(y, x) notation for the derivative/gradient of y with respect to x (p.65-67)",
+   "The nested model expression of p.70 (matmul, +, relu, softmax, loss)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the code for the composed function `fg`: `x1 = g(x)`, `y = f(x1)`, `return y`. Then it states the **chain rule** in the book's notation: `grad(y, x) == grad(y, x1) * grad(x1, x)`. Knowing the derivatives of `f` and `g` separately is enough to differentiate `fg`. The name comes from what happens with more intermediate functions: for `fghj` (with `x1 = j(x)`, `x2 = h(x1)`, `x3 = g(x2)`, `y = f(x3)`) the rule reads `grad(y, x) == grad(y, x3) * grad(x3, x2) * grad(x2, x1) * grad(x1, x)`, a chain of factors, one per link. Applying this rule to compute the gradient values of a neural network is the algorithm called **backpropagation**.\n\nUnder **Automatic differentiation with computation graphs**, the authors propose the computation graph as the right mental model for backpropagation. A computation graph is a directed acyclic graph of operations, here tensor operations; figure 2.21 (p.72) is the graph of the first model. The authors call it \"the data structure at the heart of the deep learning revolution\" and explain why: it lets us *treat computation as data*. Once a computable expression is a machine-readable structure, other programs can take it as input or produce it as output. Two examples: a program that rewrites a graph into a large-scale distributed version of the same computation (so you never write distribution logic yourself), and a program that takes a graph and automatically generates the derivative of the expression it represents. Both are far easier on an explicit graph than on \"lines of ASCII characters in a `.py` file\".\n\nTo explain backpropagation concretely, the page sets up a simplified version of figure 2.21 with a single linear layer and scalar variables (figure 2.22, p.72): two scalar parameters `w` and `b`, a scalar input `x`, operations combining them into an output `y`, and an absolute-value error loss `loss_val = abs(y_true - y)`. Since we want to update `w` and `b` to minimize `loss_val`, the targets of the computation are `grad(loss_val, b)` and `grad(loss_val, w)`.",
+ "paragraphs": [
+  {
+   "ref": "p071_e04",
+   "excerpt": "Then the chain rule states that grad(y, x) == grad(y, x1) * grad(x1, x).",
+   "what_it_says": "For the composed function fg with intermediate value x1 = g(x), the chain rule says grad(y, x) == grad(y, x1) * grad(x1, x). This lets you compute the derivative of fg as long as you know the derivatives of f and g. With more intermediate functions the identity starts to look like a chain, hence the name.",
+   "what_it_means": "grad(x1, x) measures how much the intermediate value responds to a nudge in x; grad(y, x1) measures how much the output responds to a nudge in the intermediate value. The response of y to x is the product. In conventional notation with y = f(g(x)): dy/dx = f'(g(x)) * g'(x). Note that grad(y, x1) is the derivative of f evaluated at the current intermediate value x1, which is why the forward pass must be run first to know x1.",
+   "why_it_matters": "This single identity is all the calculus backpropagation requires. Every autodiff system, including tf.GradientTape (p.80), PyTorch's loss.backward() (p.103) and JAX's grad, is an engine for applying it along a graph.",
+   "technical_idea": "The derivative of a composition equals the product of the derivatives of the components, each evaluated at the point reached in the forward computation. For tensor-valued intermediates the 'product' becomes a product of Jacobian matrices, but the structure is identical.",
+   "terminology": [
+    {"term": "grad(a, b)", "meaning": "The book's notation for the derivative (gradient) of a with respect to b, i.e. how much a changes per unit change of b around the current values."},
+    {"term": "intermediate variable x1", "meaning": "The value produced by the inner function and consumed by the outer one; the chain rule factors the derivative at each such variable."}
+   ],
+   "connections": [
+    "p.70: The composition y = fg(x) == f(g(x)) was set up at the bottom of the previous page.",
+    "p.65: A derivative was defined as the factor a in y(x + epsilon) ~ y(x) + a * epsilon; chaining two such linear approximations multiplies their factors."
+   ]
+  },
+  {
+   "ref": "p071_e06",
+   "excerpt": "Applying the chain rule to the computation of the gradient values of a",
+   "what_it_says": "Applying the chain rule to the computation of a neural network's gradient values gives rise to the algorithm called backpropagation. The authors promise to show concretely how it works.",
+   "what_it_means": "Backpropagation is not a separate theory: it is the chain rule, organized so that the factors are computed starting at the loss and moving backward toward the parameters, reusing shared factors along the way.",
+   "why_it_matters": "It names the thing: whenever the book later says 'the model computes the gradient of the loss with regard to the weights using the Backpropagation algorithm' (p.76), it means exactly this chained multiplication of local derivatives.",
+   "technical_idea": "For the four-function chain, grad(y, x3) is computed once and reused when extending to grad(y, x2) = grad(y, x3) * grad(x3, x2), and so on; this reuse is what makes the backward sweep efficient.",
+   "terminology": [
+    {"term": "backpropagation", "meaning": "The chain rule applied to the chain (graph) of operations of a neural network, computing gradients of the loss with respect to all parameters."}
+   ],
+   "connections": [
+    "p.74: 'Backpropagation is simply the application of the chain rule to a computation graph. There's nothing more to it.'"
+   ]
+  },
+  {
+   "ref": "p071_e08",
+   "excerpt": "A useful way to think about backpropagation is in terms of computation graphs.",
+   "what_it_says": "Backpropagation is best thought of with computation graphs. A computation graph is a directed acyclic graph of operations, in our case tensor operations, and the authors call it the data structure at the heart of the deep learning revolution. Figure 2.21 (p.72) is the graph representation of the first model.",
+   "what_it_means": "Each node is an operation (dot, +, relu, softmax, loss) or a value (inputs, weights, targets); each edge carries a tensor from the node that produced it to the node that consumes it. 'Directed' because data flows one way; 'acyclic' because a forward pass never feeds a value back into an earlier node. The nested expression on p.70 and figure 2.21 are two representations of the same graph.",
+   "why_it_matters": "The graph view makes the chain rule mechanical: every edge gets a local derivative, and backpropagation multiplies along paths. It is also how frameworks actually represent models internally (TensorFlow graphs, PyTorch's dynamic autograd graph, JAX's traced jaxprs, chapter 3).",
+   "technical_idea": "A DAG admits a topological order; the forward pass evaluates nodes in that order and the backward pass visits them in reverse, which is exactly what makes a single sweep sufficient.",
+   "terminology": [
+    {"term": "computation graph", "meaning": "A directed acyclic graph whose nodes are operations (and input values) and whose edges carry the tensors between them."},
+    {"term": "directed acyclic graph (DAG)", "meaning": "A graph with one-way edges and no cycles, so there is a well-defined order in which nodes can be evaluated."}
+   ],
+   "connections": [
+    "p.72: Figure 2.21 draws the two-layer model as a graph; figure 2.22 draws the simplified scalar version.",
+    "p.80: tf.GradientTape records tensor operations 'in the form of a computation graph (sometimes called a tape)'."
+   ]
+  },
+  {
+   "ref": "p071_e09",
+   "excerpt": "Computation graphs have been an extremely successful abstraction in computer science because",
+   "what_it_says": "Computation graphs succeed because they let us treat computation as data: an expression becomes a machine-readable structure that can be the input or output of another program. Two examples: a program that converts a graph into a large-scale distributed version of the same computation (no hand-written distribution logic), and a program that takes a graph and generates the derivative of the expression it represents. Both are easier with an explicit graph than with lines of ASCII in a .py file. The authors then set up a basic example: a simplified version of figure 2.21 with one linear layer and all-scalar variables (figure 2.22): parameters w and b, input x, operations combining them into y, and an absolute-value error loss loss_val = abs(y_true - y). The goal is to compute grad(loss_val, b) and grad(loss_val, w) so that w and b can be updated to minimize loss_val.",
+   "what_it_means": "The second example is automatic differentiation: given the forward graph, a program can produce the backward graph. The first example is the basis of distributed training (data and model parallelism) which Keras exposes without you writing communication code (chapter 3 and later). The toy problem strips the two-layer model down to its essence: one multiplication by a weight, one bias addition, one loss. The absolute-value loss is chosen because its derivative is trivially +1 or -1, so all the attention can go to the chaining rather than to the local derivatives.",
+   "why_it_matters": "This paragraph justifies why every modern framework is built around graphs and introduces the exact example (x, w, b, y_true, abs loss) whose forward pass (p.72), backward pass (p.73) and chain-rule path (p.74) carry the rest of the subsection.",
+   "technical_idea": "The toy graph computes x1 = x * w, x2 = x1 + b (so y = x2), loss_val = abs(y_true - x2). Derivatives wanted: grad(loss_val, w) and grad(loss_val, b). With the concrete values of p.72 (x = 2, w = 3, b = 1, y_true = 4), the answers on p.73 are 2 and 1.",
+   "terminology": [
+    {"term": "treat computation as data", "meaning": "Represent a computation as a data structure so that programs can inspect, transform, distribute or differentiate it."},
+    {"term": "absolute value error loss", "meaning": "loss_val = abs(y_true - y): the magnitude of the difference between target and output."},
+    {"term": "input nodes", "meaning": "The nodes of the graph that hold given values rather than computed ones: x, y_true, w and b (p.72)."}
+   ],
+   "connections": [
+    "p.72: Figure 2.22 draws this graph and figure 2.23 runs its forward pass with x = 2, w = 3, b = 1, y_true = 4.",
+    "p.73: The backward pass annotates each reversed edge with a grad value and yields grad(loss_val, w) = 2, grad(loss_val, b) = 1.",
+    "p.103: PyTorch's loss.backward() populates .grad on every tensor involved in computing loss, the framework version of this idea."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "chain_rule",
+   "name": "Chain rule",
+   "definition": "For a composed function with intermediate value x1 = g(x) and output y = f(x1): grad(y, x) == grad(y, x1) * grad(x1, x). For longer chains, the derivative is the product of one factor per link.",
+   "intuition": "A nudge to x is scaled by each stage it passes through; the total scaling is the product of the stage scalings.",
+   "technical": "Four chained functions fghj: grad(y, x) == grad(y, x3) * grad(x3, x2) * grad(x2, x1) * grad(x1, x). Each factor is a local derivative evaluated at the values produced by the forward pass.",
+   "significance": "The entire mathematical content of backpropagation; the reason knowing the derivatives of atomic operations suffices to differentiate any network.",
+   "example": "y = f(g(x)) with g(x) = x * w (x = 2) and f(u) = u + b: grad(y, w) = grad(y, x1) * grad(x1, w) = 1 * 2 = 2 (the toy example of p.72-73).",
+   "misconception": "The factors are not all evaluated at x; grad(y, x1) is evaluated at the intermediate value x1 = g(x), which is why a forward pass precedes the backward pass.",
+   "related": ["backpropagation", "derivative", "gradient", "computation_graph"],
+   "source": "book"
+  },
+  {
+   "id": "backpropagation",
+   "name": "Backpropagation",
+   "definition": "The algorithm obtained by applying the chain rule to the computation of the gradient values of a neural network.",
+   "intuition": "Start from the loss and multiply local derivatives backward along the chain of operations until you reach each parameter.",
+   "technical": "Equivalent to reverse-mode automatic differentiation on the model's computation graph; one backward sweep yields the gradient with respect to every parameter.",
+   "significance": "Provides step 4 of mini-batch SGD (the backward pass, p.68) at a cost comparable to a forward pass.",
+   "example": "On the scalar toy graph: grad(loss_val, w) = grad(loss_val, x2) * grad(x2, x1) * grad(x1, w).",
+   "misconception": "Backpropagation is not an optimizer; it only produces gradients. The optimizer (SGD, momentum, Adam) decides how to move the weights.",
+   "related": ["chain_rule", "computation_graph", "autodiff", "gradient_descent"],
+   "source": "book"
+  },
+  {
+   "id": "computation_graph",
+   "name": "Computation graph",
+   "definition": "A directed acyclic graph of operations (tensor operations in deep learning) in which edges carry values from producing to consuming operations.",
+   "intuition": "A flowchart of the arithmetic: inputs and weights at the top, the loss at the bottom, one box per operation.",
+   "technical": "Being a DAG, it has a topological order: forward evaluation follows it, backward differentiation reverses it. Figure 2.21 (p.72) is the graph of the two-layer model; figure 2.22 the simplified scalar graph.",
+   "significance": "Called by the authors 'the data structure at the heart of the deep learning revolution': it makes computation a piece of data that programs can distribute or differentiate automatically.",
+   "example": "Toy graph: x and w feed '*', its output x1 and b feed '+', its output x2 and y_true feed 'loss', which outputs loss_val.",
+   "misconception": "A computation graph is not a neural-network diagram of neurons and connections; its nodes are operations such as dot, +, relu and loss, and parameters appear as input nodes.",
+   "related": ["autodiff", "backpropagation", "gradient_tape"],
+   "source": "book"
+  },
+  {
+   "id": "autodiff",
+   "name": "Automatic differentiation",
+   "definition": "Generating the derivative of an expression automatically from its computation graph, rather than deriving it by hand.",
+   "intuition": "A program that reads a graph and writes the backward graph: one of the two 'computation as data' examples on this page.",
+   "technical": "Implemented in TensorFlow (tf.GradientTape, p.80), PyTorch (loss.backward(), p.103) and JAX (grad / value_and_grad, p.112) on top of recorded or traced computation graphs.",
+   "significance": "It is why you will never implement backpropagation yourself (p.74); you only write the forward pass.",
+   "example": "On p.80, operations run inside a GradientTape scope are recorded and tape.gradient(loss, weights) returns the gradients.",
+   "misconception": "Automatic differentiation is not numerical differentiation (nudging each weight and re-running the model); it computes exact derivatives via the chain rule.",
+   "related": ["computation_graph", "backpropagation", "gradient_tape"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Chain rule for two composed functions",
+   "latex": "y = f(g(x)),\\quad x_1 = g(x) \\;\\Longrightarrow\\; \\frac{dy}{dx} = \\frac{dy}{dx_1}\\cdot\\frac{dx_1}{dx} = f'(x_1)\\, g'(x)",
+   "source_text": "grad(y, x) == grad(y, x1) * grad(x1, x)",
+   "variables": [
+    {"symbol": "x", "meaning": "The input to the composed function."},
+    {"symbol": "x_1 = g(x)", "meaning": "The intermediate value produced by the inner function g."},
+    {"symbol": "y = f(x_1)", "meaning": "The output of the outer function f."},
+    {"symbol": "\\frac{dy}{dx_1}", "meaning": "grad(y, x1): the derivative of f evaluated at the intermediate value x1."},
+    {"symbol": "\\frac{dx_1}{dx}", "meaning": "grad(x1, x): the derivative of g evaluated at x."}
+   ],
+   "operations": "Multiply the derivative of the outer function (at the intermediate value) by the derivative of the inner function (at the input).",
+   "purpose": "To differentiate a composed function knowing only the derivatives of its parts.",
+   "interpretation": "A change epsilon in x becomes a change of about grad(x1, x) * epsilon in x1, which becomes a change of about grad(y, x1) * grad(x1, x) * epsilon in y.",
+   "intuition": "Two gears in series: the overall ratio is the product of the two gear ratios.",
+   "numerical_example": "g(x) = 3x, f(u) = u^2, x = 2. Then x1 = 6, grad(x1, x) = 3, grad(y, x1) = 2 * x1 = 12, so grad(y, x) = 12 * 3 = 36. Check directly: y = 9x^2, dy/dx = 18x = 36 at x = 2.",
+   "source": "book",
+   "book_ref": "p.71"
+  },
+  {
+   "id": "m2",
+   "title": "Chain rule for four chained functions (fghj)",
+   "latex": "\\frac{dy}{dx} = \\frac{dy}{dx_3}\\cdot\\frac{dx_3}{dx_2}\\cdot\\frac{dx_2}{dx_1}\\cdot\\frac{dx_1}{dx}, \\qquad x_1 = j(x),\\; x_2 = h(x_1),\\; x_3 = g(x_2),\\; y = f(x_3)",
+   "source_text": "grad(y, x) == grad(y, x3) * grad(x3, x2) * grad(x2, x1) * grad(x1, x)",
+   "variables": [
+    {"symbol": "x_1, x_2, x_3", "meaning": "The intermediate values after j, h and g respectively."},
+    {"symbol": "\\frac{dx_{k}}{dx_{k-1}}", "meaning": "The local derivative of one link of the chain, evaluated at the forward-pass values."},
+    {"symbol": "y", "meaning": "The final output, f(x3)."}
+   ],
+   "operations": "One multiplicative factor per function in the chain, each a local derivative.",
+   "purpose": "To show why the rule is called a chain and how it scales to arbitrarily long compositions such as a deep network.",
+   "interpretation": "Backpropagation computes these factors from right to left in the forward order, i.e. starting at y: first grad(y, x3), then multiply by grad(x3, x2), and so on, reusing each partial product.",
+   "intuition": "Four gears in series; or four lenses, each magnifying a nudge by its own factor.",
+   "numerical_example": "If the local derivatives along the chain are 1, 1, 1 and 2 (as in the toy example of p.73 extended by one identity link), the overall derivative is 1 * 1 * 1 * 2 = 2.",
+   "source": "book",
+   "book_ref": "p.71"
+  },
+  {
+   "id": "m3",
+   "title": "The toy model and its absolute-value loss",
+   "latex": "y = x\\,w + b, \\qquad \\text{loss\\_val} = \\lvert y_{\\text{true}} - y \\rvert",
+   "source_text": "loss_val = abs(y_true - y)",
+   "variables": [
+    {"symbol": "x", "meaning": "Scalar input (value 2 on p.72)."},
+    {"symbol": "w", "meaning": "Scalar weight parameter (value 3 on p.72)."},
+    {"symbol": "b", "meaning": "Scalar bias parameter (value 1 on p.72)."},
+    {"symbol": "y", "meaning": "The model output (x2 in the figures), equal to x * w + b."},
+    {"symbol": "y_{\\text{true}}", "meaning": "The target (value 4 on p.72)."},
+    {"symbol": "\\text{loss\\_val}", "meaning": "The absolute error between target and output."}
+   ],
+   "operations": "Multiply x by w, add b, take the absolute difference from y_true.",
+   "purpose": "The simplest possible 'one linear layer plus loss' graph on which to demonstrate backpropagation; we want grad(loss_val, w) and grad(loss_val, b).",
+   "interpretation": "loss_val is a function of w and b (x and y_true fixed). Its derivative with respect to y is -1 if y < y_true and +1 if y > y_true (undefined exactly at y = y_true); the chain rule then gives the gradients with respect to w and b.",
+   "intuition": "The loss is a V-shaped function of the output; which arm of the V you are on fixes the sign of its slope.",
+   "numerical_example": "With x = 2, w = 3, b = 1, y_true = 4: y = 7, loss_val = |4 - 7| = 3 (figure 2.23, p.72).",
+   "source": "book",
+   "book_ref": "p.71"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "A composed function fg with an explicit intermediate value",
+   "original_code": "def fg(x):\n    x1 = g(x)\n    y = f(x1)\n    return y",
+   "language": "python",
+   "what_it_does": "Defines fg(x) = f(g(x)) in two steps, naming the intermediate value x1 so that the chain rule can refer to it.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "fg is the composition of f and g."},
+    {"lines": "2", "explanation": "Apply the inner function first; x1 is the intermediate value at which f's derivative will be evaluated."},
+    {"lines": "3-4", "explanation": "Apply the outer function to the intermediate value and return the result."}
+   ],
+   "inputs_outputs": "Input: a value x. Output: y = f(g(x)).",
+   "algorithm": "Two sequential function applications.",
+   "theory_link": "The chain rule immediately below reads grad(y, x) == grad(y, x1) * grad(x1, x): one factor per assignment in this function.",
+   "parameters": [],
+   "pitfalls": [
+    "f and g are placeholders for any differentiable functions; the code is illustrative, not runnable as is."
+   ],
+   "illustrative_code": "# AI-written: a concrete fg and a numerical check of the chain rule\ndef g(x):\n    return 3 * x\n\ndef f(u):\n    return u * u\n\ndef fg(x):\n    x1 = g(x)\n    y = f(x1)\n    return y\n\nx = 2.0\nx1 = g(x)\ngrad_x1_x = 3            # derivative of g\ngrad_y_x1 = 2 * x1       # derivative of f at x1\nprint(\"chain rule:\", grad_y_x1 * grad_x1_x)  # 36\neps = 1e-6\nprint(\"finite diff:\", (fg(x + eps) - fg(x)) / eps)  # ~36"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "A four-function chain fghj and its chained derivative",
+   "original_code": "def fghj(x):\n    x1 = j(x)\n    x2 = h(x1)\n    x3 = g(x2)\n    y = f(x3)\n    return y\ngrad(y, x) == grad(y, x3) * grad(x3, x2) * grad(x2, x1) * grad(x1, x)",
+   "language": "python",
+   "what_it_does": "Composes four functions (j, then h, then g, then f) with named intermediates x1, x2, x3, and states the chain rule for the composition: the derivative of y with respect to x is the product of the four local derivatives, one per link.",
+   "line_explanations": [
+    {"lines": "1-6", "explanation": "Forward computation: each line applies one function to the previous intermediate value, exactly like the layers of a network transform the previous layer's output."},
+    {"lines": "7", "explanation": "The chain rule for this chain. Read from left to right it starts at the output y and walks back toward x: grad(y, x3), then grad(x3, x2), then grad(x2, x1), then grad(x1, x). This is the order in which backpropagation computes them."}
+   ],
+   "inputs_outputs": "Input: x. Output: y = f(g(h(j(x)))). The final line is a mathematical identity, not an executable statement (grad is not a defined Python function here).",
+   "algorithm": "Forward: four sequential applications. Backward: multiply four local derivatives.",
+   "theory_link": "A neural network is such a chain (p.70: matmul, +, relu, matmul, +, softmax, loss); backpropagation is this identity applied to that chain.",
+   "parameters": [],
+   "pitfalls": [
+    "The last line uses == as a mathematical statement of equality, in the same spirit as y = fg(x) == f(g(x)) on p.70; it is not meant to be run.",
+    "Each grad factor is evaluated at the intermediate value reached in the forward pass; you cannot compute the backward product without first running forward."
+   ],
+   "illustrative_code": null
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why the chain rule works: stacking linear approximations",
+   "kind": "step_by_step",
+   "body": "On p.65 a derivative was defined through the local linear approximation: g(x + epsilon) is approximately g(x) + grad(x1, x) * epsilon. Apply this twice.\n\n1. Nudge x by epsilon. The intermediate changes by about delta1 = grad(x1, x) * epsilon.\n2. Now f receives x1 + delta1. By f's own linear approximation, y changes by about grad(y, x1) * delta1.\n3. Substitute: the change in y is grad(y, x1) * grad(x1, x) * epsilon.\n\nThe coefficient of epsilon is, by definition, grad(y, x), so grad(y, x) = grad(y, x1) * grad(x1, x). Repeating the substitution for each additional function gives the four-factor version for fghj. Nothing deeper is involved: the chain rule is just the statement that small changes propagate through a pipeline multiplicatively.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Computation graphs as the 'assembly language' of deep learning",
+   "kind": "application",
+   "body": "The page gives two illustrations of 'computation as data'. Beyond the book, here is how each shows up in practice:\n\n- **Automatic derivative generation**: tf.GradientTape (p.80) records the operations executed inside its scope as a graph and can then return the gradient of any scalar with respect to any recorded tensor. PyTorch builds a graph during every forward pass and loss.backward() walks it in reverse (p.103). JAX traces a Python function into a graph (a jaxpr) and transforms it with grad.\n- **Automatic distribution**: the same graph can be partitioned so that different devices run different parts (model parallelism) or run identical copies on different data batches and combine their gradients (data parallelism). Keras's distribution APIs do this transformation for you.\n\nOther graph-to-graph transformations exist too (not in the book): compilers such as XLA fuse neighbouring operations for speed, and quantization tools rewrite a graph to use lower-precision arithmetic. All of them are possible only because the model is data rather than opaque Python source.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Reading the toy example as a one-neuron network",
+   "kind": "breakdown",
+   "body": "The simplified graph the authors set up at the end of the page is figure 2.21 with everything stripped away except one linear layer:\n\n| Two-layer model (p.70) | Toy graph (p.71-72) |\n|---|---|\n| inputs (batch, 784) | scalar x |\n| W1 (784 x 512) | scalar w |\n| b1 (512,) | scalar b |\n| matmul(inputs, W1) | x * w |\n| + b1 | + b |\n| relu, second layer, softmax | (omitted) |\n| crossentropy loss | abs(y_true - y) |\n\nBecause there is a single path from each parameter to the loss and every local derivative is a plain number, the chain rule reduces to multiplying two or three numbers. That is the point: once you see the mechanism on scalars, the tensor version differs only in the bookkeeping (Jacobians instead of numbers, sums over multiple paths as noted on p.74).",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "The simplified scalar computation graph (figure 2.22)",
+   "why": "The page sets up a graph with scalar parameters w and b, scalar input x, an output y and the loss abs(y_true - y). This is the structure of figure 2.22 on p.72: x and w enter a multiplication, its result and b enter an addition, and the result is compared with y_true by the loss.",
+   "mermaid": "flowchart TB\n  x((x)) --> M[\"*\"]\n  w((w)) --> M\n  M -- x1 --> A[\"+\"]\n  b((b)) --> A\n  A -- x2 = y --> L[loss]\n  yt((y_true)) --> L\n  L --> LV[loss_val]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Chain rule on a one-layer graph: step through forward and backward",
+   "why": "The page asks for grad(loss_val, w) and grad(loss_val, b) on a graph with x, w, b and a loss. This widget uses the same structure (y = w * x + b followed by a loss) with the values the book uses on p.72: x = 2, w = 3, b = 1, y_true = 4. Note that the widget's loss is the squared error rather than the book's absolute error, so the final factor grad(loss, y) differs (2 * (y - y_true) = 6 instead of 1); the chain-rule multiplication along the path is otherwise identical.",
+   "widget": "backprop_graph",
+   "params": {
+    "example": "linear_mse",
+    "x": 2,
+    "y": 4,
+    "w": 3,
+    "b": 1,
+    "lr": 0.1
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "To apply the chain rule you need a formula for the whole composed function.",
+   "correction": "You only need the derivatives of the individual functions f and g (and h, j, ...). That is the whole point: grad(y, x) == grad(y, x1) * grad(x1, x) uses each function's derivative separately."
+  },
+  {
+   "claim": "A computation graph is just a drawing for humans.",
+   "correction": "It is a machine-readable data structure. The page's point is that treating computation as data lets programs distribute or differentiate the computation automatically, which is impossible with 'lines of ASCII characters in a .py file'."
+  },
+  {
+   "claim": "Backpropagation is a different idea from the chain rule.",
+   "correction": "Backpropagation is the name for applying the chain rule to the computation of a neural network's gradients (p.71), nothing more (p.74)."
+  },
+  {
+   "claim": "Computation graphs can contain loops because training iterates many times.",
+   "correction": "The graph of a single forward pass is acyclic (a DAG). The training loop repeats the whole forward-backward computation; it does not create cycles inside the graph."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 70, "note": "Sets up y = fg(x) == f(g(x)) and writes the model as a nested function of W1, b1, W2, b2."},
+   {"page": 65, "note": "Derivative defined via the local linear approximation, which underlies the chain rule."},
+   {"page": 68, "note": "Mini-batch SGD step 4, the backward pass, is what backpropagation implements."}
+  ],
+  "later": [
+   {"page": 72, "note": "Figures 2.21 (two-layer model graph), 2.22 (toy graph) and 2.23 (forward pass with x = 2, w = 3, b = 1, y_true = 4)."},
+   {"page": 73, "note": "Backward pass: each reversed edge annotated with its grad; results grad(loss_val, w) = 2, grad(loss_val, b) = 1."},
+   {"page": 74, "note": "Summing over multiple paths; backpropagation summarized; automatic differentiation in JAX, TensorFlow, PyTorch."},
+   {"page": 80, "note": "tf.GradientTape records a computation graph (tape) and returns gradients."},
+   {"page": 103, "note": "PyTorch's loss.backward() runs backpropagation from the loss node and fills tensor.grad."}
+  ],
+  "prerequisites": [
+   {"page": 66, "note": "Gradient of a tensor operation and the grad(loss_value, W) notation."}
+  ],
+  "related_math": [
+   {"page": 73, "note": "Numerical application of the chain rule along the toy graph."}
+  ],
+  "related_code": [
+   {"page": 80, "note": "GradientTape as the practical replacement for hand-written backpropagation."}
+  ],
+  "related_figures": [
+   {"page": 72, "note": "Figures 2.21, 2.22 and 2.23 referenced on this page."}
+  ]
+ },
+ "takeaways": [
+  "Chain rule: for y = f(g(x)) with x1 = g(x), grad(y, x) == grad(y, x1) * grad(x1, x); knowing the parts' derivatives suffices.",
+  "Longer chains multiply more factors, one per intermediate function, which is where the name comes from.",
+  "Backpropagation is the chain rule applied to the computation of a neural network's gradients.",
+  "A computation graph is a directed acyclic graph of tensor operations; it treats computation as data so programs can distribute or differentiate it automatically.",
+  "The worked example uses scalars w, b, x, an output y and loss_val = abs(y_true - y); the targets are grad(loss_val, w) and grad(loss_val, b)."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "For fg(x) = f(g(x)) with x1 = g(x), which expression does the chain rule give for grad(y, x)?",
+   "options": [
+    "grad(y, x1) + grad(x1, x)",
+    "grad(y, x1) * grad(x1, x)",
+    "grad(x1, x) / grad(y, x1)",
+    "grad(y, x1) evaluated at x"
+   ],
+   "answer": "grad(y, x1) * grad(x1, x)",
+   "explanation": "The page states grad(y, x) == grad(y, x1) * grad(x1, x): the derivatives multiply. They are not added or divided, and grad(y, x1) is evaluated at the intermediate value x1, not at x.",
+   "page_refs": [71]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Let g(x) = 3x and f(u) = u^2. Using the chain rule as stated on this page, compute grad(y, x) at x = 2 for y = f(g(x)).",
+   "options": [],
+   "answer": "x1 = g(2) = 6; grad(x1, x) = 3; grad(y, x1) = 2 * x1 = 12; grad(y, x) = 12 * 3 = 36.",
+   "explanation": "Apply grad(y, x) == grad(y, x1) * grad(x1, x). The derivative of f must be evaluated at the intermediate value x1 = 6, giving 12, not at x = 2. Direct check: y = 9x^2, so dy/dx = 18x = 36.",
+   "page_refs": [71]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "Write the chain rule for the four-function chain fghj in the book's grad notation.",
+   "options": [],
+   "answer": "grad(y, x) == grad(y, x3) * grad(x3, x2) * grad(x2, x1) * grad(x1, x)",
+   "explanation": "With x1 = j(x), x2 = h(x1), x3 = g(x2), y = f(x3), each link contributes one multiplicative factor; this is why the identity is called a chain.",
+   "page_refs": [71]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "What does it mean to 'treat computation as data', and what two example programs does the page mention that this makes possible?",
+   "options": [],
+   "answer": "A computable expression is encoded as a machine-readable graph that other programs can take as input or produce as output. Examples: a program that rewrites a computation graph into a large-scale distributed version of the same computation, and a program that automatically generates the derivative of the expression a graph represents.",
+   "explanation": "The page contrasts an explicit graph data structure with 'lines of ASCII characters in a .py file' and gives exactly these two examples; the second is automatic differentiation, the basis of modern training.",
+   "page_refs": [71]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Which description of a computation graph matches the book?",
+   "options": [
+    "A directed acyclic graph of operations, in our case tensor operations",
+    "A diagram of neurons connected by weighted synapses",
+    "A cyclic graph that encodes the training loop",
+    "A table listing each layer's parameter count"
+   ],
+   "answer": "A directed acyclic graph of operations, in our case tensor operations",
+   "explanation": "The page defines a computation graph as 'a directed acyclic graph of operations, in our case, tensor operations'. Nodes are operations such as dot, +, relu and loss (figure 2.21), not neurons; the graph has no cycles; it is not a parameter table.",
+   "page_refs": [71, 72]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "In the simplified example introduced at the end of the page, what are the input nodes, what is the loss function, and which two gradients do we want?",
+   "options": [],
+   "answer": "Inputs: scalar x, target y_true, and parameters w and b. Loss: loss_val = abs(y_true - y). We want grad(loss_val, w) and grad(loss_val, b).",
+   "explanation": "The page says we take two scalar variables w, b, a scalar input x, combine them into y, apply the absolute value error loss abs(y_true - y), and, since we want to update w and b to minimize loss_val, compute grad(loss_val, b) and grad(loss_val, w).",
+   "page_refs": [71, 72]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you explain in one sentence why a forward pass must be run before the backward pass, using the chain rule's factor grad(y, x1)?",
+   "options": [],
+   "answer": "grad(y, x1) is the derivative of f evaluated at the intermediate value x1 = g(x), and that value is only known after computing the forward pass.",
+   "explanation": "The chain rule's factors are local derivatives at the points actually reached by the computation; without the forward values (x1, x2, x3 ...) you cannot evaluate them. This is why figure 2.23 (p.72) runs the forward pass before figure 2.24 (p.73) runs the backward pass.",
+   "page_refs": [71, 72, 73]
+  }
+ ]
+}

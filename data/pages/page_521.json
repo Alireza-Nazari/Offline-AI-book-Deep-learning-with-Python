@@ -1,0 +1,316 @@
+{
+ "page_id": "page_521",
+ "pdf_page": 521,
+ "printed_page": "497",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:00:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "p521_e09 says the 4-billion-parameter Gemma 3 model 'was first pretrained on 14 trillion tokens'. The Gemma 3 technical report gives 14T tokens for the 27B model and 4T tokens for the 4B model (12T for 12B, 2T for 1B). The book appears to quote the 27B figure; please verify."
+  ],
+  "extraction_quality": "Good. Sidebar, both code blocks and the body paragraphs match the page image. The sidebar's three printed paragraphs were merged into one element (p521_e04)."
+ },
+ "overview": {
+  "title": "bfloat16 for big models and a first chat with instruction-tuned Gemma",
+  "chapter": "16 Text generation",
+  "section": "16.4 Going further with LLMs",
+  "subsection": "16.4.1 Reinforcement Learning with Human Feedback (RLHF)",
+  "main_topic": "Why the 4B instruction-tuned Gemma is loaded in bfloat16, the chat prompt template it expects, and a first question-answer exchange with it",
+  "central_idea": "For billion-parameter models, bytes per parameter decide whether the model fits in memory; for inference-only use, 2-byte bfloat16 halves memory versus float32. An instruction-tuned checkpoint must be prompted with the same turn markers it was tuned with, and the result is a model that answers questions far more helpfully than a raw pretrained one.",
+  "importance": "This page connects the RLHF theory of the previous pages (p.519-520) to a model you can actually run. It also introduces two practical habits that matter every time you use an LLM: choose the dtype to fit your memory budget, and match the prompt format used during tuning. The PROMPT_TEMPLATE defined here is reused on pp.522, 524 and 527.",
+  "learning_objectives": [
+   "Compute the weight memory of a model from its parameter count and dtype (bytes per parameter).",
+   "Explain why float32 is preferred for training but bfloat16 is fine for pure inference.",
+   "Explain why an instruction-tuned checkpoint needs a specific chat template, and read the Gemma template's turn markers.",
+   "Use PROMPT_TEMPLATE.format(prompt) with gemma_lm.generate() and interpret the echoed output.",
+   "List the kinds of post-training (supervised fine-tuning, RLHF, distillation from a larger 'teacher') the book says went into this model."
+  ],
+  "prerequisites": [
+   "Loading Gemma with keras_hub.models.CausalLM.from_preset (p.509) and the instruction-tuned variant (Listing 16.16, p.520)",
+   "Instruction fine-tuning and prompt markup (p.512)",
+   "RLHF and reward models (pp.519-520)",
+   "Basic floating-point concepts (bits, bytes)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Sidebar: choosing a dtype for large models.** The first Gemma model (p.509) was loaded with `dtype=\"float32\"`; the 4-billion-parameter instruction-tuned Gemma in Listing 16.16 (p.520) uses `dtype=\"bfloat16\"`. The sidebar explains why. For models with more than a billion parameters, the **number of bytes per floating-point number** becomes a key consideration. When **training**, 32 bits (4 bytes) per parameter is often a good idea, because float32 can represent very small values and helps keep **gradients stable**. Here the model is only used for **inference**, so `bfloat16` (2 bytes per parameter) is enough: there are no gradients to worry about, and the lower precision saves \"many gigabytes\" of memory. For a 4B model that is roughly 16 GB versus 8 GB of weights. Chapter 18 (pp.582-583) treats floating-point precision in detail.\n\n**A chat template.** Like the model fine-tuned in section 16.3.2, this instruction-tuned checkpoint expects a specific input format. The exact wording does not matter in principle; what matters is that **the prompt template matches what was used to tune the model**. Gemma's template wraps the user's text between `<start_of_turn>user` and `<end_of_turn>`, then opens a `<start_of_turn>model` turn so the model's continuation is its reply.\n\n**A first question.** Asked \"Why can't you assign values in Jax tensors? Be brief!\", the model returns a short, on-topic answer ending with `<end_of_turn>`, its learned signal that the reply is complete.\n\n**Where the ability comes from.** The authors say this model was pretrained on 14 trillion tokens (see the review flag: the Gemma 3 report gives that figure for the 27B model) and then extensively fine-tuned using three things: **supervised fine-tuning** as in section 16.3.2, **RLHF** as in section 16.4.1, and other techniques such as using an **even larger model as a \"teacher\"**. The improvement in question answering is easy to see. The page ends by setting up a retry of the hallucination-prone question from earlier pages (the \"542nd president\" prompt, answered on p.522).",
+ "paragraphs": [
+  {
+   "ref": "p521_e04",
+   "excerpt": "You might have noticed we passed dtype=\"float32\" when creating our Gemma model",
+   "what_it_says": "The first Gemma model was created with float32 and the instruction-tuned one with bfloat16. For billion-parameter models, the bytes per float matter. Training usually benefits from 32-bit (4-byte) floats because they can represent very small values and keep gradients stable. Since we are not training, bfloat16 (2 bytes per parameter) avoids gradient worries and saves many gigabytes. Chapter 18 discusses precision in detail.",
+   "what_it_means": "Memory for the weights is simply (number of parameters) x (bytes per parameter). A 4B model needs about 16 GB in float32 but about 8 GB in bfloat16, which decides whether it fits on a 16 GB Colab GPU at all, before even counting activations or the key/value cache used during generation. Inference only needs the forward pass, and LLM forward passes tolerate 16-bit weights well. Training also accumulates many tiny updates, which 16-bit formats handle badly.\n\nNote (not in the book): the sidebar's wording that 32-bit floats 'can represent very small values' is a simplification. bfloat16 has the same 8-bit exponent as float32, so its *range* (smallest and largest magnitudes) is essentially the same. What it lacks is *precision*: only 7 explicit mantissa bits, about 2-3 significant decimal digits. The training problem is that a small update added to a much larger weight (for example 1.0 + 1e-4) rounds away to nothing. Chapter 18 (p.583) describes this as being unable to represent small gradient updates of around 1e-5 or 1e-6.",
+   "why_it_matters": "This is the first time the book makes dtype a visible memory knob. The same reasoning underlies the LoRA memory analysis (pp.514-517), float16/bfloat16 inference (p.582) and mixed-precision training (p.583).",
+   "technical_idea": "Weight memory = N_params x bytes_per_param; float32 = 4 bytes (1 sign, 8 exponent, 23 mantissa bits), bfloat16 = 2 bytes (1 sign, 8 exponent, 7 mantissa bits).",
+   "terminology": [
+    {"term": "dtype", "meaning": "The numeric data type used to store a tensor's elements, e.g. float32, bfloat16, int32."},
+    {"term": "float32", "meaning": "IEEE single-precision float: 32 bits = 4 bytes, about 7 significant decimal digits."},
+    {"term": "bfloat16", "meaning": "'Brain float' 16-bit format: float32's 8-bit exponent with a 7-bit mantissa; same range as float32, much lower precision; 2 bytes."},
+    {"term": "gradient stability", "meaning": "Avoiding gradients or updates that underflow, overflow or get rounded away during training."}
+   ],
+   "connections": [
+    "p.509: the first Gemma (gemma3_1b) was loaded with dtype=\"float32\".",
+    "p.514: the 1B model takes about 3.7 GB, and Adam's optimizer state pushes training memory to about 15 GB.",
+    "p.582: bfloat16 uses 8 exponent bits and 7 mantissa bits, a wider range than float16 but lower resolution.",
+    "p.583: mixed-precision training keeps the precision-sensitive parts in float32."
+   ]
+  },
+  {
+   "ref": "p521_e05",
+   "excerpt": "Like the earlier Gemma model we fine-tuned ourselves, this instruction-tuned checkpoint comes with",
+   "what_it_says": "Like the model fine-tuned in the previous section, this instruction-tuned checkpoint has its own template for formatting input. The exact text does not matter; what matters is that the prompt template matches the one used during tuning.",
+   "what_it_means": "During instruction tuning the model saw thousands of conversations wrapped in the same markers. It learned that text after `<start_of_turn>model` is a helpful reply and that `<end_of_turn>` ends a turn. If you prompt with different markers, the input looks unlike the tuning data and the model may fall back to plain 'autocomplete the internet' behaviour. The markers are arbitrary strings (as the book said on p.512); their value comes only from consistency between tuning and use.",
+   "why_it_matters": "A prompt-format mismatch is one of the most common causes of a capable chat model behaving badly in practice. The template defined here is reused for every later query in the chapter (pp.522, 524, 527).",
+   "terminology": [
+    {"term": "instruction-tuned checkpoint", "meaning": "A pretrained model's weights after further training on instruction/response data (and often RLHF) so it behaves like an assistant."},
+    {"term": "prompt template / chat template", "meaning": "The fixed markup around user and model turns that the model was trained with."}
+   ],
+   "connections": [
+    "p.512: instruction fine-tuning used markers like \"[instruction]\" and \"[response]\"; the precise markup matters only for consistency.",
+    "p.520: Listing 16.16 loads the gemma3_instruct_4b preset that this template belongs to."
+   ]
+  },
+  {
+   "ref": "p521_e09",
+   "excerpt": "This 4-billion-parameter model was first pretrained on 14 trillion tokens of text and",
+   "what_it_says": "The 4B model was pretrained on 14 trillion tokens and then extensively fine-tuned to answer questions more helpfully. The tuning combined supervised fine-tuning, RLHF, and other techniques such as using an even larger model as a 'teacher'. Its improvement at question answering is easy to notice.",
+   "what_it_means": "The model's helpfulness comes from **post-training**, not a new architecture: the same decoder-only Transformer, pretrained on next-token prediction, is steered by three kinds of extra training. Supervised fine-tuning imitates written answers. RLHF optimizes a learned proxy for human preference. A 'teacher' model supplies targets: this is knowledge distillation, where a small student learns to match a larger model's output distribution, which is richer than a single correct token.\n\nThe 14-trillion figure is discussed in the review flag. Published Gemma 3 numbers give 14T tokens for the 27B model and 4T for the 4B model. Either way the ratio is enormous: even 4T tokens for 4B parameters is about 1,000 tokens per parameter, far more than older models used (see Figure 16.8 on p.529).",
+   "why_it_matters": "It shows that in modern LLMs most user-visible quality comes from layered post-training on top of pretraining. That idea is developed in the rest of section 16.4.",
+   "terminology": [
+    {"term": "pretraining", "meaning": "Self-supervised next-token prediction on a huge text corpus."},
+    {"term": "supervised fine-tuning (SFT)", "meaning": "Training on handwritten prompt/response pairs with the ordinary next-token loss."},
+    {"term": "teacher model / distillation", "meaning": "Using a larger model's outputs as training targets for a smaller model."}
+   ],
+   "connections": [
+    "p.512: supervised instruction fine-tuning was done on the Databricks dataset.",
+    "pp.519-520: RLHF uses a reward model and keeps or reinforces high-reward responses.",
+    "p.529: Figure 16.8 shows the growth in pretraining tokens over time."
+   ]
+  },
+  {
+   "ref": "p521_e10",
+   "excerpt": "Let's try this model on the prompt that has been giving us trouble with hallucinations",
+   "what_it_says": "The authors set up a test of the new model on the prompt that previously produced hallucinations.",
+   "what_it_means": "This is the '542nd president of the United States' trick question, which the base Gemma (p.511) and the self-fine-tuned model (p.518) both answered with confident fabrications. The response appears on p.522.",
+   "why_it_matters": "It sets up an honest test of whether post-training fixes hallucinations. On p.522 the answer is 'partly': the model refuses the trick but invents today's date.",
+   "connections": [
+    "p.522: the instruction-tuned model refuses the trick question but makes up a date: whack-a-mole."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "bfloat16",
+   "name": "bfloat16 precision",
+   "definition": "A 16-bit floating-point format with 1 sign bit, 8 exponent bits and 7 mantissa bits; 2 bytes per value.",
+   "intuition": "It is float32 with the last 16 bits of the mantissa chopped off: same range of magnitudes, coarser steps between neighbouring values.",
+   "technical": "The relative spacing between representable numbers (machine epsilon) is 2^-7, about 0.0078, versus 2^-23, about 1.2e-7, for float32. Its maximum is about 3.4e38, like float32, unlike float16's 65,504.",
+   "significance": "It halves weight memory and bandwidth versus float32. That is enough to fit a 4B model (about 8 GB) on a 16 GB GPU with room for activations.",
+   "example": "Gemma 4B: 4e9 x 2 bytes is about 8 GB in bfloat16, versus 16 GB in float32.",
+   "misconception": "bfloat16 does not lack small *magnitudes*; it lacks *precision*. 1e-30 is representable, but 1.0 + 0.001 rounds back to 1.0.",
+   "related": ["mixed_precision", "float16", "inference"],
+   "source": "book"
+  },
+  {
+   "id": "chat_template",
+   "name": "Chat / prompt template",
+   "definition": "The fixed markup (here `<start_of_turn>user ... <end_of_turn>` and `<start_of_turn>model`) that delimits user and model turns in an instruction-tuned model's input.",
+   "intuition": "It is the 'form' the model learned to fill in during tuning. Hand it the same form and it knows where its answer goes.",
+   "technical": "The markers are usually special tokens in the vocabulary. The model learned the conditional distribution p(reply | template-wrapped prompt) and to emit `<end_of_turn>` as a stop signal.",
+   "significance": "A mismatched template is a distribution shift that can sharply degrade answers.",
+   "example": "PROMPT_TEMPLATE.format(\"Why can't you assign values in Jax tensors? Be brief!\")",
+   "misconception": "The specific words in the template are not magic. Any markup works if it is the one used during tuning.",
+   "related": ["instruction_fine_tuning", "language_model"],
+   "source": "book"
+  },
+  {
+   "id": "instruction_fine_tuning",
+   "name": "Instruction tuning / post-training",
+   "definition": "Further training of a pretrained LLM so it follows instructions and answers helpfully. Here it combines supervised fine-tuning, RLHF and teacher-guided training.",
+   "intuition": "Pretraining teaches the model to continue any text; post-training teaches it which continuations people want.",
+   "technical": "SFT minimizes next-token cross-entropy on curated responses. RLHF maximizes a learned reward (usually with a penalty for drifting from the SFT model). Distillation minimizes divergence from a teacher's token distributions.",
+   "significance": "It turns an 'autocomplete' model into a usable assistant without changing the architecture.",
+   "example": "The gemma3_instruct_4b checkpoint answers the Jax question concisely and stops with <end_of_turn>.",
+   "misconception": "Instruction tuning does not add new world knowledge in bulk; it mostly reshapes how existing knowledge is expressed.",
+   "related": ["rlhf", "language_model", "transfer_learning"],
+   "source": "book"
+  },
+  {
+   "id": "rlhf",
+   "name": "Reinforcement Learning with Human Feedback",
+   "definition": "Fine-tuning an LLM against a reward model trained to predict human preferences between responses.",
+   "intuition": "Instead of copying one 'right' answer, the model is pushed towards whatever people tend to rate higher.",
+   "technical": "See pp.519-520: generate responses, score them with the reward model, and update the policy (in the simplest version, keep high-reward outputs as new SFT data).",
+   "significance": "It is one of the ingredients the book lists for this checkpoint's quality.",
+   "example": "OpenAI used it to go from GPT-3 to the first ChatGPT (p.520).",
+   "misconception": "RLHF does not eliminate hallucinations; p.522 shows the tuned model still invents a date.",
+   "related": ["instruction_fine_tuning", "reward_model"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Weight memory from parameter count and dtype",
+   "latex": "M_{\\text{weights}} = N_{\\text{params}} \\times b_{\\text{dtype}}, \\qquad b_{\\text{float32}} = 4,\\; b_{\\text{bfloat16}} = 2",
+   "source_text": "32 bits (4 bytes) per parameter ... bfloat16, which uses only 2 bytes per parameter",
+   "variables": [
+    {"symbol": "M_{\\text{weights}}", "meaning": "Memory needed just to store the model's parameters (bytes)"},
+    {"symbol": "N_{\\text{params}}", "meaning": "Number of parameters (about 4 x 10^9 for this Gemma)"},
+    {"symbol": "b_{\\text{dtype}}", "meaning": "Bytes per parameter for the chosen dtype"}
+   ],
+   "operations": "A simple product of the parameter count and the bytes per value.",
+   "purpose": "Quantifies the sidebar's claim that bfloat16 'will save many gigabytes'.",
+   "interpretation": "Halving the bytes per parameter halves weight memory and also the memory bandwidth needed to read the weights at every generated token.",
+   "intuition": "Every parameter is a number sitting in GPU memory; smaller numbers mean more of them fit.",
+   "numerical_example": "4B params: float32 gives $4\\times10^9 \\times 4 = 16$ GB; bfloat16 gives $4\\times10^9 \\times 2 = 8$ GB. That saves 8 GB, half of a 16 GB Colab GPU. For the 1B model on p.514: about $1\\times10^9\\times4 \\approx 4$ GB (the book reports 3.7 GB, which is 4 GB expressed in GiB).",
+   "source": "ai_explanation",
+   "book_ref": "p.521"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Gemma instruction-tuned chat template",
+   "original_code": "PROMPT_TEMPLATE = \"\"\"<start_of_turn>user\n{}<end_of_turn>\n<start_of_turn>model\n\"\"\"",
+   "language": "python",
+   "what_it_does": "Defines a multi-line Python format string that wraps a user prompt in Gemma's chat markup and leaves the model's turn open for it to complete.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Opens a triple-quoted string. `<start_of_turn>user` marks the beginning of the user's turn."},
+    {"lines": "2", "explanation": "`{}` is the placeholder that `.format(prompt)` fills with the question; `<end_of_turn>` closes the user turn."},
+    {"lines": "3", "explanation": "`<start_of_turn>model` opens the model's turn, followed by a newline: the model continues from here."},
+    {"lines": "4", "explanation": "Closes the string. The trailing newline after `model` is part of the template, as in tuning."}
+   ],
+   "inputs_outputs": "Input: a prompt string via .format(). Output: the full templated string fed to gemma_lm.generate().",
+   "algorithm": "String formatting only. The model then performs autoregressive generation from the end of this string.",
+   "theory_link": "A language model predicts p(next token | previous tokens). The template makes the 'previous tokens' look exactly like the start of a tuning example whose continuation was an assistant reply.",
+   "parameters": [
+    {"name": "{}", "role": "Slot for the user's message."}
+   ],
+   "pitfalls": [
+    "Changing the markers (e.g. typos, missing newline) can noticeably degrade answers.",
+    "A prompt containing literal braces { } would break str.format; escape them as {{ }}.",
+    "Do not add the model's closing <end_of_turn> yourself; the model generates it."
+   ],
+   "illustrative_code": "# AI-written: a multi-turn conversation in the same format\nhistory = (\n    \"<start_of_turn>user\\nHi!<end_of_turn>\\n\"\n    \"<start_of_turn>model\\nHello! How can I help?<end_of_turn>\\n\"\n)\nfull = history + PROMPT_TEMPLATE.format(\"Explain bfloat16 in one line.\")\n# gemma_lm.generate(full, max_length=512)"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Asking the instruction-tuned Gemma a question",
+   "original_code": ">>> prompt = \"Why can't you assign values in Jax tensors? Be brief!\"\n>>> gemma_lm.generate(PROMPT_TEMPLATE.format(prompt), max_length=512)\n<start_of_turn>user\nWhy can't you assign values in Jax tensors? Be brief!<end_of_turn>\n<start_of_turn>model\nJax tensors are designed for efficient automatic differentiation. Directly\nassigning values disrupts this process, making it difficult to track gradients\ncorrectly. Instead, Jax uses operations to modify tensor values, preserving the\ndifferentiation pipeline.<end_of_turn>",
+   "language": "python",
+   "what_it_does": "Formats a question with the chat template and generates up to 512 tokens (prompt included). The output echoes the prompt, then shows the model's reply, which ends with <end_of_turn>.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "The user question; 'Be brief!' is an instruction the tuned model obeys."},
+    {"lines": "2", "explanation": "generate() tokenizes the templated prompt and samples autoregressively until it emits an end token or reaches max_length=512 total tokens."},
+    {"lines": "3-5", "explanation": "The returned string starts with the full prompt, because KerasHub returns prompt + completion."},
+    {"lines": "6-9", "explanation": "The model's answer: concise, on-topic, terminated by <end_of_turn>."}
+   ],
+   "inputs_outputs": "Input: templated string. Output: a string with the prompt followed by the generated reply.",
+   "algorithm": "Autoregressive decoding with whatever sampler is currently compiled into the model. On p.527 the book explicitly switches to random sampling, which implies the earlier outputs are not randomly sampled.",
+   "theory_link": "Generative decoding (p.502) and sampling strategies (p.504) applied to a 4B instruction-tuned Transformer.",
+   "parameters": [
+    {"name": "max_length", "role": "Upper bound on total sequence length (prompt + generated tokens)."}
+   ],
+   "pitfalls": [
+    "max_length counts the prompt too, so long prompts leave fewer tokens for the answer.",
+    "Beyond the book: the reply sounds authoritative but is only partly accurate. JAX arrays are immutable mainly because JAX is built on pure functions that can be traced and compiled (jit, XLA) and transformed (grad, vmap), not only because of autodiff. JAX offers x.at[idx].set(v), which returns a new array. A fluent answer is not necessarily a correct one."
+   ],
+   "illustrative_code": "# AI-written: the idiomatic JAX way to 'assign'\nimport jax.numpy as jnp\nx = jnp.zeros(3)\ny = x.at[1].set(5.0)   # returns a new array; x is unchanged\n# x[1] = 5.0  -> TypeError: JAX arrays are immutable"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Range vs precision: what 16 bits actually lose",
+   "kind": "numerical",
+   "body": "float32: 1 sign + 8 exponent + 23 mantissa bits. bfloat16: 1 + 8 + 7. float16: 1 + 5 + 10.\n\n- **Range** depends on the exponent bits. float32 and bfloat16 both reach about $3.4\\times10^{38}$ and normal values as small as about $1.2\\times10^{-38}$. float16 tops out at 65,504, and its smallest normal value is about $6\\times10^{-5}$.\n- **Precision** depends on the mantissa bits. The gap between 1 and the next number is $2^{-23}\\approx1.2\\times10^{-7}$ in float32 but $2^{-7}\\approx0.0078$ in bfloat16.\n\nSo in bfloat16, `1.0 + 0.001 == 1.0`. A weight of 1.0 receiving an update of learning-rate x gradient of about $10^{-5}$ never moves. That is the real training danger the sidebar points to. For inference, the weights are fixed and 2-3 significant digits per weight is plenty.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the template matters: a distribution view",
+   "kind": "breakdown",
+   "body": "An instruction-tuned LLM still only models $p(x_t\\mid x_{<t})$. During tuning, almost every training sequence had the shape `<start_of_turn>user … <end_of_turn> <start_of_turn>model [good reply] <end_of_turn>`. Conditioning on exactly that prefix places the model in the region of input space where post-training reshaped its behaviour. Without the template, the prefix looks like ordinary web text, and the model may continue the question (for example by writing more questions) instead of answering it.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Teacher models (distillation) in one paragraph",
+   "kind": "alternative",
+   "body": "The book mentions 'using an even larger model as a teacher'. In knowledge distillation the student is trained to match the teacher's whole next-token probability distribution, not just the single observed token. Matching the teacher's soft probabilities over the whole vocabulary gives far more signal per token than a one-hot target (for example, it tells the student that 'car' and 'automobile' are both plausible). This lets a 4B model inherit much of a larger model's behaviour at a fraction of the inference cost.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Weight memory for the two Gemma models in this chapter",
+   "why": "The sidebar contrasts float32 (4 bytes) and bfloat16 (2 bytes). These bars show what that means for the 1B and 4B Gemma models against a 16 GB Colab GPU.",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": ["Gemma 1B", "Gemma 4B (instruct)"],
+     "datasets": [
+      {"label": "float32 (GB)", "data": [4, 16]},
+      {"label": "bfloat16 (GB)", "data": [2, 8]}
+     ]
+    },
+    "options": {
+     "plugins": {"title": {"display": true, "text": "Approximate weight memory = params x bytes/param"}},
+     "scales": {"y": {"title": {"display": true, "text": "GB"}, "beginAtZero": true}}
+    }
+   }
+  }
+ ],
+ "misconceptions": [
+  {"claim": "bfloat16 cannot represent very small numbers, which is why it is bad for training.", "correction": "bfloat16 has the same exponent range as float32. Its weakness is low precision (7 mantissa bits), so small updates added to larger weights get rounded away. float16, not bfloat16, has the limited range."},
+  {"claim": "Any reasonable chat formatting works equally well with an instruction-tuned model.", "correction": "The book stresses that the template must match the one used in tuning. The words are arbitrary, but consistency is not."},
+  {"claim": "The instruction-tuned model is a different architecture from the base Gemma.", "correction": "It is the same kind of Transformer, made more helpful by post-training: SFT, RLHF and teacher-guided training."},
+  {"claim": "A fluent, confident answer means the model is correct.", "correction": "The Jax answer is plausible but incomplete. p.522 shows that even this tuned model still hallucinates (an invented date)."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 509, "note": "The first Gemma model was loaded with dtype=\"float32\"."},
+   {"page": 512, "note": "Instruction fine-tuning and consistent prompt markup."},
+   {"page": 514, "note": "Memory budgeting: the 1B model takes 3.7 GB, and Adam's state pushes training to about 15 GB."},
+   {"page": 519, "note": "Introduction of RLHF and reward models."},
+   {"page": 520, "note": "Listing 16.16 loads gemma3_instruct_4b with dtype=\"bfloat16\"."}
+  ],
+  "later": [
+   {"page": 522, "note": "The tuned model handles the trick question but hallucinates the date; multimodal LLMs begin."},
+   {"page": 524, "note": "PROMPT_TEMPLATE is reused for image questions."},
+   {"page": 527, "note": "PROMPT_TEMPLATE is reused for a math word problem with random sampling."},
+   {"page": 582, "note": "float16 and bfloat16 inference in detail."},
+   {"page": 583, "note": "Mixed-precision training."}
+  ],
+  "prerequisites": [
+   {"page": 502, "note": "Generative decoding loop."},
+   {"page": 512, "note": "Instruction fine-tuning."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 520, "note": "Listing 16.16, loading the instruction-tuned Gemma."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "Weight memory is params x bytes per param: 4B params take about 16 GB in float32 and about 8 GB in bfloat16.",
+  "Use float32 (or mixed precision) for training stability; 16-bit formats are fine for inference only.",
+  "bfloat16 keeps float32's range but has far less precision.",
+  "Prompt an instruction-tuned model with exactly the chat template it was tuned with.",
+  "The tuned model's helpfulness comes from post-training (SFT, RLHF, teacher models) on top of large-scale pretraining, not from a new architecture."
+ ],
+ "questions": [
+  {"id": "q1", "type": "math", "question": "How much memory do the weights of a 4-billion-parameter model need in float32 and in bfloat16?", "options": [], "answer": "About 16 GB in float32 and about 8 GB in bfloat16.", "explanation": "4e9 x 4 bytes = 16e9 bytes; 4e9 x 2 bytes = 8e9 bytes. bfloat16 saves about 8 GB, which is the 'many gigabytes' in the sidebar.", "page_refs": [521]},
+  {"id": "q2", "type": "mcq", "question": "Why does the book load the instruction-tuned Gemma in bfloat16 rather than float32?", "options": ["bfloat16 is more accurate than float32", "No training is done, so gradient stability is irrelevant and halving memory is pure gain", "Gemma's weights only exist in bfloat16", "bfloat16 is required for the chat template to work"], "answer": "No training is done, so gradient stability is irrelevant and halving memory is pure gain", "explanation": "The sidebar says float32 helps training gradients stay stable. For inference this does not matter, and bfloat16 halves memory. bfloat16 is less precise, not more. The book itself loaded Gemma in float32 earlier, so the weights exist in other formats. The dtype is unrelated to the prompt format.", "page_refs": [521]},
+  {"id": "q3", "type": "conceptual", "question": "The book says the exact text of the prompt template 'does not matter' but that it must match the tuning template. Reconcile these two statements.", "options": [], "answer": "The markers are arbitrary in principle: any strings could have been chosen before tuning. Once the model has been tuned with specific markers, it has learned to behave like an assistant only when it sees them, so you must reuse them.", "explanation": "The model learns a conditional distribution given the exact prefix seen in tuning. Changing the prefix is a distribution shift (see p.512).", "page_refs": [521, 512]},
+  {"id": "q4", "type": "short", "question": "Name the three kinds of post-training the book says went into this 4B Gemma checkpoint.", "options": [], "answer": "Supervised fine-tuning, RLHF, and other techniques such as using a larger model as a 'teacher'.", "explanation": "All three are listed in paragraph p521_e09.", "page_refs": [521]},
+  {"id": "q5", "type": "mcq", "question": "In bfloat16, which of these is the real problem for training?", "options": ["Values below 1e-5 cannot be stored at all", "Values above 65,504 overflow", "A small update added to a larger weight can round away to nothing", "Integers cannot be represented"], "answer": "A small update added to a larger weight can round away to nothing", "explanation": "bfloat16 has float32's 8-bit exponent, so tiny magnitudes and huge values are representable; 65,504 is float16's limit. With only 7 mantissa bits, 1 + 1e-4 rounds to 1. Integers within its precision are representable.", "page_refs": [521, 582, 583]},
+  {"id": "q6", "type": "conceptual", "question": "What role does <end_of_turn> play in the model's output?", "options": [], "answer": "It is the learned signal that the model's reply is complete; generation stops when it is produced.", "explanation": "The model saw replies end with <end_of_turn> during tuning, so it learned to emit it. KerasHub treats it as a stop token for Gemma chat checkpoints.", "page_refs": [521]},
+  {"id": "q7", "type": "self", "question": "Could you explain to a colleague why a model that fits for inference on a 16 GB GPU might not fit for training with Adam?", "options": [], "answer": "Training needs the weights plus gradients plus Adam's two moment estimates (about 4 numbers per parameter in float32), plus activations for backprop. That is roughly 4x or more the inference weight memory (see p.514).", "explanation": "This connects the dtype sidebar to the LoRA motivation on pp.514-517.", "page_refs": [521, 514]}
+ ]
+}

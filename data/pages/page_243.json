@@ -1,0 +1,373 @@
+{
+  "page_id": "page_243",
+  "pdf_page": 243,
+  "printed_page": "219",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:29:31Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean. All four code blocks match the image. The callouts on compute_loss_and_updates were fragmented and were reassembled from the image. The opening bullet continues the stateless_call() list from p.242."
+  },
+  "overview": {
+    "title": "stateless_call, compute_loss_and_updates and has_aux",
+    "chapter": "7 A deep dive on Keras",
+    "section": "7.4 Writing your own training and evaluation loops",
+    "subsection": "7.4.2 Writing custom training step functions",
+    "main_topic": "Building a stateless JAX loss function with model.stateless_call() and turning it into a gradient function with jax.value_and_grad(..., has_aux=True)",
+    "central_idea": "stateless_call() returns outputs plus updated non-trainable weights, so the JAX loss function compute_loss_and_updates() returns (loss, non_trainable_variables). Since jax.grad and value_and_grad require a scalar-only return, has_aux=True is used to mark the second output as auxiliary.",
+    "importance": "These are the key JAX-specific pieces of the training step. The same compute_loss_and_updates() pattern is reused to customize fit() on JAX (p.249).",
+    "learning_objectives": [
+      "Describe both differences between stateless_call() and call()",
+      "Write compute_loss_and_updates() and explain its signature and return value",
+      "Explain why gradients are taken with respect to trainable_variables only",
+      "Explain why has_aux=True is needed and what it does"
+    ],
+    "prerequisites": [
+      "JAX statelessness and stateless_call's inputs (p.242)",
+      "jax.grad and jax.value_and_grad (pp.110–111)",
+      "has_aux for returning extra outputs (p.112)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page finishes the description of **`stateless_call()`**. Besides taking trainable and non-trainable weights as inputs (p.242), it **returns the model's updated non-trainable weights** together with its outputs: `outputs, non_trainable_weights = model.stateless_call(trainable_weights, non_trainable_weights, inputs)`.\n\nThis is used to write the JAX loss function. Because it also computes updates for the non-trainable variables, the authors name it **`compute_loss_and_updates()`**. It takes `(trainable_variables, non_trainable_variables, inputs, targets)`, calls `model.stateless_call(..., training=True)`, computes `loss = loss_fn(targets, outputs)` and returns `loss, non_trainable_variables`. The callouts note that **gradients are computed for the entries in the first argument** (`trainable_variables`), and that the function returns the scalar loss plus the updated non-trainable weights.\n\nNext, the function is passed to **`jax.value_and_grad`**, with a generic template: `grad_fn = jax.value_and_grad(fn)`, then `loss, gradients = grad_fn(...)`.\n\nThere is a \"small problem\": `jax.grad()` and `jax.value_and_grad()` require `fn` to **return a scalar value only**, but `compute_loss_and_updates()` returns the scalar loss *and* the new non-trainable weights. The fix, already covered in chapter 3 (p.112), is the **`has_aux`** argument: `grad_fn = jax.value_and_grad(compute_loss_and_updates, has_aux=True)`. This tells JAX that the first output is the value to differentiate and the rest is auxiliary data to pass through. How to call the resulting `grad_fn` is shown at the top of p.244.",
+  "paragraphs": [
+    {
+      "ref": "p243_e03",
+      "excerpt": "It returns the model’s updated non-trainable weights, in addition to the model’s",
+      "what_it_says": "This is the second difference between stateless_call and call: it returns updated non-trainable weights along with the outputs. \"It works like this\" introduces the one-line usage.",
+      "what_it_means": "A normal call would update BatchNorm statistics (for example) in place. stateless_call cannot mutate anything, so it hands the new values back and you decide where to keep them. The pattern `outputs, non_trainable_weights = model.stateless_call(trainable_weights, non_trainable_weights, inputs)` rebinds the name to the new values.",
+      "why_it_matters": "This closes the loop on statelessness: everything the forward pass would have changed now comes back as a return value.",
+      "connections": ["p.242: the first difference (weights passed as inputs)", "p.239: non-trainable weights modified during the forward pass"]
+    },
+    {
+      "ref": "p243_e06",
+      "excerpt": "We can use stateless_call() to implement our JAX loss function. Since the",
+      "what_it_says": "The JAX loss function is built on stateless_call. Because it also computes the non-trainable updates, it is named compute_loss_and_updates().",
+      "what_it_means": "The name describes the function's two jobs: compute the scalar to differentiate (the loss), and carry the updated state (the non-trainable variables) out of the pure function.",
+      "why_it_matters": "This function is what JAX differentiates. Its argument order and return structure determine how value_and_grad behaves.",
+      "connections": ["p.249: a compute_loss_and_updates() method reused when customizing fit() with JAX"]
+    },
+    {
+      "ref": "p243_e08",
+      "excerpt": "Once we have this compute_loss_and_updates() function, we can pass it to",
+      "what_it_says": "The loss function is passed to jax.value_and_grad to get a function that computes the gradients. A generic template follows: `grad_fn = jax.value_and_grad(fn)` and `loss, gradients = grad_fn(...)`.",
+      "what_it_means": "value_and_grad returns a new function with the same arguments as `fn`. Calling it returns both the function's value (the loss) and the gradient with respect to the first argument. The `...` in the book's snippet stands for the actual arguments.",
+      "why_it_matters": "This replaces the pseudocode's get_gradients_of() for JAX, and it also returns the loss without a second forward pass (p.111).",
+      "terminology": [
+        {"term": "jax.value_and_grad", "meaning": "Transforms f into a function that returns (f(args), ∇_{args[0]} f(args))."}
+      ],
+      "connections": ["p.111: value_and_grad avoids recomputing the loss separately", "p.113: chapter 3's linear classifier used value_and_grad"]
+    },
+    {
+      "ref": "p243_e10",
+      "excerpt": "Now, there’s just a small problem. Both jax.grad() and jax.value_and_grad() require",
+      "what_it_says": "grad and value_and_grad require `fn` to return only a scalar, but compute_loss_and_updates also returns the new non-trainable weights. The fix from chapter 3 is to pass `has_aux=True`.",
+      "what_it_means": "A gradient is only defined for a scalar output (for a vector you would need a Jacobian). With `has_aux=True`, JAX expects `fn` to return a pair `(scalar, aux)`. It differentiates the scalar and passes `aux` through untouched.",
+      "why_it_matters": "Without has_aux the call fails, because JAX cannot differentiate a tuple containing arrays. With it, the updated non-trainable weights come out of the gradient computation along with the loss.",
+      "technical_idea": "Beyond the book: with has_aux=True, value_and_grad returns `((loss, aux), grads)`, so the call unpacks as `(loss, non_trainable_variables), grads = grad_fn(...)`. The book shows this call on p.244.",
+      "terminology": [
+        {"term": "has_aux", "meaning": "A flag telling grad/value_and_grad that fn returns (value, auxiliary_data); only the value is differentiated."},
+        {"term": "auxiliary output", "meaning": "Extra data returned alongside the loss that is not differentiated."}
+      ],
+      "connections": ["p.112: chapter 3's two-step recipe for has_aux (return a tuple, pass has_aux=True)", "p.244: using grad_fn with has_aux"]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "stateless_call",
+      "name": "Model.stateless_call()",
+      "definition": "A pure forward pass: it takes trainable and non-trainable weights plus inputs (and training), and returns outputs and updated non-trainable weights.",
+      "intuition": "The model as a mathematical function of its weights, with no hidden state.",
+      "technical": "`outputs, non_trainable_variables = model.stateless_call(trainable_variables, non_trainable_variables, inputs, training=True)`.",
+      "significance": "Makes a Keras model usable inside JAX transformations such as value_and_grad and jit.",
+      "example": "Inside compute_loss_and_updates() on this page.",
+      "misconception": "It leaves the model's own variables unchanged; the updates exist only in the returned values.",
+      "related": ["jax_statelessness", "non_trainable_weights"],
+      "source": "book"
+    },
+    {
+      "id": "compute_loss_and_updates",
+      "name": "compute_loss_and_updates()",
+      "definition": "The stateless JAX loss function for the training step. It returns (loss, updated non-trainable variables).",
+      "intuition": "A loss function that also hands back any state it changed.",
+      "technical": "Signature `(trainable_variables, non_trainable_variables, inputs, targets)`. Trainable variables come first because JAX differentiates with respect to the first argument.",
+      "significance": "Central to both the from-scratch JAX step (p.244) and the custom fit() on JAX (p.249).",
+      "example": "The code block on this page.",
+      "misconception": "It does not apply gradients. It only computes the loss and the state updates; the optimizer step comes later.",
+      "related": ["stateless_call", "has_aux", "loss_function"],
+      "source": "book"
+    },
+    {
+      "id": "value_and_grad",
+      "name": "jax.value_and_grad",
+      "definition": "A JAX transformation that returns a function computing both a function's value and its gradient with respect to the first argument.",
+      "intuition": "One call gives both how big the loss is and which direction to move.",
+      "technical": "`grad_fn = jax.value_and_grad(fn)`; `loss, grads = grad_fn(*args)`. The gradient has the same structure as the first argument (here a list of arrays).",
+      "significance": "JAX's replacement for get_gradients_of() in the pseudocode.",
+      "example": "`jax.value_and_grad(compute_loss_and_updates, has_aux=True)`.",
+      "misconception": "It requires a scalar output unless has_aux is used to split off extra outputs.",
+      "related": ["autodiff", "has_aux", "metaprogramming_gradients"],
+      "source": "book"
+    },
+    {
+      "id": "has_aux",
+      "name": "has_aux=True",
+      "definition": "An option to jax.grad/value_and_grad declaring that the function returns (scalar, auxiliary), so only the scalar is differentiated.",
+      "intuition": "Tells JAX: differentiate the first output, and just pass the second one back to me.",
+      "technical": "With value_and_grad the result is ((value, aux), grads).",
+      "significance": "Lets the loss function return updated non-trainable weights without breaking the scalar-only rule.",
+      "example": "`grad_fn = jax.value_and_grad(compute_loss_and_updates, has_aux=True)`.",
+      "misconception": "has_aux does not compute gradients of the auxiliary output.",
+      "related": ["value_and_grad", "compute_loss_and_updates"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "What value_and_grad with has_aux computes",
+      "latex": "\\begin{aligned} (L,\\ \\nu') &= F(\\theta, \\nu, x, y) \\\\ \\text{grad\\_fn}(\\theta, \\nu, x, y) &= \\big((L,\\ \\nu'),\\ \\nabla_{\\theta} L\\big) \\end{aligned}",
+      "source_text": "grad_fn = jax.value_and_grad(compute_loss_and_updates, has_aux=True)",
+      "variables": [
+        {"symbol": "F", "meaning": "compute_loss_and_updates"},
+        {"symbol": "\\theta", "meaning": "trainable_variables (first argument, the one differentiated)"},
+        {"symbol": "\\nu, \\nu'", "meaning": "non-trainable variables before and after the forward pass"},
+        {"symbol": "x, y", "meaning": "inputs and targets"},
+        {"symbol": "L", "meaning": "the scalar loss"}
+      ],
+      "operations": "The gradient is taken only of the scalar L and only with respect to θ. ν' is passed through as auxiliary data.",
+      "purpose": "States in notation exactly what the transformed function returns. The notation is ours; the semantics follow the book's description and standard JAX.",
+      "interpretation": "Even though ν changes during the forward pass, no gradient is taken with respect to it.",
+      "intuition": "The scalar is differentiated; the state update just comes along.",
+      "source": "ai_explanation",
+      "book_ref": "p.243"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Calling stateless_call",
+      "original_code": "outputs, non_trainable_weights = model.stateless_call(\n    trainable_weights, non_trainable_weights, inputs\n)",
+      "language": "python",
+      "what_it_does": "Runs the model's forward pass on explicitly supplied weights and returns the outputs plus updated non-trainable weights.",
+      "line_explanations": [
+        {"lines": "1-3", "explanation": "Weights in, outputs and new non-trainable weights out. Rebinding `non_trainable_weights` to the returned value is how state is \"updated\" in a stateless style."}
+      ],
+      "inputs_outputs": "Inputs: lists of trainable and non-trainable weight arrays, and the input batch. Outputs: model outputs and a list of updated non-trainable arrays.",
+      "algorithm": "Pure functional forward pass.",
+      "theory_link": "Implements the 'take all variables as arguments, return updated ones' rule from p.242.",
+      "parameters": [
+        {"name": "trainable_weights", "role": "Values for the trainable variables, in model.trainable_variables order"},
+        {"name": "non_trainable_weights", "role": "Values for the non-trainable variables"}
+      ],
+      "pitfalls": [
+        "Lists must follow the model's variable order.",
+        "`training` is omitted in this snippet, so inference behavior is used; the loss function below passes training=True."
+      ]
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "compute_loss_and_updates(): the stateless JAX loss function",
+      "original_code": "model = get_mnist_model()\nloss_fn = keras.losses.SparseCategoricalCrossentropy()\n\ndef compute_loss_and_updates(\n    trainable_variables, non_trainable_variables, inputs, targets\n):\n    outputs, non_trainable_variables = model.stateless_call(\n        trainable_variables, non_trainable_variables, inputs, training=True\n    )\n    loss = loss_fn(targets, outputs)\n    return loss, non_trainable_variables",
+      "language": "python",
+      "what_it_does": "Computes the batch loss as a pure function of the weights and returns it with the updated non-trainable variables.",
+      "line_explanations": [
+        {"lines": "1-2", "explanation": "New MNIST model and loss function for the JAX example."},
+        {"lines": "4-6", "explanation": "Signature. Gradients are computed for the entries in the first argument, trainable_variables here (book callout)."},
+        {"lines": "7-9", "explanation": "Calls stateless_call (book callout) in training mode and gets outputs and updated non-trainable variables."},
+        {"lines": "10", "explanation": "Scalar loss from targets and outputs."},
+        {"lines": "11", "explanation": "Returns the scalar loss value and the updated non-trainable weights (book callout)."}
+      ],
+      "inputs_outputs": "Inputs: trainable and non-trainable variable values, an input batch, targets. Output: (scalar loss, list of updated non-trainable arrays).",
+      "algorithm": "Pure forward pass plus loss.",
+      "theory_link": "The JAX counterpart of the forward-pass-and-loss lines of the pseudocode on p.240.",
+      "parameters": [
+        {"name": "training=True", "role": "Training-mode behavior inside the stateless call"}
+      ],
+      "pitfalls": [
+        "Putting non_trainable_variables first would make JAX differentiate the wrong argument.",
+        "Returning only the loss would discard BatchNorm-style state updates."
+      ]
+    },
+    {
+      "id": "c3",
+      "listing": null,
+      "title": "Generic value_and_grad template",
+      "original_code": "import jax\n\ngrad_fn = jax.value_and_grad(fn)\nloss, gradients = grad_fn(...)",
+      "language": "python",
+      "what_it_does": "Shows the general pattern: transform a function into one that returns its value and gradient. `fn` and `...` are placeholders.",
+      "line_explanations": [
+        {"lines": "3", "explanation": "Metaprogramming: returns a new function."},
+        {"lines": "4", "explanation": "Calling it returns (value, gradients). This only works if `fn` returns a scalar, which is the 'small problem' the next paragraph addresses."}
+      ],
+      "inputs_outputs": "Placeholder code, not meant to be run as is.",
+      "algorithm": "Reverse-mode autodiff by function transformation.",
+      "theory_link": "p.110–111: grad and value_and_grad in chapter 3.",
+      "parameters": [
+        {"name": "fn", "role": "A function returning a scalar"}
+      ],
+      "pitfalls": [
+        "Using it directly on compute_loss_and_updates fails because that function returns a tuple."
+      ]
+    },
+    {
+      "id": "c4",
+      "listing": null,
+      "title": "value_and_grad with has_aux",
+      "original_code": "import jax\n\ngrad_fn = jax.value_and_grad(compute_loss_and_updates, has_aux=True)",
+      "language": "python",
+      "what_it_does": "Creates the gradient function for the JAX training step, treating the updated non-trainable variables as auxiliary output.",
+      "line_explanations": [
+        {"lines": "3", "explanation": "has_aux=True: differentiate only the first returned value (the loss) and pass the second through."}
+      ],
+      "inputs_outputs": "grad_fn takes the same arguments as compute_loss_and_updates and returns ((loss, non_trainable_variables), gradients). The book shows the call on p.244.",
+      "algorithm": "Function transformation.",
+      "theory_link": "p.112: has_aux recipe from chapter 3.",
+      "parameters": [
+        {"name": "has_aux", "role": "Marks the second return value as non-differentiated auxiliary data"}
+      ],
+      "pitfalls": [
+        "Unpacking as `loss, gradients = grad_fn(...)` with has_aux=True gives `loss` = the (loss, aux) tuple. The nesting matters."
+      ],
+      "illustrative_code": "# AI-written illustration of the call (the book's version is on p.244)\n(loss, non_trainable_variables), grads = grad_fn(\n    trainable_variables, non_trainable_variables, inputs, targets\n)"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why the trainable variables must be the first argument",
+      "kind": "step_by_step",
+      "body": "1. By default, `jax.grad` and `jax.value_and_grad` differentiate with respect to argument 0 (`argnums=0`).\n2. The callout on this page says gradients are computed \"for the entries in the first argument (trainable_variables here).\"\n3. That argument is a list of arrays, so the gradient is a list of arrays with the same structure, one gradient per trainable variable. That is the form `optimizer.apply` / `stateless_apply` expects.\n4. Non-trainable variables, inputs and targets come later and are treated as constants for differentiation.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Why the scalar-only rule exists",
+      "kind": "breakdown",
+      "body": "Reverse-mode autodiff computes the gradient of **one scalar** with respect to many inputs in a single backward sweep. For an output with several values you would need either a full Jacobian or a vector–Jacobian product with a chosen cotangent. `grad` avoids that ambiguity by requiring a scalar. `has_aux` keeps the rule intact: there is still one scalar to differentiate, and the rest is labeled as data. (Explanation not in the book.)",
+      "source": "ai_explanation"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "Data flow through grad_fn with has_aux=True",
+      "why": "Shows how compute_loss_and_updates, stateless_call and has_aux on this page fit together: which outputs are differentiated and which are passed through.",
+      "mermaid": "flowchart LR\n  TV[trainable_variables] --> SC[\"model.stateless_call(..., training=True)\"]\n  NTV[non_trainable_variables] --> SC\n  X[inputs] --> SC\n  SC --> O[outputs]\n  SC --> NTV2[updated non_trainable_variables]\n  O --> L[\"loss_fn(targets, outputs)\"]\n  Y[targets] --> L\n  L --> VG{\"value_and_grad\\nhas_aux=True\"}\n  NTV2 -->|aux, not differentiated| VG\n  VG --> R1[\"(loss, non_trainable_variables)\"]\n  VG --> R2[\"gradients w.r.t. trainable_variables\"]"
+    }
+  ],
+  "misconceptions": [
+    {"claim": "stateless_call updates the model's BatchNorm statistics in place.", "correction": "It returns the updated non-trainable weights. Nothing is mutated; you keep the returned values."},
+    {"claim": "value_and_grad can differentiate any function.", "correction": "It requires fn to return a scalar. Extra outputs need has_aux=True."},
+    {"claim": "has_aux makes JAX compute gradients for the non-trainable variables too.", "correction": "Auxiliary outputs are passed through without being differentiated. Gradients are only for the first argument."}
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 242, "note": "Why JAX needs stateless functions; first difference of stateless_call"},
+      {"page": 110, "note": "jax.grad: turning a loss function into a gradient function"},
+      {"page": 111, "note": "value_and_grad returns the loss as well as gradients"},
+      {"page": 112, "note": "has_aux recipe for returning extra outputs"}
+    ],
+    "later": [
+      {"page": 244, "note": "Calling grad_fn, stateless_apply on the optimizer, and the end-to-end JAX train step"},
+      {"page": 249, "note": "compute_loss_and_updates() as a method when customizing fit() with JAX"},
+      {"page": 319, "note": "jax.grad used for gradient ascent on an input image in chapter 10"}
+    ],
+    "prerequisites": [
+      {"page": 242, "note": "JAX statelessness and stateless_call inputs"},
+      {"page": 112, "note": "has_aux in chapter 3"}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 113, "note": "Chapter 3's JAX linear classifier training step"},
+      {"page": 249, "note": "compute_loss_and_updates in a Model subclass"}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "stateless_call takes weights explicitly and returns outputs plus updated non-trainable weights.",
+    "compute_loss_and_updates(trainable, non_trainable, inputs, targets) returns (loss, non_trainable).",
+    "JAX differentiates with respect to the first argument, so the trainable variables go first.",
+    "grad and value_and_grad need a scalar-only return; has_aux=True lets extra outputs pass through.",
+    "grad_fn = jax.value_and_grad(compute_loss_and_updates, has_aux=True) is the JAX gradient function for the step."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "What does model.stateless_call() return?",
+      "options": [
+        "Only the model outputs",
+        "The outputs and the updated non-trainable weights",
+        "The gradients of the loss",
+        "The updated trainable weights"
+      ],
+      "answer": "The outputs and the updated non-trainable weights",
+      "explanation": "Stated in the bullet at the top of the page. It computes no gradients, and trainable weights are only changed by the optimizer.",
+      "page_refs": [243]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "Why is the function named compute_loss_and_updates rather than compute_loss?",
+      "options": [],
+      "answer": "Because besides the loss it also computes and returns the updates for all non-trainable variables.",
+      "explanation": "The book gives this reason for the name.",
+      "page_refs": [243]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "With respect to which variables does value_and_grad compute gradients here, and why those?",
+      "options": [],
+      "answer": "trainable_variables, because it is the first argument and JAX differentiates the first argument by default. These are also the only variables the optimizer should update.",
+      "explanation": "The callout says gradients are computed for the entries in the first argument.",
+      "page_refs": [243]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "What problem does has_aux=True solve?",
+      "options": [
+        "It makes value_and_grad run faster on GPUs",
+        "It lets the function return extra non-differentiated outputs besides the scalar loss",
+        "It computes second-order gradients",
+        "It makes non-trainable variables trainable"
+      ],
+      "answer": "It lets the function return extra non-differentiated outputs besides the scalar loss",
+      "explanation": "grad/value_and_grad require a scalar-only return; has_aux marks the second output as auxiliary. It has nothing to do with speed, higher-order derivatives or trainability.",
+      "page_refs": [243, 112]
+    },
+    {
+      "id": "q5",
+      "type": "short",
+      "question": "In compute_loss_and_updates, what training flag is passed to stateless_call and why?",
+      "options": [],
+      "answer": "training=True, so that layers like Dropout and BatchNorm behave as they do in training, as in the other backends' train_step.",
+      "explanation": "Same subtlety as p.239.",
+      "page_refs": [239, 243]
+    },
+    {
+      "id": "q6",
+      "type": "conceptual",
+      "question": "What would happen if you called jax.value_and_grad(compute_loss_and_updates) without has_aux and then called the result?",
+      "options": [],
+      "answer": "It would fail, because the function returns a tuple (loss, non-trainable variables) rather than a scalar, and value_and_grad requires a scalar output.",
+      "explanation": "That is the 'small problem' the book describes.",
+      "page_refs": [243]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you write compute_loss_and_updates from memory, including the correct argument order and return value?",
+      "options": [],
+      "answer": "Check: (trainable_variables, non_trainable_variables, inputs, targets) → stateless_call(..., training=True) → loss_fn(targets, outputs) → return loss, non_trainable_variables.",
+      "explanation": "Compare with the code block on the page.",
+      "page_refs": [243]
+    }
+  ]
+}

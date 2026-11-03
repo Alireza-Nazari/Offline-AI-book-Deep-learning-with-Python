@@ -1,0 +1,252 @@
+{
+ "page_id": "page_253",
+ "pdf_page": 253,
+ "printed_page": "229",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:36:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction. The first code block completes the JAX compute_loss_and_updates() started on p.252; the second is the JAX train_step(), which continues onto p.254 (new_metrics_vars += current_vars, the new state tuple and return). Callouts match the page image."
+ },
+ "overview": {
+  "title": "Stateless metric management in a JAX train_step()",
+  "chapter": "7 A deep dive on Keras",
+  "section": "7.4 Writing your own training and evaluation loops",
+  "subsection": "7.4.5 Handling metrics in a custom train_step()",
+  "main_topic": "Completing compute_loss_and_updates() with self.compute_loss(), and writing a JAX train_step() that updates the compiled metrics statelessly by slicing a flat list of metric variables.",
+  "central_idea": "Under JAX, metric variables are part of the explicit training state. The train_step() walks through self.metrics, cuts each metric's own variables out of the flat metrics_variables list, updates them with stateless_update_state(), reads the value with stateless_result(), and collects the new variables to return as new state.",
+  "importance": "It completes the backend trilogy of the chapter: the same goal (honor compile()'s loss and metrics) needs a single loop in TensorFlow/PyTorch but explicit state bookkeeping in JAX. Understanding this is essential for writing correct, jit-compatible custom steps in JAX.",
+  "learning_objectives": [
+   "Explain why compute_loss_and_updates() returns (predictions, non_trainable_variables) as auxiliary output.",
+   "Read the nested unpacking (loss, (predictions, non_trainable_variables)), grads = grad_fn(...).",
+   "Explain how metrics_variables is a single flat list and how num_prev and num_current slice it per metric.",
+   "Use stateless_update_state() and stateless_result() correctly for the loss tracker and for other metrics.",
+   "Explain why the updated metric variables must be returned in the state."
+  ],
+  "prerequisites": [
+   "JAX custom training step: stateless_call, value_and_grad, stateless_apply (pp.243-245)",
+   "Customizing fit() with JAX (p.249)",
+   "self.compute_loss and self.metrics (p.250)",
+   "Low-level metric usage (p.245)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page first finishes the JAX `compute_loss_and_updates()` begun on p.252: `stateless_call()` is given `inputs` and `training=training`, then `loss = self.compute_loss(y=targets, y_pred=predictions)` uses the loss passed to `compile()`, and the method returns `loss, (predictions, non_trainable_variables)`. Compared with the p.249 version, the auxiliary output now also carries the **predictions**, because the metrics will need them.\n\n\"Next up: metric management. As usual, it's a tad more complicated due to JAX's statelessness requirements.\" The new `train_step(self, state, data)` unpacks a four-part state: trainable, non-trainable, optimizer and **metrics variables** (callout: *Metric variables are part of the state*). It builds `grad_fn = jax.value_and_grad(self.compute_loss_and_updates, has_aux=True)` and calls it with `training=True`, unpacking `(loss, (predictions, non_trainable_variables)), grads`. The optimizer update is done with `self.optimizer.stateless_apply(optimizer_variables, grads, trainable_variables)`, returning new trainable and optimizer variables.\n\nThen comes the metric loop. `new_metrics_vars = []` and `logs = {}` are initialized. For each metric in `self.metrics` (*Iterates over metrics*), the code computes `num_prev` (how many variables have already been consumed) and `num_current = len(metric.variables)`, and slices `metrics_variables[num_prev : num_prev + num_current]` (*Grabs the variables of the current metrics*). The loss tracker is updated with `stateless_update_state(current_vars, loss)`; other metrics with `stateless_update_state(current_vars, targets, predictions)` (*Updates the metric's state*). `logs[metric.name] = metric.stateless_result(current_vars)` stores the value (*Stores the results in the logs dict*). The listing continues on p.254, where `current_vars` is appended to `new_metrics_vars` and the new state is returned.",
+ "paragraphs": [
+  {
+   "ref": "p253_e03",
+   "excerpt": "inputs, training=training, ) loss = self.compute_loss(y=targets, y_pred=predictions)",
+   "what_it_says": "End of compute_loss_and_updates(): finish the stateless forward pass, compute the compiled loss with self.compute_loss(), and return the loss with the auxiliary tuple (predictions, non_trainable_variables).",
+   "what_it_means": "jax.value_and_grad with has_aux=True differentiates only the first return value (the loss) and passes the second through untouched. Putting predictions into that auxiliary tuple lets train_step() reuse them for metrics without a second forward pass.",
+   "why_it_matters": "Recomputing predictions outside the gradient function would waste a forward pass and, with dropout active, would give different predictions than those used for the loss.",
+   "technical_idea": "Auxiliary outputs of a differentiated function: f(params) -> (loss, aux); grad is taken of loss only.",
+   "terminology": [
+    {"term": "has_aux=True", "meaning": "Tells jax.value_and_grad that the function returns (value, auxiliary_data) and only value should be differentiated."}
+   ],
+   "connections": [
+    "p.252: start of this method and stateless_call()",
+    "p.249: earlier version returning only (loss, non_trainable_variables) as aux"
+   ]
+  },
+  {
+   "ref": "p253_e04",
+   "excerpt": "Next up: metric management. As usual, it's a tad more complicated",
+   "what_it_says": "The authors announce the metric handling and warn it is more complicated in JAX because of statelessness.",
+   "what_it_means": "In TensorFlow and PyTorch, update_state() mutates metric variables in place. JAX functions may not mutate state, so the metric variables must come in through the state argument and go back out in the returned state.",
+   "why_it_matters": "This is the key conceptual difference between the backends; everything in the following listing exists to satisfy it.",
+   "terminology": [
+    {"term": "statelessness", "meaning": "Functions have no hidden mutable state; all state is passed in and returned explicitly."}
+   ],
+   "connections": [
+    "p.245: JAX's speed and scalability benefits justify the extra work"
+   ]
+  },
+  {
+   "ref": "p253_e05",
+   "excerpt": "def train_step(self, state, data): ( trainable_variables, non_trainable_variables,",
+   "what_it_says": "The JAX train_step(): unpack state and data, compute loss, predictions and gradients, update weights with stateless_apply(), then loop over metrics, slicing each one's variables out of metrics_variables, updating them statelessly and recording results in logs.",
+   "what_it_means": "Keras hands train_step() all metric variables as one flat list in the order of self.metrics. Each metric owns a contiguous chunk whose length is len(metric.variables). The running count num_prev = len(new_metrics_vars) is the start offset of the current metric's chunk.",
+   "why_it_matters": "Getting the slicing wrong would feed one metric another metric's variables; forgetting to return the updated variables would make every batch start from the same metric state, so the logged values would never accumulate.",
+   "technical_idea": "Pure-function state threading: state_out = f(state_in, batch). For metrics: vars_out = stateless_update_state(vars_in, ...).",
+   "terminology": [
+    {"term": "stateless_apply()", "meaning": "Optimizer method that takes optimizer variables, gradients and trainable variables and returns updated trainable and optimizer variables."},
+    {"term": "stateless_update_state()", "meaning": "Metric method that returns updated metric variables instead of mutating them."},
+    {"term": "stateless_result()", "meaning": "Metric method that computes the metric value from given variables."}
+   ],
+   "connections": [
+    "p.249: same structure without metrics, returning logs = {\"loss\": loss}",
+    "p.254: end of this listing, returning new_metrics_vars in the state",
+    "p.252: the PyTorch equivalent using update_state()"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "stateless_metrics",
+   "name": "Stateless metric updates",
+   "definition": "Updating a Keras metric by passing its variables in and receiving new variables back, using stateless_update_state() and stateless_result().",
+   "intuition": "Instead of the metric keeping its running tally in its pocket, you hold the tally and give it to the metric each time to update.",
+   "technical": "Required in JAX train_step() because the function is traced and compiled; mutations of Python-side state are not allowed. Metric variables travel in state[3].",
+   "significance": "Lets compiled metrics work with jit-compiled JAX training steps.",
+   "example": "current_vars = metric.stateless_update_state(current_vars, targets, predictions)",
+   "misconception": "That calling metric.update_state() inside a JAX train_step() works the same; the stateless variant is the one shown for JAX.",
+   "related": ["keras_metric_state", "stateless_call", "custom_train_step"],
+   "source": "book"
+  },
+  {
+   "id": "aux_outputs_value_and_grad",
+   "name": "Auxiliary outputs with value_and_grad",
+   "definition": "jax.value_and_grad(f, has_aux=True) returns ((value, aux), grads) for a function f returning (value, aux).",
+   "intuition": "Bring extra results back from the gradient computation without differentiating them.",
+   "technical": "Here value is the loss and aux is (predictions, non_trainable_variables), hence the nested unpacking.",
+   "significance": "Avoids a second forward pass for metrics and carries updated non-trainable state.",
+   "example": "(loss, (predictions, non_trainable_variables)), grads = grad_fn(...)",
+   "misconception": "That has_aux makes JAX differentiate the auxiliary outputs too.",
+   "related": ["autodiff"],
+   "source": "book"
+  },
+  {
+   "id": "custom_train_step",
+   "name": "Custom train_step() with compiled loss and metrics",
+   "definition": "Overriding train_step() so fit() runs custom logic while still using self.compute_loss and self.metrics.",
+   "intuition": "Replace the engine, keep the dashboard.",
+   "technical": "In JAX the signature is train_step(self, state, data) and it returns (logs, state).",
+   "significance": "Completes the pattern for all three backends.",
+   "example": "This page's JAX train_step().",
+   "misconception": "That JAX train_step() returns only logs, as in TensorFlow/PyTorch.",
+   "related": ["keras_model"],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "End of compute_loss_and_updates() (JAX)",
+   "original_code": "            inputs,\n            training=training,\n        )\n        loss = self.compute_loss(y=targets, y_pred=predictions)\n        return loss, (predictions, non_trainable_variables)",
+   "language": "python",
+   "what_it_does": "Completes the stateless forward pass begun on p.252, computes the compiled loss and returns it with predictions and updated non-trainable variables.",
+   "line_explanations": [
+    {"lines": "1-3", "explanation": "Remaining arguments of self.stateless_call(trainable_variables, non_trainable_variables, inputs, training=training)."},
+    {"lines": "4", "explanation": "Uses the loss configured in compile(), plus any regularization losses (p.250)."},
+    {"lines": "5", "explanation": "Returns the differentiable value and the auxiliary tuple."}
+   ],
+   "inputs_outputs": "Returns (loss, (predictions, non_trainable_variables)).",
+   "algorithm": "Pure loss function for jax.value_and_grad.",
+   "theory_link": "Autodiff of pure functions (chapter 3).",
+   "parameters": [
+    {"name": "training", "role": "Passed through to stateless_call(); True during training."}
+   ],
+   "pitfalls": [
+    "If predictions are not returned in the aux tuple, train_step() has nothing to feed the accuracy metric."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "JAX train_step() with stateless metric handling (first part)",
+   "original_code": "    def train_step(self, state, data):\n        (\n            trainable_variables,\n            non_trainable_variables,\n            optimizer_variables,\n            metrics_variables,\n        ) = state\n        inputs, targets = data\n\n        grad_fn = jax.value_and_grad(\n            self.compute_loss_and_updates, has_aux=True\n        )\n\n        (loss, (predictions, non_trainable_variables)), grads = grad_fn(\n            trainable_variables,\n            non_trainable_variables,\n            inputs,\n            targets,\n            training=True,\n        )\n        (\n            trainable_variables,\n            optimizer_variables,\n        ) = self.optimizer.stateless_apply(\n            optimizer_variables, grads, trainable_variables\n        )\n\n        new_metrics_vars = []\n        logs = {}\n        for metric in self.metrics:\n            num_prev = len(new_metrics_vars)\n            num_current = len(metric.variables)\n            current_vars = metrics_variables[num_prev : num_prev + num_current]\n            if metric.name == \"loss\":\n                current_vars = metric.stateless_update_state(current_vars, loss)\n            else:\n                current_vars = metric.stateless_update_state(\n                    current_vars, targets, predictions\n                )\n            logs[metric.name] = metric.stateless_result(current_vars)",
+   "language": "python",
+   "what_it_does": "Performs one JAX training step: gradients, weight update, and stateless updating of all compiled metrics. The last lines of the loop and the return of the new state are on p.254.",
+   "line_explanations": [
+    {"lines": "2-7", "explanation": "Unpacks the four kinds of state; metrics_variables is part of the state (callout)."},
+    {"lines": "8", "explanation": "Unpacks the batch."},
+    {"lines": "10-12", "explanation": "Builds a function returning ((loss, aux), grads)."},
+    {"lines": "14-20", "explanation": "Runs it in training mode; nested unpacking retrieves loss, predictions, new non-trainable variables and gradients."},
+    {"lines": "21-26", "explanation": "Stateless optimizer update returning new trainable and optimizer variables."},
+    {"lines": "28-29", "explanation": "Accumulators for new metric variables and logs."},
+    {"lines": "30-33", "explanation": "For each metric, compute its offset and size and slice its variables from the flat list (callouts: iterates over metrics, grabs the variables of the current metric)."},
+    {"lines": "34-39", "explanation": "Loss tracker gets the loss; other metrics get targets and predictions (callout: updates the metric's state)."},
+    {"lines": "40", "explanation": "Computes the current value and stores it in logs (callout)."}
+   ],
+   "inputs_outputs": "Input: state tuple and (inputs, targets). Output (completed on p.254): (logs, new_state).",
+   "algorithm": "Gradient step followed by a pass over metrics with offset-based slicing of a flat variable list.",
+   "theory_link": "Functional state threading in JAX; gradient descent.",
+   "parameters": [
+    {"name": "metrics_variables", "role": "Flat list of all metric variables, ordered as in self.metrics."},
+    {"name": "num_prev", "role": "Start offset of the current metric's variables."},
+    {"name": "num_current", "role": "How many variables the current metric owns."}
+   ],
+   "pitfalls": [
+    "num_prev relies on new_metrics_vars being extended with current_vars at the end of every iteration (p.254); forgetting that line breaks all slices after the first metric.",
+    "Using metric.update_state() instead of the stateless variant would try to mutate state inside a traced function."
+   ],
+   "illustrative_code": "# Illustrative (not from the book): the slicing logic in plain Python\nmetric_sizes = [2, 2]          # e.g. loss tracker (total, count), accuracy (total, count)\nflat = ['L_total', 'L_count', 'A_total', 'A_count']\nnew = []\nfor size in metric_sizes:\n    start = len(new)\n    chunk = flat[start:start + size]\n    new += chunk\n    print(chunk)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Walking through the slicing",
+   "kind": "step_by_step",
+   "body": "Beyond the book: suppose `self.metrics` = [loss tracker, SparseCategoricalAccuracy] and each keeps two variables (a running total and a count; this is how mean-style metrics are typically implemented). Then `metrics_variables` has 4 entries.\n\n1. First metric: `num_prev = 0`, `num_current = 2`, slice `[0:2]`. Updated with the loss. After the loop body (p.254) `new_metrics_vars` has 2 entries.\n2. Second metric: `num_prev = 2`, `num_current = 2`, slice `[2:4]`. Updated with targets and predictions.\n\nBecause `new_metrics_vars` grows by exactly the size of each chunk, its length is always the offset of the next chunk.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the state must be returned",
+   "kind": "analogy",
+   "body": "Think of a scorekeeper who is handed a sheet each round, writes the new score, and must hand the sheet back. If the sheet is not handed back, the next round starts with the old sheet and the score never moves. In JAX, `fit()` passes the state into `train_step()` and keeps whatever comes back.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "svg",
+   "title": "Slicing the flat metrics_variables list",
+   "why": "The listing's callout 'Grabs the variables of the current metrics' slices metrics_variables[num_prev : num_prev + num_current]; this shows the offsets for a loss tracker and one accuracy metric (variable counts are illustrative).",
+   "svg": "<svg viewBox=\"0 0 520 170\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"12\" fill=\"none\" stroke=\"currentColor\"><text x=\"10\" y=\"20\" fill=\"currentColor\" stroke=\"none\">metrics_variables (flat list)</text><rect x=\"10\" y=\"30\" width=\"120\" height=\"34\"/><rect x=\"130\" y=\"30\" width=\"120\" height=\"34\"/><rect x=\"250\" y=\"30\" width=\"120\" height=\"34\"/><rect x=\"370\" y=\"30\" width=\"120\" height=\"34\"/><text x=\"30\" y=\"52\" fill=\"currentColor\" stroke=\"none\">[0] loss var</text><text x=\"150\" y=\"52\" fill=\"currentColor\" stroke=\"none\">[1] loss var</text><text x=\"270\" y=\"52\" fill=\"currentColor\" stroke=\"none\">[2] acc var</text><text x=\"390\" y=\"52\" fill=\"currentColor\" stroke=\"none\">[3] acc var</text><path d=\"M10 74 v8 h240 v-8\"/><path d=\"M250 74 v8 h240 v-8\"/><text x=\"40\" y=\"102\" fill=\"currentColor\" stroke=\"none\">metric 1: \"loss\"</text><text x=\"40\" y=\"118\" fill=\"currentColor\" stroke=\"none\">num_prev=0, num_current=2</text><text x=\"40\" y=\"134\" fill=\"currentColor\" stroke=\"none\">slice [0:2], update with loss</text><text x=\"280\" y=\"102\" fill=\"currentColor\" stroke=\"none\">metric 2: accuracy</text><text x=\"280\" y=\"118\" fill=\"currentColor\" stroke=\"none\">num_prev=2, num_current=2</text><text x=\"280\" y=\"134\" fill=\"currentColor\" stroke=\"none\">slice [2:4], targets+predictions</text><text x=\"10\" y=\"160\" fill=\"currentColor\" stroke=\"none\">new_metrics_vars += current_vars after each metric (p.254)</text></svg>"
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "State flowing through the JAX train_step()",
+   "why": "Shows how each of the four state components on this page is consumed and replaced.",
+   "mermaid": "flowchart LR\n  S[state: trainable, non_trainable, optimizer, metrics vars] --> G[grad_fn = value_and_grad of compute_loss_and_updates]\n  D[data: inputs, targets] --> G\n  G --> L[loss, predictions, new non_trainable, grads]\n  L --> O[optimizer.stateless_apply]\n  O --> T[new trainable + optimizer vars]\n  L --> M[for each metric: slice vars, stateless_update_state, stateless_result]\n  S --> M\n  M --> LG[logs]\n  M --> NM[new_metrics_vars]\n  T --> NS[new state, returned on p.254]\n  NM --> NS"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "In JAX, Keras metrics update themselves when you call them, as in TensorFlow.", "correction": "In the JAX train_step() the metric variables are passed in via state, updated with stateless_update_state(), and must be returned."},
+  {"claim": "has_aux=True means the predictions are differentiated as well.", "correction": "Only the first return value (loss) is differentiated; auxiliary data is just passed through."},
+  {"claim": "Each metric receives the whole metrics_variables list.", "correction": "Each metric gets only its own contiguous slice, located with num_prev and num_current."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 252, "note": "Start of compute_loss_and_updates() and the PyTorch metric loop."},
+   {"page": 249, "note": "JAX train_step() for customizing fit() without metrics."},
+   {"page": 245, "note": "Low-level metric usage; JAX's extra work is worth it."},
+   {"page": 243, "note": "JAX custom training step with stateless_call and stateless_apply."}
+  ],
+  "later": [
+   {"page": 254, "note": "End of this train_step() and the chapter summary."}
+  ],
+  "prerequisites": [
+   {"page": 250, "note": "self.compute_loss and self.metrics after compile()."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 251, "note": "TensorFlow metric loop with update_state()."},
+   {"page": 252, "note": "PyTorch metric loop."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "compute_loss_and_updates() returns (loss, (predictions, non_trainable_variables)) so metrics can reuse the predictions.",
+  "In JAX, metric variables are the fourth component of the training state.",
+  "Each metric's variables are a contiguous slice of metrics_variables, located by num_prev and len(metric.variables).",
+  "stateless_update_state() returns new metric variables; stateless_result() computes the value for logs.",
+  "The updated metric variables must be collected and returned in the new state (p.254)."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "Why does compute_loss_and_updates() now return predictions in its auxiliary output?", "options": ["So JAX can differentiate them", "So the metrics can be updated without a second forward pass", "Because stateless_apply() requires them", "To compute regularization losses"], "answer": "So the metrics can be updated without a second forward pass", "explanation": "The accuracy metric needs (targets, predictions). Aux outputs are not differentiated, stateless_apply() needs only grads and variables, and regularization is handled inside self.compute_loss.", "page_refs": [253]},
+  {"id": "q2", "type": "short", "question": "Write the line that unpacks the result of grad_fn and name each item.", "options": [], "answer": "(loss, (predictions, non_trainable_variables)), grads = grad_fn(...): the scalar loss, the model's predictions, the updated non-trainable variables, and the gradients of the loss w.r.t. trainable_variables.", "explanation": "value_and_grad with has_aux returns ((value, aux), grads).", "page_refs": [253]},
+  {"id": "q3", "type": "conceptual", "question": "What does num_prev = len(new_metrics_vars) represent, and why does it work?", "options": [], "answer": "The index in metrics_variables where the current metric's variables start; it works because new_metrics_vars has been extended by each previous metric's variables.", "explanation": "Metric variables are laid out in order; the running length equals the cumulative size of previous chunks (the extend happens on p.254).", "page_refs": [253, 254]},
+  {"id": "q4", "type": "mcq", "question": "Which call updates the SparseCategoricalAccuracy metric in this JAX train_step()?", "options": ["metric.update_state(targets, predictions)", "metric.stateless_update_state(current_vars, loss)", "metric.stateless_update_state(current_vars, targets, predictions)", "metric.stateless_result(current_vars)"], "answer": "metric.stateless_update_state(current_vars, targets, predictions)", "explanation": "Non-loss metrics get targets and predictions with the stateless API. The first is the stateful TF/PyTorch call, the second is for the loss tracker, the last only reads the result.", "page_refs": [253]},
+  {"id": "q5", "type": "conceptual", "question": "Why is metric handling 'a tad more complicated' in JAX than in PyTorch?", "options": [], "answer": "Because JAX requires stateless functions: metric variables cannot be mutated in place, so they must be passed in through the state, updated functionally, and returned.", "explanation": "This is the statelessness requirement the authors mention.", "page_refs": [253]},
+  {"id": "q6", "type": "short", "question": "If self.metrics had three metrics with 2, 2 and 1 variables, which slices would they get?", "options": [], "answer": "[0:2], [2:4] and [4:5].", "explanation": "Offsets are cumulative sizes 0, 2, 4.", "page_refs": [253]},
+  {"id": "q7", "type": "self", "question": "Can you explain what would go wrong if train_step() returned the original metrics_variables instead of the new ones?", "options": [], "answer": "Metric state would never accumulate across batches, so logs would reflect only one batch each time.", "explanation": "Check your understanding of state threading.", "page_refs": [253, 254]}
+ ]
+}

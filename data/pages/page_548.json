@@ -1,0 +1,383 @@
+{
+ "page_id": "page_548",
+ "pdf_page": 548,
+ "printed_page": "524",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:00:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Direction wording is inconsistent on this page: the first paragraph (e03) says diffusion time 1 is the *start* of the process (maximal noise) and 0 the *end* (almost all signal), while the next paragraph (e04) says the cosine schedule goes 'from a high signal rate (low noise) at the beginning to a low signal rate (high noise) at the end of the diffusion process'. The code (Listing 17.7) matches e04 only if 'beginning/end' means diffusion time 0 -> 1 (the forward, noising direction): t=0 gives signal 0.95, t=1 gives signal 0.02. The two paragraphs use 'process' in opposite directions (generation vs. forward noising). Notes explain both readings."
+  ],
+  "extraction_quality": "Good. e03 is the end of a sentence that starts on p.547 ('we'll use a continuous value between 1 and 0 for this index'). Listing 17.7 extracted verbatim. Figure 17.10 is a plot (signal rate vs noise rate quarter circle) read from the page image."
+ },
+ "overview": {
+  "title": "The cosine diffusion schedule",
+  "chapter": "17 Image generation",
+  "section": "17.2 Diffusion models",
+  "subsection": "17.2.3 The concepts of diffusion time and diffusion schedule",
+  "main_topic": "How a continuous diffusion time in [0, 1] is mapped to a noise rate and a signal rate with a cosine schedule (Listing 17.7).",
+  "central_idea": "Each diffusion time is turned into an angle that moves linearly between arccos(0.95) and arccos(0.02); the signal rate is the cosine of that angle and the noise rate its sine, so noise_rate^2 + signal_rate^2 = 1 always holds.",
+  "importance": "The diffusion schedule is the single function that both training (to build noisy images, p.551) and generation (to decide how much noise to remove at each step, pp.551-552) rely on. Understanding what a given diffusion time means in terms of signal and noise is essential to reading the rest of the DiffusionModel code.",
+  "learning_objectives": [
+   "State what diffusion time 1 and diffusion time 0 mean in the book's convention.",
+   "Define the diffusion schedule as the mapping from diffusion time to (noise rate, signal rate).",
+   "Read Listing 17.7 line by line and compute the rates for a given diffusion time.",
+   "Explain why the cosine parametrization guarantees noise_rates**2 + signal_rates**2 == 1.",
+   "Interpret Figure 17.10 as a quarter circle in the (noise rate, signal rate) plane."
+  ],
+  "prerequisites": [
+   "The idea of a diffusion model as a denoising autoencoder applied in a loop (p.544)",
+   "The U-Net denoiser that takes noisy images and a noise rate as inputs (pp.545-547)",
+   "Basic trigonometry: cos, sin, arccos and the identity sin^2 + cos^2 = 1",
+   "Keras `ops` namespace (backend-agnostic tensor operations)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "This page finishes the definition of **diffusion time** and introduces the **diffusion schedule**.\n\n- The diffusion time is a continuous number between 1 and 0 (the sentence starts on p.547). In the book's wording, **1** marks the start of the (generation) process, where the image is maximally noisy and carries minimal signal, and **0** marks the end, where the image is almost all signal.\n- The **diffusion schedule** is the relationship between the current diffusion time and how much noise and signal the image contains. The authors pick a **cosine schedule**, which moves smoothly between a high signal rate (0.95) and a low one (0.02).\n\n**Listing 17.7** implements it as `diffusion_schedule(diffusion_times, min_signal_rate=0.02, max_signal_rate=0.95)`:\n\n1. `start_angle = arccos(0.95)` (about 0.318 rad, 18.2 degrees) and `end_angle = arccos(0.02)` (about 1.551 rad, 88.9 degrees), both cast to `float32`.\n2. The diffusion times are mapped linearly to angles: `diffusion_angles = start_angle + diffusion_times * (end_angle - start_angle)`.\n3. `signal_rates = cos(angle)`, `noise_rates = sin(angle)`; the function returns `(noise_rates, signal_rates)` in that order.\n\nSo diffusion time 0 gives signal rate 0.95 (noise rate about 0.31) and diffusion time 1 gives signal rate 0.02 (noise rate about 0.9998). Because the two rates are the cosine and sine of the same angle, they always satisfy `noise_rates ** 2 + signal_rates ** 2 == 1`, which **Figure 17.10** shows as a quarter circle: signal rate on the vertical axis, noise rate on the horizontal axis.\n\nThe returned rates will \"guide the denoising process\": during training they set how much noise is mixed into each clean image (p.551), and during generation they tell the model how noisy the current image is and how to re-noise the next step (pp.551-552). Note that the two paragraphs describe the direction of the process differently (see the review flag): read \"beginning\" in the second paragraph as diffusion time 0.",
+ "paragraphs": [
+  {
+   "ref": "p548_e03",
+   "excerpt": "and 0 for this index—a value of 1 indicates the start of the process",
+   "what_it_says": "Completes the sentence from p.547: the diffusion time is a continuous value between 1 and 0. A value of 1 is the start of the process, with maximal noise and minimal signal; a value of 0 is the end, where the image is almost all signal and no noise.",
+   "what_it_means": "The 'process' here is the generation loop described on p.547: start from pure noise and erase a bit of noise at each step. Rather than counting steps with integers (step 0, 1, ..., T), the book uses a real number that decreases from 1 to 0. This makes the model independent of the number of steps: you can later generate with 20 steps or 100 steps (p.552, p.557) and each step just corresponds to a different set of diffusion times in [0, 1].",
+   "why_it_matters": "Every later piece of code passes 'diffusion times' around: training samples them uniformly in [0, 1] (p.551), and generation walks them down from 1 toward 0 (p.551). Knowing that 1 = noisy and 0 = clean is what makes those loops readable.",
+   "technical_idea": "Continuous-time parametrization of diffusion: t in [0, 1] with t = 1 the noisiest level. Note the book's own schedule never reaches exactly 'pure noise' or 'pure signal' at the endpoints: at t = 1 the signal rate is still 0.02, and at t = 0 it is 0.95, not 1.",
+   "terminology": [
+    {"term": "Diffusion time", "meaning": "A continuous index in [0, 1] of where you are in the diffusion process; 1 = most noise, 0 = (almost) clean image."}
+   ],
+   "connections": [
+    "p.547: the sentence begins there, defining diffusion time as the index of the current step in the denoising loop.",
+    "p.551: generate() starts with diffusion_times = 1 and decreases them by 1/diffusion_steps at each iteration."
+   ]
+  },
+  {
+   "ref": "p548_e04",
+   "excerpt": "The relationship between the current diffusion time and the amount of noise",
+   "what_it_says": "Defines the diffusion schedule as the relationship between diffusion time and the amount of noise and signal in the image. The experiment uses a cosine schedule, moving smoothly from a high signal rate (low noise) at the beginning to a low signal rate (high noise) at the end of the diffusion process.",
+   "what_it_means": "A schedule is a function t -> (noise rate, signal rate). Here 'beginning' and 'end' refer to diffusion time going from 0 to 1, i.e. the forward, noise-adding direction: at t = 0 the signal rate is high, at t = 1 it is low. That is the reverse of the direction used in the previous paragraph, where 1 was called the start. The code is unambiguous: t = 0 -> signal 0.95, t = 1 -> signal 0.02. 'Smoothly' refers to the fact that the rates change along a cosine curve rather than jumping or changing linearly.",
+   "why_it_matters": "The schedule decides how the model's training effort is spread across noise levels and how big each denoising step is during generation. Choosing a schedule is one of the main design choices of a diffusion model.",
+   "technical_idea": "Beyond the book: the cosine schedule was popularized by Nichol and Dhariwal (2021, 'Improved DDPM'), who found that a linear schedule destroys information too quickly. The book's version is a simpler variant: the *angle* is linear in t, so the signal rate is cos of a linear function of t, clipped to the range [0.02, 0.95].",
+   "terminology": [
+    {"term": "Diffusion schedule", "meaning": "The function mapping diffusion time to the noise rate and signal rate used to mix an image with noise."},
+    {"term": "Signal rate", "meaning": "The coefficient multiplying the clean image in a noisy image."},
+    {"term": "Noise rate", "meaning": "The coefficient multiplying the Gaussian noise in a noisy image."},
+    {"term": "Cosine schedule", "meaning": "A schedule where the signal rate follows a cosine curve of diffusion time."}
+   ],
+   "connections": [
+    "p.551: noisy_images = signal_rates * images + noise_rates * noise_masks uses these two rates directly."
+   ]
+  },
+  {
+   "ref": "p548_e07",
+   "excerpt": "This diffusion_schedule() function takes as input a diffusion_times tensor, which represents",
+   "what_it_says": "diffusion_schedule() takes a diffusion_times tensor and returns matching noise_rates and signal_rates tensors, which guide the denoising process. The cosine schedule is chosen to maintain noise_rates ** 2 + signal_rates ** 2 == 1 (Figure 17.10).",
+   "what_it_means": "The function works element-wise on a whole tensor, so you can pass a batch of diffusion times (shape (batch_size, 1, 1, 1) in training, p.551) and get back rate tensors of the same shape, ready to broadcast against image batches of shape (batch_size, 128, 128, 3). The constraint that the squares sum to 1 follows from cos^2 + sin^2 = 1. Figure 17.10 plots signal rate against noise rate and gets a quarter of the unit circle.",
+   "why_it_matters": "Beyond the book: the sum-of-squares constraint keeps the variance of a noisy image constant. If the clean image is normalized to unit variance (p.549's normalization layer) and the noise is standard Gaussian and independent of it, then signal*image + noise_rate*noise has variance signal^2 + noise^2 = 1 at every diffusion time. The denoiser therefore always sees inputs on the same scale, whatever the noise level.",
+   "technical_idea": "Variance-preserving mixing: $x_t = s(t)\\,x_0 + n(t)\\,\\varepsilon$ with $s^2 + n^2 = 1$.",
+   "terminology": [
+    {"term": "Variance-preserving", "meaning": "Not in the book: a noising scheme where the noisy input keeps unit variance at every noise level."}
+   ],
+   "connections": [
+    "p.549: Figure 17.11 plots the same rates against diffusion time instead of against each other.",
+    "p.549: the normalization layer makes images zero-mean, unit-variance so they match the noise."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "diffusion_time",
+   "name": "Diffusion time",
+   "definition": "A continuous value in [0, 1] indexing the noise level of an image in the diffusion process; 1 is the noisiest, 0 the cleanest.",
+   "intuition": "Think of it as a dial: turn it to 1 and the image is drowned in noise; turn it to 0 and the image is nearly clean. Generation turns the dial slowly from 1 down to 0.",
+   "technical": "In this implementation, t is fed to diffusion_schedule() to get the rates. Training samples t ~ Uniform(0, 1) per image (p.551); generation uses t = 1, 1 - 1/T, 1 - 2/T, ... for T steps (p.551).",
+   "significance": "Decouples the model from a fixed number of steps; the same trained denoiser can be used with any number of generation steps.",
+   "example": "With 20 generation steps the diffusion times visited are 1.00, 0.95, 0.90, ..., 0.05.",
+   "misconception": "That diffusion time 1 means literally pure noise in this code. With the book's schedule, t = 1 still has a signal rate of 0.02.",
+   "related": ["diffusion_schedule", "diffusion_model"],
+   "source": "book"
+  },
+  {
+   "id": "diffusion_schedule",
+   "name": "Diffusion schedule (cosine)",
+   "definition": "The mapping from diffusion time to (noise rate, signal rate). The book uses a cosine schedule: the rates are the sine and cosine of an angle that grows linearly with diffusion time.",
+   "intuition": "Picture a point moving along a quarter circle from near the top (mostly signal) to near the right edge (mostly noise). Its height is the signal rate and its horizontal position is the noise rate.",
+   "technical": "angle(t) = arccos(0.95) + t (arccos(0.02) - arccos(0.95)); signal = cos(angle); noise = sin(angle). Endpoints: t=0 -> (noise 0.312, signal 0.95); t=1 -> (noise 0.9998, signal 0.02).",
+   "significance": "Determines how noisy training examples are on average and how much noise is removed per generation step.",
+   "example": "t = 0.5 gives angle about 0.934 rad, so signal rate about 0.594 and noise rate about 0.804.",
+   "misconception": "That the signal rate drops linearly with time. It is the angle that is linear; the signal rate follows a cosine, dropping slowly at first and faster later (see Figure 17.11 on p.549).",
+   "related": ["diffusion_time", "diffusion_model", "noise_rate", "signal_rate"],
+   "source": "book"
+  },
+  {
+   "id": "diffusion_model",
+   "name": "Diffusion model",
+   "definition": "A generative model that learns to denoise images and generates new images by repeatedly denoising pure noise.",
+   "intuition": "A denoising autoencoder in a loop (p.544).",
+   "technical": "The schedule on this page defines the noise level at each diffusion time; the denoiser is the U-Net of pp.545-547.",
+   "significance": "Diffusion models power modern image generators such as Stable Diffusion (p.555).",
+   "example": "The Oxford Flowers model trained on p.553.",
+   "misconception": "That 'diffusion' is what the model does during generation; generation is actually reverse diffusion (p.544).",
+   "related": ["diffusion_schedule", "diffusion_time"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Linear interpolation of the diffusion angle",
+   "latex": "\\theta(t) = \\theta_{\\text{start}} + t\\,(\\theta_{\\text{end}} - \\theta_{\\text{start}}), \\quad \\theta_{\\text{start}} = \\arccos(0.95),\\ \\theta_{\\text{end}} = \\arccos(0.02)",
+   "source_text": "diffusion_angles = start_angle + diffusion_times * (end_angle - start_angle)",
+   "variables": [
+    {"symbol": "t", "meaning": "diffusion time in [0, 1] (the diffusion_times tensor)"},
+    {"symbol": "\\theta_{\\text{start}}", "meaning": "start_angle = arccos(max_signal_rate) = arccos(0.95), about 0.3176 rad"},
+    {"symbol": "\\theta_{\\text{end}}", "meaning": "end_angle = arccos(min_signal_rate) = arccos(0.02), about 1.5508 rad"},
+    {"symbol": "\\theta(t)", "meaning": "diffusion_angles: the angle on the quarter circle for diffusion time t"}
+   ],
+   "operations": "arccos converts the desired extreme signal rates into angles; then a straight-line interpolation in angle space.",
+   "purpose": "Chooses angles so that cos(angle) hits exactly 0.95 at t=0 and 0.02 at t=1.",
+   "interpretation": "Diffusion time moves the point at constant angular speed along the unit circle.",
+   "intuition": "Instead of interpolating the signal rate directly, interpolate the angle; the rates then automatically stay on the circle.",
+   "numerical_example": "$\\theta_{end}-\\theta_{start} \\approx 1.5508 - 0.3176 = 1.2332$. For $t = 0.25$: $\\theta \\approx 0.3176 + 0.25\\cdot1.2332 = 0.6259$ rad.",
+   "source": "book",
+   "book_ref": "p.548"
+  },
+  {
+   "id": "m2",
+   "title": "Signal and noise rates as cosine and sine",
+   "latex": "s(t) = \\cos\\theta(t), \\qquad n(t) = \\sin\\theta(t)",
+   "source_text": "signal_rates = ops.cos(diffusion_angles); noise_rates = ops.sin(diffusion_angles)",
+   "variables": [
+    {"symbol": "s(t)", "meaning": "signal_rates: weight of the clean image at diffusion time t"},
+    {"symbol": "n(t)", "meaning": "noise_rates: weight of the Gaussian noise at diffusion time t"}
+   ],
+   "operations": "Element-wise cosine and sine of the angle tensor.",
+   "purpose": "Produces the two coefficients used to mix clean images and noise.",
+   "interpretation": "As t grows from 0 to 1, s falls from 0.95 to 0.02 and n rises from about 0.312 to about 0.9998.",
+   "intuition": "Signal and noise trade off like the two coordinates of a point on a circle.",
+   "numerical_example": "| t | angle (rad) | signal rate | noise rate |\n|---|---|---|---|\n| 0 | 0.318 | 0.950 | 0.312 |\n| 0.25 | 0.626 | 0.811 | 0.586 |\n| 0.379 | 0.785 | 0.707 | 0.707 |\n| 0.5 | 0.934 | 0.594 | 0.804 |\n| 0.75 | 1.243 | 0.322 | 0.947 |\n| 1 | 1.551 | 0.020 | 0.9998 |\n\nThe two rates are equal (both $1/\\sqrt2 \\approx 0.707$) at $t \\approx 0.38$, where the angle is $\\pi/4$.",
+   "source": "book",
+   "book_ref": "p.548"
+  },
+  {
+   "id": "m3",
+   "title": "The unit-circle constraint",
+   "latex": "n(t)^2 + s(t)^2 = \\sin^2\\theta(t) + \\cos^2\\theta(t) = 1",
+   "source_text": "noise_rates ** 2 + signal_rates ** 2 == 1",
+   "variables": [
+    {"symbol": "n(t)", "meaning": "noise rate"},
+    {"symbol": "s(t)", "meaning": "signal rate"}
+   ],
+   "operations": "Pythagorean identity.",
+   "purpose": "The stated reason for using a cosine schedule.",
+   "interpretation": "Figure 17.10: every (noise rate, signal rate) pair lies on the quarter circle of radius 1. Beyond the book: with unit-variance images and independent unit-variance noise, $\\operatorname{Var}(s\\,x_0 + n\\,\\varepsilon) = s^2 + n^2 = 1$, so the noisy image keeps unit variance at every diffusion time.",
+   "intuition": "Adding noise never changes the overall 'energy' of the input; it only changes how much of it is image and how much is noise.",
+   "numerical_example": "At $t=0$: $0.312^2 + 0.95^2 = 0.0975 + 0.9025 = 1.0$.",
+   "source": "book",
+   "book_ref": "p.548"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "17.7",
+   "title": "The diffusion schedule",
+   "original_code": "def diffusion_schedule(\n    diffusion_times,\n    min_signal_rate=0.02,\n    max_signal_rate=0.95,\n):\n    start_angle = ops.cast(ops.arccos(max_signal_rate), \"float32\")\n    end_angle = ops.cast(ops.arccos(min_signal_rate), \"float32\")\n    diffusion_angles = start_angle + diffusion_times * (end_angle - start_angle)\n    signal_rates = ops.cos(diffusion_angles)\n    noise_rates = ops.sin(diffusion_angles)\n    return noise_rates, signal_rates",
+   "language": "python",
+   "what_it_does": "Maps a tensor of diffusion times in [0, 1] to two tensors of the same shape: the noise rates and the signal rates, following a cosine schedule between signal rate 0.95 (t=0) and 0.02 (t=1).",
+   "line_explanations": [
+    {"lines": "1-5", "explanation": "The function takes the diffusion times plus two keyword arguments bounding the signal rate: never above 0.95 (so even the 'cleanest' training images carry a little noise) and never below 0.02 (so even the noisiest ones keep a trace of the image)."},
+    {"lines": "6", "explanation": "start_angle = arccos(0.95), about 0.3176 rad. The cast to float32 keeps the dtype consistent with the float32 image tensors (arccos of a Python float can return float64 on some backends)."},
+    {"lines": "7", "explanation": "end_angle = arccos(0.02), about 1.5508 rad, just short of pi/2."},
+    {"lines": "8", "explanation": "Linear interpolation of the angle with diffusion time. Works element-wise and broadcasts, so diffusion_times can have any shape, e.g. (batch_size, 1, 1, 1)."},
+    {"lines": "9-10", "explanation": "Signal rate = cos(angle), noise rate = sin(angle). Guarantees noise^2 + signal^2 = 1."},
+    {"lines": "11", "explanation": "Returns noise first, then signal. Callers must unpack in that order: noise_rates, signal_rates = diffusion_schedule(...)."}
+   ],
+   "inputs_outputs": "Input: diffusion_times, a float tensor with values in [0, 1] of any shape. Output: tuple (noise_rates, signal_rates), each the same shape as the input.",
+   "algorithm": "1) Convert extreme signal rates to angles with arccos. 2) Interpolate the angle linearly with t. 3) Take cos and sin.",
+   "theory_link": "Implements the diffusion schedule described in e04 and enforces the unit-circle constraint of Figure 17.10.",
+   "parameters": [
+    {"name": "diffusion_times", "role": "Tensor of diffusion times in [0, 1]; 0 = least noise, 1 = most noise."},
+    {"name": "min_signal_rate", "role": "Signal rate at t = 1 (default 0.02)."},
+    {"name": "max_signal_rate", "role": "Signal rate at t = 0 (default 0.95)."}
+   ],
+   "pitfalls": [
+    "The return order is (noise_rates, signal_rates), not (signal, noise); swapping them silently produces nonsense.",
+    "Passing diffusion times outside [0, 1] extrapolates the angle beyond the intended range (e.g. t slightly above 1 gives angles past pi/2 and a negative signal rate).",
+    "If diffusion_times is float64 (e.g. a NumPy array), the result may upcast; keep it float32 to match the images."
+   ],
+   "illustrative_code": "# AI-written check (not from the book): verify the endpoints and the identity\nimport numpy as np\nt = np.array([0.0, 0.5, 1.0], dtype=\"float32\")\na0, a1 = np.arccos(0.95), np.arccos(0.02)\nang = a0 + t * (a1 - a0)\nnoise, signal = np.sin(ang), np.cos(ang)\nprint(signal)            # [0.95  0.594 0.02 ]\nprint(noise**2 + signal**2)  # [1. 1. 1.]"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why interpolate an angle instead of the signal rate?",
+   "kind": "breakdown",
+   "body": "If you interpolated the signal rate linearly from 0.95 to 0.02 and then set the noise rate to $\\sqrt{1 - s^2}$, you would still stay on the circle, but the speed along the circle would be very uneven: near $s \\approx 0$ the noise rate barely changes while near $s \\approx 1$ it changes very fast. Interpolating the angle means the point moves along the arc at **constant angular speed**, which gives a smooth, balanced progression of both rates. This is the 'smoothly transition' the authors mention. (Explanation beyond the book.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why not go all the way to signal rates 1 and 0?",
+   "kind": "step_by_step",
+   "body": "The defaults clip the schedule to [0.02, 0.95]. Two practical reasons (not stated on this page):\n\n1. **Signal rate 0 would break `denoise()`** on p.550, which divides by `signal_rates` to reconstruct the clean image. With a minimum of 0.02 the division is still large (up to 50x) but finite.\n2. **Signal rate 1 would mean zero noise**, so there would be nothing to predict: the noise-prediction target would be meaningless at that level. Keeping a little noise (rate about 0.31 at t = 0) makes every training example a real denoising task.",
+   "source": "inference"
+  },
+  {
+   "title": "The volume-knob analogy",
+   "kind": "analogy",
+   "body": "Imagine mixing two audio tracks, a song (the image) and static (noise), with a single crossfader whose position is the angle. The song's volume is $\\cos\\theta$ and the static's is $\\sin\\theta$. Because $\\cos^2 + \\sin^2 = 1$, the total loudness (power) stays constant while you sweep the fader; only the balance changes. The diffusion schedule is a recipe for how fast you move that crossfader as diffusion time advances.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "The book's schedule on the unit circle (Figure 17.10, with t marked)",
+   "why": "Figure 17.10 shows the full quarter circle noise^2 + signal^2 = 1. Listing 17.7 only uses the arc between signal rate 0.95 (t = 0) and 0.02 (t = 1); this chart overlays that arc, sampled every 0.1 of diffusion time, on the full circle.",
+   "chart": {
+    "type": "scatter",
+    "data": {
+     "datasets": [
+      {
+       "label": "Full quarter circle (Figure 17.10)",
+       "data": [{"x": 0.0, "y": 1.0}, {"x": 0.156, "y": 0.988}, {"x": 0.309, "y": 0.951}, {"x": 0.454, "y": 0.891}, {"x": 0.588, "y": 0.809}, {"x": 0.707, "y": 0.707}, {"x": 0.809, "y": 0.588}, {"x": 0.891, "y": 0.454}, {"x": 0.951, "y": 0.309}, {"x": 0.988, "y": 0.156}, {"x": 1.0, "y": 0.0}],
+       "showLine": true,
+       "pointRadius": 0
+      },
+      {
+       "label": "Listing 17.7 schedule, t = 0, 0.1, ..., 1",
+       "data": [{"x": 0.312, "y": 0.95}, {"x": 0.427, "y": 0.904}, {"x": 0.535, "y": 0.845}, {"x": 0.635, "y": 0.773}, {"x": 0.725, "y": 0.689}, {"x": 0.804, "y": 0.594}, {"x": 0.871, "y": 0.491}, {"x": 0.925, "y": 0.38}, {"x": 0.965, "y": 0.263}, {"x": 0.99, "y": 0.143}, {"x": 1.0, "y": 0.02}],
+       "showLine": false,
+       "pointRadius": 4
+      }
+     ]
+    },
+    "options": {
+     "scales": {
+      "x": {"title": {"display": true, "text": "Noise rate"}, "min": 0, "max": 1.05},
+      "y": {"title": {"display": true, "text": "Signal rate"}, "min": 0, "max": 1.05}
+     }
+    }
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Diffusion time 0 means the first step of generation.",
+   "correction": "In the book's convention, generation starts at diffusion time 1 (most noise) and moves toward 0 (almost clean). Time 0 is where generation ends."
+  },
+  {
+   "claim": "The signal rate decreases linearly with diffusion time.",
+   "correction": "The angle is linear in t; the signal rate is its cosine, so it decreases slowly at first and faster near t = 1 (Figure 17.11, p.549)."
+  },
+  {
+   "claim": "noise_rate + signal_rate = 1.",
+   "correction": "It is the sum of the squares that equals 1. At t = 0, 0.312 + 0.95 = 1.262, but 0.312^2 + 0.95^2 = 1."
+  },
+  {
+   "claim": "diffusion_schedule returns (signal_rates, noise_rates).",
+   "correction": "It returns noise_rates first: `return noise_rates, signal_rates`."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 547, "note": "Defines diffusion time as the index of the current step of the denoising loop; the sentence finishes on this page."},
+   {"page": 544, "note": "Introduces diffusion models as a denoising autoencoder applied in a loop, turning pure noise into images."},
+   {"page": 545, "note": "The U-Net denoiser is told how much noise it should remove; that amount is the noise rate computed by this schedule."}
+  ],
+  "later": [
+   {"page": 549, "note": "Figure 17.11 plots noise and signal rates against diffusion time for this schedule."},
+   {"page": 551, "note": "call() samples random diffusion times and uses diffusion_schedule() to build noisy training images."},
+   {"page": 552, "note": "generate() uses diffusion_schedule() to compute the rates for the next, slightly less noisy step."}
+  ],
+  "prerequisites": [
+   {"page": 544, "note": "The core idea of diffusion as repeated denoising."}
+  ],
+  "related_math": [
+   {"page": 550, "note": "denoise() inverts the mixing x_t = s x_0 + n eps using these rates."}
+  ],
+  "related_code": [
+   {"page": 551, "note": "Training forward pass in call(), which calls diffusion_schedule()."},
+   {"page": 549, "note": "Plotting code that produces Figure 17.11 from this function."}
+  ],
+  "related_figures": [
+   {"page": 549, "note": "Figure 17.11, the same schedule as functions of diffusion time."}
+  ]
+ },
+ "takeaways": [
+  "Diffusion time is a continuous index in [0, 1]: 1 = noisiest, 0 = almost clean.",
+  "The diffusion schedule maps diffusion time to a (noise rate, signal rate) pair.",
+  "Listing 17.7 interpolates an angle linearly between arccos(0.95) and arccos(0.02), then takes cos (signal) and sin (noise).",
+  "Because the rates are cos and sin of the same angle, noise_rates**2 + signal_rates**2 == 1 (Figure 17.10).",
+  "The function returns (noise_rates, signal_rates) in that order and works element-wise on whole tensors.",
+  "The two paragraphs on this page describe the direction of the process differently; the code makes t=0 the low-noise end."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "With the default arguments, what signal rate does diffusion_schedule() return for diffusion time 1.0?",
+   "options": ["0.0", "0.02", "0.95", "1.0"],
+   "answer": "0.02",
+   "explanation": "At t = 1 the angle equals end_angle = arccos(min_signal_rate) = arccos(0.02), so cos(angle) = 0.02. 0.95 is the value at t = 0; 0.0 and 1.0 are never reached because the schedule is clipped to [0.02, 0.95].",
+   "page_refs": [548]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Compute the noise rate at diffusion time 0 with the default arguments.",
+   "options": [],
+   "answer": "sqrt(1 - 0.95^2) = sqrt(0.0975), about 0.312.",
+   "explanation": "At t = 0 the angle is arccos(0.95), so the noise rate is sin(arccos(0.95)) = sqrt(1 - 0.95^2) by the unit-circle identity.",
+   "page_refs": [548, 549]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why does the cosine schedule guarantee noise_rates ** 2 + signal_rates ** 2 == 1, and what does this buy the model?",
+   "options": [],
+   "answer": "Both rates are the sine and cosine of the same angle, so the identity sin^2 + cos^2 = 1 applies. If images are normalized to unit variance and the noise is unit-variance and independent, every noisy image then has unit variance, whatever the noise level.",
+   "explanation": "The first half is the book's stated reason (Figure 17.10). The variance-preservation benefit is an explanation beyond the book, consistent with the normalization layer introduced on p.549.",
+   "page_refs": [548, 549]
+  },
+  {
+   "id": "q4",
+   "type": "short",
+   "question": "In the book's convention, which end of the diffusion-time range does image generation start from, and why?",
+   "options": [],
+   "answer": "From 1, the noisiest level, because generation starts from pure noise and removes a little noise at each step until it reaches 0.",
+   "explanation": "e03: 'a value of 1 indicates the start of the process, where the amount of noise is maximal'. generate() on p.551 indeed starts with diffusion_times = 1.",
+   "page_refs": [548, 551]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "What is linear in diffusion time in Listing 17.7?",
+   "options": ["The signal rate", "The noise rate", "The angle whose cosine and sine give the rates", "The squared signal rate"],
+   "answer": "The angle whose cosine and sine give the rates",
+   "explanation": "diffusion_angles = start_angle + diffusion_times * (end_angle - start_angle) is linear in t. The signal and noise rates are cos and sin of it, so they are not linear; their squares are not linear either.",
+   "page_refs": [548]
+  },
+  {
+   "id": "q6",
+   "type": "math",
+   "question": "At what diffusion time are the noise rate and the signal rate equal?",
+   "options": [],
+   "answer": "When the angle is pi/4: t = (pi/4 - arccos(0.95)) / (arccos(0.02) - arccos(0.95)) = (0.7854 - 0.3176) / 1.2332, about 0.38.",
+   "explanation": "cos(theta) = sin(theta) at theta = pi/4. Solving the linear angle equation for t gives about 0.38, matching the crossing point of the two curves in Figure 17.11 on p.549.",
+   "page_refs": [548, 549]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Without looking, write diffusion_schedule() from memory, including the argument defaults and the return order. Then check it against Listing 17.7.",
+   "options": [],
+   "answer": "See Listing 17.7.",
+   "explanation": "Pay attention to the return order (noise first) and to the fact that arccos is applied to max_signal_rate for the start angle.",
+   "page_refs": [548]
+  }
+ ]
+}

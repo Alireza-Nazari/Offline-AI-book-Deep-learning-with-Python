@@ -1,0 +1,530 @@
+{
+ "page_id": "page_559",
+ "pdf_page": 559,
+ "printed_page": "535",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:50:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. e03 continues the sentence begun on p.558. e04–e07 are a four-item bullet list (each short). Listing 17.10 (e10) is extracted without blank lines; content matches the image. Its callout ('The second and fourth text embeddings are for the negative prompt, which we do not use.') points at e1[1] and e1[3]. The last paragraph (e12) continues on p.560. The book gives no slerp formula in prose; the math below is reconstructed from the code."
+ },
+ "overview": {
+  "title": "The four text embeddings and slerp interpolation",
+  "chapter": "17 Image generation",
+  "section": "17.3 Text-to-image models",
+  "subsection": "17.3.1 Exploring the latent space of a text-to-image model",
+  "main_topic": "What the four text-embedding tensors of Stable Diffusion 3 are, and Listing 17.10: a spherical linear interpolation (slerp) function and a helper that interpolates the positive-prompt embeddings between two prompts.",
+  "central_idea": "SD3 passes the denoiser both a per-token sequence and a pooled vector for both the positive and negative prompt, giving four tensors. To walk between two prompts, the book interpolates the positive sequence and vector with slerp, which moves along a great circle of a sphere rather than a straight chord. This keeps intermediate points at roughly the same magnitude as real embeddings, on the 'surface' of the learned manifold.",
+  "importance": "Slerp is the standard tool for interpolating in high-dimensional latent spaces (GAN/diffusion latents, embeddings, quaternion rotations). This page gives the code and the reason for it, and it is the core of the prompt-morphing demo on p.560.",
+  "learning_objectives": [
+   "List the four embedding tensors (positive/negative × sequence/vector) and their roles.",
+   "Read Listing 17.10 and write the slerp formula it implements.",
+   "Explain why the code interpolates only indices 0 and 2 and copies indices 1 and 3.",
+   "Explain geometrically why linear interpolation between two points on a sphere leaves the sphere and slerp does not.",
+   "Compute a small slerp example by hand."
+  ],
+  "prerequisites": [
+   "Listing 17.9 and the embedding shapes (p.558)",
+   "Dot product, vector norm, cosine similarity (chapter 2)",
+   "Basic trigonometry (sin, arccos)",
+   "keras.ops"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes the explanation begun on p.558. Stable Diffusion passes the denoiser both the final output vector and the last representation of the **entire token sequence** learned by the text encoder, which gives it more information. Doing this for both prompts gives **four tensors**:\n\n- the positive prompt's encoder sequence, `(1, 154, 4096)`\n- the negative prompt's encoder sequence, `(1, 154, 4096)`\n- the positive prompt's encoder vector, `(1, 2048)`\n- the negative prompt's encoder vector, `(1, 2048)`\n\nWith `generate()` decomposed, we can walk the latent space between two prompts. **Listing 17.10** defines two functions:\n\n- **`slerp(t, v1, v2)`** casts both tensors to float32 and computes their flattened norms and the cosine of the angle between them (`dot`). It takes `theta_0 = arccos(dot)` and returns $\\frac{\\sin((1-t)\\theta_0)}{\\sin\\theta_0} v_1 + \\frac{\\sin(t\\theta_0)}{\\sin\\theta_0} v_2$.\n- **`interpolate_text_embeddings(e1, e2, start=0, stop=1, num=10)`** loops over `np.linspace(start, stop, num)`. For each `t` it builds a 4-tuple: slerp of the positive sequences (`e1[0]`, `e2[0]`), `e1[1]` unchanged, slerp of the positive vectors (`e1[2]`, `e2[2]`), `e1[3]` unchanged. The callout says the second and fourth embeddings are for the unused negative prompt.\n\nThe authors explain that **slerp** stands for *spherical linear interpolation*, a function used in computer graphics for decades to interpolate points on a sphere. They say the math details are not important, but the motivation is. If the text manifold is imagined as a sphere and two prompts as random points on it, directly linearly interpolating between them would... (continued on p.560: land inside the sphere, off the surface where embeddings have meaning).",
+ "paragraphs": [
+  {
+   "ref": "p559_e03",
+   "excerpt": "representation of the entire token sequence learned by the text encoder. This",
+   "what_it_says": "Completing p.558's sentence: SD3 passes the denoiser both the final output vector and the last representation of the entire token sequence, which gives it more information. This is done for both positive and negative prompts, so there are four tensors. The bullets that follow (e04–e07) name them: the positive prompt's encoder sequence, the negative prompt's encoder sequence, the positive prompt's encoder vector, and the negative prompt's encoder vector.",
+   "what_it_means": "The tuple order matches the shapes printed on p.558: index 0 = positive sequence (1, 154, 4096), index 1 = negative sequence (1, 154, 4096), index 2 = positive vector (1, 2048), index 3 = negative vector (1, 2048). The sequence keeps one vector per token position, which preserves word-level detail. The pooled vector compresses the whole prompt into a single summary.",
+   "why_it_matters": "This indexing is exactly what interpolate_text_embeddings relies on: it interpolates indices 0 and 2 (positive) and copies 1 and 3 (negative).",
+   "technical_idea": "Note (not in the book): 'last representation' means the output of the encoder's final layer (or, for CLIP in SD3, its penultimate hidden layer) rather than a single pooled token. The pooled vector is a projection of the end-of-text token's representation.",
+   "terminology": [
+    {
+     "term": "Encoder sequence",
+     "meaning": "The text encoder's per-token output, shape (batch, tokens, features)."
+    },
+    {
+     "term": "Encoder vector",
+     "meaning": "A single pooled vector summarizing the prompt, shape (batch, features)."
+    }
+   ],
+   "connections": [
+    "p.558: the shapes [(1, 154, 4096), (1, 154, 4096), (1, 2048), (1, 2048)].",
+    "p.556: negative prompts, the source of tensors 1 and 3."
+   ]
+  },
+  {
+   "ref": "p559_e08",
+   "excerpt": "With our generate() function decomposed, we can now try walking the latent",
+   "what_it_says": "With generate() decomposed, we can try walking the latent space between two text prompts by writing a function that interpolates between the text embeddings the model outputs.",
+   "what_it_means": "The plan: compute embeddings for prompt A and prompt B with get_text_embeddings (p.558), produce a list of intermediate embedding tuples, and pass each to denoise_with_text_embeddings to get an image per step. The 'latent space' being walked here is the text-embedding space that conditions the denoiser, not the image-noise latent.",
+   "why_it_matters": "This is the payoff of decomposing generate(): embeddings are now ordinary tensors you can do arithmetic on.",
+   "technical_idea": "",
+   "terminology": [
+    {
+     "term": "Walking the latent space",
+     "meaning": "Generating outputs for a sequence of points along a path between two latent representations."
+    }
+   ],
+   "connections": [
+    "p.557: the motivation, a smooth continuous manifold of prompts.",
+    "p.560: generating images along the interpolation (figure 17.17)."
+   ]
+  },
+  {
+   "ref": "p559_e11",
+   "excerpt": "You’ll notice we use a special interpolation function called slerp to walk",
+   "what_it_says": "The interpolation uses slerp, short for spherical linear interpolation, a function used in computer graphics for decades to interpolate points on a sphere.",
+   "what_it_means": "Slerp moves along the great-circle arc between two vectors at constant angular speed, rather than along the straight line (chord) between them. In graphics it is used for smoothly interpolating rotations represented as unit quaternions, which was its original use (Shoemake, 1985; not cited in the book). In generative modeling it is the usual way to interpolate Gaussian latent vectors and embeddings.",
+   "why_it_matters": "Choosing the interpolation path is not a detail. Points that leave the region where the model was trained give poor or washed-out outputs.",
+   "technical_idea": "Beyond the book: for unit vectors with angle θ between them, slerp(t) = [sin((1−t)θ) v1 + sin(tθ) v2] / sin θ always has norm 1 and makes angle tθ with v1. For non-unit vectors, as in the code, the result's norm varies smoothly between |v1| and |v2| (it is exact when the norms are equal), but it does not shrink the way the linear midpoint does.",
+   "terminology": [
+    {
+     "term": "Slerp",
+     "meaning": "Spherical linear interpolation: interpolation along the arc of a great circle between two vectors."
+    },
+    {
+     "term": "Great circle",
+     "meaning": "The largest circle on a sphere, through two points and the center; the shortest path on the surface."
+    }
+   ],
+   "connections": [
+    "p.560: figure 17.16 illustrates spherical vs linear interpolation."
+   ]
+  },
+  {
+   "ref": "p559_e12",
+   "excerpt": "Don’t worry too much about the math; it’s not important for our",
+   "what_it_says": "The math is not important for the example, but the motivation is. If we imagine the text manifold as a sphere and our two prompts as random points on it, directly linearly interpolating (continued on p.560) between them would land inside the sphere, off its surface.",
+   "what_it_means": "Embeddings of real prompts tend to have similar magnitudes, so they lie near a sphere-like shell. The straight line between two such points passes through the interior, where vectors have smaller norm. For nearly orthogonal vectors (common in high dimensions), the linear midpoint has only about 71% of the original norm. The denoiser never saw such shrunken embeddings, so it may behave unpredictably. Slerp keeps the magnitude roughly constant.",
+   "why_it_matters": "This geometric argument applies wherever data or latents concentrate on a shell. For example, Gaussian noise in d dimensions has norm close to √d, which is why slerp is also used to interpolate diffusion and GAN noise vectors.",
+   "technical_idea": "",
+   "terminology": [
+    {
+     "term": "Linear interpolation (lerp)",
+     "meaning": "(1 − t)·v1 + t·v2: the straight line between two points."
+    }
+   ],
+   "connections": [
+    "p.560: 'We would like to stay on the surface of the smooth manifold learned by our text embedding'."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "slerp",
+   "name": "Spherical linear interpolation (slerp)",
+   "definition": "Interpolation between two vectors along the great-circle arc connecting them, parameterized by t ∈ [0, 1].",
+   "intuition": "Walking along the surface of a globe from one city to another, instead of tunnelling straight through the Earth.",
+   "technical": "θ = arccos(v1·v2 / (|v1||v2|)); slerp(t) = sin((1−t)θ)/sin θ · v1 + sin(tθ)/sin θ · v2. At t = 0 it gives v1, at t = 1 it gives v2.",
+   "significance": "Keeps interpolated embeddings at a realistic magnitude, on the manifold where the denoiser was trained.",
+   "example": "Listing 17.10: slerp(t, e1[0], e2[0]) and slerp(t, e1[2], e2[2]).",
+   "misconception": "Slerp is not a nonlinear 'smart' interpolation that understands semantics; it is pure geometry on norms and angles.",
+   "related": [
+    "latent_space_interpolation",
+    "embedding",
+    "cosine_similarity"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "text_embeddings_sd3",
+   "name": "Positive/negative sequence and vector embeddings",
+   "definition": "The four conditioning tensors of SD3: positive sequence, negative sequence, positive vector, negative vector.",
+   "intuition": "Two granularities (per-word, whole-prompt) times two prompts (do, don't).",
+   "technical": "Shapes (1, 154, 4096), (1, 154, 4096), (1, 2048), (1, 2048), in that order.",
+   "significance": "Determines which indices to interpolate (0 and 2) and which to leave alone (1 and 3).",
+   "example": "interpolate_text_embeddings keeps e1[1] and e1[3].",
+   "misconception": "The negative embeddings are not unused by the model. They are used in guidance; we just keep them fixed (both prompts use the empty negative prompt).",
+   "related": [
+    "slerp",
+    "negative_prompt"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "cosine_similarity",
+   "name": "Cosine similarity",
+   "definition": "The dot product of two vectors divided by the product of their norms, equal to the cosine of the angle between them.",
+   "intuition": "How closely two arrows point in the same direction, ignoring their lengths.",
+   "technical": "In the code: dot = ops.sum(v1 * v2 / (v1_norm * v2_norm)), with norms computed over the flattened tensors.",
+   "significance": "Gives the angle θ0 that slerp interpolates.",
+   "example": "Orthogonal vectors have cosine 0 → θ0 = π/2.",
+   "misconception": "Flattening a (1, 154, 4096) tensor and computing one angle treats the whole sequence as one vector; it is not a per-token angle.",
+   "related": [
+    "slerp"
+   ],
+   "source": "ai_explanation"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Angle between the two embeddings",
+   "latex": "\\theta_0 = \\arccos\\!\\left(\\frac{\\langle v_1, v_2\\rangle}{\\lVert v_1\\rVert\\,\\lVert v_2\\rVert}\\right)",
+   "source_text": "dot = ops.sum(v1 * v2 / (v1_norm * v2_norm)); theta_0 = ops.arccos(dot)",
+   "variables": [
+    {
+     "symbol": "v_1, v_2",
+     "meaning": "The two embedding tensors (flattened), from prompt 1 and prompt 2."
+    },
+    {
+     "symbol": "\\langle v_1, v_2\\rangle",
+     "meaning": "Their dot product (sum of elementwise products)."
+    },
+    {
+     "symbol": "\\lVert v\\rVert",
+     "meaning": "Euclidean norm of the flattened tensor (ops.linalg.norm(ops.ravel(v)))."
+    },
+    {
+     "symbol": "\\theta_0",
+     "meaning": "Angle between the two vectors, in radians."
+    }
+   ],
+   "operations": "Elementwise product, sum, division by the product of norms (cosine similarity), then arccos.",
+   "purpose": "Find how far apart the two embeddings are in direction; slerp moves a fraction t of this angle.",
+   "interpretation": "θ0 = 0 means same direction; π/2 means orthogonal; π means opposite.",
+   "intuition": "The arc length (on a unit sphere) between the two prompts.",
+   "numerical_example": "v1 = (1, 0), v2 = (0, 1): dot = 0 → θ0 = arccos(0) = π/2 ≈ 1.571.",
+   "source": "book",
+   "book_ref": "p.559"
+  },
+  {
+   "id": "m2",
+   "title": "Spherical linear interpolation",
+   "latex": "\\operatorname{slerp}(t; v_1, v_2) = \\frac{\\sin\\big((1-t)\\,\\theta_0\\big)}{\\sin\\theta_0}\\, v_1 + \\frac{\\sin(t\\,\\theta_0)}{\\sin\\theta_0}\\, v_2",
+   "source_text": "theta_t = theta_0 * t; s0 = ops.sin(theta_0 - theta_t) / sin_theta_0; s1 = sin_theta_t / sin_theta_0; return s0 * v1 + s1 * v2",
+   "variables": [
+    {
+     "symbol": "t",
+     "meaning": "Interpolation parameter in [0, 1] (from np.linspace(start, stop, num))."
+    },
+    {
+     "symbol": "\\theta_0",
+     "meaning": "Angle between v1 and v2 (m1)."
+    },
+    {
+     "symbol": "s_0, s_1",
+     "meaning": "The weights sin((1−t)θ0)/sin θ0 and sin(tθ0)/sin θ0 applied to v1 and v2."
+    }
+   ],
+   "operations": "Compute θ_t = tθ0; weights from sines; weighted sum of the original (unnormalized) tensors. Note θ0 − θ_t = (1 − t)θ0.",
+   "purpose": "Interpolate between two embeddings while staying on (or near) the sphere they lie on.",
+   "interpretation": "At t = 0, s0 = 1 and s1 = 0 → v1; at t = 1, s0 = 0 and s1 = 1 → v2. For unit vectors, the result is a unit vector making angle tθ0 with v1.",
+   "intuition": "Rotate v1 toward v2 by a fraction t of the angle between them, instead of sliding along the chord.",
+   "numerical_example": "v1 = (1, 0), v2 = (0, 1), θ0 = π/2, t = 0.5: s0 = s1 = sin(π/4)/1 ≈ 0.7071 → slerp = (0.7071, 0.7071), norm 1. Linear interpolation gives (0.5, 0.5), norm ≈ 0.7071: about 29% shorter, inside the circle.",
+   "source": "book",
+   "book_ref": "p.559"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "17.10",
+   "title": "A function to interpolate text embeddings",
+   "original_code": "from keras import ops\ndef slerp(t, v1, v2):\n    v1, v2 = ops.cast(v1, \"float32\"), ops.cast(v2, \"float32\")\n    v1_norm = ops.linalg.norm(ops.ravel(v1))\n    v2_norm = ops.linalg.norm(ops.ravel(v2))\n    dot = ops.sum(v1 * v2 / (v1_norm * v2_norm))\n    theta_0 = ops.arccos(dot)\n    sin_theta_0 = ops.sin(theta_0)\n    theta_t = theta_0 * t\n    sin_theta_t = ops.sin(theta_t)\n    s0 = ops.sin(theta_0 - theta_t) / sin_theta_0\n    s1 = sin_theta_t / sin_theta_0\n    return s0 * v1 + s1 * v2\ndef interpolate_text_embeddings(e1, e2, start=0, stop=1, num=10):\n    embeddings = []\n    for t in np.linspace(start, stop, num):\n        embeddings.append(\n            (\n                slerp(t, e1[0], e2[0]),\n                e1[1],\n                slerp(t, e1[2], e2[2]),\n                e1[3],\n            )\n        )\n    return embeddings",
+   "language": "python",
+   "what_it_does": "slerp() spherically interpolates two tensors of any shape (treated as flattened vectors). interpolate_text_embeddings() produces `num` embedding 4-tuples for t evenly spaced between start and stop, interpolating the positive sequence and positive vector between prompts 1 and 2 and keeping prompt 1's negative embeddings.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "keras.ops for backend-agnostic math."
+    },
+    {
+     "lines": "3",
+     "explanation": "Cast to float32. The model runs in float16 (p.556), and arccos/sin of values near 1 are numerically fragile in half precision."
+    },
+    {
+     "lines": "4-5",
+     "explanation": "Norm of each tensor flattened into one long vector (154 × 4096 = 630,784 numbers for the sequence)."
+    },
+    {
+     "lines": "6",
+     "explanation": "Cosine similarity: elementwise product divided by the product of norms, summed."
+    },
+    {
+     "lines": "7-8",
+     "explanation": "Angle θ0 between the vectors and its sine (the normalizer)."
+    },
+    {
+     "lines": "9-10",
+     "explanation": "θ_t = tθ0, the angle travelled from v1."
+    },
+    {
+     "lines": "11-13",
+     "explanation": "Slerp weights s0 = sin(θ0 − θ_t)/sin θ0 and s1 = sin θ_t/sin θ0, and the weighted sum of the original tensors."
+    },
+    {
+     "lines": "14",
+     "explanation": "e1 and e2 are the 4-tuples from get_text_embeddings for two prompts; by default 10 points from t = 0 to t = 1."
+    },
+    {
+     "lines": "16",
+     "explanation": "np.linspace(start, stop, num) gives num evenly spaced values including both ends."
+    },
+    {
+     "lines": "17-23",
+     "explanation": "Build a 4-tuple in the order the backbone expects: interpolated positive sequence, prompt 1's negative sequence, interpolated positive vector, prompt 1's negative vector. Callout: the second and fourth embeddings are for the negative prompt, which we do not use."
+    },
+    {
+     "lines": "25",
+     "explanation": "Returns a list of embedding tuples ready for denoise_with_text_embeddings."
+    }
+   ],
+   "inputs_outputs": "slerp: scalar t, two same-shaped tensors → a float32 tensor of that shape. interpolate_text_embeddings: two embedding 4-tuples → a list of `num` 4-tuples.",
+   "algorithm": "For each t in linspace(start, stop, num): positive_seq(t) = slerp(t, seq1, seq2); positive_vec(t) = slerp(t, vec1, vec2); negatives fixed.",
+   "theory_link": "Embeddings concentrate near a sphere-like shell, so interpolating along arcs keeps intermediate points on the manifold the denoiser knows (pp.559–560).",
+   "parameters": [
+    {
+     "name": "t",
+     "role": "Fraction of the way from v1 to v2."
+    },
+    {
+     "name": "start, stop",
+     "role": "Range of t; p.560 uses 0.5 to 0.6 to zoom in on where the morph happens."
+    },
+    {
+     "name": "num",
+     "role": "Number of interpolation points (images to generate)."
+    }
+   ],
+   "pitfalls": [
+    "If the two embeddings are (nearly) identical, θ0 ≈ 0 and sin θ0 ≈ 0, so the code divides by zero; robust implementations fall back to linear interpolation when θ0 is tiny.",
+    "Floating-point error can push the cosine slightly above 1, making arccos return NaN; clipping dot to [−1, 1] avoids this.",
+    "The result is float32 while the model runs in float16; the backbone typically casts inputs, but watch dtypes if you combine tensors yourself.",
+    "Copying e1's negative embeddings is fine here because both prompts use the same empty negative prompt, so e1[1] equals e2[1] and e1[3] equals e2[3]."
+   ],
+   "illustrative_code": "# AI-written (not from the book): a numerically safer slerp\ndef safe_slerp(t, v1, v2, eps=1e-6):\n    v1, v2 = ops.cast(v1, \"float32\"), ops.cast(v2, \"float32\")\n    cos = ops.sum(v1 * v2) / (ops.linalg.norm(ops.ravel(v1)) * ops.linalg.norm(ops.ravel(v2)))\n    cos = ops.clip(cos, -1.0, 1.0)\n    theta = ops.arccos(cos)\n    if float(ops.sin(theta)) < eps:          # almost parallel: lerp is fine\n        return (1 - t) * v1 + t * v2\n    return (ops.sin((1 - t) * theta) * v1 + ops.sin(t * theta) * v2) / ops.sin(theta)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why linear interpolation shrinks high-dimensional vectors",
+   "kind": "numerical",
+   "body": "Take two vectors of equal norm $r$ with angle $\\theta_0$ between them. The linear midpoint $(v_1 + v_2)/2$ has norm\n\n$$\\left\\lVert \\tfrac{v_1+v_2}{2} \\right\\rVert = r\\cos(\\theta_0/2).$$\n\n- $\\theta_0 = 30°$: $r\\cdot 0.966$ (barely shorter)\n- $\\theta_0 = 90°$: $r\\cdot 0.707$ (29% shorter)\n- $\\theta_0 = 120°$: $r\\cdot 0.5$\n\nIn very high dimensions, random or unrelated vectors are close to orthogonal, so their linear midpoints are typically about 30% shorter than real embeddings. Slerp keeps the norm at $r$ for every $t$. This is the 'inside vs on the sphere' argument the book makes (pp.559–560) in numbers.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Walking on the globe",
+   "kind": "analogy",
+   "body": "To travel from Paris to Tokyo, a straight line tunnels through the Earth's interior: every point on it is underground, where nobody lives. Following the great circle keeps you at the surface the whole way. Embeddings 'live' on a sphere-like surface; slerp is the great-circle route, lerp the tunnel.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Norm of the interpolant: lerp vs slerp (two orthogonal unit vectors)",
+   "why": "The page motivates slerp by saying linear interpolation between two points on a sphere leaves the sphere; this plots the norm along the path for v1 = (1, 0), v2 = (0, 1).",
+   "chart": {
+    "type": "line",
+    "data": {
+     "labels": ["0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1"],
+     "datasets": [
+      {
+       "label": "linear interpolation ‖(1−t)v1 + t v2‖",
+       "data": [1, 0.9055, 0.8246, 0.7616, 0.7211, 0.7071, 0.7211, 0.7616, 0.8246, 0.9055, 1]
+      },
+      {
+       "label": "slerp ‖slerp(t; v1, v2)‖",
+       "data": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+      }
+     ]
+    },
+    "options": {
+     "scales": {
+      "x": {
+       "title": {
+        "display": true,
+        "text": "t"
+       }
+      },
+      "y": {
+       "min": 0.6,
+       "max": 1.05,
+       "title": {
+        "display": true,
+        "text": "norm of interpolated vector"
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "v2",
+   "type": "svg",
+   "title": "Chord (lerp) vs arc (slerp) between two prompt embeddings",
+   "why": "Illustrates the page's mental model: two prompts as points on a sphere; the straight line passes inside, the slerp path stays on the surface.",
+   "svg": "<svg viewBox=\"0 0 320 220\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"12\"><circle cx=\"160\" cy=\"190\" r=\"150\" fill=\"none\" stroke=\"currentColor\" stroke-opacity=\"0.35\"/><circle cx=\"160\" cy=\"190\" r=\"3\" fill=\"currentColor\"/><text x=\"166\" y=\"205\" fill=\"currentColor\">origin</text><path d=\"M 54 84 A 150 150 0 0 1 266 84\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"/><line x1=\"54\" y1=\"84\" x2=\"266\" y2=\"84\" stroke=\"currentColor\" stroke-width=\"2\" stroke-dasharray=\"6 4\"/><circle cx=\"54\" cy=\"84\" r=\"5\" fill=\"currentColor\"/><circle cx=\"266\" cy=\"84\" r=\"5\" fill=\"currentColor\"/><text x=\"14\" y=\"78\" fill=\"currentColor\">prompt 1</text><text x=\"262\" y=\"78\" fill=\"currentColor\">prompt 2</text><circle cx=\"160\" cy=\"40\" r=\"4\" fill=\"currentColor\"/><text x=\"112\" y=\"30\" fill=\"currentColor\">slerp, t = 0.5</text><circle cx=\"160\" cy=\"84\" r=\"4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"112\" y=\"104\" fill=\"currentColor\">lerp, t = 0.5 (inside)</text><line x1=\"160\" y1=\"190\" x2=\"54\" y2=\"84\" stroke=\"currentColor\" stroke-opacity=\"0.3\"/><line x1=\"160\" y1=\"190\" x2=\"266\" y2=\"84\" stroke=\"currentColor\" stroke-opacity=\"0.3\"/><text x=\"150\" y=\"160\" fill=\"currentColor\">θ0</text></svg>"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Interpolating all four embedding tensors is necessary for a morph.",
+   "correction": "Only the positive sequence and vector (indices 0 and 2) differ between the two prompts; the negative embeddings come from the same empty prompt, so they are copied from e1."
+  },
+  {
+   "claim": "Slerp and lerp give nearly the same result, so the choice doesn't matter.",
+   "correction": "For nearly orthogonal high-dimensional vectors, the linear midpoint is about 29% shorter, which puts it off the embedding manifold; slerp preserves magnitude."
+  },
+  {
+   "claim": "The text embedding manifold really is a sphere.",
+   "correction": "The book treats the sphere as a mental model; p.560 says the manifold is not actually spherical but is 'sphere-like' because embeddings have similar magnitudes."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 558,
+    "note": "Listing 17.9 (get_text_embeddings) and the four embedding shapes."
+   },
+   {
+    "page": 557,
+    "note": "The idea of walking the smooth manifold of prompts to morph images."
+   },
+   {
+    "page": 556,
+    "note": "Negative prompts, whose embeddings occupy indices 1 and 3."
+   }
+  ],
+  "later": [
+   {
+    "page": 560,
+    "note": "Figure 17.16 on spherical vs linear interpolation, and figure 17.17 with slerp from t = 0.5 to 0.6."
+   },
+   {
+    "page": 561,
+    "note": "Chapter summary on latent spaces and text-to-image models."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 557,
+    "note": "Continuity of the text-embedding space."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 558,
+    "note": "The rescaling formula and guidance in the decomposed generation pipeline."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 558,
+    "note": "denoise_with_text_embeddings consumes the tuples produced here."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 560,
+    "note": "Figure 17.16: spherical interpolation keeps us close to the surface of the manifold."
+   }
+  ]
+ },
+ "takeaways": [
+  "SD3's text conditioning consists of four tensors: positive and negative encoder sequences (1, 154, 4096) and positive and negative encoder vectors (1, 2048).",
+  "Listing 17.10's slerp computes θ0 = arccos(cosine similarity) and returns sin((1−t)θ0)/sin θ0 · v1 + sin(tθ0)/sin θ0 · v2.",
+  "interpolate_text_embeddings slerps only indices 0 and 2 (positive prompt) and keeps the negative embeddings fixed.",
+  "Slerp stays on the sphere; linear interpolation cuts through the interior, giving shrunken embeddings unlike any the model was trained on.",
+  "np.linspace(start, stop, num) controls which slice of the path is explored (p.560 uses 0.5 to 0.6)."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In interpolate_text_embeddings, why are e1[1] and e1[3] copied rather than interpolated?",
+   "options": [
+    "They are the pooled vectors, which cannot be interpolated",
+    "They are the negative-prompt embeddings, which we do not use",
+    "They contain the image latents",
+    "slerp only works on 3-D tensors"
+   ],
+   "answer": "They are the negative-prompt embeddings, which we do not use",
+   "explanation": "The callout says the second and fourth embeddings are for the negative prompt. Indices 2 and 3 are the pooled vectors, and index 2 is interpolated (so option 1 is wrong). There are no image latents in the tuple, and slerp works on any shape because it flattens for the norms.",
+   "page_refs": [
+    559
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Compute slerp(t = 0.5) and lerp(t = 0.5) for v1 = (1, 0), v2 = (0, 1), and give the norm of each.",
+   "options": [],
+   "answer": "slerp = (0.7071, 0.7071), norm 1; lerp = (0.5, 0.5), norm ≈ 0.7071.",
+   "explanation": "θ0 = arccos(0) = π/2, sin θ0 = 1, s0 = s1 = sin(π/4) ≈ 0.7071. Lerp averages the vectors, landing inside the unit circle.",
+   "page_refs": [
+    559
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What does the variable `dot` in slerp represent, and why is it divided by v1_norm * v2_norm?",
+   "options": [],
+   "answer": "It is the cosine similarity of the two (flattened) tensors. Dividing by the product of norms removes the magnitudes, so arccos(dot) gives the angle between them.",
+   "explanation": "cos θ = ⟨v1, v2⟩/(‖v1‖‖v2‖); arccos requires a value in [−1, 1].",
+   "page_refs": [
+    559
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Explain the book's motivation for using slerp instead of linear interpolation between text embeddings.",
+   "options": [],
+   "answer": "If the text manifold is pictured as a sphere with the two prompts as points on it, linear interpolation cuts through the interior, giving points off the surface, with smaller norm than real embeddings, where the denoiser has not learned meaningful behaviour. Slerp follows the surface, so every intermediate embedding is the kind of point the model knows how to use.",
+   "explanation": "This is the argument begun on p.559 and finished on p.560 (figure 17.16).",
+   "page_refs": [
+    559,
+    560
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "What is the order of the four tensors returned by encode_text_step?",
+   "options": [
+    "positive vector, negative vector, positive sequence, negative sequence",
+    "positive sequence, negative sequence, positive vector, negative vector",
+    "positive sequence, positive vector, negative sequence, negative vector",
+    "negative sequence, positive sequence, negative vector, positive vector"
+   ],
+   "answer": "positive sequence, negative sequence, positive vector, negative vector",
+   "explanation": "Given by the bullet list and consistent with the shapes on p.558 ((1,154,4096) twice, then (1,2048) twice) and with the code interpolating indices 0 and 2.",
+   "page_refs": [
+    559,
+    558
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "What goes wrong in slerp if both prompts are identical, and how would you fix it?",
+   "options": [],
+   "answer": "θ0 = 0 so sin θ0 = 0, and s0 and s1 divide by zero (NaN); rounding can also push the cosine above 1, making arccos NaN. Clip the cosine to [−1, 1] and fall back to linear interpolation when sin θ0 is tiny.",
+   "explanation": "An edge case of the printed code; not discussed in the book.",
+   "page_refs": [
+    559
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Without looking, can you write slerp in one line of math and say what happens at t = 0 and t = 1?",
+   "options": [],
+   "answer": "slerp(t) = sin((1−t)θ0)/sin θ0 · v1 + sin(tθ0)/sin θ0 · v2; t = 0 gives v1, t = 1 gives v2.",
+   "explanation": "At t = 0 the weights are (1, 0), at t = 1 they are (0, 1).",
+   "page_refs": [
+    559
+   ]
+  }
+ ]
+}

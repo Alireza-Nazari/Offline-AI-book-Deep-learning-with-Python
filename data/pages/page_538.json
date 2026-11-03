@@ -1,0 +1,423 @@
+{
+ "pdf_page": 538,
+ "printed_page": "514",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:20:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. e03 is the body of the encoder.summary() table begun on p.537. Listing 17.2 is split across e06, e07 and e08; it is combined here into one code entry. The text refers to `input_img` (the name in the p.536 schematic), while Listing 17.1 names the input `image_inputs`; this is a naming mismatch only."
+ },
+ "overview": {
+  "title": "Encoder summary and the latent-space Sampler layer",
+  "chapter": "17 Image generation",
+  "section": "17.1 Deep learning for image generation",
+  "subsection": "17.1.3 Implementing a VAE with Keras",
+  "main_topic": "Verifying the encoder via its summary (69,076 parameters) and implementing the sampling step as a custom Keras layer with a seed generator",
+  "central_idea": "The Sampler layer turns z_mean and z_log_var into a random latent point z = z_mean + exp(0.5 * z_log_var) * epsilon, with epsilon drawn from a standard normal via keras.random and a SeedGenerator stored on the layer.",
+  "importance": "This is where the VAE's randomness lives. Writing it as a backend-agnostic Keras layer, with ops and keras.random, means the whole VAE runs on TensorFlow, JAX or PyTorch. The formula is the correct form of the schematic line on p.536.",
+  "learning_objectives": [
+   "Read the encoder summary and check its shapes and parameter counts",
+   "Explain why a SeedGenerator is needed to call keras.random functions inside call()",
+   "Explain each line of the Sampler.call method, including dynamic batch size",
+   "Derive why exp(0.5 * z_log_var) is the standard deviation",
+   "Explain why sampling this way keeps the layer differentiable with respect to z_mean and z_log_var"
+  ],
+  "prerequisites": [
+   "Listing 17.1 encoder (p.537)",
+   "Custom Keras layers: subclassing keras.Layer (chapter 7)",
+   "keras.ops backend-agnostic operations",
+   "Normal distribution basics"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The top of the page completes the **encoder summary** from p.537. The input is (None, 28, 28, 1). `conv2d` gives (None, 14, 14, 32) with 320 parameters, `conv2d_1` gives (None, 7, 7, 64) with 18,496, `flatten` gives (None, 3136), `dense` gives (None, 16) with 50,192, and the two heads `z_mean` and `z_log_var` give (None, 2) with 34 parameters each. Both heads are connected to `dense[0][0]`, which confirms the branching. Total: **69,076 trainable parameters** (269.83 KB).\n\nNext the authors use `z_mean` and `z_log_var`, \"the parameters of the statistical distribution assumed to have produced `input_img`\", to generate a latent point `z`. **Listing 17.2** defines a custom layer `Sampler(keras.Layer)`:\n\n- In `__init__`, it creates a `keras.random.SeedGenerator()`. The callout explains that a seed generator is needed to use `keras.random` functions inside `call()`. It also sets `self.built = True`, because the layer has no weights to create.\n- In `call(self, z_mean, z_log_var)`, it reads the batch size and latent size from `ops.shape(z_mean)`, draws a batch of **random normal vectors** `epsilon` with shape `(batch_size, z_size)`, and returns `z_mean + ops.exp(0.5 * z_log_var) * epsilon`. The callout calls this the **VAE sampling formula**.\n\nBecause $\\exp(0.5\\log\\sigma^2)=\\sigma$, this is exactly $z=\\mu+\\sigma\\varepsilon$, a sample from $\\mathcal N(\\mu,\\sigma^2)$. The randomness comes only from `epsilon`, so gradients flow through `z_mean` and `z_log_var` (the reparameterization trick, a term the book does not use).\n\nThe page closes by introducing the **decoder** (Listing 17.3, p.539). It reshapes `z` to image-like dimensions and uses convolution layers to output an image the same size as `input_img`.",
+ "paragraphs": [
+  {
+   "ref": "p538_e04",
+   "excerpt": "Next is the code for using z_mean and z_log_var, the parameters of the statistical distribution",
+   "what_it_says": "Introduces Listing 17.2, which uses `z_mean` and `z_log_var` (the parameters of the distribution assumed to have produced `input_img`) to generate a latent point `z`.",
+   "what_it_means": "The encoder's outputs are treated as describing a Gaussian over latent space, and this step draws one sample from it. The phrase 'assumed to have produced' reflects the generative story of p.535: the image is imagined as generated from a latent variable by a random process.",
+   "why_it_matters": "It connects the probabilistic language of p.535-536 to concrete code.",
+   "terminology": [
+    {
+     "term": "latent space point z",
+     "meaning": "The vector actually passed to the decoder."
+    }
+   ],
+   "connections": [
+    "p.536: schematic line `z = z_mean + exp(z_log_variance) * epsilon`",
+    "p.535: the 'statistical process' assumption"
+   ]
+  },
+  {
+   "ref": "p538_e09",
+   "excerpt": "The following listing shows the decoder implementation. We reshape the vector z to the dimensions",
+   "what_it_says": "The decoder reshapes `z` to image-like dimensions and then applies a few convolution layers to produce an output with the same dimensions as the original `input_img`.",
+   "what_it_means": "The decoder mirrors the encoder. A Dense layer expands z to 3,136 numbers, Reshape makes a 7x7x64 feature map, and transposed convolutions upsample back to 28x28. A final 1-channel convolution produces the image (p.539).",
+   "why_it_matters": "Output shape must match input shape because the reconstruction loss compares them pixel by pixel (p.541).",
+   "connections": [
+    "p.539: Listing 17.3 decoder",
+    "p.541: binary crossentropy between x and reconstruction"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "reparameterization_trick",
+   "name": "Sampling with a random epsilon (reparameterization)",
+   "definition": "Drawing z as mean plus standard deviation times standard-normal noise so that sampling is differentiable with respect to the mean and variance.",
+   "intuition": "Draw the randomness separately, then shift and scale it with the network's outputs.",
+   "technical": "$z=\\mu+e^{\\frac12\\log\\sigma^2}\\varepsilon$, $\\varepsilon\\sim\\mathcal N(0,I)$; $\\partial z/\\partial\\mu=1$ and $\\partial z/\\partial(\\log\\sigma^2)=\\tfrac12\\sigma\\varepsilon$.",
+   "significance": "Lets backpropagation train the encoder through a random sampling step.",
+   "example": "`return z_mean + ops.exp(0.5 * z_log_var) * epsilon`",
+   "misconception": "The book calls it 'the VAE sampling formula'; 'reparameterization trick' is the literature term.",
+   "related": [
+    "vae",
+    "backpropagation"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "seed_generator",
+   "name": "keras.random.SeedGenerator",
+   "definition": "A stateful object that supplies fresh seeds to keras.random functions so that each call produces new random numbers in a backend-agnostic, traceable way.",
+   "intuition": "A counter that a layer keeps so each call gets new dice rolls.",
+   "technical": "Stored as layer state; passed as `seed=self.seed_generator` to keras.random.normal. Needed especially with JAX, where random state must be explicit.",
+   "significance": "Required for using keras.random inside call() (callout).",
+   "example": "`keras.random.normal((batch_size, z_size), seed=self.seed_generator)`",
+   "misconception": "Passing a fixed integer seed would give the same epsilon at every call (in compiled code), which would destroy the stochasticity.",
+   "related": [
+    "keras_layer"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "keras_layer",
+   "name": "Custom Keras layer",
+   "definition": "A subclass of keras.Layer with optional __init__, build and call methods.",
+   "intuition": "Your own building block that composes with built-in ones.",
+   "technical": "Sampler has no weights, so it sets self.built = True and implements only call(z_mean, z_log_var).",
+   "significance": "Keeps the random sampling step modular and reusable.",
+   "example": "`Sampler()(z_mean, z_log_var)`",
+   "misconception": "Layers do not need trainable weights; stateless layers are common.",
+   "related": [
+    "functional_api"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "VAE sampling formula (Listing 17.2)",
+   "latex": "z = \\mu + \\exp\\!\\big(0.5\\,\\log\\sigma^2\\big)\\odot\\varepsilon = \\mu + \\sigma\\odot\\varepsilon,\\qquad \\varepsilon\\sim\\mathcal N(0, I_{d})",
+   "source_text": "return z_mean + ops.exp(0.5 * z_log_var) * epsilon",
+   "variables": [
+    {
+     "symbol": "\\mu",
+     "meaning": "z_mean, shape (batch_size, z_size)"
+    },
+    {
+     "symbol": "\\log\\sigma^2",
+     "meaning": "z_log_var, same shape"
+    },
+    {
+     "symbol": "\\varepsilon",
+     "meaning": "epsilon from keras.random.normal"
+    },
+    {
+     "symbol": "d",
+     "meaning": "z_size = latent_dim = 2"
+    },
+    {
+     "symbol": "\\sigma",
+     "meaning": "standard deviation per dimension"
+    }
+   ],
+   "operations": "Elementwise exponential of half the log-variance, elementwise product with noise, and addition of the mean.",
+   "purpose": "Produce a random latent point from $\\mathcal N(\\mu,\\operatorname{diag}\\sigma^2)$.",
+   "interpretation": "$\\exp(0.5\\log\\sigma^2)=(\\sigma^2)^{0.5}=\\sigma$. Since $\\varepsilon$ has mean 0 and variance 1, $z$ has mean $\\mu$ and variance $\\sigma^2$.",
+   "intuition": "The mean says where the cloud is; sigma says how wide it is.",
+   "numerical_example": "z_mean = [1.0, -0.5], z_log_var = [-1.386, 0.0] (so sigma = [0.5, 1.0]), epsilon = [2.0, -0.3] gives z = [1.0 + 0.5*2.0, -0.5 + 1.0*(-0.3)] = [2.0, -0.8].",
+   "source": "book",
+   "book_ref": "p.538"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Encoder summary table (continued from p.537)",
+   "original_code": "│ input_layer           │ (None, 28, 28, 1) │           0 │ -                  │\n│ (InputLayer)          │                   │             │                    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ conv2d (Conv2D)       │ (None, 14, 14,    │         320 │ input_layer[0][0]  │\n│                       │ 32)               │             │                    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ conv2d_1 (Conv2D)     │ (None, 7, 7, 64)  │      18,496 │ conv2d[0][0]       │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ flatten (Flatten)     │ (None, 3136)      │           0 │ conv2d_1[0][0]     │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ dense (Dense)         │ (None, 16)        │      50,192 │ flatten[0][0]      │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ z_mean (Dense)        │ (None, 2)         │          34 │ dense[0][0]        │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ z_log_var (Dense)     │ (None, 2)         │          34 │ dense[0][0]        │\n└───────────────────────┴───────────────────┴─────────────┴────────────────────┘\n Total params: 69,076 (269.83 KB)\n Trainable params: 69,076 (269.83 KB)\n Non-trainable params: 0 (0.00 B)",
+   "language": "text",
+   "what_it_does": "Shows each encoder layer with its output shape, parameter count and incoming connection.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "Input layer (None, 28, 28, 1); None is the batch dimension."
+    },
+    {
+     "lines": "4-5",
+     "explanation": "conv2d: (None, 14, 14, 32), 320 params = 3*3*1*32 + 32."
+    },
+    {
+     "lines": "7",
+     "explanation": "conv2d_1: (None, 7, 7, 64), 18,496 params = 3*3*32*64 + 64."
+    },
+    {
+     "lines": "9",
+     "explanation": "flatten: (None, 3136), no params."
+    },
+    {
+     "lines": "11",
+     "explanation": "dense: (None, 16), 50,192 params = 3136*16 + 16."
+    },
+    {
+     "lines": "13-15",
+     "explanation": "z_mean and z_log_var: (None, 2), 34 params each; both connected to dense[0][0], the shared trunk."
+    },
+    {
+     "lines": "17-19",
+     "explanation": "Totals: 69,076 params, all trainable; 269.83 KB at 4 bytes per float32 parameter."
+    }
+   ],
+   "inputs_outputs": "Printed output only.",
+   "algorithm": "N/A",
+   "theory_link": "Confirms the strided downsampling and the two-head design of Listing 17.1.",
+   "parameters": [],
+   "pitfalls": [
+    "Memory size: 69,076 * 4 bytes = 276,304 bytes = 269.83 KiB (Keras uses 1024-based KB)."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "17.2",
+   "title": "Latent space sampling layer",
+   "original_code": "from keras import ops\n\nclass Sampler(keras.Layer):\n    def __init__(self, **kwargs):\n        super().__init__(**kwargs)\n        self.seed_generator = keras.random.SeedGenerator()\n        self.built = True\n\n    def call(self, z_mean, z_log_var):\n        batch_size = ops.shape(z_mean)[0]\n        z_size = ops.shape(z_mean)[1]\n        epsilon = keras.random.normal(\n            (batch_size, z_size), seed=self.seed_generator\n        )\n        return z_mean + ops.exp(0.5 * z_log_var) * epsilon",
+   "language": "python",
+   "what_it_does": "Defines a weightless custom layer that draws a random latent point from the Gaussian described by z_mean and z_log_var.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Imports keras.ops, the backend-agnostic NumPy-like operations module."
+    },
+    {
+     "lines": "3-5",
+     "explanation": "Subclasses keras.Layer and forwards keyword args (such as name) to the parent constructor."
+    },
+    {
+     "lines": "6",
+     "explanation": "Creates a SeedGenerator. Callout: needed to use functions from keras.random in call()."
+    },
+    {
+     "lines": "7",
+     "explanation": "Marks the layer as built; it has no weights, so no build() step is required."
+    },
+    {
+     "lines": "9-11",
+     "explanation": "call takes both tensors and reads the dynamic batch size and latent size from the shape of z_mean."
+    },
+    {
+     "lines": "12-14",
+     "explanation": "Draws a batch of standard-normal vectors epsilon of shape (batch_size, z_size) (callout)."
+    },
+    {
+     "lines": "15",
+     "explanation": "Applies the VAE sampling formula: mean + std * epsilon (callout)."
+    }
+   ],
+   "inputs_outputs": "Inputs: z_mean and z_log_var, each (batch, 2). Output: z, (batch, 2).",
+   "algorithm": "Reparameterized Gaussian sampling.",
+   "theory_link": "Implements the 'point randomly sampled from the distribution' arrow of figure 17.4 (p.536) and the correct version of the schematic's line 2.",
+   "parameters": [
+    {
+     "name": "seed_generator",
+     "role": "Supplies a new seed for each random draw."
+    },
+    {
+     "name": "0.5",
+     "role": "Converts log-variance to log-standard-deviation."
+    }
+   ],
+   "pitfalls": [
+    "Using ops.exp(z_log_var) without the 0.5 would scale by the variance, not the standard deviation.",
+    "Reading the batch size with ops.shape (not a Python constant) keeps the layer working for any batch size, including the last partial batch.",
+    "The Sampler is random during inference too; to get a deterministic encoding, use z_mean directly."
+   ],
+   "illustrative_code": "# AI-written: quick check that samples have the intended statistics\nimport numpy as np\nmu, log_var = np.array([1.0, -0.5]), np.array([np.log(0.25), 0.0])\neps = np.random.normal(size=(100000, 2))\nz = mu + np.exp(0.5 * log_var) * eps\nprint(z.mean(0), z.std(0))  # ~[1.0, -0.5], ~[0.5, 1.0]"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why gradients can pass through the sampling step",
+   "kind": "step_by_step",
+   "source": "ai_explanation",
+   "body": "If the layer called something like `sample_normal(mean, var)` directly, z would be a random draw with no derivative with respect to mean and var. Writing $z=\\mu+\\sigma\\varepsilon$ moves the randomness into $\\varepsilon$, which is treated as a constant input. Then $\\partial z/\\partial\\mu=1$ and $\\partial z/\\partial\\log\\sigma^2=0.5\\,\\sigma\\,\\varepsilon$, so the reconstruction loss can train the encoder."
+  },
+  {
+   "title": "Why a SeedGenerator, not a fixed seed?",
+   "kind": "breakdown",
+   "source": "ai_explanation",
+   "body": "In JAX, random numbers are pure functions of a key, and compiled functions do not carry hidden global state. `SeedGenerator` is a Keras state variable that is advanced on every draw, so each training step gets new noise on every backend. A literal integer seed in compiled code would give the same epsilon every step."
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Data flow through the Sampler layer",
+   "why": "Shows how Listing 17.2 combines its two inputs with noise.",
+   "mermaid": "flowchart LR\n  M[z_mean] --> A((+))\n  L[z_log_var] --> H[x 0.5] --> X[exp] --> P((x))\n  S[SeedGenerator] --> E[keras.random.normal batch x z_size] --> P\n  P --> A --> Z[z]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The Sampler has trainable weights.",
+   "correction": "It has none; it only combines its inputs with random noise. That is why it sets self.built = True."
+  },
+  {
+   "claim": "exp(0.5 * z_log_var) is the variance.",
+   "correction": "It is the standard deviation; the variance is exp(z_log_var)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 537,
+    "note": "Encoder network and start of its summary"
+   },
+   {
+    "page": 536,
+    "note": "Schematic sampling line and figure 17.4"
+   }
+  ],
+  "later": [
+   {
+    "page": 539,
+    "note": "Decoder network (Listing 17.3)"
+   },
+   {
+    "page": 540,
+    "note": "VAE model instantiates Sampler()"
+   },
+   {
+    "page": 541,
+    "note": "compute_loss calls self.sampler(z_mean, z_log_var)"
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 537,
+    "note": "Listing 17.1 encoder"
+   }
+  ],
+  "related_math": [
+   {
+    "page": 536,
+    "note": "Schematic sampling formula"
+   }
+  ],
+  "related_code": [
+   {
+    "page": 541,
+    "note": "Sampler used inside compute_loss"
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 536,
+    "note": "Figure 17.4"
+   }
+  ]
+ },
+ "takeaways": [
+  "The encoder has 69,076 parameters, most of them in the Flatten-to-Dense(16) connection.",
+  "The Sampler is a weightless custom keras.Layer that uses a SeedGenerator for keras.random calls.",
+  "It returns z = z_mean + exp(0.5 * z_log_var) * epsilon, a sample from N(mean, variance).",
+  "Moving the randomness into epsilon keeps the layer differentiable with respect to z_mean and z_log_var.",
+  "Using keras.ops and keras.random keeps the layer backend-agnostic."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why does the Sampler create a keras.random.SeedGenerator in __init__?",
+   "options": [
+    "To initialize its trainable weights",
+    "To use functions from keras.random inside call()",
+    "To fix the same epsilon for every batch",
+    "To set the batch size"
+   ],
+   "answer": "To use functions from keras.random inside call()",
+   "explanation": "That is the callout's wording. The layer has no weights, a seed generator gives *fresh* noise rather than a fixed epsilon, and the batch size is read from ops.shape.",
+   "page_refs": [
+    538
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Show that ops.exp(0.5 * z_log_var) is the standard deviation.",
+   "options": [],
+   "answer": "z_log_var = log(sigma^2) = 2 log sigma, so 0.5 * z_log_var = log sigma and exp(log sigma) = sigma.",
+   "explanation": "This is why the listing uses the 0.5 factor.",
+   "page_refs": [
+    538
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What is the shape of epsilon during training with batch_size=128 and latent_dim=2?",
+   "options": [],
+   "answer": "(128, 2), or smaller in the first dimension for the last partial batch.",
+   "explanation": "epsilon has shape (batch_size, z_size), read dynamically from ops.shape(z_mean).",
+   "page_refs": [
+    538,
+    541
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why is the sample written as z_mean + std * epsilon instead of being drawn directly from N(z_mean, var)?",
+   "options": [],
+   "answer": "The randomness then sits in epsilon, which does not depend on the parameters, so z is a differentiable function of z_mean and z_log_var and the encoder can be trained by backpropagation.",
+   "explanation": "Beyond the book: this is the reparameterization trick of Kingma and Welling.",
+   "page_refs": [
+    538
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "How many parameters does the z_log_var layer have, and why?",
+   "options": [
+    "2, one bias per output",
+    "32, a 16x2 weight matrix",
+    "34, a 16x2 weight matrix plus 2 biases",
+    "3136, one per flattened input"
+   ],
+   "answer": "34, a 16x2 weight matrix plus 2 biases",
+   "explanation": "It takes the 16-dim Dense output; 16*2 + 2 = 34. The other options forget the biases or the weights, or use the wrong input size.",
+   "page_refs": [
+    538
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "self",
+   "question": "Could you rewrite the Sampler as a plain function used with the functional API? What would you lose?",
+   "options": [],
+   "answer": "Yes, but you would need somewhere to keep the SeedGenerator state; a layer stores it neatly and plugs into the subclassed VAE model.",
+   "explanation": "Reflect on why stateful random operations belong in layers.",
+   "page_refs": [
+    538
+   ]
+  }
+ ],
+ "page_id": "page_538",
+ "book_id": "dlwp3"
+}

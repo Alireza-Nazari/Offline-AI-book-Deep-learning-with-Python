@@ -1,0 +1,284 @@
+{
+ "page_id": "page_496",
+ "pdf_page": 496,
+ "printed_page": "472",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:40:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. The extractor merged two printed paragraphs into p496_e09 ('When training GPT…' and 'We will load each file shard…'); they get separate notes. Listing 16.3 has three callouts; from the arrows in the image, 'Restores newlines' points at the regex_replace line, 'Tokenizes data' at `ds.map(tokenizer, …)`, and 'Adds the <|endoftext|> token' at the final `tf.concat` line. The pipeline that uses `read_file` continues at the top of p.497."
+ },
+ "overview": {
+  "title": "A SentencePiece tokenizer and per-file preprocessing for mini-GPT pretraining",
+  "chapter": "16 Text generation",
+  "section": "16.2 Training a mini-GPT",
+  "subsection": "",
+  "main_topic": "Loading a premade 32,000-term SentencePiece vocabulary through KerasHub, tokenizing and detokenizing text, marking document boundaries with <|endoftext|>, and a read_file() function that restores newlines, tokenizes each document and appends the boundary token, ready to be interleaved across file shards",
+  "central_idea": "Pretraining data is prepared GPT-style: every document in every shard is tokenized with a fast subword tokenizer and followed by a special <|endoftext|> token, and the documents are later concatenated into one long token stream without trying to align samples with document boundaries.",
+  "importance": "This is the input side of the most expensive training run in the book. The choices here (subword vocabulary, boundary token, interleaved parallel loading) are the same ones real LLM pipelines make, and they determine what the mini-GPT sees and how fast data can be fed to the GPU.",
+  "learning_objectives": [
+   "Load a SentencePiece vocabulary with `keras.utils.get_file()` and wrap it in `keras_hub.tokenizers.SentencePieceTokenizer`",
+   "Use `tokenize()` and `detokenize()` to map text to integer ids and back",
+   "Explain why GPT-style pretraining marks document boundaries with <|endoftext|> instead of padding each document",
+   "Read `read_file()` line by line: TextLineDataset, newline restoration, parallel tokenization, appending the suffix token",
+   "Explain how interleaving file shards speeds up loading on a multicore CPU"
+  ],
+  "prerequisites": [
+   "Subword (byte-pair encoding) tokenization (chapter 14, pp.416-418)",
+   "tf.data datasets, map() and num_parallel_calls (p.273)",
+   "The mini-C4 shards and their escaped newlines (p.495)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page sets up tokenization and the first half of the data pipeline for pretraining the mini-GPT.\n\n**Listing 16.2.** As in chapter 15, KerasHub provides LLM utilities; here it wraps the **SentencePiece** library as a Keras layer. `keras.utils.get_file()` downloads a premade vocabulary file (`vocabulary.proto`, the 32,000-term vocabulary introduced on p.495), and `keras_hub.tokenizers.SentencePieceTokenizer(vocabulary_file)` builds the tokenizer.\n\nThe tokenizer maps text to ints **bidirectionally**: `tokenize(\"The quick brown fox.\")` returns `array([450, 4996, 17354, 1701, 29916, 29889], dtype=int32)`, and `detokenize()` of the same ids gives back `\"The quick brown fox.\"`. Four words and a period become six subword tokens, so one word is split into two pieces.\n\nThe tokenizer will be used to tokenize the corpus, and **`tf.data`** to window it into sequences of length **256**. Following the GPT developers, the authors make **no attempt to keep document boundaries out of the middle of a sample**. Instead each document is followed by a special **`<|endoftext|>`** token. `tf.data` is again used so training works with any backend.\n\nEach **file shard is loaded separately** and the outputs are **interleaved** into a single dataset. This keeps loading fast, avoids worrying about text lining up across sample boundaries (each sample is independent), and lets each CPU core read and tokenize a different file at the same time.\n\n**Listing 16.3** fixes `batch_size = 128` and `sequence_length = 256`, looks up the id of `<|endoftext|>` with `tokenizer.token_to_id()` as a one-element NumPy array `suffix`, and defines `read_file(filename)`: a `TextLineDataset` yields one document per line; `regex_replace` turns the escaped `\\n` sequences back into real newlines (callout \"Restores newlines\"); `ds.map(tokenizer, num_parallel_calls=8)` tokenizes (\"Tokenizes data\"); and `tf.concat([x, suffix], -1)` appends the boundary token (\"Adds the <|endoftext|> token\"). Interleaving, windowing and batching follow on p.497.",
+ "paragraphs": [
+  {
+   "ref": "p496_e03",
+   "excerpt": "As in the last chapter, we can use the KerasHub library to access",
+   "what_it_says": "As in chapter 15, KerasHub provides extra functions for working with LLMs. It wraps SentencePiece as a Keras layer, which the authors now try out.",
+   "what_it_means": "Instead of the pure-Python subword tokenizer of chapter 14, a fast C++ implementation is used, exposed as a Keras preprocessing layer so it can be called inside a tf.data pipeline.",
+   "why_it_matters": "Tokenizing roughly a billion tokens with a slow tokenizer would take far too long; a fast tokenizer is a practical necessity for pretraining (p.495).",
+   "technical_idea": "",
+   "terminology": [
+    {"term": "KerasHub", "meaning": "Keras library of pretrained models, tokenizers and preprocessing layers (used for RoBERTa on p.480)."},
+    {"term": "SentencePiece", "meaning": "A C++ subword tokenization library that works directly on raw text, treating spaces as part of tokens."}
+   ],
+   "connections": ["p.480: KerasHub used to load RoBERTa and its tokenizer", "p.495: SentencePiece and the 32,000-term vocabulary introduced"]
+  },
+  {
+   "ref": "p496_e06",
+   "excerpt": "We can use this tokenizer to map from text to int sequences",
+   "what_it_says": "The tokenizer maps text to integer sequences and back. The example turns 'The quick brown fox.' into six ids and detokenizes them to the original string.",
+   "what_it_means": "Tokenization is reversible: `detokenize()` maps ids back to subword strings and joins them, restoring spaces because SentencePiece encodes the leading space inside tokens. The model will predict ids; detokenization turns its predictions back into readable text.",
+   "why_it_matters": "Generation in this chapter outputs token ids one at a time (p.502); a lossless round trip is what lets those ids be shown as text.",
+   "technical_idea": "Beyond the book: SentencePiece marks a word-initial space with the symbol '▁' inside the token (e.g. '▁quick'). That is why detokenizing is just concatenation plus replacing '▁' with a space. Six ids for four words and a period means one word was split into two subword pieces; with this vocabulary the period is its own token (29889).",
+   "terminology": [
+    {"term": "tokenize / detokenize", "meaning": "Text → integer ids, and integer ids → text."}
+   ],
+   "connections": ["p.446: detokenizing by mapping ints back to string tokens and joining them"]
+  },
+  {
+   "ref": "p496_e08",
+   "excerpt": "Let’s use this layer to tokenize our input text and then use",
+   "what_it_says": "The tokenizer layer will tokenize the corpus, and tf.data will window it into sequences of length 256.",
+   "what_it_means": "Training samples will be fixed-length chunks of 256 tokens cut from a continuous token stream, not individual documents.",
+   "why_it_matters": "Fixed-length chunks give uniform batches with no padding, so no compute is wasted on pad tokens.",
+   "technical_idea": "",
+   "terminology": [
+    {"term": "windowing", "meaning": "Cutting a long stream into fixed-length chunks (here via `rebatch()` on p.497)."}
+   ],
+   "connections": ["p.497: `ds.rebatch(sequence_length + 1, …)` performs the windowing"]
+  },
+  {
+   "ref": "p496_e09",
+   "excerpt": "When training GPT, the developers chose to keep things simple and make",
+   "what_it_says": "GPT's developers did not try to stop document boundaries from falling in the middle of a sample; they marked each boundary with a special <|endoftext|> token. The authors do the same, again using tf.data so training works with any backend.",
+   "what_it_means": "A 256-token sample may contain the end of one web page, an <|endoftext|> token, and the beginning of another. The model learns that after <|endoftext|> a new, unrelated document starts, so it should not use the previous text to predict the next one.",
+   "why_it_matters": "Packing documents end to end avoids padding and wasting compute on short documents, which matters when compute is the main budget. The boundary token is also useful at generation time as a natural stop signal.",
+   "technical_idea": "Beyond the book: the alternative, one document per sample padded to 256 tokens, would waste most positions on short web pages and truncate long ones. Packing with a separator is standard in GPT-2/GPT-3-style pretraining. Attention can still look across the boundary inside a sample; the model simply learns to ignore it.",
+   "terminology": [
+    {"term": "<|endoftext|>", "meaning": "A special token (GPT-2's name for it) marking the end of a document in the concatenated training stream."},
+    {"term": "document boundary", "meaning": "The point where one source document ends and the next begins."}
+   ],
+   "connections": ["p.426: tf.data preprocessing works with JAX, PyTorch or TensorFlow backends"]
+  },
+  {
+   "ref": "p496_e09",
+   "excerpt": "We will load each file shard individually and interleave the output data",
+   "what_it_says": "Each shard file is loaded on its own and the outputs are interleaved into one dataset. This keeps loading fast, sidesteps alignment across sample boundaries because each sample is independent, and lets each CPU processor read and tokenize a different file at the same time.",
+   "what_it_means": "The 50 shards (p.495) become 50 parallel streams, each produced by `read_file()`. `interleave()` (p.497) pulls from several of them concurrently and mixes their outputs into one stream.",
+   "why_it_matters": "Reading and tokenizing about 3.75 GB of text is CPU-heavy. Parallelizing across files keeps the GPU from waiting on data, and mixing shards adds variety to consecutive batches.",
+   "technical_idea": "Beyond the book: `Dataset.interleave(f, cycle_length, num_parallel_calls)` applies `f` to each input element (here a filename) to get a sub-dataset, then cycles through `cycle_length` of them at once; with `num_parallel_calls` those sub-datasets are produced on separate threads.",
+   "terminology": [
+    {"term": "shard", "meaning": "One of several files a large dataset is split into (50 here, about 75 MB each)."},
+    {"term": "interleave", "meaning": "Merging the outputs of several datasets into one by taking elements from each in turn."}
+   ],
+   "connections": ["p.495: 50 shards of about 75 MB each", "p.497: `ds.interleave(read_file, cycle_length=32, num_parallel_calls=32)`"]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "tokenization",
+   "name": "Subword tokenization with SentencePiece",
+   "definition": "Splitting text into frequent subword units drawn from a fixed vocabulary (here 32,000 entries) and mapping each to an integer id.",
+   "intuition": "Common words get one token; rare words are built from a few pieces, so any text can be represented without an unknown-word token.",
+   "technical": "SentencePiece implements byte-pair encoding (and unigram LM) in C++; KerasHub wraps it as a layer with `tokenize()`, `detokenize()` and `token_to_id()`.",
+   "significance": "Keeps sequences short and the embedding matrix manageable, which is essential for pretraining at scale (p.480).",
+   "example": "'The quick brown fox.' → [450, 4996, 17354, 1701, 29916, 29889].",
+   "misconception": "One token is not one word: here 4 words + 1 punctuation mark give 6 tokens.",
+   "related": ["embedding", "language_model"],
+   "source": "book"
+  },
+  {
+   "id": "end_of_text_token",
+   "name": "End-of-text token and sequence packing",
+   "definition": "Concatenating documents into one token stream separated by a special <|endoftext|> token and cutting the stream into fixed-length samples regardless of document boundaries.",
+   "intuition": "Like gluing all books end to end with a 'THE END' marker and cutting the scroll into equal pages.",
+   "technical": "`read_file()` appends `suffix` (the id of <|endoftext|>) to each tokenized line with `tf.concat([x, suffix], -1)`; `rebatch()` on p.497 then cuts the stream.",
+   "significance": "No padding waste, simpler pipeline; the model learns that <|endoftext|> starts a new context.",
+   "example": "A sample might be '...best BBQ in town. <|endoftext|> Welcome to our garden shop...'.",
+   "misconception": "Samples do not have to start at a document start; GPT simply does not enforce it.",
+   "related": ["tokenization", "language_model"],
+   "source": "book"
+  },
+  {
+   "id": "tf_data_interleave",
+   "name": "Parallel input pipelines with tf.data",
+   "definition": "Building the training input as a chain of tf.data transformations that run on CPU threads in parallel with training.",
+   "intuition": "Several workers each read and prepare a different file while the GPU trains on the previous batch.",
+   "technical": "`map(…, num_parallel_calls=8)` parallelizes per-element work; `interleave(…, num_parallel_calls=32)` parallelizes across files; `prefetch()` overlaps input and training (p.497).",
+   "significance": "Prevents the accelerator from sitting idle waiting for data during long pretraining runs.",
+   "example": "50 shard files, read 32 at a time by `interleave` (p.497).",
+   "misconception": "tf.data does not tie you to the TensorFlow backend; Keras converts its outputs for JAX or PyTorch (p.426).",
+   "related": ["keras_model"],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "16.2",
+   "title": "Downloading a SentencePiece vocabulary and instantiating a tokenizer",
+   "original_code": "import keras_hub\nimport numpy as np\n\nvocabulary_file = keras.utils.get_file(\n    origin=\"https://hf.co/mattdangerw/spiece/resolve/main/vocabulary.proto\",\n)\ntokenizer = keras_hub.tokenizers.SentencePieceTokenizer(vocabulary_file)",
+   "language": "python",
+   "what_it_does": "Downloads a premade SentencePiece vocabulary (a serialized protobuf model) and wraps it in a KerasHub tokenizer layer.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Imports KerasHub (tokenizers, later models) and NumPy (used for `suffix` in Listing 16.3)."},
+    {"lines": "4-6", "explanation": "`keras.utils.get_file()` downloads the file once, caches it under `~/.keras/datasets`, and returns its local path."},
+    {"lines": "7", "explanation": "Creates a `SentencePieceTokenizer` layer from the vocabulary file. It can be called like any layer and used inside `Dataset.map()`."}
+   ],
+   "inputs_outputs": "Input: a URL. Output: a tokenizer layer mapping strings to int32 id tensors.",
+   "algorithm": "Load a pretrained subword model; tokenization itself is SentencePiece's BPE segmentation.",
+   "theory_link": "Same subword idea as the byte-pair encoding tokenizer built in chapter 14, implemented in C++ for speed (p.495).",
+   "parameters": [
+    {"name": "origin", "role": "URL of the `vocabulary.proto` file."},
+    {"name": "vocabulary_file", "role": "Local path of the SentencePiece model (32,000 terms)."}
+   ],
+   "pitfalls": [
+    "The vocabulary is fixed: the model's embedding size must match the tokenizer's vocabulary size (32,000).",
+    "Changing the tokenizer after pretraining makes the learned embeddings meaningless, as with RoBERTa (p.480)."
+   ],
+   "illustrative_code": "# AI-written: inspect the vocabulary\nprint(tokenizer.vocabulary_size())          # 32000 expected\nprint(tokenizer.id_to_token(450))           # likely '▁The'"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Round-trip tokenization",
+   "original_code": ">>> tokenizer.tokenize(\"The quick brown fox.\")\narray([  450,  4996, 17354,  1701, 29916, 29889], dtype=int32)\n>>> tokenizer.detokenize([450, 4996, 17354, 1701, 29916, 29889])\n\"The quick brown fox.\"",
+   "language": "python",
+   "what_it_does": "Shows that tokenization and detokenization are inverse operations for this input.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Six int32 ids for 'The quick brown fox.': four words plus a period produce six tokens, so one word is split into two subword pieces."},
+    {"lines": "3-4", "explanation": "Feeding the same ids back reconstructs the original string, spaces included."}
+   ],
+   "inputs_outputs": "String ↔ int32 array.",
+   "algorithm": "Segmentation into subwords and lookup of their ids; reverse lookup and concatenation.",
+   "theory_link": "A reversible mapping between text and integer sequences is what makes a language model's predicted ids readable (p.446).",
+   "parameters": [],
+   "pitfalls": ["Detokenization is lossless for normal text but may normalize some Unicode or whitespace details depending on the SentencePiece settings."],
+   "illustrative_code": ""
+  },
+  {
+   "id": "c3",
+   "listing": "16.3",
+   "title": "Preprocessing text input for Transformer pretraining",
+   "original_code": "import tensorflow as tf\n\nbatch_size = 128\nsequence_length = 256\nsuffix = np.array([tokenizer.token_to_id(\"<|endoftext|>\")])\n\ndef read_file(filename):\n    ds = tf.data.TextLineDataset(filename)\n    ds = ds.map(lambda x: tf.strings.regex_replace(x, r\"\\\\n\", \"\\n\"))\n    ds = ds.map(tokenizer, num_parallel_calls=8)\n    return ds.map(lambda x: tf.concat([x, suffix], -1))",
+   "language": "python",
+   "what_it_does": "Defines the batch size and sequence length, gets the id of the end-of-text token, and defines `read_file()`, which turns one shard into a dataset of tokenized documents each ending with <|endoftext|>.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "TensorFlow is imported only for `tf.data` and `tf.strings`; the model itself can run on any Keras backend."},
+    {"lines": "3-4", "explanation": "128 samples per batch, 256 tokens per sample (used on p.497)."},
+    {"lines": "5", "explanation": "`token_to_id(\"<|endoftext|>\")` returns the integer id of the boundary token; wrapping it in a one-element NumPy array lets it be concatenated to 1-D token tensors."},
+    {"lines": "7-8", "explanation": "`TextLineDataset` yields one string per line, and each line is one crawled document (p.495)."},
+    {"lines": "9", "explanation": "Callout 'Restores newlines'. In the raw string `r\"\\\\n\"` the regex is backslash-backslash-n, which matches a *literal* backslash followed by `n`, the escaped newline stored in the shard. The replacement `\"\\n\"` is a real newline character."},
+    {"lines": "10", "explanation": "Callout 'Tokenizes data'. The tokenizer layer is used as the map function, with 8 parallel calls, so each document becomes a variable-length int32 vector."},
+    {"lines": "11", "explanation": "Callout 'Adds the <|endoftext|> token'. Concatenates the suffix along the last axis so every document ends with the boundary token."}
+   ],
+   "inputs_outputs": "Input: a filename. Output: a `tf.data.Dataset` of 1-D int32 tensors of varying length, one per document.",
+   "algorithm": "Read lines → unescape newlines → tokenize in parallel → append end-of-text id.",
+   "theory_link": "Implements the GPT packing convention described in the text: documents are separated by <|endoftext|> rather than aligned with samples.",
+   "parameters": [
+    {"name": "batch_size = 128", "role": "Samples per training batch."},
+    {"name": "sequence_length = 256", "role": "Tokens per training sample (context length)."},
+    {"name": "num_parallel_calls = 8", "role": "Number of documents tokenized concurrently within one file."},
+    {"name": "suffix", "role": "Array holding the <|endoftext|> id."}
+   ],
+   "pitfalls": [
+    "Writing `\"\\\\n\"` without the raw-string prefix, or `r\"\\n\"`, changes what the regex matches; the point is to match a backslash followed by n.",
+    "`batch_size` and `sequence_length` are defined here but only used in the pipeline on p.497.",
+    "If the vocabulary lacked <|endoftext|>, `token_to_id` would fail or return an unknown-token id."
+   ],
+   "illustrative_code": "# AI-written: look at one processed document\nfor tokens in read_file(files[0]).take(1):\n    print(tokens.shape, tokens[-1].numpy() == suffix[0])   # (n,) True"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why pack documents instead of padding them?",
+   "kind": "numerical",
+   "body": "Suppose (illustrative numbers, not from the book) documents average 400 tokens with many short pages of 50-100 tokens. With one document per 256-token sample:\n\n- a 60-token page wastes 196 positions on padding (77% waste);\n- a 1,000-token page is truncated, losing 744 tokens, or must be split anyway.\n\nWith packing, every position in every sample is a real token, apart from one <|endoftext|> per document. When pretraining cost is measured in GPU-hours per token, this can nearly double useful throughput on short-document corpora like web crawls.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "The escaped-newline round trip",
+   "kind": "step_by_step",
+   "body": "1. In the shard files each document is stored on one line, so its internal newlines were written as the two characters `\\` and `n` (p.495).\n2. `TextLineDataset` splits the file on real newlines, giving one document per element.\n3. `regex_replace(x, r\"\\\\n\", \"\\n\")` turns each two-character `\\n` back into a real newline, so the model sees the document's true line structure (paragraph breaks are informative tokens).\n4. The tokenizer then encodes those newlines as tokens like any other character.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "What read_file() does to one shard",
+   "why": "Listing 16.3 chains four tf.data steps with three callouts; this follows one document through them.",
+   "mermaid": "flowchart LR\n  F[shardN.txt] --> T[TextLineDataset<br/>one document per line]\n  T --> R[regex_replace<br/>restore newlines]\n  R --> K[tokenizer<br/>8 parallel calls]\n  K --> C[concat suffix<br/>append end-of-text id]\n  C --> O[variable-length<br/>int32 token vectors]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "Each training sample corresponds to one document.", "correction": "Following GPT, samples are fixed 256-token chunks of a continuous stream; a sample can span the end of one document, <|endoftext|>, and the start of another."},
+  {"claim": "Using tf.data means the model must use the TensorFlow backend.", "correction": "The text says tf.data is used for the input pipeline and training works with any backend."},
+  {"claim": "Each word maps to exactly one token id.", "correction": "'The quick brown fox.' has 4 words and a period but 6 ids: subword tokenization can split words and gives punctuation its own tokens."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 495, "note": "The 50 mini-C4 shards, escaped newlines, and the choice of SentencePiece with a 32,000-term vocabulary."},
+   {"page": 494, "note": "Section 16.2 begins: the C4 corpus and downloading a portion of it (Listing 16.1)."},
+   {"page": 418, "note": "Chapter 14's subword tokenizer and its advantages."},
+   {"page": 480, "note": "RoBERTa's subword tokenizer loaded via KerasHub."},
+   {"page": 273, "note": "tf.data map() with num_parallel_calls and prefetch()."}
+  ],
+  "later": [
+   {"page": 497, "note": "The read_file() datasets are interleaved, windowed into 257-token chunks, split into inputs/labels, batched and prefetched."},
+   {"page": 502, "note": "Generated token ids are turned back into text with detokenize()."}
+  ],
+  "prerequisites": [
+   {"page": 426, "note": "tf.data for text preprocessing with any backend."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 497, "note": "The rest of the pretraining input pipeline."},
+   {"page": 483, "note": "Listing 15.21: preprocessing with a KerasHub tokenizer and StartEndPacker."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "KerasHub's SentencePieceTokenizer wraps a fast C++ subword tokenizer with a premade 32,000-term vocabulary.",
+  "Tokenization is reversible: tokenize() maps text to ids, detokenize() maps ids back to text.",
+  "GPT-style pretraining packs documents into one stream, separated by <|endoftext|>, and ignores document boundaries when cutting samples.",
+  "read_file() restores escaped newlines, tokenizes each document in parallel, and appends the end-of-text id.",
+  "Shards are loaded separately and interleaved so several CPU cores can read and tokenize files at once."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "How does the mini-GPT pipeline handle document boundaries?", "options": ["Each sample is padded so that it contains exactly one document", "Documents are separated by a special <|endoftext|> token and samples may cross boundaries", "Documents shorter than 256 tokens are discarded", "A [SEP] token is inserted every 256 tokens"], "answer": "Documents are separated by a special <|endoftext|> token and samples may cross boundaries", "explanation": "The page says GPT's developers made no attempt to keep boundaries out of samples and instead marked them with <|endoftext|>. There is no padding, discarding or fixed-interval separator.", "page_refs": [496]},
+  {"id": "q2", "type": "short", "question": "What does `tf.strings.regex_replace(x, r\"\\\\n\", \"\\n\")` do in read_file()?", "options": [], "answer": "It replaces each literal backslash-n sequence (the escaped newline stored in the shards) with a real newline character, restoring the document's line breaks.", "explanation": "The callout says 'Restores newlines'; p.495 explains that newlines were escaped so each document fits on one line.", "page_refs": [496, 495]},
+  {"id": "q3", "type": "conceptual", "question": "Why does `tokenizer.tokenize(\"The quick brown fox.\")` return six ids rather than four?", "options": [], "answer": "SentencePiece uses subword tokens: the period is its own token, and one of the words is split into two subword pieces.", "explanation": "Subword vocabularies represent common words as single tokens and less common ones as several pieces; punctuation usually gets separate tokens.", "page_refs": [496]},
+  {"id": "q4", "type": "conceptual", "question": "Give two reasons the authors load each shard separately and interleave them.", "options": [], "answer": "It keeps loading fast, because each CPU processor can read and tokenize a different file at the same time; and there is no need to worry about text lining up across sample boundaries since each sample is independent.", "explanation": "Both reasons are stated in the last paragraph before Listing 16.3.", "page_refs": [496]},
+  {"id": "q5", "type": "mcq", "question": "What is the role of `suffix` in Listing 16.3?", "options": ["It stores the padding id", "It holds the id of <|endoftext|>, appended to every tokenized document", "It is the label for the next-token prediction", "It sets the sequence length"], "answer": "It holds the id of <|endoftext|>, appended to every tokenized document", "explanation": "`suffix = np.array([tokenizer.token_to_id(\"<|endoftext|>\")])`, then `tf.concat([x, suffix], -1)`; the callout reads 'Adds the <|endoftext|> token'. Labels are created on p.497, and sequence_length is a separate variable.", "page_refs": [496]},
+  {"id": "q6", "type": "short", "question": "Which tf.data argument parallelizes tokenization within one file in read_file(), and with what value?", "options": [], "answer": "`num_parallel_calls=8` in `ds.map(tokenizer, num_parallel_calls=8)`.", "explanation": "Parallelism across files is added separately by interleave on p.497.", "page_refs": [496, 497]},
+  {"id": "q7", "type": "self", "question": "Can you explain why changing the tokenizer after pretraining the mini-GPT would break the model?", "options": [], "answer": "Self-check: the embedding matrix and output layer are indexed by token id; a different tokenizer assigns different ids (and possibly a different vocabulary size), so the learned weights would refer to the wrong tokens.", "explanation": "Same reason a matching tokenizer was needed for RoBERTa (p.480).", "page_refs": [480, 496]}
+ ]
+}

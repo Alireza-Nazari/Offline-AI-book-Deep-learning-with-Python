@@ -1,0 +1,124 @@
+{
+ "page_id": "page_340", "pdf_page": 340, "printed_page": "316", "book_id": "dlwp3",
+ "generation": {"status": "complete", "model": "claude-opus-5-5", "generated_at": "2026-11-03T07:38:05Z",
+  "confidence": "high", "review_flags": [],
+  "extraction_quality": "Good. The numbered list of IoU steps was split across elements p340_e04 (intro + start of step 1) and p340_e05 (end of step 1, steps 2-3 and the lead-in to the code); p340_e03 is the end of a sentence begun on p.339. Two code blocks with callouts; the model.fit call continues on p.341."},
+ "overview": {
+  "title": "Intersection over Union; compiling and fitting",
+  "chapter": "11 Image segmentation",
+  "section": "11.2 Training a segmentation model from scratch",
+  "subsection": "11.2.2 Building and training the segmentation model",
+  "main_topic": "The IoU metric for segmentation, its Keras implementation for the foreground class, and the compile/fit setup with a best-only checkpoint",
+  "central_idea": "Segmentation quality is measured by IoU = area of overlap / area of union between predicted and true masks. Keras's IoU metric is configured for 3 classes, the foreground class 0, sparse integer targets and dense softmax predictions. The model is compiled with Adam and sparse categorical cross-entropy and trained for 50 epochs, saving the best model.",
+  "importance": "Pixel accuracy can be misleading when one class (background) dominates; IoU focuses on how well the object of interest is outlined. The sparse/dense flags are a common source of silent bugs.",
+  "learning_objectives": [
+   "Compute IoU from intersection and union of two masks",
+   "Configure keras.metrics.IoU for one target class with sparse targets and dense predictions",
+   "Explain why sparse_categorical_crossentropy fits integer masks",
+   "Describe what ModelCheckpoint(save_best_only=True) does"
+  ],
+  "prerequisites": [
+   "p.337: labels 0 (foreground), 1 (background), 2 (contour)",
+   "p.339: per-pixel softmax output",
+   "Callbacks and model.compile/fit (chapter 7)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page first completes the sentence from p.339: after compressing inputs to `(25, 25, 256)`, the model *simply applies the corresponding sequence of `Conv2DTranspose` layers followed by a final `Conv2D` layer* to produce outputs of shape `(200, 200, 3)`.\n\n**Intersection over Union (IoU).** To evaluate the model, the authors introduce IoU, a measure of the match between ground-truth and predicted masks. It can be computed separately for each class or averaged over several classes. The recipe has three steps:\n\n1. compute the **intersection**, the area where prediction and ground truth overlap;\n2. compute the **union**, the total area covered by both masks, which is *the target object and any extra bits your model might have included by mistake*;\n3. divide intersection by union. The result lies between 0 (complete miss) and 1 (perfect match).\n\n**Keras metric.** Rather than coding it by hand, they use `keras.metrics.IoU(num_classes=3, target_class_ids=(0,), name=\"foreground_iou\", sparse_y_true=True, sparse_y_pred=False)`. The callouts explain that `num_classes` is the total number of classes, `target_class_ids=(0,)` selects the class to compute IoU for (0 = foreground), and the targets are sparse integer class IDs *but our model's predictions are a dense softmax!*\n\n**Training.** The model is compiled with `optimizer=\"adam\"`, `loss=\"sparse_categorical_crossentropy\"` (integer masks vs per-pixel softmax) and `metrics=[foreground_iou]`. A `ModelCheckpoint(\"oxford_segmentation.keras\", save_best_only=True)` callback keeps the best model. `model.fit(train_input_imgs, train_targets, epochs=50, callbacks=callbacks, ...)` starts training, and its remaining arguments (`batch_size=64` and the validation data) are on p.341.",
+ "paragraphs": [
+  {"ref": "p340_e03", "excerpt": "simply apply the corresponding sequence of Conv2DTranspose layers followed by a final",
+   "what_it_says": "Ends p.339's sentence: after the Conv2D encoder, the Conv2DTranspose stack and a final Conv2D produce (200, 200, 3) outputs.",
+   "what_it_means": "The decoder mirrors the encoder (p.338), and the final Conv2D is the softmax head (p.339).",
+   "why_it_matters": "Confirms the output resolution matches the 200 × 200 masks.",
+   "technical_idea": "",
+   "terminology": [],
+   "connections": ["p.339: the beginning of this sentence and the Conv2DTranspose explanation."]},
+  {"ref": "p340_e04", "excerpt": "To evaluate the model, we’ll use a metric named Intersection over Union",
+   "what_it_says": "IoU measures the match between ground-truth and predicted masks; it can be computed per class or averaged over classes. Step 1: compute the intersection, the area where prediction and ground truth overlap.",
+   "what_it_means": "For one class c, treat both masks as binary (pixel is c or not) and count overlapping pixels. Averaging per-class IoUs gives 'mean IoU' (mIoU), the standard segmentation benchmark metric (that name is not used in the book).",
+   "why_it_matters": "Background pixels dominate many images; a model predicting 'background everywhere' could have decent pixel accuracy but foreground IoU of 0. IoU exposes this.",
+   "technical_idea": "Intersection = |P ∩ G| = number of true-positive pixels for class c.",
+   "terminology": [{"term": "Intersection over Union (IoU)", "meaning": "|P ∩ G| / |P ∪ G| for predicted region P and ground-truth region G; also called the Jaccard index."}, {"term": "ground truth", "meaning": "The reference (human-annotated) mask."}],
+   "connections": ["p.337: the foreground class has label 0 after shifting."]},
+  {"ref": "p340_e05", "excerpt": "ground truth overlap. 2 Compute the union of the masks, the total",
+   "what_it_says": "Step 2: compute the union, the total area covered by both masks, i.e. the target object plus anything the model wrongly included. Step 3: divide intersection by union; the result is between 0 (complete miss) and 1 (perfect match). A built-in Keras metric will be used.",
+   "what_it_means": "Union = TP + FP + FN pixels. Both false positives (extra bits) and false negatives (missed parts of the object) enlarge the denominator without adding to the numerator, so IoU penalizes both kinds of error.",
+   "why_it_matters": "IoU cannot be gamed by over-predicting: claiming every pixel as foreground gives full overlap but a huge union.",
+   "technical_idea": "IoU = TP / (TP + FP + FN).",
+   "terminology": [{"term": "union", "meaning": "|P ∪ G| = |P| + |G| − |P ∩ G|."}],
+   "connections": ["p.341: foreground IoU is tracked during training.", "p.354: chapter 12 notes segmentation is a superset of detection; detection uses IoU between boxes too."]},
+  {"ref": "p340_e07", "excerpt": "We can now compile and fit our model:",
+   "what_it_says": "Introduces the compile/fit code.",
+   "what_it_means": "Adam optimizer, sparse categorical cross-entropy loss averaged over all pixels, the foreground IoU metric, and a checkpoint that saves the model only when validation loss improves.",
+   "why_it_matters": "Because validation loss later rises (overfitting, p.341), save_best_only ensures the saved file is the best epoch, not the last.",
+   "technical_idea": "ModelCheckpoint monitors 'val_loss' by default when save_best_only=True.",
+   "terminology": [{"term": "sparse_categorical_crossentropy", "meaning": "Cross-entropy taking integer class labels and probability vectors; here applied per pixel and averaged."}, {"term": "ModelCheckpoint", "meaning": "Callback that saves the model during training; with save_best_only=True only when the monitored metric improves."}],
+   "connections": ["p.341: the end of the fit call and the loss curves.", "p.338: train_input_imgs and train_targets were created by the split."]}
+ ],
+ "concepts": [
+  {"id": "iou", "name": "Intersection over Union (IoU)", "definition": "The ratio of the overlap area to the combined area of predicted and ground-truth masks for a class.", "intuition": "How much of the 'claimed or true' territory is actually agreed upon.", "technical": "IoU_c = |P_c ∩ G_c| / |P_c ∪ G_c| = TP / (TP + FP + FN); in [0, 1]. Keras accumulates TP/FP/FN over batches via a confusion matrix.", "significance": "The metric used to evaluate the segmentation model on foreground class 0.", "example": "Prediction 1,000 px, truth 900 px, overlap 800 px: union = 1,100, IoU ≈ 0.727.", "misconception": "IoU is not pixel accuracy; true negatives (correct background) do not appear in it.", "related": ["semantic_segmentation", "confusion_matrix"], "source": "book"},
+  {"id": "cross_entropy", "name": "Sparse categorical cross-entropy (per pixel)", "definition": "Cross-entropy loss with integer targets, here applied to every pixel's softmax and averaged.", "intuition": "At every pixel, penalize the model by how little probability it put on the true class.", "technical": "L = −(1/N) Σ_pixels log p_{pixel, y_pixel}, where y is the integer mask label 0–2.", "significance": "Lets the uint8 masks from p.337 be used directly without one-hot encoding.", "example": "A pixel with true class 0 and predicted [0.9, 0.08, 0.02] contributes −log 0.9 ≈ 0.105.", "misconception": "'Sparse' refers to the label format (integers), not to sparse tensors.", "related": ["softmax", "loss_function"], "source": "book"},
+  {"id": "model_checkpoint", "name": "Best-only model checkpointing", "definition": "Saving the model only when the monitored validation metric improves.", "intuition": "Keep a copy of your best attempt, overwrite it only with better ones.", "technical": "keras.callbacks.ModelCheckpoint(path, save_best_only=True), monitoring val_loss by default.", "significance": "Recovers the pre-overfitting model reloaded on p.341.", "example": "If val_loss bottoms out at epoch 20 and then rises, the file holds epoch 20's weights.", "misconception": "It does not stop training; that is EarlyStopping.", "related": ["overfitting", "validation_set"], "source": "book"}
+ ],
+ "math": [
+  {"id": "m1", "title": "Intersection over Union", "latex": "\\operatorname{IoU}(P,G) = \\frac{|P\\cap G|}{|P\\cup G|} = \\frac{TP}{TP+FP+FN} \\in [0,1]", "source_text": "1 Compute the intersection between the masks … 2 Compute the union of the masks … 3 Divide the intersection area by the union area to get the IoU. It's a number between 0 and 1", "variables": [{"symbol": "P", "meaning": "Set of pixels predicted as the target class (foreground)"}, {"symbol": "G", "meaning": "Set of pixels labeled as the target class in the ground truth"}, {"symbol": "TP", "meaning": "Pixels in both P and G"}, {"symbol": "FP", "meaning": "Pixels in P but not G ('extra bits your model might have included by mistake')"}, {"symbol": "FN", "meaning": "Pixels in G but not P (missed parts)"}], "operations": "Set intersection and union sizes, then a ratio.", "purpose": "Score how well a predicted mask matches the true mask for one class.", "interpretation": "1 = perfect match, 0 = no overlap.", "intuition": "Both over- and under-segmentation shrink the score.", "numerical_example": "For a 10 × 10 image, if the true cat covers 30 pixels, the model predicts 35 and they share 25: union = 30 + 35 − 25 = 40 → IoU = 25/40 = 0.625.", "source": "book", "book_ref": "p.340"},
+  {"id": "m2", "title": "Per-pixel sparse categorical cross-entropy", "latex": "\\mathcal{L} = -\\frac{1}{HW}\\sum_{i=1}^{H}\\sum_{j=1}^{W} \\log \\hat{p}_{ij}[y_{ij}]", "source_text": "loss=\"sparse_categorical_crossentropy\"", "variables": [{"symbol": "\\hat{p}_{ij}", "meaning": "Softmax probability vector (3 entries) at pixel (i, j)"}, {"symbol": "y_{ij}", "meaning": "Integer label 0, 1 or 2 at that pixel"}, {"symbol": "H, W", "meaning": "200, 200"}], "operations": "Index the probability of the true class, take −log, average over pixels (and over the batch).", "purpose": "Training objective for the segmentation model.", "interpretation": "Lower is better; 0 when every pixel gets probability 1 on its true class.", "intuition": "Classification loss averaged over 40,000 tiny classification problems per image.", "numerical_example": "Three pixels with true-class probabilities 0.9, 0.6 and 0.3: loss = (0.105 + 0.511 + 1.204)/3 ≈ 0.607.", "source": "ai_explanation", "book_ref": "p.340"}
+ ],
+ "code": [
+  {"id": "c1", "listing": null, "title": "Foreground IoU metric", "original_code": "foreground_iou = keras.metrics.IoU(\n    num_classes=3,\n    target_class_ids=(0,),\n    name=\"foreground_iou\",\n    sparse_y_true=True,\n    sparse_y_pred=False,\n)", "language": "python",
+   "what_it_does": "Creates a stateful Keras metric computing IoU for class 0 (foreground) from integer targets and softmax predictions.",
+   "line_explanations": [{"lines": "2", "explanation": "Callout: specifies the total number of classes (3)."}, {"lines": "3", "explanation": "Callout: specifies the class to compute IoU for (0 = foreground). A tuple; multiple ids would be averaged."}, {"lines": "4", "explanation": "Name shown in logs and history (foreground_iou, val_foreground_iou)."}, {"lines": "5", "explanation": "Callout: our targets are sparse (integer class IDs)."}, {"lines": "6", "explanation": "Callout: but the predictions are a dense softmax, so Keras takes the argmax over the last axis first."}],
+   "inputs_outputs": "Per batch: y_true (N, 200, 200, 1) ints, y_pred (N, 200, 200, 3) probabilities → running IoU scalar.",
+   "algorithm": "argmax predictions → accumulate confusion matrix → IoU for class 0 = TP / (TP + FP + FN).",
+   "theory_link": "The three-step IoU recipe above.",
+   "parameters": [{"name": "num_classes", "role": "Size of the confusion matrix."}, {"name": "target_class_ids", "role": "Which classes' IoU to report (averaged)."}, {"name": "sparse_y_true / sparse_y_pred", "role": "Whether targets/predictions are integer ids (True) or per-class vectors (False)."}],
+   "pitfalls": ["Setting sparse_y_pred=True with softmax outputs would treat probabilities as class ids, giving meaningless values.", "The metric accumulates over all batches of an epoch, not a per-batch average."],
+   "illustrative_code": "# Not from the book: IoU by hand with NumPy\nimport numpy as np\ndef iou(pred_mask, true_mask, cls=0):\n    p, g = pred_mask == cls, true_mask == cls\n    return (p & g).sum() / (p | g).sum()"},
+  {"id": "c2", "listing": null, "title": "Compile and start fitting (continues on p.341)", "original_code": "model.compile(\n    optimizer=\"adam\",\n    loss=\"sparse_categorical_crossentropy\",\n    metrics=[foreground_iou],\n)\ncallbacks = [\n    keras.callbacks.ModelCheckpoint(\n        \"oxford_segmentation.keras\",\n        save_best_only=True,\n    ),\n]\nhistory = model.fit(\n    train_input_imgs,\n    train_targets,\n    epochs=50,\n    callbacks=callbacks,", "language": "python",
+   "what_it_does": "Compiles the model and launches 50 epochs of training with a best-only checkpoint. These are only this page's lines; the call ends on p.341 with batch_size=64 and validation_data=(val_input_imgs, val_targets).",
+   "line_explanations": [{"lines": "1-5", "explanation": "Adam optimizer, per-pixel sparse cross-entropy for integer masks, foreground IoU metric."}, {"lines": "6-11", "explanation": "Saves to oxford_segmentation.keras whenever validation loss improves."}, {"lines": "12-16", "explanation": "Fits on the training arrays from p.338 for 50 epochs, returning a History object used on p.341."}],
+   "inputs_outputs": "Inputs: training arrays. Output: history, plus the checkpoint file on disk.",
+   "algorithm": "Mini-batch gradient descent with Adam.",
+   "theory_link": "Validation-based model selection.",
+   "parameters": [{"name": "optimizer=\"adam\"", "role": "Adaptive optimizer with default learning rate 0.001."}, {"name": "epochs=50", "role": "Deliberately long; overfitting appears midway (p.341)."}, {"name": "save_best_only=True", "role": "Keep only the best (lowest val_loss) model."}],
+   "pitfalls": ["save_best_only needs validation data to monitor val_loss; it is passed on p.341.", "With ~6,390 images of 200 × 200 the run takes a while on CPU; a GPU is recommended."],
+   "illustrative_code": ""}
+ ],
+ "deeper": [
+  {"title": "IoU vs pixel accuracy", "kind": "numerical", "body": "Beyond the book: take a 200 × 200 image where the pet covers 10% (4,000 px). A model that predicts background everywhere has pixel accuracy ≈ 90% (ignoring the contour class) but foreground IoU = 0 / 4,000 = 0. A model that predicts the whole image as foreground has foreground IoU = 4,000 / 40,000 = 0.1. Only a model that outlines the pet gets a high IoU.", "source": "ai_explanation"},
+  {"title": "Why track only the foreground class?", "kind": "breakdown", "body": "Inference: the task is to separate the main subject from the background (p.335), so class 0 is the one that matters. Background IoU would be high almost for free, and the contour class is a thin ambiguous band with inherently low IoU, so averaging them in would muddy the signal.", "source": "inference"}
+ ],
+ "visualizations": [
+  {"id": "v1", "type": "svg", "title": "Intersection and union of two masks", "why": "Illustrates the page's three-step IoU recipe: the overlap (intersection) divided by the total covered area (union).", "svg": "<svg viewBox=\"0 0 360 170\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"12\" fill=\"currentColor\"><defs><clipPath id=\"cg\"><circle cx=\"130\" cy=\"80\" r=\"60\"/></clipPath></defs><circle cx=\"130\" cy=\"80\" r=\"60\" fill=\"#3b82f6\" fill-opacity=\"0.25\" stroke=\"#3b82f6\"/><circle cx=\"200\" cy=\"80\" r=\"60\" fill=\"#ef4444\" fill-opacity=\"0.25\" stroke=\"#ef4444\"/><circle cx=\"200\" cy=\"80\" r=\"60\" clip-path=\"url(#cg)\" fill=\"#a855f7\" fill-opacity=\"0.6\"/><text x=\"75\" y=\"84\">FN</text><text x=\"155\" y=\"84\">TP</text><text x=\"235\" y=\"84\">FP</text><text x=\"60\" y=\"160\">ground truth G</text><text x=\"200\" y=\"160\">prediction P</text><text x=\"270\" y=\"30\">IoU = TP /</text><text x=\"270\" y=\"46\">(TP+FP+FN)</text></svg>"},
+  {"id": "v2", "type": "widget", "title": "Pixel counts for the foreground class", "why": "A 2 × 2 table of foreground vs not-foreground pixel counts. IoU = TP / (TP + FN + FP) uses three of the cells; the widget's accuracy uses all four, which shows why accuracy can mislead.", "widget": "confusion_matrix", "params": {"matrix": [[800, 100], [200, 38900]], "labels": ["foreground", "not foreground"]}}
+ ],
+ "misconceptions": [
+  {"claim": "IoU and pixel accuracy measure the same thing.", "correction": "Accuracy counts correct background pixels (true negatives); IoU ignores them, focusing on the target class region."},
+  {"claim": "sparse_y_pred=False means predictions are sparse.", "correction": "It means predictions are NOT sparse: they are dense per-class probability vectors (softmax), as the callout says."},
+  {"claim": "ModelCheckpoint stops training when the model stops improving.", "correction": "It only saves; training continues for all 50 epochs (EarlyStopping would stop it)."}
+ ],
+ "connections": {
+  "earlier": [{"page": 339, "note": "Per-pixel softmax output and the start of this page's first sentence."}, {"page": 337, "note": "Integer labels 0/1/2, with 0 = foreground."}, {"page": 338, "note": "Training/validation arrays."}],
+  "later": [{"page": 341, "note": "End of fit, loss curves, overfitting around epoch 25, reloading the best checkpoint."}, {"page": 342, "note": "Predicted mask for a test image."}, {"page": 354, "note": "Object detection, which also relies on overlap between predictions and ground truth."}],
+  "prerequisites": [{"page": 337, "note": "Label encoding."}],
+  "related_math": [],
+  "related_code": [{"page": 341, "note": "The rest of model.fit."}],
+  "related_figures": [{"page": 341, "note": "Figure 11.5 loss curves produced from history."}]
+ },
+ "takeaways": [
+  "IoU = intersection / union of predicted and true masks, from 0 (miss) to 1 (perfect).",
+  "It can be computed per class or averaged; here only foreground (class 0) is tracked.",
+  "keras.metrics.IoU needs num_classes, target_class_ids and the sparse flags matching targets (integers) and predictions (softmax).",
+  "Integer masks + per-pixel softmax → sparse_categorical_crossentropy.",
+  "ModelCheckpoint(save_best_only=True) keeps the best validation-loss model."
+ ],
+ "questions": [
+  {"id": "q1", "type": "math", "question": "A true foreground region has 500 pixels, the predicted one has 600, and they overlap on 400. What is the IoU?", "options": [], "answer": "400 / (500 + 600 − 400) = 400 / 700 ≈ 0.571", "explanation": "Union = |P| + |G| − |P ∩ G|.", "page_refs": [340]},
+  {"id": "q2", "type": "mcq", "question": "Why is sparse_y_pred set to False?", "options": ["Because the targets are one-hot", "Because the model outputs dense softmax probabilities per class", "Because IoU requires sparse tensors", "To compute IoU over all classes"], "answer": "Because the model outputs dense softmax probabilities per class", "explanation": "Callout: our model's predictions are a dense softmax. Targets are integers (sparse_y_true=True), the flag has nothing to do with sparse tensors, and target_class_ids controls which classes are evaluated.", "page_refs": [340]},
+  {"id": "q3", "type": "short", "question": "What does target_class_ids=(0,) select and why 0?", "options": [], "answer": "IoU is computed only for class 0, which is the foreground (the pet) after the labels were shifted from 1–3 to 0–2.", "explanation": "See the callout and p.337.", "page_refs": [340, 337]},
+  {"id": "q4", "type": "conceptual", "question": "Why does IoU penalize a model that labels every pixel as foreground?", "options": [], "answer": "The intersection becomes the whole true region, but the union becomes the whole image, so the ratio equals the fraction of the image that is foreground, typically small.", "explanation": "The 'extra bits your model might have included by mistake' inflate the union.", "page_refs": [340]},
+  {"id": "q5", "type": "short", "question": "Which loss is used and why does it fit the data format?", "options": [], "answer": "sparse_categorical_crossentropy, because targets are integer class ids per pixel and the outputs are per-pixel softmax distributions.", "explanation": "No one-hot encoding is required.", "page_refs": [340]},
+  {"id": "q6", "type": "mcq", "question": "What does ModelCheckpoint(..., save_best_only=True) do here?", "options": ["Stops training when validation loss rises", "Saves the model after every epoch", "Saves the model only when validation loss improves", "Saves only the optimizer state"], "answer": "Saves the model only when validation loss improves", "explanation": "save_best_only keeps the best monitored value (val_loss by default). Stopping is EarlyStopping; saving every epoch is save_best_only=False; the whole model is saved, not just optimizer state.", "page_refs": [340]},
+  {"id": "q7", "type": "self", "question": "Can you list the three steps of computing IoU and give its range?", "options": [], "answer": "Intersection, union, divide; range 0 to 1.", "explanation": "Directly from the numbered list.", "page_refs": [340]}
+ ]
+}

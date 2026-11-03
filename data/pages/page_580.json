@@ -1,0 +1,246 @@
+{
+ "page_id": "page_580",
+ "pdf_page": 580,
+ "printed_page": "556",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:00:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. The NOTE about Google Cloud Storage was merged into element p580_e04 by the extractor, but it is a separate NOTE block on the page. The section heading 18.3 is split across two elements. The last paragraph continues on p.581."
+ },
+ "overview": {
+  "title": "Using TPUs, step fusing, and intro to lower precision",
+  "chapter": "18 Best practices for the real world",
+  "section": "18.3 Speeding up training and inference with lower-precision computation",
+  "subsection": "18.3.1 Understanding floating-point precision",
+  "main_topic": "Running Keras/JAX on TPUs (set_distribution, caching data, large batches, steps_per_execution) and the start of section 18.3 on lower-precision computation",
+  "central_idea": "On a TPU with the JAX backend, setting a DataParallel or ModelParallel distribution before creating the model is all you need. To keep TPU cores busy, cache small datasets in VM memory, use very large batches (with a higher learning rate), or use step fusing (steps_per_execution) to run several training steps per TPU execution. Section 18.3 then introduces precision, the number of bits used to encode a number, as the key to a nearly free 2x speedup.",
+  "importance": "Step fusing is a one-argument change that can greatly speed up small models on TPUs. The precision discussion begun here is the foundation for float16/bfloat16 inference, mixed-precision training, float8, and quantization later in the chapter.",
+  "learning_objectives": [
+   "Activate TPU cores from Keras with keras.distribution.set_distribution before model creation",
+   "Explain why data reading from GCS can bottleneck TPUs and how dataset.cache() helps",
+   "Explain why large batches call for a larger learning rate",
+   "Describe step fusing and use compile(..., steps_per_execution=N)",
+   "Define numerical precision by analogy with image resolution"
+  ],
+  "prerequisites": [
+   "DataParallel and ModelParallel distributions (p.575, p.578)",
+   "tf.data pipelines and prefetching (p.579)",
+   "Learning rate and mini-batch gradient descent (p.64)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes the TPU subsection and opens section 18.3.\n\n**Getting on a TPU.** Colab offers a TPU runtime besides the GPU runtime, and Google Cloud provides TPU v3 through v5 for serious runs. With the JAX backend on a TPU notebook, the only thing to do is call `keras.distribution.set_distribution(distribution)` with a `DataParallel` or `ModelParallel` instance, and the authors stress that you must call it *before* creating your model.\n\n**NOTE: feeding the TPU.** TPUs process batches so fast that reading from Google Cloud Storage (GCS) can become the bottleneck. If the dataset is small enough, keep it in the VM's memory with `dataset.cache()` so it is read from GCS only once.\n\n**Using step fusing to improve TPU utilization.** A TPU has so much compute that you need very large batches to keep its cores busy, sometimes over 10,000 samples per batch for small models. With huge batches you should raise the learning rate: you make fewer updates, but each one is more accurate because its gradient averages more samples, so each update can move the weights further. The alternative is **step fusing**: run several training steps per TPU execution, doing more work between two round trips from VM memory to the TPU. In Keras this is `model.compile(..., steps_per_execution=8)`, which for small models underusing the TPU can give a dramatic speedup.\n\n**18.3 Lower-precision computation.** The authors announce a technique that can speed up training and inference of almost any model by up to 2x, basically for free. To understand it, you need the notion of *precision*. **18.3.1** starts the analogy: precision is to numbers what resolution is to images. Computers only process 1s and 0s, so every number must be encoded as a binary string (continued on p.581).",
+ "paragraphs": [
+  {
+   "ref": "p580_e03",
+   "excerpt": "TPU runtime in addition to the GPU runtime. For more serious training runs",
+   "what_it_says": "Colab offers a TPU runtime alongside the GPU runtime, and for more serious training Google Cloud offers TPU v3 through v5, which are even faster.",
+   "what_it_means": "Colab's free TPU is good for learning and experiments. Production-scale training would use Cloud TPU VMs or pods of newer generations.",
+   "why_it_matters": "It shows the path from a free notebook to large-scale TPU training with the same Keras/JAX code.",
+   "terminology": [
+    {"term": "TPU runtime", "meaning": "A Colab notebook backend attached to TPU hardware."}
+   ],
+   "connections": ["p.579: TPU v2 described as 15x faster than an NVIDIA P100"]
+  },
+  {
+   "ref": "p580_e04",
+   "excerpt": "When running Keras code with the JAX backend on a TPU-enabled notebook, you",
+   "what_it_says": "With the JAX backend on a TPU notebook, you only need `keras.distribution.set_distribution(distribution)` with a DataParallel or ModelParallel instance to use the TPU cores, called before creating the model. The NOTE adds that TPUs process batches so fast that reading data from GCS can become the bottleneck, so for small enough datasets keep the data in VM memory with `dataset.cache()`, so it is read from GCS only once.",
+   "what_it_means": "A TPU exposes several cores (e.g. 8 on a v2-8), and JAX sees them as separate devices. The same distribution API used for multi-GPU training on p.575 and p.578 spreads work across them. `cache()` stores the elements produced on the first pass (in memory by default) and serves later epochs from that cache.",
+   "why_it_matters": "There is no TPU-specific Keras API to learn. The main pitfalls are ordering (distribution first, then model) and data throughput.",
+   "technical_idea": "Beyond the book: place `cache()` after expensive deterministic preprocessing but before random augmentation and shuffling, so augmentations are not frozen into the cache.",
+   "terminology": [
+    {"term": "GCS", "meaning": "Google Cloud Storage, the object store where TPU training data typically lives."},
+    {"term": "dataset.cache()", "meaning": "tf.data transformation that stores elements after the first iteration so later epochs avoid re-reading/re-computing them."}
+   ],
+   "connections": ["p.575: DataParallel distribution", "p.578: ModelParallel distribution and the same 'set it before building' rule", "p.579: tf.data performance tips (prefetch)"]
+  },
+  {
+   "ref": "p580_e06",
+   "excerpt": "Because a TPU has a lot of compute power available, you need to",
+   "what_it_says": "TPUs need very large batches to keep their cores busy, sometimes over 10,000 samples per batch for small models. With enormous batches, increase the learning rate: there are fewer updates, but each is more accurate because its gradient is computed from more data points, so each update should move the weights more.",
+   "what_it_means": "Each step has fixed overheads (launch, synchronization, host-device transfer). With a small model and small batch, those overheads dominate and the matrix units sit idle. Larger batches amortize them. The learning-rate advice reflects that a batch gradient is an average: averaging more samples reduces its variance (noise), so it is safe to take larger steps along it, and you need larger steps to cover the same distance in fewer updates.",
+   "why_it_matters": "If you increase the batch size 10x without adjusting the learning rate, you make 10x fewer updates of the same size per epoch and training appears to slow down or stall.",
+   "technical_idea": "Beyond the book: a common heuristic is the linear scaling rule, which multiplies the learning rate by k when the batch size is multiplied by k, usually with a warmup period. It breaks down at very large batch sizes, where adaptive methods such as LAMB/LARS are used.",
+   "terminology": [
+    {"term": "utilization", "meaning": "Fraction of the accelerator's peak compute actually used."},
+    {"term": "gradient variance", "meaning": "Noise in the mini-batch gradient estimate; it decreases as batch size grows."}
+   ],
+   "connections": ["p.64: mini-batch stochastic gradient descent and the learning rate", "p.573: data parallelism also effectively raises the global batch size"]
+  },
+  {
+   "ref": "p580_e07",
+   "excerpt": "There is, however, a simple trick you can use to keep reasonably sized",
+   "what_it_says": "Step fusing keeps batches reasonably sized while fully using the TPU: run multiple training steps in each TPU execution, doing more work between two round trips from VM memory to the TPU. In Keras, pass `steps_per_execution` to `compile()`, e.g. `steps_per_execution=8` for eight steps per execution. For small, underutilizing models this can give a dramatic speedup.",
+   "what_it_means": "Normally `fit()` hands control back to Python after every batch: launch step, wait, update callbacks/metrics, launch next step. With `steps_per_execution=N`, Keras compiles a function that loops over N batches on the device, so the host-device round trip and dispatch overhead are paid once per N steps. Each update still uses the normal batch size, so no learning-rate adjustment is needed.",
+   "why_it_matters": "It gives most of the throughput benefit of huge batches without their optimization side effects. It is a single argument, and it also helps on GPUs for small models.",
+   "technical_idea": "Beyond the book: callbacks' `on_batch_*` hooks and progress-bar updates fire only every N steps when steps_per_execution > 1, and N should not exceed the number of steps per epoch.",
+   "terminology": [
+    {"term": "step fusing", "meaning": "Running several optimizer steps inside one device execution to amortize per-step host overhead."},
+    {"term": "steps_per_execution", "meaning": "compile() argument setting how many batches are processed per compiled call."}
+   ],
+   "connections": ["p.230: compile()/fit() workflow that steps_per_execution plugs into"]
+  },
+  {
+   "ref": "p580_e11",
+   "excerpt": "What if I told you there’s a simple technique you could use to speed",
+   "what_it_says": "There is a simple technique that can speed up training and inference of almost any model by up to 2x basically for free. To understand it, you first need the notion of precision in computer science.",
+   "what_it_means": "The technique is using 16-bit floating-point numbers (float16/bfloat16), developed over the following pages as float16 inference (p.582) and mixed-precision training (p.583). The \"up to 2x\" comes from halving the bits moved and processed per number, and from 16-bit matrix units on modern hardware.",
+   "why_it_matters": "It is one of the highest-payoff optimizations in practice. Mini-GPT in chapter 16 already used it (p.499).",
+   "terminology": [
+    {"term": "precision", "meaning": "Number of bits used to encode a number, which determines how finely values can be distinguished."}
+   ],
+   "connections": ["p.499: mixed precision was turned on for the mini-GPT, with the explanation deferred to chapter 18", "p.582: float16 inference gives a nearly 2x speedup"]
+  },
+  {
+   "ref": "p580_e13",
+   "excerpt": "Precision is to numbers what resolution is to images. Because computers can only",
+   "what_it_says": "Precision is to numbers what resolution is to images. Computers process only 1s and 0s, so every number must be encoded as a binary string.",
+   "what_it_means": "An image with more pixels shows finer detail. A number format with more bits can distinguish values that are closer together. With n bits you have at most 2^n distinct codes, so a format can represent at most 2^n different numbers.",
+   "why_it_matters": "This analogy is the lens for the rest of section 18.3: lowering precision trades resolution for speed and memory.",
+   "terminology": [
+    {"term": "binary encoding", "meaning": "Representation of a value as a fixed-length string of bits."}
+   ],
+   "connections": ["p.581: uint8 and int32 integers, then float16/32/64 and the floating-point encoding"]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "step_fusing",
+   "name": "Step fusing (steps_per_execution)",
+   "definition": "Running several training steps within a single device execution, set in Keras with compile(..., steps_per_execution=N).",
+   "intuition": "Instead of sending a courier back and forth for each package, send them with eight packages per trip.",
+   "technical": "Keras compiles a loop over N batches into one device call, so host-device round trips and Python dispatch happen once per N steps.",
+   "significance": "Large speedups for small models that underutilize TPUs, without enormous batches.",
+   "example": "`model.compile(..., steps_per_execution=8)`",
+   "misconception": "It does not change the batch size or the number of weight updates; each of the N steps is a normal update.",
+   "related": ["tpu", "batch_size"],
+   "source": "book"
+  },
+  {
+   "id": "large_batch_training",
+   "name": "Large-batch training and learning rate",
+   "definition": "Training with very large batches (e.g. >10,000 samples) to saturate accelerators, increasing the learning rate to compensate.",
+   "intuition": "Fewer but better-informed steps can each be bigger.",
+   "technical": "The averaged gradient over B samples has variance proportional to 1/B. Fewer updates per epoch need larger steps to cover the same distance.",
+   "significance": "It is required for full TPU utilization unless you use step fusing.",
+   "example": "Batch 256 → 8192 (32x); a linear-scaling heuristic would multiply the LR by 32 with warmup (AI example).",
+   "misconception": "A larger batch with the same learning rate is not equivalent to the original training. It makes fewer updates per epoch, so progress per epoch drops.",
+   "related": ["learning_rate", "sgd", "data_parallelism"],
+   "source": "book"
+  },
+  {
+   "id": "numerical_precision",
+   "name": "Numerical precision",
+   "definition": "The number of bits used to store a number, which sets how finely values can be represented.",
+   "intuition": "Precision is to numbers what resolution is to images.",
+   "technical": "n bits give at most 2^n distinct values. Floating-point formats spread them across scales with an exponent (p.581).",
+   "significance": "Lower precision means less memory and faster hardware operations, at the cost of numerical accuracy.",
+   "example": "uint8 has 256 values (0-255); float16 uses 16 bits, float32 32 bits.",
+   "misconception": "More bits do not always mean better models. Inference often loses nothing at 16 bits.",
+   "related": ["float16", "bfloat16", "mixed_precision"],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Enabling step fusing",
+   "original_code": "model.compile(..., steps_per_execution=8)",
+   "language": "python",
+   "what_it_does": "Compiles the model so that each device execution runs eight training steps.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "`...` stands for your usual optimizer/loss/metrics arguments. `steps_per_execution=8` fuses 8 batches per compiled call."}
+   ],
+   "inputs_outputs": "No output; changes how fit()/evaluate()/predict() dispatch work.",
+   "algorithm": "Loop over N batches inside one compiled function.",
+   "theory_link": "Amortizes host-to-device round-trip overhead over N steps.",
+   "parameters": [
+    {"name": "steps_per_execution", "role": "Number of batches processed per device call (default 1)."}
+   ],
+   "pitfalls": ["Batch-level callbacks and progress updates happen only every N steps.", "Gains are largest for small models; big models are already compute-bound."],
+   "illustrative_code": "# AI-written: typical TPU setup order\nimport keras\nkeras.distribution.set_distribution(keras.distribution.DataParallel())\nmodel = build_model()  # after set_distribution!\nmodel.compile(optimizer=\"adam\", loss=\"sparse_categorical_crossentropy\",\n              steps_per_execution=32)\nmodel.fit(train_ds.cache().prefetch(tf.data.AUTOTUNE), epochs=10)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Back-of-the-envelope: why step fusing helps",
+   "kind": "numerical",
+   "body": "Suppose a small model's step takes 2 ms of TPU compute, but each host-device round trip (dispatch, sync, metric fetch) costs 6 ms.\n\n- `steps_per_execution=1`: 8 ms per step, so the TPU is busy 25% of the time.\n- `steps_per_execution=8`: 8 x 2 + 6 = 22 ms for 8 steps, 2.75 ms per step, so the TPU is busy 73% of the time, a 2.9x speedup.\n\nIllustrative numbers, not from the book. They show why the authors say the speedup can be dramatic for small models.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why bigger batches justify bigger steps",
+   "kind": "step_by_step",
+   "body": "1. The mini-batch gradient is the average of per-sample gradients: $\\hat g = \\frac{1}{B}\\sum_{i=1}^{B} g_i$.\n2. Its variance shrinks like $\\sigma^2/B$, so it points more reliably in the true descent direction (the book's \"more accurate\").\n3. An epoch now contains $N/B$ updates instead of $N/B_0$, so with an unchanged step size you cover less ground per epoch.\n4. A larger learning rate compensates. A linear rule ($\\eta \\propto B$) is a common starting point (beyond the book), usually with warmup because large steps early in training are unstable.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Analogy: courier trips",
+   "kind": "analogy",
+   "body": "A TPU is a fast factory and the VM is the warehouse. If a truck carries one small box per trip, the factory waits for the truck most of the time. You can use a bigger box (larger batch) or load eight boxes per trip (step fusing). Both keep the factory busy, but only the bigger box changes what each box contains.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Without vs. with step fusing",
+   "why": "The page describes step fusing as doing more work between two round trips from VM memory to the TPU.",
+   "mermaid": "flowchart LR\n  subgraph S1[steps_per_execution=1]\n    direction LR\n    H1[host] -->|batch| T1[TPU step] -->|result| H2[host] -->|batch| T2[TPU step] -->|result| H3[host]\n  end\n  subgraph S8[steps_per_execution=8]\n    direction LR\n    G1[host] -->|8 batches| U[TPU: step x8] -->|results| G2[host]\n  end"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "You can call set_distribution after building the model and it will move the weights to the TPU cores.", "correction": "The authors insist: call it before creating your model."},
+  {"claim": "Using a 40x larger batch with the same learning rate trains just as well.", "correction": "With enormous batches you should increase the learning rate, because there are fewer updates, each more accurate."},
+  {"claim": "steps_per_execution=8 means a batch size 8 times larger.", "correction": "Batch size is unchanged. Eight separate steps run per device execution, each with its own weight update."},
+  {"claim": "Lower precision always hurts accuracy.", "correction": "The section's premise is that up to 2x speedup is available 'basically for free'. The following pages explain where precision matters (gradient updates) and where it doesn't."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 579, "note": "TPU training introduction; tf.data prefetch tips."},
+   {"page": 575, "note": "DataParallel distribution."},
+   {"page": 578, "note": "ModelParallel distribution and set_distribution."},
+   {"page": 573, "note": "Data parallelism and effective batch size."},
+   {"page": 96, "note": "Chapter 3 introduction to TensorFlow."}
+  ],
+  "later": [
+   {"page": 581, "note": "Integer and floating-point encodings, float16/32/64."},
+   {"page": 582, "note": "Float16 inference: nearly 2x speedup."},
+   {"page": 583, "note": "Mixed-precision training."},
+   {"page": 587, "note": "Chapter summary."}
+  ],
+  "prerequisites": [
+   {"page": 64, "note": "Gradient-based optimization and the learning rate."},
+   {"page": 115, "note": "Picking a Keras backend (JAX here)."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 126, "note": "Inference with a trained model (predict), which benefits from lower precision."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "On TPU with JAX, call keras.distribution.set_distribution(DataParallel/ModelParallel) before creating the model, and nothing else is needed.",
+  "Cache small datasets in VM memory with dataset.cache() so that reads from GCS don't bottleneck the TPU.",
+  "TPUs need very large batches (sometimes >10,000), and large batches need a larger learning rate.",
+  "Step fusing, compile(..., steps_per_execution=N), runs N steps per TPU execution and can speed up small models dramatically.",
+  "Section 18.3 begins: lower precision can give up to ~2x speedup, and precision is to numbers what resolution is to images."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "What does `steps_per_execution=8` in `compile()` do?", "options": ["Multiplies the batch size by 8", "Runs eight training steps per TPU execution, reducing host-device round trips", "Trains for 8 epochs", "Uses 8 TPU cores"], "answer": "Runs eight training steps per TPU execution, reducing host-device round trips", "explanation": "That is step fusing as described on the page. The batch size is unchanged, epochs are set in fit(), and core usage depends on the distribution.", "page_refs": [580]},
+  {"id": "q2", "type": "conceptual", "question": "Why should you raise the learning rate when training with enormous batches?", "options": [], "answer": "You make fewer updates per epoch, but each gradient is more accurate (averaged over more samples), so each update can and should move the weights by a larger amount.", "explanation": "This is the authors' reasoning in the step-fusing subsection.", "page_refs": [580]},
+  {"id": "q3", "type": "short", "question": "What does the NOTE recommend if reading data from Google Cloud Storage is slowing down TPU training and the dataset is small?", "options": [], "answer": "Keep it in VM memory by calling dataset.cache() on the tf.data.Dataset, so it is read from GCS only once.", "explanation": "TPUs consume batches very quickly, so I/O becomes the bottleneck.", "page_refs": [580]},
+  {"id": "q4", "type": "mcq", "question": "When must keras.distribution.set_distribution be called on a TPU notebook?", "options": ["After model.fit()", "Before creating the model", "After compile() but before fit()", "Any time; it is retroactive"], "answer": "Before creating the model", "explanation": "The page says 'Make sure to call it before creating your model!' because variables are placed when they are created. The other options all come after the variables already exist.", "page_refs": [580]},
+  {"id": "q5", "type": "conceptual", "question": "What analogy does the book use for numerical precision, and what does it imply?", "options": [], "answer": "Precision is to numbers what resolution is to images: more bits let you distinguish values that are closer together, just as more pixels show finer detail.", "explanation": "Stated at the start of 18.3.1.", "page_refs": [580]},
+  {"id": "q6", "type": "short", "question": "What speedup does the book promise from the lower-precision technique introduced in 18.3?", "options": [], "answer": "Up to 2x for training and inference of almost any model, basically for free.", "explanation": "Stated in the section introduction.", "page_refs": [580]},
+  {"id": "q7", "type": "self", "question": "Can you explain to a colleague the difference between using a bigger batch and using step fusing to improve TPU utilization?", "options": [], "answer": "A bigger batch changes the optimization (fewer, more accurate updates; needs a higher LR). Step fusing keeps batch size and update count the same but runs several steps per device call to avoid round-trip overhead.", "explanation": "Both are presented on this page as ways to keep the TPU busy.", "page_refs": [580]}
+ ]
+}

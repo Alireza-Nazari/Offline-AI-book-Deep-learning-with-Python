@@ -1,0 +1,135 @@
+{
+ "page_id": "page_154", "pdf_page": 154, "printed_page": "130", "book_id": "dlwp3",
+ "generation": {"status": "complete", "model": "claude-opus-5-5", "generated_at": "2026-11-03T07:16:29Z",
+  "confidence": "high", "review_flags": [],
+  "extraction_quality": "Clean. Figure 4.9 labels were extracted and match the image; listing 4.28 is complete on this page; callouts match. The printed results of the run are on p.155."},
+ "overview": {
+  "title": "Three-fold diagram and the K-fold validation loop",
+  "chapter": "4 Classification and regression",
+  "section": "4.3 Predicting house prices: A regression example",
+  "subsection": "4.3.4 Validating your approach using K-fold validation",
+  "main_topic": "Figure 4.9 (three-fold cross-validation) and listing 4.28, a from-scratch NumPy implementation of K-fold validation with K = 4 on the house-price data",
+  "central_idea": "K-fold validation rotates which contiguous slice of the training data is held out: for each fold, the code slices out a validation partition, concatenates the remaining partitions for training, builds a fresh compiled model with get_model(), trains it, evaluates its MAE on the held-out partition and collects the scores for averaging.",
+  "importance": "This is the concrete code behind the idea defined on p.153 and the template you will reuse whenever data is scarce; understanding the slicing and the fresh model per fold avoids subtle evaluation bugs.",
+  "learning_objectives": [
+   "Read figure 4.9 and explain how each fold produces one validation score",
+   "Trace the index arithmetic that selects validation and training partitions in listing 4.28",
+   "Explain why get_model() is called inside the loop",
+   "Identify what model.evaluate returns (loss and MAE) and which value is collected",
+   "Compute fold sizes for 480 samples and K = 4"
+  ],
+  "prerequisites": [
+   "The K-fold definition and get_model() (pp.152-153)",
+   "NumPy slicing and np.concatenate",
+   "model.fit and model.evaluate (chapter 3)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Figure 4.9** shows **three-fold cross-validation**: the data is split into 3 partitions. In fold 1 the first partition is used for validation and the other two for training; in fold 2 the middle partition validates; in fold 3 the last one does. Each fold yields a validation score (#1, #2, #3), and the **final score is their average**.\n\n**Listing 4.28** implements this with **k = 4** on the normalized training data:\n\n- `num_val_samples = len(x_train) // k` (480 // 4 = 120), `num_epochs = 50`, and an empty `all_scores` list.\n- For each fold `i`, the **validation data** is the slice `[i * num_val_samples : (i + 1) * num_val_samples]` of `x_train` and `y_train` (callout: data from partition #k).\n- The **training data** is all other partitions, joined with `np.concatenate([... [: i * num_val_samples], ...[(i + 1) * num_val_samples :]], axis=0)`.\n- `model = get_model()` builds a **fresh, already compiled** model for every fold.\n- `model.fit(...)` trains it for `num_epochs` epochs with `batch_size=16` and `verbose=0` (silent).\n- `model.evaluate(fold_x_val, fold_y_val, verbose=0)` returns the loss and the metric; they are unpacked as `val_loss, val_mae`, and **`val_mae` is appended** to `all_scores`.\n\nThe page ends with \"Running this with `num_epochs = 50` yields the following results:\"; the per-fold MAEs (0.232 to 0.349) and their mean (0.296, about $29,600) are printed on p.155.\n\nNote that all of this runs on the 480 training samples only; the 120 test samples are untouched, consistent with the rule on p.152 never to use test data in the workflow.",
+ "paragraphs": [
+  {"ref": "p154_e03", "excerpt": "Figure 4.9 Three-fold cross-validation",
+   "what_it_says": "The figure shows the data split into 3 partitions; in each of 3 folds a different partition is the validation set and the other two are training data. Each fold yields a validation score, and the final score is their average.",
+   "what_it_means": "The validation partition moves diagonally across the folds, so each partition is validated exactly once and used for training K - 1 = 2 times.",
+   "why_it_matters": "It visualizes why K-fold uses all data for both roles and produces K scores to average, the remedy for the high-variance single split described on p.153.",
+   "terminology": [{"term": "fold", "meaning": "One round of training on K-1 partitions and validating on the remaining one."}],
+   "connections": ["p.153: the text defines K-fold and points to this figure.", "p.175: figure 5.13 in chapter 5 shows the same three-fold scheme."]},
+  {"ref": "p154_e06", "excerpt": "Running this with num_epochs = 50 yields the following results:",
+   "what_it_says": "Introduces the results of running listing 4.28 with 50 epochs; the actual numbers appear on the next page.",
+   "what_it_means": "After the loop, all_scores holds four validation MAEs, one per fold.",
+   "why_it_matters": "The spread of these four numbers is the empirical proof of the variance problem that motivated K-fold.",
+   "terminology": [],
+   "connections": ["p.155: scores range from 0.232 to 0.349; their average is 0.296 ($29,600)."]}
+ ],
+ "concepts": [
+  {"id": "k_fold_validation", "name": "K-fold validation (implementation)", "definition": "A loop over K folds that slices out one partition for validation, trains a fresh model on the rest, and records the validation score.", "intuition": "Slide a validation window across the data, one partition at a time.", "technical": "Validation indices [i·m, (i+1)·m), training = concatenation of [0, i·m) and [(i+1)·m, n), with m = n // K.", "significance": "Turns the K-fold idea into reusable code.", "example": "n = 480, K = 4, m = 120: fold 2 (i = 1) validates on samples 120-239.", "misconception": "The partitions here are contiguous slices, not random; data order matters (see deeper note).", "related": ["validation_set", "overfitting"], "source": "book"},
+  {"id": "model_factory", "name": "Fresh model per fold", "definition": "Calling get_model() inside the loop to obtain a new, independently initialized, compiled model each fold.", "intuition": "Each fold's examiner must not have already seen the exam.", "technical": "Reusing a single model would continue training from the previous fold's weights, which were trained on the current fold's validation data.", "significance": "Prevents leakage between folds.", "example": "model = get_model() is the first line of the training step in each iteration.", "misconception": "Calling fit again on the same model resets its weights; it does not.", "related": ["keras_model", "sequential_model"], "source": "book"},
+  {"id": "model_evaluate", "name": "model.evaluate output", "definition": "Returns the loss followed by each compiled metric on the given data.", "intuition": "One report card per fold.", "technical": "With loss MSE and metrics=[MAE], evaluate returns [mse, mae], unpacked as val_loss, val_mae.", "significance": "The MAE is the score kept for averaging.", "example": "scores = model.evaluate(fold_x_val, fold_y_val, verbose=0).", "misconception": "evaluate does not update the weights.", "related": ["mae", "mse"], "source": "book"}
+ ],
+ "math": [
+  {"id": "m1", "title": "Fold index ranges", "latex": "m = \\left\\lfloor \\frac{n}{K} \\right\\rfloor, \\qquad \\mathcal{V}_i = \\{\\, j : i\\,m \\le j < (i+1)\\,m \\,\\}, \\qquad \\mathcal{T}_i = \\{0,\\dots,n-1\\} \\setminus \\mathcal{V}_i",
+   "source_text": "num_val_samples = len(x_train) // k; x_train[i * num_val_samples : (i + 1) * num_val_samples]; np.concatenate([x_train[: i * num_val_samples], x_train[(i + 1) * num_val_samples :]], axis=0)",
+   "variables": [{"symbol": "n", "meaning": "Number of training samples (480)"}, {"symbol": "K", "meaning": "Number of folds (k = 4)"}, {"symbol": "m", "meaning": "Samples per validation partition (num_val_samples = 120)"}, {"symbol": "i", "meaning": "Fold index, 0 to K-1"}, {"symbol": "\\mathcal{V}_i, \\mathcal{T}_i", "meaning": "Validation and training index sets for fold i"}],
+   "operations": "Integer division, slicing, set complement (via concatenation of the two outer slices).",
+   "purpose": "Define which samples validate and which train in each fold.",
+   "interpretation": "A contiguous validation window of size m slides across the data; everything else trains.",
+   "intuition": "Like figure 4.9 but with 4 blocks.",
+   "numerical_example": "n = 480, K = 4, m = 120. i = 0: validate 0-119, train 120-479. i = 2: validate 240-359, train 0-239 and 360-479 (360 samples). If n were 482, the last 2 samples would never be validated (482 // 4 = 120) but would always be trained on.",
+   "source": "book", "book_ref": "p.154"}
+ ],
+ "code": [
+  {"id": "c1", "listing": "4.28", "title": "K-fold validation",
+   "original_code": "k = 4\nnum_val_samples = len(x_train) // k\nnum_epochs = 50\nall_scores = []\nfor i in range(k):\n    print(f\"Processing fold #{i + 1}\")\n    fold_x_val = x_train[i * num_val_samples : (i + 1) * num_val_samples]\n    fold_y_val = y_train[i * num_val_samples : (i + 1) * num_val_samples]\n    fold_x_train = np.concatenate(\n        [x_train[: i * num_val_samples], x_train[(i + 1) * num_val_samples :]],\n        axis=0,\n    )\n    fold_y_train = np.concatenate(\n        [y_train[: i * num_val_samples], y_train[(i + 1) * num_val_samples :]],\n        axis=0,\n    )\n    model = get_model()\n    model.fit(\n        fold_x_train,\n        fold_y_train,\n        epochs=num_epochs,\n        batch_size=16,\n        verbose=0,\n    )\n    scores = model.evaluate(fold_x_val, fold_y_val, verbose=0)\n    val_loss, val_mae = scores\n    all_scores.append(val_mae)",
+   "language": "python",
+   "what_it_does": "Runs 4-fold cross-validation of the get_model() regressor on the normalized training data, training 50 epochs per fold and collecting each fold's validation MAE.",
+   "line_explanations": [
+    {"lines": "1-4", "explanation": "Setup: K = 4 folds; num_val_samples = 480 // 4 = 120; 50 epochs per fold; a list to collect scores."},
+    {"lines": "5-6", "explanation": "Loop over folds i = 0..3, printing progress (1-based)."},
+    {"lines": "7-8", "explanation": "Validation data: the i-th contiguous block of 120 samples (callout: data from partition #k)."},
+    {"lines": "9-16", "explanation": "Training data: concatenation along axis 0 of everything before and after the validation block (callout: data from all other partitions)."},
+    {"lines": "17", "explanation": "Build a fresh, already compiled model (callout), so no weights carry over between folds."},
+    {"lines": "18-24", "explanation": "Train silently (verbose=0) for num_epochs with mini-batches of 16 samples."},
+    {"lines": "25-27", "explanation": "Evaluate on the held-out block; evaluate returns [loss, mae], unpacked, and the MAE is appended to all_scores (callout: evaluates the model on the validation data)."}
+   ],
+   "inputs_outputs": "Inputs: x_train (480, 8), y_train (480,), get_model(). Output: all_scores, a list of 4 validation MAEs in units of $100,000.",
+   "algorithm": "Standard K-fold cross-validation with contiguous partitions.",
+   "theory_link": "Averaging K scores reduces the variance of the validation estimate (p.153).",
+   "parameters": [{"name": "k", "role": "Number of folds (4)."}, {"name": "num_epochs", "role": "Training epochs per fold (50 here, 200 on p.155)."}, {"name": "batch_size=16", "role": "Mini-batch size; with 360 training samples, about 23 gradient steps per epoch."}, {"name": "verbose=0", "role": "Suppress per-epoch logs."}],
+   "pitfalls": ["Contiguous slices assume the data is not ordered in a systematic way; if it were sorted (e.g. by price), shuffle first.", "Moving get_model() outside the loop would reuse trained weights and leak validation data across folds.", "The scores are in scaled units; multiply by 100,000 for dollars.", "The test set is not used; K-fold here is for model selection, not final evaluation."],
+   "illustrative_code": "# AI-written: summarize the run (the book prints these on p.155)\nimport numpy as np\nprint(all_scores)\nprint(\"mean MAE:\", np.mean(all_scores), \"=> $\", round(np.mean(all_scores) * 100000))"}
+ ],
+ "deeper": [
+  {"title": "Tracing fold 3 (i = 2) by hand", "kind": "step_by_step", "body": "With num_val_samples = 120:\n\n1. `fold_x_val = x_train[240:360]` → shape (120, 8).\n2. `x_train[:240]` (240 rows) and `x_train[360:]` (120 rows) are concatenated along axis 0 → `fold_x_train` shape (360, 8).\n3. `get_model()` returns a new model with random weights.\n4. `fit` runs 50 epochs × ceil(360/16) = 23 steps = 1,150 gradient updates.\n5. `evaluate` returns `[val_mse, val_mae]`; `val_mae` is appended.\n\nAfter four iterations, `all_scores` has length 4.", "source": "ai_explanation"},
+  {"title": "Cost of K-fold", "kind": "breakdown", "body": "Beyond the book: K-fold multiplies training cost by K (here 4 trainings). That is cheap for a 4,801-parameter model on 360 samples, but for large models and datasets a single hold-out split is usually preferred, both because it is cheaper and because large validation sets already have low variance. That trade-off is why the IMDb and Reuters examples used a simple hold-out set.", "source": "inference"},
+  {"title": "Alternative: library implementations", "kind": "alternative", "body": "Not in the book: scikit-learn's `KFold(n_splits=4, shuffle=True, random_state=0)` generates the same kind of index splits (optionally shuffled). The book's manual version keeps everything visible and dependency-free.", "source": "ai_explanation"}
+ ],
+ "visualizations": [
+  {"id": "v1", "type": "widget", "title": "Folds of listing 4.28", "why": "Figure 4.9 shows 3 folds while listing 4.28 uses k = 4; step through which partition validates in each fold (scaled down to 16 samples; in the book each partition holds 120 of the 480 samples).", "widget": "kfold", "params": {"k": 4, "n": 16}},
+  {"id": "v2", "type": "mermaid", "title": "One iteration of the K-fold loop", "why": "Mirrors the callouts of listing 4.28: prepare validation data, prepare training data, build model, train, evaluate, store the score.", "mermaid": "flowchart TD\n  A[fold i] --> B[validation slice: i*120 to i+1*120]\n  A --> C[training: concatenate the other slices, 360 samples]\n  C --> D[model = get_model fresh and compiled]\n  D --> E[fit: 50 epochs, batch_size 16]\n  B --> F[evaluate on validation slice]\n  E --> F\n  F --> G[append val_mae to all_scores]\n  G --> H{more folds?}\n  H -- yes --> A\n  H -- no --> I[average all_scores, p.155]"}
+ ],
+ "misconceptions": [
+  {"claim": "K-fold validation uses the test set as one of the folds.", "correction": "Listing 4.28 partitions only x_train/y_train; the test set stays untouched."},
+  {"claim": "The same model can be trained across folds to save time.", "correction": "get_model() is called inside the loop precisely so each fold starts from fresh weights."},
+  {"claim": "model.evaluate returns just the MAE.", "correction": "It returns the loss followed by the metrics; the code unpacks val_loss, val_mae and keeps the MAE."},
+  {"claim": "Figure 4.9 and the listing use the same K.", "correction": "The figure illustrates K = 3; the listing uses k = 4."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 153, "note": "Definition and motivation of K-fold validation; get_model() finished."},
+   {"page": 152, "note": "x_train and y_train were produced by listings 4.25 and 4.26."}
+  ],
+  "later": [
+   {"page": 155, "note": "Results of the 50-epoch run and listing 4.29, which records per-epoch validation MAE over 200 epochs."},
+   {"page": 158, "note": "Wrapping up: K-fold is a great way to evaluate with little data."},
+   {"page": 175, "note": "Chapter 5 generalizes K-fold (figure 5.13, listing 5.6)."}
+  ],
+  "prerequisites": [
+   {"page": 153, "note": "K-fold definition."}
+  ],
+  "related_math": [
+   {"page": 153, "note": "The K-fold score is the average of the K validation scores."}
+  ],
+  "related_code": [
+   {"page": 152, "note": "get_model() factory (listing 4.27)."},
+   {"page": 155, "note": "Listing 4.29 extends this loop to save histories."}
+  ],
+  "related_figures": [
+   {"page": 175, "note": "Figure 5.13, three-fold validation, in chapter 5."}
+  ]
+ },
+ "takeaways": [
+  "Figure 4.9: each partition serves as validation once; final score = average of fold scores.",
+  "Listing 4.28 uses k = 4, 120 validation and 360 training samples per fold, 50 epochs, batch size 16.",
+  "Validation and training partitions are built by slicing and np.concatenate along axis 0.",
+  "A fresh compiled model is created each fold via get_model().",
+  "model.evaluate returns [loss, MAE]; the MAE is collected in all_scores."
+ ],
+ "questions": [
+  {"id": "q1", "type": "short", "question": "In listing 4.28, what is num_val_samples, and which sample indices form the validation set when i = 1?", "options": [], "answer": "480 // 4 = 120; indices 120 to 239.", "explanation": "x_train[1*120 : 2*120].", "page_refs": [154]},
+  {"id": "q2", "type": "mcq", "question": "Why is model = get_model() inside the for loop?", "options": ["To change the architecture each fold", "So each fold starts with a freshly initialized model and no information from other folds", "Because compile must be called after fit", "To reduce memory usage"], "answer": "So each fold starts with a freshly initialized model and no information from other folds", "explanation": "The architecture is identical each time; compile is inside get_model and happens before fit; memory is not the reason. Reusing a model would leak weights trained on the current validation partition.", "page_refs": [154, 152]},
+  {"id": "q3", "type": "mcq", "question": "What does scores = model.evaluate(fold_x_val, fold_y_val, verbose=0) contain here?", "options": ["Only the MSE", "Only the MAE", "The MSE loss and the MAE metric", "The predictions"], "answer": "The MSE loss and the MAE metric", "explanation": "The model was compiled with loss MSE and metric MAE, so evaluate returns both; the code unpacks them as val_loss, val_mae. Predictions come from predict().", "page_refs": [154, 153]},
+  {"id": "q4", "type": "math", "question": "How many gradient updates does one fold perform with num_epochs = 50 and batch_size = 16?", "options": [], "answer": "360 training samples / 16 = 22.5 → 23 batches per epoch; 23 × 50 = 1,150 updates.", "explanation": "Keras uses a final partial batch, so the batch count rounds up.", "page_refs": [154]},
+  {"id": "q5", "type": "conceptual", "question": "What could go wrong with this contiguous-slice implementation if the training data were sorted by price?", "options": [], "answer": "Each validation partition would cover a narrow price range not represented in its training data, giving biased, highly variable fold scores; you should shuffle before splitting.", "explanation": "An AI-added caution; the book's loader returns data that is not sorted in this way.", "page_refs": [154]},
+  {"id": "q6", "type": "short", "question": "Describe figure 4.9 in one sentence.", "options": [], "answer": "Data is split into three partitions; in each of three folds a different partition validates while the other two train, and the three validation scores are averaged into the final score.", "explanation": "Directly from the figure labels.", "page_refs": [154]},
+  {"id": "q7", "type": "self", "question": "Could you rewrite listing 4.28 from memory for k = 5, and say how many samples each fold would validate and train on?", "options": [], "answer": "96 validation and 384 training samples per fold (480 // 5 = 96).", "explanation": "Only k changes; the slicing logic is identical.", "page_refs": [154]}
+ ]
+}

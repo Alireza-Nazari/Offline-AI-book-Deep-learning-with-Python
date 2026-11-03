@@ -1,0 +1,335 @@
+{
+ "page_id": "page_103",
+ "pdf_page": 103,
+ "printed_page": "79",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:32:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "The training-step code as printed calls `predictions = model(inputs)`, but the `model` function defined on p.102 takes `(inputs, W, b)`. Reproduced verbatim; the discrepancy is pointed out in the code pitfalls and in a misconception note."
+  ],
+  "extraction_quality": "Good, with one split/merge: the four numbered explanation points are split across e03 (start of point 1) and e04 (rest of point 1 plus points 2-4). One note is written per printed point, each quoting its own opening words. The training-step code and its callouts (Forward pass, Computes gradients, Retrieves gradients, Updates weights inside a no_grad scope, Resets gradients) match the image. Listing 3.27 starts at the bottom of the page and continues on p.104."
+ },
+ "overview": {
+  "title": "The pure-PyTorch training step, and introducing torch.nn.Module",
+  "chapter": "3 Introduction to TensorFlow, PyTorch, JAX, and Keras",
+  "section": "3.4 Introduction to PyTorch",
+  "subsection": "3.4.2 An end-to-end example: A linear classifier in pure PyTorch",
+  "main_topic": "How one gradient-descent step is written in pure PyTorch (backward, .grad, no_grad update, gradient reset), and the start of the object-oriented Module + optimizer API",
+  "central_idea": "A PyTorch training step runs the forward pass, calls loss.backward() to populate W.grad and b.grad, updates W and b inside a torch.no_grad() scope so the update is not itself tracked, and resets the gradients to None so they do not accumulate. The same thing can be expressed more compactly by subclassing torch.nn.Module (parameters in __init__(), computation in forward()) and using an optimizer from torch.optim.",
+  "importance": "This is the complete low-level recipe for training anything in PyTorch; every higher-level API (Module, optimizer, Keras with the PyTorch backend on p.241) automates exactly these four steps. Understanding why no_grad and the reset are needed prevents the most common PyTorch training bugs.",
+  "learning_objectives": [
+   "Describe the four steps of the pure-PyTorch training step and what each line of the code does",
+   "Explain what loss.backward() populates and what tensor.grad represents",
+   "Explain why the parameter update is done inside torch.no_grad()",
+   "Explain why W.grad and b.grad must be reset to None after each step",
+   "State the two responsibilities of a torch.nn.Module subclass (Parameters in __init__(), computation in forward())",
+   "Compare the PyTorch training step with the TensorFlow one using GradientTape (p.96)"
+  ],
+  "prerequisites": [
+   "Gradient accumulation and resetting .grad (pp.101-102)",
+   "The PyTorch variables, model and loss defined on p.102",
+   "Gradient descent update rule from chapter 2 and the TensorFlow training step (p.96)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page explains and then shows the training step of the pure-PyTorch linear classifier. The numbered explanation (printed before the code) has four points:\n\n1. `loss.backward()` runs backpropagation starting from the `loss` output node and populates `tensor.grad` on all tensors involved in computing `loss`; `tensor.grad` is the gradient of the loss with regard to that tensor.\n2. The `.grad` attribute is used to recover the gradients of the loss with regard to `W` and `b`.\n3. `W` and `b` are updated with those gradients. Because the updates are not meant to be part of the backward pass, they are done inside a `torch.no_grad()` scope, which skips gradient computation for everything inside it.\n4. The `.grad` of `W` and `b` is reset to `None`; otherwise gradients would accumulate across multiple calls to `training_step()`, giving invalid values.\n\nThe code sets `learning_rate = 0.1` and defines `training_step(inputs, targets, W, b)`: forward pass, `mean_squared_error(targets, predictions)`, `loss.backward()`, `grad_loss_wrt_W, grad_loss_wrt_b = W.grad, b.grad`, the in-place updates `W -= grad_loss_wrt_W * learning_rate` (and the same for `b`) inside `with torch.no_grad():`, then `W.grad = None`, `b.grad = None`, and `return loss`. (As printed, the forward line is `model(inputs)`, although the `model` function on p.102 takes `W` and `b` as well.)\n\n\"This could be made even simpler.\" The subsection **Packaging state and computation with the Module class** introduces PyTorch's higher-level, object-oriented API, which relies on two new classes: `torch.nn.Module` and an optimizer from `torch.optim`, such as `torch.optim.SGD` (the equivalent of `keras.optimizers.SGD`). You subclass `torch.nn.Module`, which holds some `Parameters` (state variables, defined in `__init__()`) and implements the forward pass in `forward()`. **Listing 3.27** begins: `class LinearModel(torch.nn.Module):` with an `__init__` that calls `super().__init__()`; the rest of the listing is on p.104.",
+ "paragraphs": [
+  {
+   "ref": "p103_e03",
+   "excerpt": "loss.backward() runs backpropagation starting from the loss output node and",
+   "what_it_says": "Point 1: `loss.backward()` runs backpropagation from the `loss` output node and populates `tensor.grad` on all tensors involved in computing `loss`; `tensor.grad` is the gradient of the loss with regard to that tensor. (The sentence continues in element e04.)",
+   "what_it_means": "During the forward pass PyTorch recorded a one-time graph: inputs → matmul with W → add b → subtract from targets → square → mean → loss. `backward()` walks this graph in reverse applying the chain rule, and deposits $\\partial\\mathcal{L}/\\partial W$ into `W.grad` (shape (2, 1)) and $\\partial\\mathcal{L}/\\partial b$ into `b.grad` (shape (1,)).",
+   "why_it_matters": "This single call replaces TensorFlow's `with tf.GradientTape() as tape:` block plus `tape.gradient(loss, [W, b])` (p.96). It is the 'only major difference' announced on p.102.",
+   "technical_idea": "Only tensors with requires_grad=True receive .grad; the inputs and targets do not, because they were not created with that flag.",
+   "terminology": [
+    {"term": "Output node", "meaning": "The tensor from which backpropagation starts; here the scalar loss."},
+    {"term": "Backpropagation", "meaning": "Reverse-mode application of the chain rule through the recorded computation graph."}
+   ],
+   "connections": ["p.101: backward() and the hidden one-time graph introduced.", "p.241: the same mental model restated for Keras with the PyTorch backend."]
+  },
+  {
+   "ref": "p103_e04",
+   "excerpt": "We use the .grad attribute to recover the gradients of the loss",
+   "what_it_says": "Point 2: the `.grad` attribute gives the gradients of the loss with regard to W and b.",
+   "what_it_means": "In the code, `grad_loss_wrt_W, grad_loss_wrt_b = W.grad, b.grad` simply reads the two tensors that `backward()` just filled in. Unlike `tape.gradient()`, nothing is computed here; the values are already sitting on the parameters.",
+   "why_it_matters": "It makes the PyTorch code look like the TensorFlow code (same variable names) and makes clear where gradients live: on the parameters themselves.",
+   "terminology": [
+    {"term": "grad_loss_wrt_W", "meaning": "Gradient of the loss with respect to W, same shape as W."}
+   ],
+   "connections": ["p.96: TensorFlow obtains the same pair via tape.gradient(loss, [W, b])."]
+  },
+  {
+   "ref": "p103_e04",
+   "excerpt": "We update W and b using those gradients. Because these updates are",
+   "what_it_says": "Point 3: W and b are updated with the gradients, inside a `torch.no_grad()` scope, because the updates are not meant to be part of the backward pass; the scope skips gradient computation for everything inside it.",
+   "what_it_means": "The update is plain gradient descent, $W \\leftarrow W - \\eta\\,\\nabla_W\\mathcal{L}$ with $\\eta = 0.1$. If it were done with tracking on, PyTorch would try to record an in-place modification of a leaf tensor that requires grad, which it refuses (beyond the book: it raises a RuntimeError), and in any case the update should not become part of the graph used to differentiate the next loss.",
+   "why_it_matters": "`torch.no_grad()` is the standard way to perform any operation on parameters that is bookkeeping rather than model computation — parameter updates, evaluation, inference.",
+   "technical_idea": "Beyond the book: `W -= ...` is an in-place operation, so W stays the same leaf tensor with requires_grad=True and keeps its identity across steps; writing `W = W - ...` would create a new non-leaf tensor and break later steps.",
+   "terminology": [
+    {"term": "torch.no_grad()", "meaning": "Context manager that disables gradient tracking for operations run inside it."},
+    {"term": "Learning rate", "meaning": "Scalar step size multiplying the gradient in the update (0.1 here)."}
+   ],
+   "connections": ["p.96: TensorFlow uses W.assign_sub(grad_loss_wrt_W * learning_rate) for the same update.", "p.104: optimizer.step() replaces these manual updates."]
+  },
+  {
+   "ref": "p103_e04",
+   "excerpt": "We reset the contents of the .grad property of our W and",
+   "what_it_says": "Point 4: `.grad` of W and b is reset to None; without this, gradient values would accumulate across calls to `training_step()`, resulting in invalid values.",
+   "what_it_means": "This applies the accumulation rule demonstrated on p.102 (6 → 12) to training: step 2 would otherwise use the sum of step-1 and step-2 gradients, step 3 the sum of three, and so on.",
+   "why_it_matters": "Forgetting the reset is a silent bug: the code runs, but the updates are wrong and usually explode. p.105 calls forgetting the equivalent `model.zero_grad()` a major and unfortunately common bug.",
+   "terminology": [],
+   "connections": ["p.102: gradient accumulation and `.grad = None`.", "p.105: model.zero_grad() resets all parameters' gradients at once."]
+  },
+  {
+   "ref": "p103_e08",
+   "excerpt": "PyTorch also has a higher-level, object-oriented API for performing backpropagation, which",
+   "what_it_says": "After noting that the step \"could be made even simpler\", the book introduces PyTorch's higher-level, object-oriented API, built on two new classes: `torch.nn.Module` and an optimizer class from `torch.optim`, such as `torch.optim.SGD`, the equivalent of `keras.optimizers.SGD`.",
+   "what_it_means": "The Module takes over holding W and b (so they need not be passed around), and the optimizer takes over the manual `W -= grad * lr` updates.",
+   "why_it_matters": "This is how real PyTorch code is written, and it is also what Keras models are under the PyTorch backend (p.241).",
+   "terminology": [
+    {"term": "torch.nn.Module", "meaning": "Base class for PyTorch models and layers; holds parameters and defines computation."},
+    {"term": "torch.optim.SGD", "meaning": "PyTorch's stochastic gradient descent optimizer, which updates the parameters it is given using their .grad."}
+   ],
+   "connections": ["p.104: instantiating LinearModel and the SGD optimizer.", "p.121: Keras optimizers configured in compile()."]
+  },
+  {
+   "ref": "p103_e09",
+   "excerpt": "The general idea is to define a subclass of torch.nn.Module, which",
+   "what_it_says": "You define a subclass of `torch.nn.Module` that (bullet 1) holds some `Parameters` to store state variables, defined in `__init__()`, and (bullet 2) implements the forward pass in `forward()`. \"It should look just like the following.\"",
+   "what_it_means": "State and computation are packaged together: `__init__()` creates W and b as `torch.nn.Parameter` objects (seen on p.100), which the Module automatically registers so they can later be listed with `.parameters()` (p.104); `forward()` holds what `model(inputs, W, b)` used to do.",
+   "why_it_matters": "This separation (state in the constructor, computation in a call method) is the same pattern as Keras layers' build/call (section 3.6.2, p.116).",
+   "terminology": [
+    {"term": "Parameter", "meaning": "A tensor wrapper (torch.nn.Parameter) that a Module registers as trainable state; requires_grad is True by default."},
+    {"term": "forward()", "meaning": "Method containing the Module's forward-pass computation."}
+   ],
+   "connections": ["p.100: the Parameter class.", "p.116: Keras layers as the building blocks of deep learning."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "training_step",
+   "name": "Training step",
+   "definition": "One iteration of gradient descent: forward pass, loss, gradient computation, parameter update (and, in PyTorch, gradient reset).",
+   "intuition": "Look at how wrong you are, find which way is downhill, take a small step, forget the old slope.",
+   "technical": "In pure PyTorch: predictions = model(...); loss = mse(targets, predictions); loss.backward(); with torch.no_grad(): W -= W.grad * lr; b -= b.grad * lr; then W.grad = b.grad = None.",
+   "significance": "It is the inner loop of all training; Keras's fit() runs it for you (p.124).",
+   "example": "Called repeatedly (e.g. 40 times as in the TensorFlow loop on p.96) on the full 2000-sample dataset.",
+   "misconception": "That the reset is optional cleanup; without it the gradients are wrong from the second step on.",
+   "related": ["gradient_descent", "autodiff", "gradient_accumulation", "learning_rate"],
+   "source": "book"
+  },
+  {
+   "id": "no_grad",
+   "name": "torch.no_grad() scope",
+   "definition": "A context manager inside which PyTorch does not record operations for gradient computation.",
+   "intuition": "It tells PyTorch: what happens here is housekeeping, not part of the model's math to differentiate.",
+   "technical": "Used around W -= grad_loss_wrt_W * learning_rate. Beyond the book: in-place updates to a leaf tensor with requires_grad=True raise an error outside no_grad.",
+   "significance": "Needed for manual parameter updates and also commonly used for evaluation/inference to save memory.",
+   "example": "`with torch.no_grad(): W -= grad_loss_wrt_W * learning_rate`.",
+   "misconception": "That no_grad stops W from being trainable later; it only affects operations executed inside the block.",
+   "related": ["autodiff", "requires_grad", "training_step"],
+   "source": "book"
+  },
+  {
+   "id": "gradient_accumulation",
+   "name": "Gradient accumulation in .grad",
+   "definition": "Each backward() adds to the existing .grad instead of replacing it.",
+   "intuition": ".grad is a running total that must be cleared every step.",
+   "technical": "Step 4 of the training step sets W.grad = None and b.grad = None.",
+   "significance": "Explains why every PyTorch training step ends (or starts) with a gradient reset.",
+   "example": "On p.102, a second backward() doubles the gradient from 6 to 12.",
+   "misconception": "That PyTorch clears gradients automatically after an update.",
+   "related": ["training_step", "requires_grad"],
+   "source": "book"
+  },
+  {
+   "id": "torch_module",
+   "name": "torch.nn.Module",
+   "definition": "PyTorch's base class for models: a subclass holds Parameters (created in __init__()) and implements the forward computation in forward().",
+   "intuition": "A container that keeps a model's weights together with the code that uses them.",
+   "technical": "Listing 3.27 starts `class LinearModel(torch.nn.Module): def __init__(self): super().__init__()`; the parameters and forward() follow on p.104. Pairs with an optimizer such as torch.optim.SGD.",
+   "significance": "The standard PyTorch abstraction; Keras layers and models inherit from it under the PyTorch backend (p.241).",
+   "example": "A LinearModel whose __init__ creates W and b as Parameters and whose forward(inputs) returns torch.matmul(inputs, self.W) + self.b (p.104).",
+   "misconception": "That super().__init__() can be skipped; the Module base class needs it to set up parameter registration (beyond the book: assigning a Parameter before calling it raises an error).",
+   "related": ["keras_layer", "keras_model", "optimizer"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Gradient-descent update in the training step",
+   "latex": "W \\leftarrow W - \\eta\\,\\frac{\\partial \\mathcal{L}}{\\partial W},\\qquad b \\leftarrow b - \\eta\\,\\frac{\\partial \\mathcal{L}}{\\partial b},\\qquad \\eta = 0.1",
+   "source_text": "W -= grad_loss_wrt_W * learning_rate / b -= grad_loss_wrt_b * learning_rate",
+   "variables": [
+    {"symbol": "W", "meaning": "weight matrix (2, 1)"},
+    {"symbol": "b", "meaning": "bias vector (1,)"},
+    {"symbol": "\\eta", "meaning": "learning_rate = 0.1"},
+    {"symbol": "\\partial\\mathcal{L}/\\partial W", "meaning": "W.grad, filled by loss.backward()"},
+    {"symbol": "\\mathcal{L}", "meaning": "mean squared error loss"}
+   ],
+   "operations": "Scale the gradient by the learning rate and subtract it in place from the parameter.",
+   "purpose": "Move the parameters a small step in the direction that decreases the loss.",
+   "interpretation": "Parameters with a large positive gradient are decreased the most.",
+   "intuition": "A step downhill on the loss surface, of size proportional to the slope.",
+   "numerical_example": "If W = [[0.5], [0.2]] and W.grad = [[0.3], [-0.1]], then W becomes [[0.5 − 0.03], [0.2 + 0.01]] = [[0.47], [0.21]].",
+   "source": "book",
+   "book_ref": "p.103"
+  },
+  {
+   "id": "m2",
+   "title": "What backward() computes for the MSE linear model",
+   "latex": "\\begin{aligned}\\mathcal{L} &= \\frac{1}{N}\\sum_{i=1}^{N}(y_i - x_i W - b)^2\\\\ \\frac{\\partial\\mathcal{L}}{\\partial W} &= -\\frac{2}{N}X^{\\top}(Y - XW - b)\\\\ \\frac{\\partial\\mathcal{L}}{\\partial b} &= -\\frac{2}{N}\\sum_{i=1}^{N}(y_i - x_i W - b)\\end{aligned}",
+   "source_text": "loss.backward(); grad_loss_wrt_W, grad_loss_wrt_b = W.grad, b.grad",
+   "variables": [
+    {"symbol": "X", "meaning": "inputs, (N, 2)"},
+    {"symbol": "Y", "meaning": "targets, (N, 1)"},
+    {"symbol": "x_i", "meaning": "row i of X"},
+    {"symbol": "N", "meaning": "number of samples"}
+   ],
+   "operations": "Chain rule through mean, square, subtraction, addition of b and the matrix product.",
+   "purpose": "Shows the actual values PyTorch writes into W.grad and b.grad.",
+   "interpretation": "The gradient for W is the correlation between inputs and residuals; for b, the mean residual (times −2).",
+   "intuition": "If predictions are too high on average, b.grad is positive and the update lowers b.",
+   "numerical_example": "One sample x = (1, 2), y = 1, W = (0.5, 0.2), b = 0: prediction 0.9, residual 0.1; ∂L/∂W = −2·0.1·(1, 2) = (−0.2, −0.4), ∂L/∂b = −0.2. With η = 0.1: W → (0.52, 0.24), b → 0.02.",
+   "source": "ai_explanation",
+   "book_ref": "p.103"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "The pure-PyTorch training step",
+   "original_code": "learning_rate = 0.1\n\ndef training_step(inputs, targets, W, b):\n    predictions = model(inputs)\n    loss = mean_squared_error(targets, predictions)\n    loss.backward()\n    grad_loss_wrt_W, grad_loss_wrt_b = W.grad, b.grad\n    with torch.no_grad():\n        W -= grad_loss_wrt_W * learning_rate\n        b -= grad_loss_wrt_b * learning_rate\n    W.grad = None\n    b.grad = None\n    return loss",
+   "language": "python",
+   "what_it_does": "Performs one gradient-descent step on W and b for the linear classifier and returns the loss.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Step size of gradient descent, same value as the TensorFlow version (p.96)."},
+    {"lines": "3", "explanation": "W and b are passed in; they are updated in place, so nothing needs to be returned except the loss."},
+    {"lines": "4", "explanation": "Callout 'Forward pass'. As printed it calls model(inputs); with the model function from p.102 this must be model(inputs, W, b)."},
+    {"lines": "5", "explanation": "Also part of the forward pass: scalar MSE loss."},
+    {"lines": "6", "explanation": "Callout 'Computes gradients': backpropagation from loss fills W.grad and b.grad."},
+    {"lines": "7", "explanation": "Callout 'Retrieves gradients'."},
+    {"lines": "8-10", "explanation": "Callout 'Updates weights inside a no_grad scope': in-place gradient-descent update not tracked by autograd."},
+    {"lines": "11-12", "explanation": "Callout 'Resets gradients' so they do not accumulate into the next call."},
+    {"lines": "13", "explanation": "Returns the loss tensor (still attached to the old graph) for logging."}
+   ],
+   "inputs_outputs": "Inputs: inputs (N, 2), targets (N, 1), W (2, 1), b (1,). Side effect: W and b updated. Output: scalar loss.",
+   "algorithm": "Batch gradient descent with reverse-mode autodiff.",
+   "theory_link": "Gradient descent (chapter 2) with gradients from backpropagation; same algorithm as Listing 3.20 on p.96.",
+   "parameters": [
+    {"name": "learning_rate", "role": "Multiplies the gradients in the update (0.1)."},
+    {"name": "W, b", "role": "Trainable tensors with requires_grad=True, updated in place."}
+   ],
+   "pitfalls": [
+    "As printed, `model(inputs)` does not match the three-argument `model(inputs, W, b)` from p.102; use the three-argument call to run this code.",
+    "Doing `W = W - ...` instead of `W -= ...` would rebind W to a new tensor (beyond the book) and break the next step.",
+    "Removing the no_grad block makes the in-place update fail on a leaf that requires grad (beyond the book).",
+    "Removing the `.grad = None` lines makes gradients accumulate — the bug the page warns about.",
+    "To print the returned loss, use loss.item() (beyond the book)."
+   ],
+   "illustrative_code": "# AI-written: running the step (with the three-argument model from p.102)\nimport torch\ninputs_t = torch.from_numpy(inputs)    # float32 arrays from p.94\ntargets_t = torch.from_numpy(targets)\n\ndef training_step(inputs, targets, W, b):\n    predictions = model(inputs, W, b)\n    loss = mean_squared_error(targets, predictions)\n    loss.backward()\n    with torch.no_grad():\n        W -= W.grad * learning_rate\n        b -= b.grad * learning_rate\n    W.grad = None\n    b.grad = None\n    return loss\n\nfor step in range(40):\n    loss = training_step(inputs_t, targets_t, W, b)\n    print(f\"Loss at step {step}: {loss.item():.4f}\")"
+  },
+  {
+   "id": "c2",
+   "listing": "3.27",
+   "title": "Defining a torch.nn.Module (beginning)",
+   "original_code": "class LinearModel(torch.nn.Module):\n    def __init__(self):\n        super().__init__()",
+   "language": "python",
+   "what_it_does": "Starts the definition of a Module subclass for the linear model; only the first three lines are on this page — the parameter definitions and the forward() method continue on p.104.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "LinearModel inherits from torch.nn.Module."},
+    {"lines": "2-3", "explanation": "The constructor first calls the base-class constructor, which sets up the machinery that registers Parameters assigned as attributes."}
+   ],
+   "inputs_outputs": "No inputs yet; on p.104 the class gains W and b Parameters and a forward(inputs) method.",
+   "algorithm": "Class definition (state + computation packaging).",
+   "theory_link": "Same idea as a Keras layer holding weights and a call() method.",
+   "parameters": [],
+   "pitfalls": ["Forgetting super().__init__() causes an error when assigning Parameters (beyond the book)."]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "TensorFlow vs PyTorch training step, line by line",
+   "kind": "breakdown",
+   "body": "| Step | TensorFlow (p.96) | PyTorch (this page) |\n|---|---|---|\n| Record | `with tf.GradientTape() as tape:` | implicit (requires_grad=True) |\n| Forward | `predictions = model(inputs, W, b)` | `predictions = model(inputs)` (as printed) |\n| Gradients | `tape.gradient(loss, [W, b])` | `loss.backward()` then `W.grad, b.grad` |\n| Update | `W.assign_sub(grad * lr)` | `with torch.no_grad(): W -= grad * lr` |\n| Reset | not needed (tape is discarded) | `W.grad = None; b.grad = None` |\n\nBeyond the book: TensorFlow needs no reset because `tape.gradient` returns fresh tensors each time; PyTorch stores gradients on the parameters, so they persist until cleared.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the update must be invisible to autograd",
+   "kind": "step_by_step",
+   "body": "1. W is a leaf tensor with requires_grad=True.\n2. The next step's loss should depend on W's *new value*, with gradient ∂L/∂W — not on how W was computed from the previous W.\n3. If the update were recorded, the graph would chain every step's update back through all previous steps (and PyTorch refuses in-place changes to such leaves anyway).\n4. `torch.no_grad()` performs the arithmetic without recording, so W remains a clean leaf for the next forward pass.\n\nThis is an expansion of the book's point 3 ('these updates are not intended to be part of the backward pass').",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "The four parts of training_step()",
+   "why": "Mirrors the code and its callouts: forward pass, compute gradients, retrieve gradients, update in no_grad, reset gradients.",
+   "mermaid": "flowchart TD\n A[\"Forward pass: predictions = model(...)\\nloss = mean_squared_error(targets, predictions)\"] --> B[\"loss.backward()\\nfills W.grad, b.grad\"]\n B --> C[\"grad_loss_wrt_W, grad_loss_wrt_b = W.grad, b.grad\"]\n C --> D[\"with torch.no_grad():\\nW -= grad * 0.1; b -= grad * 0.1\"]\n D --> E[\"W.grad = None; b.grad = None\"]\n E --> F[\"return loss\"]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Backward pass and update for a linear model with MSE",
+   "why": "The training step backpropagates an MSE loss through an affine model and updates W and b with learning_rate = 0.1; step through the same computation on a single sample.",
+   "widget": "backprop_graph",
+   "params": {"example": "linear_mse", "x": 1.5, "y": 1.0, "w": 0.8, "b": 0.1, "lr": 0.1}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "The printed training_step runs as-is with the model function from p.102.", "correction": "The printed line `predictions = model(inputs)` omits W and b, which the p.102 model function requires; call model(inputs, W, b)."},
+  {"claim": "torch.no_grad() makes W stop being trainable.", "correction": "It only disables tracking for the operations inside the block; W keeps requires_grad=True and receives gradients in the next step."},
+  {"claim": "loss.backward() returns the gradients.", "correction": "It returns None; it stores the gradients in the .grad attribute of each tracked tensor (point 1)."},
+  {"claim": "Gradients are cleared automatically after the update.", "correction": "They are not; point 4 resets them by hand, otherwise they accumulate across calls."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 102, "note": "Gradient accumulation demo, .grad = None, and the variables, model and loss used here."},
+   {"page": 101, "note": "backward() and the hidden one-time computation graph."},
+   {"page": 96, "note": "TensorFlow training step (Listing 3.20) with GradientTape and assign_sub."},
+   {"page": 100, "note": "The torch.nn.Parameter class used inside Modules."}
+  ],
+  "later": [
+   {"page": 104, "note": "Rest of Listing 3.27, instantiating LinearModel, .parameters(), torch.optim.SGD and the simplified training step with optimizer.step()."},
+   {"page": 105, "note": "model.zero_grad() and the backward-step-zero_grad 'incantation'."},
+   {"page": 113, "note": "The JAX training step, where state is returned rather than updated in place."},
+   {"page": 241, "note": "Writing a PyTorch training step for a Keras model."}
+  ],
+  "prerequisites": [
+   {"page": 102, "note": "model, mean_squared_error, W and b definitions."},
+   {"page": 101, "note": "Computing gradients with backward()."}
+  ],
+  "related_math": [
+   {"page": 96, "note": "The same gradient-descent update in TensorFlow."}
+  ],
+  "related_code": [
+   {"page": 96, "note": "Listing 3.20, the TensorFlow training-step function."},
+   {"page": 104, "note": "The Module + optimizer version of the training step."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "loss.backward() fills .grad on every tensor with requires_grad=True that contributed to the loss.",
+  "Parameter updates go inside torch.no_grad() because they are not part of the backward pass.",
+  "W.grad and b.grad must be reset to None after each step, or gradients accumulate across calls.",
+  "Apart from how gradients are obtained, the PyTorch step mirrors the TensorFlow one (same learning rate 0.1, same update).",
+  "The higher-level API packages parameters (in __init__()) and computation (in forward()) in a torch.nn.Module subclass and delegates updates to a torch.optim optimizer such as SGD."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "Why are the updates of W and b done inside `torch.no_grad()`?", "options": ["To make the update run on the GPU", "Because the updates are not meant to be part of the backward pass, so gradient tracking is skipped", "To reset W.grad and b.grad to zero", "Because torch.no_grad() computes the gradients"], "answer": "Because the updates are not meant to be part of the backward pass, so gradient tracking is skipped", "explanation": "Point 3 says exactly this. no_grad has nothing to do with device placement, does not reset gradients (that is point 4) and computes nothing — backward() computes gradients.", "page_refs": [103]},
+  {"id": "q2", "type": "short", "question": "What would go wrong if the lines `W.grad = None` and `b.grad = None` were removed?", "options": [], "answer": "Gradients would accumulate across calls to training_step(), so each update would use the sum of all past gradients — invalid values.", "explanation": "Point 4, building on the accumulation demo on p.102.", "page_refs": [102, 103]},
+  {"id": "q3", "type": "conceptual", "question": "What does `tensor.grad` represent after `loss.backward()`, and which tensors get it?", "options": [], "answer": "The gradient of the loss with regard to that tensor; it is populated on all tensors involved in computing the loss that track gradients (here W and b).", "explanation": "Point 1. inputs and targets were not created with requires_grad=True, so they get no gradient.", "page_refs": [103, 101]},
+  {"id": "q4", "type": "math", "question": "W = [[1.0], [0.0]], W.grad = [[0.5], [-2.0]], learning_rate = 0.1. What is W after the update?", "options": [], "answer": "[[0.95], [0.2]]", "explanation": "W -= grad * 0.1: 1.0 − 0.05 = 0.95 and 0.0 − (−0.2) = 0.2.", "page_refs": [103]},
+  {"id": "q5", "type": "mcq", "question": "In the Module API introduced on this page, where are the Parameters defined?", "options": ["In forward()", "In __init__()", "In the optimizer", "In loss.backward()"], "answer": "In __init__()", "explanation": "The first bullet: hold some Parameters to store state variables, defined in __init__(). forward() implements the computation; the optimizer updates parameters but does not define them; backward() computes gradients.", "page_refs": [103]},
+  {"id": "q6", "type": "short", "question": "Which two classes does PyTorch's higher-level API rely on, and what is the Keras equivalent of torch.optim.SGD?", "options": [], "answer": "torch.nn.Module and an optimizer class from torch.optim (e.g. torch.optim.SGD); its Keras equivalent is keras.optimizers.SGD.", "explanation": "Stated in the first paragraph of 'Packaging state and computation with the Module class'.", "page_refs": [103]},
+  {"id": "q7", "type": "self", "question": "Can you write the full training step from memory, in the right order, and say what each line corresponds to in the TensorFlow version on p.96?", "options": [], "answer": "Forward + loss; loss.backward() (≈ tape.gradient); read W.grad/b.grad; update inside no_grad (≈ assign_sub); reset .grad (no TF equivalent); return loss.", "explanation": "Comparing the two versions confirms the book's claim that the only major difference is how gradients are computed.", "page_refs": [96, 103]}
+ ]
+}

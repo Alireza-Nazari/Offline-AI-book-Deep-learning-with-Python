@@ -1,0 +1,356 @@
+{
+ "page_id": "page_447",
+ "pdf_page": 447,
+ "printed_page": "423",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:52:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. The blank lines between speaker turns in the REPL output are dropped in extraction; the original_code below restores them from the page image. The callout on sequence_length was captured separately."
+ },
+ "overview": {
+  "title": "Preparing Shakespeare for next-character prediction",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.1 The language model",
+  "subsection": "15.1.1 Training a Shakespeare language model",
+  "main_topic": "Inspecting the Shakespeare corpus and turning the raw string into (features, labels) pairs of 100-character chunks, where the labels are the input shifted by one character.",
+  "central_idea": "A language model's training data comes from the text itself: cut the corpus into fixed-length chunks, and use as target for each chunk the same text offset by one character, so the label at every position is the next character.",
+  "importance": "This 'shift by one' construction is how every causal language model in the book (the GRU here, the Transformer decoder, the mini-GPT) gets its supervision from unlabeled text. It is the concrete version of the unsupervised pretraining idea from p.444.",
+  "learning_objectives": [
+   "Read the first 250 characters of the corpus and recognize its play-script format.",
+   "Explain why chunking can be done directly on the string with a character-level tokenizer.",
+   "Explain how slicing shakespeare[:-1] and shakespeare[1:] produces labels offset by one character.",
+   "Trace Listing 15.2: the split_input generator, the features/labels lists and tf.data.Dataset.from_tensor_slices.",
+   "Interpret the (x, y) sample: y is x shifted left by one character."
+  ],
+  "prerequisites": [
+   "The language-model definition p(token | past tokens) (p.446)",
+   "Python slicing and generators",
+   "tf.data datasets (earlier chapters)",
+   "Windowed timeseries datasets (the timeseries chapters)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page continues section 15.1.1 by looking at the data loaded in Listing 15.1 (p.446). Printing `shakespeare[:250]` shows a play script: speaker names such as `First Citizen:` and `All:`, each followed by its lines (\"Before we proceed any further, hear me speak.\", \"Speak, speak.\", \"...Caius Marcius is chief enemy to the people.\").\n\nTo build a *language model*, the text has to be \"massaged\":\n\n- **Chunking.** The data is split into **equal-length chunks** that can be batched, \"much as we did for weather measurements in the timeseries chapters.\" Because the tokenizer will be character-level, chunking can be done **directly on the string**: a 100-character string maps to a 100-integer sequence.\n- **Features and labels.** Each input is split into a feature sequence and a label sequence, where the label sequence is \"simply the input sequence offset by a single character.\"\n\n**Listing 15.2** implements this. `sequence_length = 100` (the callout: \"We only train on sequences of 100 characters at a time\"). The generator `split_input` yields consecutive, non-overlapping slices `input[i : i + sequence_length]` with step `sequence_length`. Features are the chunks of `shakespeare[:-1]` (all but the last character), and labels are the chunks of `shakespeare[1:]` (all but the first). Since both are cut at the same offsets, label chunk *k* is feature chunk *k* moved one character to the right in the original text. `tf.data.Dataset.from_tensor_slices((features, labels))` pairs them up.\n\nThe sample shows the result: `x[:50]` is `b\"First Citizen:\\nBefore we proceed any further, hear\"` and `y[:50]` is `b\"irst Citizen:\\nBefore we proceed any further, hear \"`. At every position the label is the **next character**. The strings are still raw bytes; turning them into integers with a character-level `TextVectorization` layer comes next (p.448).",
+ "paragraphs": [
+  {
+   "ref": "p447_e05",
+   "excerpt": "To build a language model from this input, we will need to massage our source text.",
+   "what_it_says": "The source text is split into equal-length chunks for batching, as was done with weather measurements in the timeseries chapters. Because the tokenizer is character-level, chunking happens directly on the string, and a 100-character string becomes a 100-integer sequence.",
+   "what_it_means": "Neural networks train on batches of equal-shape tensors, so one 1-million-character string must be cut into many fixed-length windows. With characters as tokens there is a one-to-one correspondence between string length and token count, so string slicing gives exactly the sequence length wanted after tokenization. A word or subword tokenizer would not give this guarantee.",
+   "why_it_matters": "It explains why chunking can happen before tokenization here, and links the method to the windowing of timeseries: in both cases a long stream is turned into fixed-size training windows.",
+   "technical_idea": "Chunks are non-overlapping (stride = window length). Beyond the book: overlapping windows (stride < length) would yield more training examples from the same corpus at the cost of redundancy; the timeseries chapters used a similar sliding-window construction.",
+   "terminology": [
+    {"term": "chunk", "meaning": "A fixed-length slice of the corpus used as one training sequence."},
+    {"term": "character-level tokenizer", "meaning": "A tokenizer in which each character is one token, so string length equals token count."}
+   ],
+   "connections": [
+    "p.446: the language-model definition this data prepares for.",
+    "p.448: the TextVectorization layer with split='character' and output_sequence_length=100."
+   ]
+  },
+  {
+   "ref": "p447_e06",
+   "excerpt": "We will also split each input into two separate feature and label sequences,",
+   "what_it_says": "Each input gets a feature sequence and a label sequence, the label being the input offset by one character.",
+   "what_it_means": "At position t, the model sees characters 0..t of the feature sequence and must predict label t, which is character t+1 of the text. One 100-character example therefore provides 100 next-character prediction problems at once.",
+   "why_it_matters": "This is what makes language modeling unsupervised: the targets are free, taken from the text itself. It is the practical form of p(token | past tokens) from p.446.",
+   "technical_idea": "For this to be a valid 'past tokens only' task, the model must not see position t+1 when predicting at t. A forward-only GRU guarantees that; p.452 shows that a bidirectional GRU breaks it and trivially 'cheats'.",
+   "terminology": [
+    {"term": "feature sequence", "meaning": "The model input, here a 100-character chunk."},
+    {"term": "label sequence", "meaning": "The target, the same text shifted one character ahead."},
+    {"term": "teacher forcing", "meaning": "Beyond the book's wording: training on the true previous tokens at every position rather than the model's own predictions."}
+   ],
+   "connections": [
+    "p.452: why the setup only works with a forward-only RNN.",
+    "p.440: CBOW also built its labels from the text, the middle word from its context."
+   ]
+  },
+  {
+   "ref": "p447_e09",
+   "excerpt": "Let’s look at an (x, y) input sample. Our label at each position in the sequence",
+   "what_it_says": "Inspecting one (x, y) pair confirms that the label at each position is the next character.",
+   "what_it_means": "x starts 'First Citizen:\\nBefore...' and y starts 'irst Citizen:\\nBefore...': every character in y is the character one place to the right in x. The final ' ' in y[:50] is the character after 'hear' in the text, which x[:50] does not yet include.",
+   "why_it_matters": "It is a sanity check that the alignment is right before training; a misaligned shift would teach the model to copy or skip characters.",
+   "terminology": [
+    {"term": "as_numpy_iterator", "meaning": "A tf.data method that yields dataset elements as NumPy values (here byte strings)."}
+   ],
+   "connections": [
+    "p.448: these byte strings are next mapped to integer sequences."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "next_token_targets",
+   "name": "Shifted-by-one targets (next-token labels)",
+   "definition": "The training target sequence for a causal language model is the input sequence offset by one token, so the label at each position is the following token.",
+   "intuition": "Slide the text one step to the left and use it as the answer key.",
+   "technical": "features = text[:-1], labels = text[1:], both chunked at the same offsets. Loss is per-position cross-entropy over the vocabulary, and each chunk of length L contributes L prediction targets.",
+   "significance": "It turns any raw text into supervised data without human labels; it is the training signal behind GPT-style models.",
+   "example": "Text 'hear me': feature 'hear m', label 'ear me'. Position 0 sees 'h' and must predict 'e'.",
+   "misconception": "That the label is only the single character after the chunk. Every position has its own label.",
+   "related": ["language_model", "pretraining", "rnn"],
+   "source": "book"
+  },
+  {
+   "id": "language_model",
+   "name": "Language model",
+   "definition": "A model of p(token | past tokens); here at the character level.",
+   "intuition": "Predict the next character from all previous characters in the chunk.",
+   "technical": "Trained with the shifted-label datasets built on this page.",
+   "significance": "The setup is the basis for text generation in this and later chapters.",
+   "example": "After 'First Citize' the model should predict 'n'.",
+   "misconception": "That it needs labeled data; the labels here are the text itself.",
+   "related": ["next_token_targets", "tokenization"],
+   "source": "book"
+  },
+  {
+   "id": "tokenization",
+   "name": "Character-level tokenization",
+   "definition": "Treating each character as a token.",
+   "intuition": "The 'words' of the model are letters, spaces, punctuation and newlines.",
+   "technical": "String length equals token count, which allows chunking on the raw string before tokenizing.",
+   "significance": "A tiny vocabulary (67 entries on p.448) and fast training; the model must learn spelling itself.",
+   "example": "'Speak' becomes 5 tokens: S, p, e, a, k.",
+   "misconception": "That chunking by characters breaks a word-level model; it is only valid because this tokenizer is character-level.",
+   "related": ["language_model"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Feature/label alignment",
+   "latex": "x_t = c_{100k + t}, \\qquad y_t = c_{100k + t + 1}, \\qquad t = 0,\\dots,99",
+   "source_text": "features = list(split_input(shakespeare[:-1], sequence_length)); labels = list(split_input(shakespeare[1:], sequence_length))",
+   "variables": [
+    {"symbol": "c_j", "meaning": "The j-th character of the corpus string shakespeare."},
+    {"symbol": "k", "meaning": "Index of the chunk (0, 1, 2, ...)."},
+    {"symbol": "t", "meaning": "Position within the chunk, from 0 to sequence_length - 1 = 99."},
+    {"symbol": "x_t, y_t", "meaning": "Feature and label characters at position t of chunk k."}
+   ],
+   "operations": "Slicing [:-1] keeps characters 0..N-2; [1:] keeps 1..N-1. Chunking both at multiples of 100 gives y_t = x_{t+1} within a chunk, and the last label of a chunk is the first character of the next feature chunk.",
+   "purpose": "Makes the learning target at each position the next character, matching p(token | past tokens).",
+   "interpretation": "The model at position t sees x_0..x_t and is trained to output y_t = c_{100k+t+1}.",
+   "intuition": "The label strip is the feature strip slid by one.",
+   "numerical_example": "For chunk 0: x_0 = 'F', y_0 = 'i'; x_1 = 'i', y_1 = 'r'; ... matching the printed sample 'First Citizen...' / 'irst Citizen...'.",
+   "source": "inference",
+   "book_ref": "p.447"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Inspecting the first 250 characters",
+   "original_code": ">>> shakespeare[:250]\nFirst Citizen:\nBefore we proceed any further, hear me speak.\n\nAll:\nSpeak, speak.\n\nFirst Citizen:\nYou are all resolved rather to die than to famish?\n\nAll:\nResolved. resolved.\n\nFirst Citizen:\nFirst, you know Caius Marcius is chief enemy to the people.",
+   "language": "python",
+   "what_it_does": "Shows the beginning of the corpus: a dialogue from Coriolanus in play-script format, with speaker labels followed by their lines.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Slices the first 250 characters of the string."},
+    {"lines": "2-14", "explanation": "The text as displayed: speaker names end with ':', and lines and turns are separated by newlines. Newlines and punctuation are characters the model will have to predict too."}
+   ],
+   "inputs_outputs": "Input: the corpus string. Output: its first 250 characters.",
+   "algorithm": "String slicing.",
+   "theory_link": "Shows the structure (speaker tags, line breaks, capitalization) that a character-level model can learn to imitate.",
+   "parameters": [],
+   "pitfalls": [
+    "In a plain REPL, evaluating `shakespeare[:250]` shows the repr with literal `\\n` escapes; the multi-line display printed in the book corresponds to `print(shakespeare[:250])` or notebook-style rendering."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "15.2",
+   "title": "Splitting text into chunks for language model training",
+   "original_code": "import tensorflow as tf\n\nsequence_length = 100\n\ndef split_input(input, sequence_length):\n    for i in range(0, len(input), sequence_length):\n        yield input[i : i + sequence_length]\n\nfeatures = list(split_input(shakespeare[:-1], sequence_length))\nlabels = list(split_input(shakespeare[1:], sequence_length))\ndataset = tf.data.Dataset.from_tensor_slices((features, labels))",
+   "language": "python",
+   "what_it_does": "Cuts the corpus into consecutive 100-character chunks twice, once for inputs and once for inputs shifted by one character, and wraps the aligned pairs in a tf.data.Dataset.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Imports TensorFlow for the tf.data pipeline."},
+    {"lines": "3", "explanation": "Chunk length. The callout: 'The chunk size we will use during training. We only train on sequences of 100 characters at a time.'"},
+    {"lines": "5-7", "explanation": "A generator that yields slices starting at 0, 100, 200, ...; the chunks do not overlap. The last slice may be shorter than 100 characters."},
+    {"lines": "9", "explanation": "Features: chunks of the text without its last character."},
+    {"lines": "10", "explanation": "Labels: chunks of the text without its first character. Because the cut points match, each label chunk is its feature chunk shifted one character ahead."},
+    {"lines": "11", "explanation": "Builds a dataset whose elements are (feature_string, label_string) pairs of scalar string tensors."}
+   ],
+   "inputs_outputs": "Input: the `shakespeare` string. Output: `dataset`, yielding (x, y) byte-string pairs of up to 100 characters.",
+   "algorithm": "Non-overlapping windowing with an offset-by-one target copy.",
+   "theory_link": "Implements the training targets for p(token | past tokens) (p.446): the label at each position is the next character.",
+   "parameters": [
+    {"name": "sequence_length", "role": "Window size (100) in characters, and therefore in tokens for a character tokenizer; also the length over which the GRU is unrolled during training."}
+   ],
+   "pitfalls": [
+    "The final chunk is usually shorter than 100; on p.448 TextVectorization's `output_sequence_length` pads it to the fixed length.",
+    "The parameter name `input` shadows Python's built-in `input()` inside the function; harmless here but best avoided.",
+    "Both lists hold the whole corpus in memory twice; fine for about 1 MB of text, not for very large corpora (later chapters stream data)."
+   ],
+   "illustrative_code": "# AI-written check (not from the book): verify the one-character shift\nfor x, y in zip(features[:3], labels[:3]):\n    assert x[1:] == y[:-1]\nprint(len(features), 'chunks; last chunk length', len(features[-1]))"
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Inspecting one (x, y) pair",
+   "original_code": ">>> x, y = next(dataset.as_numpy_iterator())\n>>> x[:50], y[:50]\n(b\"First Citizen:\\nBefore we proceed any further, hear\",\n b\"irst Citizen:\\nBefore we proceed any further, hear \")",
+   "language": "python",
+   "what_it_does": "Takes the first element of the dataset and prints the first 50 bytes of the feature and the label.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "as_numpy_iterator yields NumPy/bytes values; next takes the first (x, y) pair."},
+    {"lines": "2-4", "explanation": "The label begins with 'irst', one character ahead of 'First'. The label ends with ' ', the space that follows 'hear' in the text."}
+   ],
+   "inputs_outputs": "Input: dataset. Output: two byte strings showing the shift.",
+   "algorithm": "Inspection.",
+   "theory_link": "Confirms that the label at each position is the next character.",
+   "parameters": [],
+   "pitfalls": [
+    "The values are bytes (b\"...\"), not str, because tf.string tensors hold raw bytes."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "One chunk, 100 lessons",
+   "kind": "breakdown",
+   "body": "A single (x, y) pair is not one training example but 100 of them: predict `i` given `F`, `r` given `Fi`, `s` given `Fir`, and so on. A recurrent model processes the chunk once and emits a prediction at every step, so the loss averages 100 cross-entropy terms. That is why language modeling extracts so much signal from raw text: every character of the corpus serves as a label.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Same idea as the timeseries windows",
+   "kind": "alternative",
+   "body": "The authors compare chunking to the weather-measurement windows of the timeseries chapters. There, a window of past measurements predicted a future temperature; here, a window of past characters predicts the next character at every position. In both cases the 'labels' are just later values in the same stream. (Inference from the comparison made on the page.)",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "svg",
+   "title": "Features vs. labels: offset by one character",
+   "why": "Listing 15.2 and the printed (x, y) sample show that the label sequence is the input shifted by one; the diagram lines up the first characters.",
+   "svg": "<svg viewBox=\"0 0 460 150\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"monospace\" font-size=\"16\" fill=\"none\" stroke=\"currentColor\"><text x=\"5\" y=\"42\" fill=\"currentColor\" stroke=\"none\" font-size=\"13\">x</text><text x=\"5\" y=\"122\" fill=\"currentColor\" stroke=\"none\" font-size=\"13\">y</text><g><rect x=\"30\" y=\"20\" width=\"40\" height=\"34\"/><rect x=\"80\" y=\"20\" width=\"40\" height=\"34\"/><rect x=\"130\" y=\"20\" width=\"40\" height=\"34\"/><rect x=\"180\" y=\"20\" width=\"40\" height=\"34\"/><rect x=\"230\" y=\"20\" width=\"40\" height=\"34\"/><rect x=\"280\" y=\"20\" width=\"40\" height=\"34\"/><rect x=\"330\" y=\"20\" width=\"40\" height=\"34\"/><rect x=\"30\" y=\"100\" width=\"40\" height=\"34\"/><rect x=\"80\" y=\"100\" width=\"40\" height=\"34\"/><rect x=\"130\" y=\"100\" width=\"40\" height=\"34\"/><rect x=\"180\" y=\"100\" width=\"40\" height=\"34\"/><rect x=\"230\" y=\"100\" width=\"40\" height=\"34\"/><rect x=\"280\" y=\"100\" width=\"40\" height=\"34\"/><rect x=\"330\" y=\"100\" width=\"40\" height=\"34\"/></g><g fill=\"currentColor\" stroke=\"none\" text-anchor=\"middle\"><text x=\"50\" y=\"43\">F</text><text x=\"100\" y=\"43\">i</text><text x=\"150\" y=\"43\">r</text><text x=\"200\" y=\"43\">s</text><text x=\"250\" y=\"43\">t</text><text x=\"300\" y=\"43\">␣</text><text x=\"350\" y=\"43\">C</text><text x=\"50\" y=\"123\">i</text><text x=\"100\" y=\"123\">r</text><text x=\"150\" y=\"123\">s</text><text x=\"200\" y=\"123\">t</text><text x=\"250\" y=\"123\">␣</text><text x=\"300\" y=\"123\">C</text><text x=\"350\" y=\"123\">i</text><text x=\"415\" y=\"43\" font-size=\"12\">… 100</text><text x=\"415\" y=\"123\" font-size=\"12\">… 100</text></g><g stroke-dasharray=\"3 3\"><line x1=\"50\" y1=\"56\" x2=\"50\" y2=\"98\"/><line x1=\"100\" y1=\"56\" x2=\"100\" y2=\"98\"/><line x1=\"150\" y1=\"56\" x2=\"150\" y2=\"98\"/><line x1=\"200\" y1=\"56\" x2=\"200\" y2=\"98\"/><line x1=\"250\" y1=\"56\" x2=\"250\" y2=\"98\"/><line x1=\"300\" y1=\"56\" x2=\"300\" y2=\"98\"/><line x1=\"350\" y1=\"56\" x2=\"350\" y2=\"98\"/></g><text x=\"230\" y=\"80\" fill=\"currentColor\" stroke=\"none\" font-size=\"11\" text-anchor=\"middle\">label at t = next character after x[t]</text></svg>"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Character tokens of the first line",
+   "why": "The page relies on character-level tokenization (a 100-character string maps to 100 integers); see how 'First Citizen' becomes one token per character.",
+   "widget": "token_sequence",
+   "params": {"text": "First Citizen:", "mode": "char"}
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Each chunk gives the model one target, the character after the chunk.",
+   "correction": "The label is a whole sequence: every position has its own next-character target."
+  },
+  {
+   "claim": "You can always chunk raw text by character count before tokenizing.",
+   "correction": "That only gives fixed token lengths because the tokenizer is character-level; the page states this explicitly."
+  },
+  {
+   "claim": "features and labels come from different texts.",
+   "correction": "Both come from the same string; labels are shakespeare[1:], features are shakespeare[:-1], chunked at the same offsets."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 446, "note": "Listing 15.1 loads the corpus; the language-model definition p(token|past tokens)."},
+   {"page": 444, "note": "Pretraining on unlabeled text with an unsupervised task; this is such a task."},
+   {"page": 411, "note": "Character tokenization."}
+  ],
+  "later": [
+   {"page": 448, "note": "Listing 15.3: character-level TextVectorization (vocabulary of 67) and the tokenized, batched dataset."},
+   {"page": 450, "note": "Generating Shakespeare with the trained model."},
+   {"page": 452, "note": "Why bidirectional RNNs break this shifted-label setup."}
+  ],
+  "prerequisites": [
+   {"page": 446, "note": "Definition of a language model."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 446, "note": "Listing 15.1 creates the `shakespeare` string sliced here."},
+   {"page": 448, "note": "The dataset built here is mapped through the tokenizer."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "The corpus is a play script; speaker tags, newlines and punctuation are all characters to predict.",
+  "Text is cut into non-overlapping 100-character chunks; with character tokens this gives 100-token sequences.",
+  "Labels are the input shifted by one character: features from shakespeare[:-1], labels from shakespeare[1:].",
+  "Each chunk provides a next-character target at every one of its positions.",
+  "The pairs are still raw byte strings; tokenization to integers follows on p.448."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In Listing 15.2, why are features built from shakespeare[:-1] and labels from shakespeare[1:]?",
+   "options": [
+    "To remove the header and footer of the file",
+    "So that each label sequence is the feature sequence offset by one character",
+    "To make the dataset size a multiple of 100",
+    "To produce overlapping windows for data augmentation"
+   ],
+   "answer": "So that each label sequence is the feature sequence offset by one character",
+   "explanation": "Chunking both slices at the same offsets aligns label t with character t+1. The slices remove one character each, not a header. They don't fix the length to a multiple of 100, and the windows don't overlap (stride = 100).",
+   "page_refs": [447]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Given the feature chunk 'hear me', what is the label chunk?",
+   "options": [],
+   "answer": "'ear me' followed by the next character of the text, e.g. 'ear me ' if a space follows.",
+   "explanation": "Each label is the next character, so the label strip is the feature strip shifted by one.",
+   "page_refs": [447]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why can the chunking be done on the raw string rather than after tokenization?",
+   "options": [],
+   "answer": "With a character-level tokenizer each character is one token, so a 100-character string always maps to a 100-integer sequence.",
+   "explanation": "Stated on the page. With word or subword tokenizers, string length and token count differ.",
+   "page_refs": [447]
+  },
+  {
+   "id": "q4",
+   "type": "math",
+   "question": "If the corpus had exactly 1,000,001 characters, how many feature chunks would split_input produce, and how long is the last one?",
+   "options": [],
+   "answer": "shakespeare[:-1] has 1,000,000 characters, so there are 10,000 chunks, each exactly 100 characters long.",
+   "explanation": "range(0, 1,000,000, 100) gives 10,000 start indices. With 1,000,051 characters there would be 10,001 chunks and the last would have 50 characters, padded later by TextVectorization.",
+   "page_refs": [447, 448]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "How many next-character prediction targets does a single 100-character (x, y) pair provide?",
+   "options": [],
+   "answer": "100, one per position.",
+   "explanation": "y is a full sequence, and the model predicts y[t] from x[0..t] at every t.",
+   "page_refs": [447]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "In the printed sample, why does y[:50] end with a space while x[:50] ends with 'hear'?",
+   "options": [],
+   "answer": "Because y is shifted one character ahead: its 50th character is the one after 'hear' in the text, which is a space ('hear me speak').",
+   "explanation": "This confirms the offset-by-one alignment.",
+   "page_refs": [447]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you rewrite split_input so that consecutive chunks overlap by 50 characters? What would change in the dataset?",
+   "options": [],
+   "answer": "Use range(0, len(input), 50) with the same slice length; the number of chunks roughly doubles and each character appears in two chunks.",
+   "explanation": "This is an exercise beyond the book; it tests whether you understand the stride/window distinction.",
+   "page_refs": [447]
+  }
+ ]
+}

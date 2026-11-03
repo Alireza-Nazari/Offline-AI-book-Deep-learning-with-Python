@@ -1,0 +1,576 @@
+{
+ "page_id": "page_080",
+ "pdf_page": 80,
+ "printed_page": "56",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-fable-5-1",
+  "generated_at": "2026-11-03T04:30:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "The GradientTape demo started here uses x = tf.zeros(shape=()), a constant that GradientTape does not watch by default; the notes point out that tape.watch(x) or a tf.Variable is needed for the p.81 gradient to be non-None (verify against the book's companion notebook)."
+  ],
+  "extraction_quality": "Good. Element p080_e09 merges two printed paragraphs ('Instead, we can rely ...' and 'The API through which ...'); they get separate notes with the same ref. The last code block is the beginning of the GradientTape example continued on p.81."
+ },
+ "overview": {
+  "title": "Weight updates by hand and with an optimizer; gradients via GradientTape",
+  "chapter": "2 The mathematical building blocks of neural networks",
+  "section": "2.5 Looking back at our first example",
+  "subsection": "2.5.2 Running one training step",
+  "main_topic": "Implementing update_weights as w.assign(w - g * learning_rate) and with keras.optimizers.SGD, then explaining why gradients are obtained with automatic differentiation (tf.GradientTape) rather than hand-written backpropagation",
+  "central_idea": "The two missing pieces of listing 2.9 are filled in. The update is plain gradient descent, subtracting gradient * learning_rate (1e-3) from each weight in place, which in practice is delegated to a Keras Optimizer's apply_gradients. Gradients come from the backend's automatic differentiation: TensorFlow's GradientTape records the operations run in its scope as a computation graph (a tape) and can then return the gradient of any scalar with respect to any inputs.",
+  "importance": "This page connects the abstract update rule (p.68) and the backpropagation algorithm (p.70-p.74) to the actual APIs used in real code. Optimizer.apply_gradients and GradientTape (and their PyTorch/JAX counterparts) are the building blocks of every custom training loop in the book.",
+  "learning_objectives": [
+   "Implement update_weights with variable.assign and a learning rate of 1e-3.",
+   "Explain why in-place assignment is needed for Keras variables.",
+   "Replace the hand-written update with optimizers.SGD(learning_rate=1e-3).apply_gradients(zip(gradients, weights)).",
+   "Explain why the authors do not reimplement backpropagation by hand here (verbose derivatives of softmax and crossentropy).",
+   "Describe what tf.GradientTape records and what it can compute."
+  ],
+  "prerequisites": [
+   "Listing 2.9 and the weight-update step (p.79)",
+   "Mini-batch SGD update rule (p.68)",
+   "Backpropagation as the chain rule on a computation graph (p.70-p.74)",
+   "model.weights list (p.78)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page completes the sentence from p.79: the magnitude of the weight move is set by the **learning rate**, typically a small quantity.\n\n**Hand-written update.** The simplest `update_weights()` subtracts `gradient * learning_rate` from each weight:\n\n```\nlearning_rate = 1e-3\nfor g, w in zip(gradients, weights):\n    w.assign(w - g * learning_rate)\n```\n\nThe callout notes that `assign` gives the variable a new value **in place**. Pairing by `zip` relies on the gradients list being aligned with `model.weights`.\n\n**With an optimizer.** In practice you almost never write this by hand; you use a Keras `Optimizer`: `optimizer = optimizers.SGD(learning_rate=1e-3)` and `update_weights` becomes `optimizer.apply_gradients(zip(gradients, weights))`.\n\n**Gradient computation.** The last missing piece is `get_gradients_of_loss_wrt_weights()`. The chain rule (backpropagation, previous section) could be reimplemented here, but it would be cumbersome, especially because a `softmax` and a crossentropy loss have fairly verbose derivatives. Instead the authors rely on the **automatic differentiation** built into one of the frameworks Keras supports (TensorFlow, JAX or PyTorch), choosing TensorFlow for the example; chapter 3 covers all three.\n\nTensorFlow's API for this is **`tf.GradientTape`**, a Python scope that records the tensor operations run inside it as a computation graph (a *tape*). The graph can then be used to retrieve the gradient of any scalar value with respect to any set of input values. The page starts a minimal example: `import tensorflow as tf` and `x = tf.zeros(shape=())`, a scalar tensor with value 0 (continued on p.81 with `y = 2 * x + 3` and `tape.gradient(y, x)`).",
+ "paragraphs": [
+  {
+   "ref": "p080_e03",
+   "excerpt": "“learning rate,” typically a small quantity. The simplest way to implement this",
+   "what_it_says": "The learning rate is typically a small quantity; the simplest update_weights() subtracts gradient * learning_rate from each weight.",
+   "what_it_means": "This is the vanilla SGD rule w <- w - eta * g applied tensor by tensor. Since each gradient has exactly the shape of its weight, the subtraction is element-wise: every one of the 407,050 scalars moves against its own partial derivative. The learning rate 1e-3 means each step changes a weight by one thousandth of its gradient.",
+   "why_it_matters": "It shows that the 'learning' part of deep learning, once gradients are known, is a single line of arithmetic per tensor.",
+   "terminology": [
+    {
+     "term": "learning rate",
+     "meaning": "Small scalar multiplying the gradient in the update; here 1e-3."
+    },
+    {
+     "term": "assign",
+     "meaning": "Method that overwrites a variable's value in place."
+    }
+   ],
+   "connections": [
+    "p.68: W -= learning_rate * gradient.",
+    "p.79: the weight update step introduced."
+   ]
+  },
+  {
+   "ref": "p080_e05",
+   "excerpt": "In practice, you will almost never implement a weight update step like",
+   "what_it_says": "In practice the weight update is not written by hand; a Keras Optimizer instance is used instead, as in the following code.",
+   "what_it_means": "optimizers.SGD(learning_rate=1e-3).apply_gradients(...) does exactly what the hand-written loop does. The value of the Optimizer abstraction is that more sophisticated rules (momentum, RMSprop, Adam from p.76) keep extra per-weight state such as running averages, and apply_gradients manages it; swapping SGD for Adam changes one line.",
+   "why_it_matters": "It connects the from-scratch code to the optimizer=\"adam\" argument of compile on p.76: that string names one of these Optimizer classes.",
+   "terminology": [
+    {
+     "term": "Optimizer",
+     "meaning": "Keras object implementing an update rule; apply_gradients takes (gradient, variable) pairs and updates the variables."
+    },
+    {
+     "term": "apply_gradients",
+     "meaning": "Optimizer method that applies one update step given an iterable of (gradient, variable) pairs."
+    }
+   ],
+   "connections": [
+    "p.76: compile(optimizer=\"adam\").",
+    "p.83: the summary's description of optimizers (RMSProp, SGD with momentum)."
+   ]
+  },
+  {
+   "ref": "p080_e08",
+   "excerpt": "Now, there’s just one thing we’re still missing: gradient computation (represented by",
+   "what_it_says": "The remaining missing piece is gradient computation (get_gradients_of_loss_wrt_weights in listing 2.9). Backpropagation via the chain rule could be reimplemented from scratch, but that would be cumbersome, especially because softmax and crossentropy have fairly verbose derivatives.",
+   "what_it_means": "Hand-deriving gradients means writing, for every operation, its local derivative and chaining them backward. For this model that includes the softmax Jacobian and the log in crossentropy, plus relu and two matmuls; the algebra is doable but long and easy to get wrong, and it would have to be redone for every architecture change.",
+   "why_it_matters": "It explains the boundary drawn on p.77 ('we won't implement backpropagation') and motivates automatic differentiation, which applies the chain rule mechanically.",
+   "technical_idea": "Beyond the book: combined, softmax followed by crossentropy has the compact gradient dL/dz = p - onehot(y) with respect to the logits z, but deriving it requires going through the verbose softmax Jacobian.",
+   "terminology": [
+    {
+     "term": "backpropagation",
+     "meaning": "Computing gradients by applying the chain rule backward through the computation graph."
+    }
+   ],
+   "connections": [
+    "p.70-p.74: backpropagation on a small computation graph.",
+    "p.79: listing 2.9's get_gradients_of_loss_wrt_weights."
+   ]
+  },
+  {
+   "ref": "p080_e09",
+   "excerpt": "Instead, we can rely on the automatic differentiation mechanism that’s built into",
+   "what_it_says": "Instead, the automatic differentiation built into one of the low-level frameworks supported by Keras (TensorFlow, JAX or PyTorch) can be used; TensorFlow is chosen for this example, and all three are covered in the next chapter.",
+   "what_it_means": "Keras 3 runs on several backends; the variables and ops in NaiveDense are backend-agnostic, but gradient computation is done with a backend-specific API. Picking TensorFlow here is a choice for illustration, not a requirement.",
+   "why_it_matters": "It tells the reader that the remaining code is TensorFlow-specific and that equivalent mechanisms exist in JAX and PyTorch (chapter 3).",
+   "terminology": [
+    {
+     "term": "automatic differentiation",
+     "meaning": "Technique by which a framework computes exact derivatives of a program by applying the chain rule to the operations it executed."
+    }
+   ],
+   "connections": [
+    "p.96: introduction to TensorFlow in chapter 3."
+   ]
+  },
+  {
+   "ref": "p080_e09",
+   "excerpt": "The API through which you can use TensorFlow’s automatic differentiation capabilities is",
+   "what_it_says": "TensorFlow's automatic differentiation is used through the tf.GradientTape object, a Python scope that records the tensor operations run inside it as a computation graph (sometimes called a tape); the graph can then be used to retrieve the gradient of any scalar value with respect to any set of input values.",
+   "what_it_means": "While code runs inside `with tf.GradientTape() as tape:`, every operation on watched tensors (trainable variables are watched automatically) is logged, building exactly the kind of graph drawn in figures 2.23-2.25. Calling tape.gradient(target, sources) then walks the graph backward, multiplying local derivatives as on p.73, and returns gradients with the shapes of the sources. The target should be a scalar, such as the average loss.",
+   "why_it_matters": "This is the concrete realization of get_gradients_of_loss_wrt_weights: it will produce the list of 4 gradients for model.weights (p.81).",
+   "terminology": [
+    {
+     "term": "tf.GradientTape",
+     "meaning": "TensorFlow context manager that records operations for later gradient computation."
+    },
+    {
+     "term": "tape",
+     "meaning": "The recorded computation graph of operations executed within the scope."
+    }
+   ],
+   "connections": [
+    "p.72-p.74: forward and backward computation graphs.",
+    "p.81: the GradientTape example and the rewritten one_training_step."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "sgd",
+   "name": "Stochastic gradient descent update",
+   "definition": "Updating each weight by subtracting gradient * learning_rate, using gradients from the current batch.",
+   "intuition": "A small step downhill, recomputed for every batch.",
+   "technical": "w.assign(w - g * learning_rate) for each (g, w); equivalent to optimizers.SGD(learning_rate=1e-3).apply_gradients(zip(gradients, weights)).",
+   "significance": "The simplest optimizer; Adam (p.76) is a refinement of it.",
+   "example": "w = 0.30, g = 4.0, lr = 1e-3 -> w = 0.296.",
+   "misconception": "SGD does not mean a batch size of one here; it is mini-batch SGD with batches of 128.",
+   "related": [
+    "learning_rate",
+    "optimizer",
+    "gradient_descent"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "learning_rate",
+   "name": "Learning rate",
+   "definition": "A typically small scalar that sets the magnitude of the weight update; 1e-3 on this page.",
+   "intuition": "Step length when walking downhill.",
+   "technical": "Multiplies the gradient in w - g * learning_rate; passed to optimizers.SGD(learning_rate=1e-3).",
+   "significance": "One of the most important hyperparameters of training.",
+   "example": "Doubling it to 2e-3 doubles every step's size.",
+   "misconception": "A larger learning rate is not always faster; too large a value makes the loss oscillate or diverge (p.68-p.69).",
+   "related": [
+    "sgd",
+    "optimizer"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "optimizer",
+   "name": "Keras Optimizer",
+   "definition": "An object implementing a weight-update rule, applied with apply_gradients(zip(gradients, weights)).",
+   "intuition": "A plug-in 'update policy' separate from the model and loss.",
+   "technical": "optimizers.SGD(learning_rate=1e-3); other optimizers maintain extra state per variable.",
+   "significance": "What compile(optimizer=\"adam\") configures on p.76.",
+   "example": "Replacing SGD with optimizers.Adam(learning_rate=1e-3) changes the rule without touching the training step.",
+   "misconception": "The optimizer does not compute gradients; it only consumes them.",
+   "related": [
+    "sgd",
+    "adam",
+    "learning_rate"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "autodiff",
+   "name": "Automatic differentiation",
+   "definition": "Framework mechanism that computes gradients of recorded computations automatically, avoiding hand-written backpropagation.",
+   "intuition": "The framework remembers what you computed and replays it backward with the chain rule.",
+   "technical": "Reverse-mode differentiation over the recorded graph; one backward pass yields gradients with respect to all inputs.",
+   "significance": "Lets the from-scratch example skip the verbose derivatives of softmax and crossentropy.",
+   "example": "For y = 2x + 3, autodiff returns dy/dx = 2 (p.81).",
+   "misconception": "It is not numerical approximation (finite differences); it gives exact derivatives of the executed operations.",
+   "related": [
+    "gradient_tape",
+    "backpropagation"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "gradient_tape",
+   "name": "tf.GradientTape",
+   "definition": "A Python scope that records the tensor operations run inside it as a computation graph (tape), from which gradients of any scalar with respect to any inputs can be retrieved.",
+   "intuition": "A flight recorder for math operations.",
+   "technical": "with tf.GradientTape() as tape: ...; tape.gradient(target, sources).",
+   "significance": "Implements get_gradients_of_loss_wrt_weights in the TensorFlow version of the example.",
+   "example": "x = tf.zeros(shape=()) starts the example continued on p.81.",
+   "misconception": "Operations executed outside the with-block are not recorded and receive no gradient.",
+   "related": [
+    "autodiff",
+    "backpropagation"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Hand-written SGD update",
+   "latex": "w \\leftarrow w - \\eta\\, g, \\qquad \\eta = 10^{-3}",
+   "source_text": "w.assign(w - g * learning_rate), learning_rate = 1e-3",
+   "variables": [
+    {
+     "symbol": "w",
+     "meaning": "A weight variable from model.weights"
+    },
+    {
+     "symbol": "g",
+     "meaning": "Its gradient, the gradient of the loss with respect to w (same shape)"
+    },
+    {
+     "symbol": "\\eta",
+     "meaning": "learning_rate = 1e-3"
+    }
+   ],
+   "operations": "Element-wise scaling and subtraction, written back into the variable in place.",
+   "purpose": "Defines update_weights.",
+   "interpretation": "Each scalar weight moves against the sign of its partial derivative by 0.001 times its magnitude.",
+   "intuition": "A small step opposite to the direction of steepest increase of the loss.",
+   "numerical_example": "w = [[0.02, -0.01]], g = [[1.5, -0.4]]: w - 0.001 g = [[0.0185, -0.0096]].",
+   "source": "book",
+   "book_ref": "p.80"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "update_weights by hand",
+   "original_code": "learning_rate = 1e-3\n\ndef update_weights(gradients, weights):\n    for g, w in zip(gradients, weights):\n        w.assign(w - g * learning_rate)",
+   "language": "python",
+   "what_it_does": "Applies a plain gradient-descent step to every weight variable.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Learning rate, a small constant."
+    },
+    {
+     "lines": "3-4",
+     "explanation": "Pairs each gradient with its weight; the lists are aligned because gradients are computed for model.weights in order."
+    },
+    {
+     "lines": "5",
+     "explanation": "Callout: assigns a new value to the variable, in place."
+    }
+   ],
+   "inputs_outputs": "Inputs: list of gradient tensors, list of variables. Effect: variables updated; returns None.",
+   "algorithm": "Vanilla SGD.",
+   "theory_link": "Step 5 of mini-batch SGD (p.68).",
+   "parameters": [
+    {
+     "name": "learning_rate",
+     "role": "Step size, 1e-3"
+    }
+   ],
+   "pitfalls": [
+    "Writing `w = w - g * learning_rate` would only rebind the Python name and leave the model's variable unchanged; assign is required.",
+    "If the gradients list were in a different order than weights, zip would pair them wrongly."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "update_weights with a Keras optimizer",
+   "original_code": "from keras import optimizers\n\noptimizer = optimizers.SGD(learning_rate=1e-3)\n\ndef update_weights(gradients, weights):\n    optimizer.apply_gradients(zip(gradients, weights))",
+   "language": "python",
+   "what_it_does": "Delegates the same SGD update to a Keras SGD optimizer.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Imports the optimizers module."
+    },
+    {
+     "lines": "3",
+     "explanation": "Creates an SGD optimizer with learning rate 1e-3, matching the hand-written version."
+    },
+    {
+     "lines": "5-6",
+     "explanation": "apply_gradients takes (gradient, variable) pairs and updates each variable."
+    }
+   ],
+   "inputs_outputs": "Same as c1.",
+   "algorithm": "SGD (could be swapped for Adam, RMSprop, ...).",
+   "theory_link": "The optimizer named in compile on p.76 is such an object.",
+   "parameters": [
+    {
+     "name": "learning_rate",
+     "role": "Step size used by the optimizer"
+    }
+   ],
+   "pitfalls": [
+    "The optimizer object must be created once, outside update_weights, so that stateful optimizers keep their state across steps."
+   ],
+   "illustrative_code": "# AI-written: switching rule is one line\noptimizer = optimizers.Adam(learning_rate=1e-3)"
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "GradientTape example (beginning)",
+   "original_code": "import tensorflow as tf\n\nx = tf.zeros(shape=())",
+   "language": "python",
+   "what_it_does": "Imports TensorFlow and creates a scalar tensor with value 0, the input for the GradientTape demonstration continued on p.81.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "TensorFlow is the backend chosen for automatic differentiation."
+    },
+    {
+     "lines": "3",
+     "explanation": "Callout: instantiates a scalar tensor with value 0 (shape=() means rank 0)."
+    }
+   ],
+   "inputs_outputs": "Creates x = 0.0.",
+   "algorithm": "Setup only.",
+   "theory_link": "A rank-0 tensor (p.46).",
+   "parameters": [
+    {
+     "name": "shape=()",
+     "role": "Rank-0 (scalar) shape"
+    }
+   ],
+   "pitfalls": [
+    "Beyond the book: TensorFlow's GradientTape automatically watches only trainable tf.Variable objects. A constant created with tf.zeros, as here, must be watched explicitly with tape.watch(x) (or created as tf.Variable) for tape.gradient(y, x) on p.81 to return 2 instead of None; the printed continuation on p.81 does not include such a call."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "What the tape records and replays",
+   "kind": "step_by_step",
+   "body": "1. Enter `with tf.GradientTape() as tape:`.\n2. Every operation on watched tensors (matmul, add, relu, softmax, log, mean) is appended to the tape together with its inputs.\n3. Leave the scope; the tape now holds the forward computation graph, like figure 2.23.\n4. `tape.gradient(average_loss, model.weights)` walks the tape backward, multiplying each operation's local derivative (chain rule, figure 2.24-2.25) and summing over paths.\n5. It returns one gradient per weight, in the same order as `model.weights`, ready for `update_weights`.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Same idea in the other backends",
+   "kind": "alternative",
+   "body": "Beyond the book's page: in PyTorch the graph is recorded on tensors with `requires_grad=True` and gradients are obtained with `loss.backward()`; in JAX one writes the loss as a pure function and calls `jax.grad(loss_fn)(params)`. The book covers these in chapter 3.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Effect of the learning rate on gradient descent",
+   "why": "update_weights subtracts gradient * learning_rate with learning_rate = 1e-3, 'typically a small quantity'. Compare how far 25 steps get with 0.001 versus larger rates.",
+   "widget": "gradient_descent",
+   "params": {
+    "surface": "bowl",
+    "lr": 0.001,
+    "start": [
+     2.5,
+     2.0
+    ],
+    "steps": 25,
+    "compare_lrs": [
+     0.001,
+     0.05,
+     0.5
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "Filling in the two missing functions of listing 2.9",
+   "why": "This page supplies update_weights (by hand or via an Optimizer) and introduces GradientTape as the source of gradients.",
+   "mermaid": "flowchart LR\n  T[\"GradientTape records forward ops\"] --> G[\"tape.gradient: list of gradients\"]\n  G --> U1[\"update_weights by hand: w.assign w - g * 1e-3\"]\n  G --> U2[\"update_weights via optimizers.SGD 1e-3 apply_gradients\"]\n  U1 --> W[(model.weights)]\n  U2 --> W"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "w = w - g * learning_rate inside the loop updates the model.",
+   "correction": "Only w.assign(...) changes the variable in place, as the callout says; rebinding a Python name does nothing to the model."
+  },
+  {
+   "claim": "The optimizer computes the gradients.",
+   "correction": "Gradients come from automatic differentiation (GradientTape); the optimizer only applies them."
+  },
+  {
+   "claim": "Automatic differentiation approximates gradients numerically.",
+   "correction": "It replays the recorded computation graph with the chain rule and gives exact derivatives of the executed operations."
+  },
+  {
+   "claim": "The from-scratch example requires TensorFlow.",
+   "correction": "The authors pick TensorFlow 'for the sake of the example'; JAX or PyTorch autodiff would work too (chapter 3)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 79,
+    "note": "Listing 2.9 and the start of the weight update explanation."
+   },
+   {
+    "page": 68,
+    "note": "Update rule W -= learning_rate * gradient."
+   },
+   {
+    "page": 73,
+    "note": "Backpropagation by hand on a toy graph."
+   },
+   {
+    "page": 76,
+    "note": "compile(optimizer=\"adam\")."
+   }
+  ],
+  "later": [
+   {
+    "page": 81,
+    "note": "GradientTape example y = 2 * x + 3 and the rewritten one_training_step."
+   },
+   {
+    "page": 96,
+    "note": "Chapter 3's introduction to TensorFlow."
+   },
+   {
+    "page": 239,
+    "note": "Custom training loops in chapter 7."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 70,
+    "note": "Chain rule and backpropagation."
+   },
+   {
+    "page": 46,
+    "note": "Scalars as rank-0 tensors."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 68,
+    "note": "Mini-batch SGD update."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 79,
+    "note": "Listing 2.9."
+   },
+   {
+    "page": 81,
+    "note": "one_training_step with GradientTape."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 74,
+    "note": "Figure 2.25: path in the backward graph, what the tape automates."
+   }
+  ]
+ },
+ "takeaways": [
+  "update_weights subtracts gradient * learning_rate (1e-3) from each weight, in place via assign.",
+  "In practice a Keras Optimizer does this: optimizers.SGD(learning_rate=1e-3).apply_gradients(zip(gradients, weights)).",
+  "Backpropagation is not reimplemented because softmax and crossentropy have verbose derivatives; automatic differentiation is used instead.",
+  "tf.GradientTape records operations in its scope as a graph (tape) and can return the gradient of any scalar with respect to any inputs."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why does update_weights use w.assign(...) instead of w = w - g * learning_rate?",
+   "options": [
+    "assign is faster but otherwise equivalent",
+    "assign updates the variable in place, so the model's weights actually change",
+    "assign computes the gradient",
+    "assign normalizes the weights"
+   ],
+   "answer": "assign updates the variable in place, so the model's weights actually change",
+   "explanation": "The callout says assign gives the variable a new value in place. Rebinding w would leave the model's variable untouched; assign neither computes gradients nor normalizes.",
+   "page_refs": [
+    80
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "A weight w = 0.25 has gradient g = -3.0. What is its value after one update with learning_rate = 1e-3?",
+   "options": [],
+   "answer": "0.253",
+   "explanation": "w - g * lr = 0.25 - (-3.0)(0.001) = 0.253. The negative gradient means increasing w lowers the loss.",
+   "page_refs": [
+    80
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "Which Keras call replaces the hand-written update loop?",
+   "options": [],
+   "answer": "optimizer.apply_gradients(zip(gradients, weights)) with optimizer = optimizers.SGD(learning_rate=1e-3).",
+   "explanation": "As shown in the second code block on the page.",
+   "page_refs": [
+    80
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why do the authors not reimplement backpropagation for this example?",
+   "options": [],
+   "answer": "It would be cumbersome, especially since the model uses softmax and a crossentropy loss, whose derivatives are fairly verbose; automatic differentiation in TensorFlow/JAX/PyTorch does it for us.",
+   "explanation": "This is stated in the 'Gradient computation' paragraphs.",
+   "page_refs": [
+    80,
+    77
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "What does tf.GradientTape record?",
+   "options": [
+    "The values of the weights at each epoch",
+    "The tensor operations run inside its scope, as a computation graph",
+    "The loss value at each batch",
+    "The learning rate schedule"
+   ],
+   "answer": "The tensor operations run inside its scope, as a computation graph",
+   "explanation": "The page describes it as a Python scope that records the tensor operations run inside it as a computation graph (tape). Weight histories, losses and schedules are not what it records.",
+   "page_refs": [
+    80
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "What is the division of labour between GradientTape and the Optimizer in the training step?",
+   "options": [],
+   "answer": "GradientTape computes the gradients of the loss with respect to the weights; the Optimizer uses those gradients to update the weights according to its rule.",
+   "explanation": "These are the two missing functions of listing 2.9: get_gradients_of_loss_wrt_weights and update_weights.",
+   "page_refs": [
+    79,
+    80
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you explain, using figures 2.23-2.25, what tape.gradient does internally when asked for the gradient of the loss with respect to W1?",
+   "options": [],
+   "answer": "It traverses the recorded graph backward from the loss, multiplying local derivatives along each path to W1 and summing over paths.",
+   "explanation": "Automatic differentiation is the mechanized version of the backward-graph computation done by hand on p.73-p.74.",
+   "page_refs": [
+    73,
+    74,
+    80
+   ]
+  }
+ ]
+}

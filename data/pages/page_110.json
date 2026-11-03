@@ -1,0 +1,445 @@
+{
+  "page_id": "page_110",
+  "pdf_page": 110,
+  "printed_page": "86",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:30:00Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean. The numbered three-step list was split by the extractor across p110_e07 and p110_e08 (item 2 wraps across the two elements); notes follow the printed list. The page ends mid-thought: the call to grad_fn and its output are on p.111."
+  },
+  "overview": {
+    "title": "A dense layer in JAX and gradients via jax.grad",
+    "chapter": "3 Introduction to TensorFlow, PyTorch, JAX, and Keras",
+    "section": "3.5 Introduction to JAX",
+    "subsection": "3.5.3 Random number generation in JAX",
+    "main_topic": "Writing a dense layer with `jnp` and introducing JAX's metaprogramming approach to gradients: `jax.grad` turns a loss function into a gradient function.",
+    "central_idea": "Instead of recording operations on a tape (TensorFlow) or calling `.backward()` (PyTorch), JAX transforms a function: `jax.grad(compute_loss)` returns a new function that computes the gradient of the loss with respect to the loss function's first argument.",
+    "importance": "`jax.grad` (and its sibling `jax.value_and_grad`, p.111) is the gradient mechanism used for the pure-JAX linear classifier (p.112-113) and for JAX training steps in Keras (p.242) and in later chapters (p.319).",
+    "learning_objectives": [
+      "Read the one-line JAX dense layer `jax.nn.relu(jnp.matmul(inputs, W) + b)`.",
+      "Define metaprogramming as 'functions that return functions' and explain how it applies to gradients.",
+      "List the three steps for computing gradients in JAX.",
+      "State the two requirements on a loss function passed to `jax.grad`: scalar output, and the state to differentiate as the first argument.",
+      "Explain what `grad_fn = jax.grad(compute_loss)` returns and how it is called."
+    ],
+    "prerequisites": [
+      "Dense layer as relu(dot(input, W) + b) (chapter 2)",
+      "Derivatives and gradients, automatic differentiation (chapter 2, p.80)",
+      "Gradient computation in TensorFlow and PyTorch (sections 3.3, 3.4)",
+      "jax.numpy basics (p.107-109)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page first closes the \"Tensor operations\" discussion with a **dense layer** written in JAX: `def dense(inputs, W, b): return jax.nn.relu(jnp.matmul(inputs, W) + b)`. It is the same affine-transform-plus-ReLU you saw in chapter 2, expressed with `jnp.matmul` and `jax.nn.relu`, and, notably, it is a pure function: the weights `W` and `b` are passed in as arguments rather than stored on an object.\n\nThe new subsection **Computing gradients with JAX** explains that, unlike TensorFlow and PyTorch, JAX takes a **metaprogramming** approach: it has *functions that return functions* (\"meta-functions\"). JAX lets you *turn a loss-computation function into a gradient-computation function*. The process has three steps:\n\n1. Define a loss function, `compute_loss()`.\n2. Call `grad_fn = jax.grad(compute_loss)` to retrieve a gradient-computation function.\n3. Call `grad_fn` to get the gradient values.\n\nThe loss function must (a) return a **scalar** loss value, and (b) take as its **first argument** the state arrays you need gradients for, conventionally named `state`; that argument can be a single array, a list of arrays or a dict of arrays.\n\nThe simple example is `compute_loss(input_var)`, which returns `jnp.square(input_var)`. Calling `jax.grad(compute_loss)` returns `grad_fn`, a function that accepts the same arguments as `compute_loss` and returns the gradient of the loss with respect to `input_var`. Because the first argument is a single array here, `grad_fn()` directly returns one gradient array; the actual call and output are on the next page (p.111).",
+  "paragraphs": [
+    {
+      "ref": "p110_e03",
+      "excerpt": "Here’s a dense layer:",
+      "what_it_says": "Introduces a one-line dense layer implemented with JAX operations.",
+      "what_it_means": "This is the practical payoff of 'math in JAX looks exactly like NumPy' (p.109): a full neural-network layer is just `matmul`, `+` and `relu`.",
+      "why_it_matters": "The layer is a pure function of `(inputs, W, b)`; this style, with parameters as explicit arguments, is exactly what `jax.grad` needs, and it reappears in the pure-JAX linear classifier (p.112).",
+      "technical_idea": "Short lead-in (under 25 words), noted because it introduces the code.",
+      "terminology": [
+        {"term": "dense layer", "meaning": "A fully connected layer computing an activation of an affine transform of its input."}
+      ],
+      "connections": ["p.109: Listing 3.32 showed the same jnp operations in isolation."]
+    },
+    {
+      "ref": "p110_e06",
+      "excerpt": "Unlike TensorFlow and PyTorch, JAX takes a metaprogramming approach to gradient computation.",
+      "what_it_says": "JAX computes gradients via metaprogramming, meaning functions that return functions ('meta-functions'). Concretely, JAX turns a loss-computation function into a gradient-computation function, which leads to a three-step process.",
+      "what_it_means": "In TensorFlow you run code inside a `GradientTape` and ask the tape for gradients; in PyTorch you call `.backward()` on a loss tensor and read `.grad` attributes. Both work on *values* produced while running. JAX instead works on *functions*: you hand it the Python function that computes the loss, and it gives you back a different Python function that computes gradients.",
+      "why_it_matters": "This function-transformation idea is central to JAX; `jax.jit` (p.112) is another transformation of the same kind. It also explains why JAX code must be stateless: the transformation can only reason about what flows through the function's arguments and return values.",
+      "technical_idea": "Beyond the book: `jax.grad` traces the function with abstract values to build a representation of its computation, then applies reverse-mode automatic differentiation to that representation.",
+      "terminology": [
+        {"term": "metaprogramming", "meaning": "Writing functions that take or return other functions (book: 'functions that return functions')."},
+        {"term": "meta-function", "meaning": "The authors' informal name for such a function, e.g. `jax.grad`."}
+      ],
+      "connections": ["p.80: chapter 2 used TensorFlow's `tf.GradientTape` to record operations and get gradients."]
+    },
+    {
+      "ref": "p110_e07",
+      "excerpt": "1 Define a loss function, `compute_loss()`. 2 Call `grad_fn = jax.grad(compute_loss)`",
+      "what_it_says": "Steps 1 and 2 of the process: define `compute_loss()`, then call `grad_fn = jax.grad(compute_loss)` to obtain a gradient-computation function.",
+      "what_it_means": "Step 2 involves no numbers at all; it only builds a new function. No loss is computed and no gradient is computed until you call that function.",
+      "why_it_matters": "Separating 'build the gradient function' from 'evaluate it' means you can build `grad_fn` once and call it at every training step, and even compile it with `jax.jit`.",
+      "technical_idea": null,
+      "terminology": [
+        {"term": "jax.grad", "meaning": "Transformation that maps a scalar-valued function to the function computing its gradient with respect to the first argument."}
+      ],
+      "connections": []
+    },
+    {
+      "ref": "p110_e08",
+      "excerpt": "function. 3 Call `grad_fn` to retrieve the gradient values. The loss function",
+      "what_it_says": "Step 3: call `grad_fn` to get the gradient values. The text then announces the properties the loss function must satisfy.",
+      "what_it_means": "Only at this step are actual arrays passed in and actual gradients returned.",
+      "why_it_matters": "The two properties that follow are not style advice; `jax.grad` fails if they are violated.",
+      "technical_idea": "This element contains the tail of printed step 2 ('function.') plus step 3 and the lead-in to the bullets.",
+      "terminology": [],
+      "connections": []
+    },
+    {
+      "ref": "p110_e10",
+      "excerpt": "Its first argument (which, in the following example, is also the only argument)",
+      "what_it_says": "Together with the preceding bullet ('It should return a scalar loss value'), this states the loss function's requirements: its first argument must contain the state arrays whose gradients you need, usually named `state`, and it may be a single array, a list of arrays or a dict of arrays.",
+      "what_it_means": "`jax.grad` differentiates only with respect to the first positional argument by default. Anything else you pass (data batches, labels, flags) is treated as a constant. Because the first argument can be a nested container, one call gives you gradients for all model parameters at once, returned in the same structure.",
+      "why_it_matters": "Organizing all trainable parameters into a single `state` argument is the standard JAX design; the linear classifier on p.113 packs `W` and `b` into `state` this way. A scalar output is required because a gradient is defined for a scalar function; a vector-valued loss would need a Jacobian.",
+      "technical_idea": "Beyond the book: `jax.grad(f, argnums=(0, 1))` can differentiate with respect to other arguments, and the nested structures are what JAX calls pytrees (the book calls them trees, p.111).",
+      "terminology": [
+        {"term": "state", "meaning": "Conventional name for the first argument holding the arrays to differentiate (model parameters)."},
+        {"term": "scalar loss", "meaning": "A single number (0-D array) summarizing the error."}
+      ],
+      "connections": ["p.111: state can be any nested structure of tuples, dicts and lists, called a tree.", "p.113: the classifier's compute_loss takes state as its first argument."]
+    },
+    {
+      "ref": "p110_e11",
+      "excerpt": "Let’s take a look at a simple example. Here’s a loss-computation function that",
+      "what_it_says": "The simplest example: a loss function taking one scalar `input_var` and returning its square.",
+      "what_it_means": "$L(x) = x^2$ satisfies both requirements: the output is a scalar and the only (hence first) argument is what we differentiate.",
+      "why_it_matters": "With a known closed-form derivative, $dL/dx = 2x$, you can check JAX's answer by hand.",
+      "technical_idea": "The analytical derivative 2x is not stated on this page; it is standard calculus.",
+      "terminology": [],
+      "connections": []
+    },
+    {
+      "ref": "p110_e13",
+      "excerpt": "We can now call the JAX utility `jax.grad()` on this loss function. It",
+      "what_it_says": "Calling `jax.grad()` on the loss function returns a gradient-computation function that takes the same arguments as the original and returns the gradient of the loss with respect to `input_var`.",
+      "what_it_means": "`grad_fn` has the same signature as `compute_loss` but a different output: instead of $x^2$ it returns $2x$.",
+      "why_it_matters": "Same signature means you can swap a forward-pass call for a gradient call without restructuring your code.",
+      "technical_idea": null,
+      "terminology": [
+        {"term": "gradient-computation function", "meaning": "The function returned by `jax.grad`."}
+      ],
+      "connections": []
+    },
+    {
+      "ref": "p110_e15",
+      "excerpt": "Once you’ve obtained `grad_fn()`, you can call it with the same arguments as",
+      "what_it_says": "`grad_fn()` is called with the same arguments as `compute_loss()` and returns gradient arrays corresponding to the first argument. Since the first argument is a single array here, it directly returns the gradient with respect to that one array. The example call follows on the next page.",
+      "what_it_means": "The output's structure mirrors the first argument's structure: a single array in, a single gradient array out; a dict of arrays in, a dict of gradients out.",
+      "why_it_matters": "This structural correspondence is what makes JAX gradients easy to apply: `new_state = state - lr * grads`, leaf by leaf.",
+      "technical_idea": "Beyond the book: the gradient has the same shape and dtype as each corresponding input leaf.",
+      "terminology": [],
+      "connections": ["p.111: the call to grad_fn, then jax.value_and_grad and has_aux."]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "dense_layer",
+      "name": "Dense layer",
+      "definition": "A layer computing `relu(matmul(inputs, W) + b)`: an affine transform followed by a nonlinearity.",
+      "intuition": "Each output unit takes a weighted vote of all inputs, adds a bias, and keeps only the positive part.",
+      "technical": "With `inputs` of shape `(batch, d_in)`, `W` of shape `(d_in, d_out)` and `b` of shape `(d_out,)`, the output has shape `(batch, d_out)`; `b` is broadcast over the batch.",
+      "significance": "The basic building block of the classifiers in chapters 2 and 3.",
+      "example": "`dense(inputs, W, b)` on this page.",
+      "misconception": "That a JAX dense layer must be an object holding its weights; here it is a pure function and weights are arguments.",
+      "related": ["relu", "affine_transform", "stateless_computation"],
+      "source": "book"
+    },
+    {
+      "id": "metaprogramming",
+      "name": "Metaprogramming (function transformations)",
+      "definition": "Functions that return functions; in JAX, transforming a loss function into a gradient function.",
+      "intuition": "A machine that takes a recipe and prints a new recipe, e.g. 'how to compute the loss' becomes 'how to compute the slope of the loss'.",
+      "technical": "`jax.grad(f)` returns `g` with `g(x, ...) = ∇_x f(x, ...)`. Other JAX transformations follow the same pattern, such as `jax.jit` (p.112) and `jax.value_and_grad` (p.111).",
+      "significance": "It is the defining difference between JAX's gradient API and those of TensorFlow and PyTorch.",
+      "example": "`grad_fn = jax.grad(compute_loss)`.",
+      "misconception": "That `jax.grad(compute_loss)` computes a gradient immediately; it only returns a function.",
+      "related": ["autodiff", "gradient_tape", "jit_compilation"],
+      "source": "book"
+    },
+    {
+      "id": "autodiff",
+      "name": "Automatic differentiation",
+      "definition": "Computing exact derivatives of programs by applying the chain rule to their elementary operations.",
+      "intuition": "The framework knows the derivative of every primitive op and chains them together for you.",
+      "technical": "JAX applies reverse-mode autodiff to the function passed to `jax.grad`; TensorFlow uses a recorded tape (p.80), PyTorch builds a graph during the forward pass.",
+      "significance": "It removes the need to hand-derive gradients for complex losses (p.80).",
+      "example": "For `jnp.square(x)`, autodiff yields `2*x`.",
+      "misconception": "That autodiff is numerical finite differencing; it is exact up to floating-point error.",
+      "related": ["backpropagation", "gradient_tape", "metaprogramming"],
+      "source": "book"
+    },
+    {
+      "id": "loss_function",
+      "name": "Loss function (JAX requirements)",
+      "definition": "A function returning a scalar measure of error; for `jax.grad` it must return a scalar and take the state to differentiate as its first argument.",
+      "intuition": "One number that says how bad things are, as a function of the knobs (state) you can turn.",
+      "technical": "`state` may be an array, list or dict of arrays; gradients are returned with the same structure.",
+      "significance": "Structuring the loss this way is what makes JAX training code work (p.113, p.242).",
+      "example": "`compute_loss(input_var)` returning `jnp.square(input_var)`.",
+      "misconception": "That `jax.grad` differentiates with respect to all arguments; by default only the first.",
+      "related": ["metaprogramming", "stateless_computation"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "The JAX dense layer",
+      "latex": "\\text{output} = \\operatorname{relu}(X W + b)",
+      "source_text": "jax.nn.relu(jnp.matmul(inputs, W) + b)",
+      "variables": [
+        {"symbol": "X", "meaning": "`inputs`, a batch of input vectors, shape (batch, d_in)."},
+        {"symbol": "W", "meaning": "Weight matrix, shape (d_in, d_out)."},
+        {"symbol": "b", "meaning": "Bias vector, shape (d_out,), broadcast across the batch."},
+        {"symbol": "\\operatorname{relu}", "meaning": "Element-wise $\\max(0, z)$."}
+      ],
+      "operations": "Matrix product, broadcast addition, element-wise ReLU.",
+      "purpose": "Defines one dense layer as a pure function of its inputs and parameters.",
+      "interpretation": "Each output unit is a weighted sum of inputs plus a bias, clipped at zero.",
+      "intuition": "Affine transformation then a nonlinearity, the same as chapter 2's `relu(dot(input, W) + b)`.",
+      "numerical_example": "With $X = [1, 2]$, $W = \\begin{bmatrix}1 & -1\\\\ 0 & 1\\end{bmatrix}$, $b = [0, -2]$: $XW = [1, 1]$, $+b = [1, -1]$, relu gives $[1, 0]$ (illustrative values, not from the book).",
+      "source": "book",
+      "book_ref": "p.110"
+    },
+    {
+      "id": "m2",
+      "title": "Gradient of the square loss",
+      "latex": "L(x) = x^2, \\qquad \\texttt{grad\\_fn}(x) = \\frac{dL}{dx} = 2x",
+      "source_text": "def compute_loss(input_var): return jnp.square(input_var); grad_fn = jax.grad(compute_loss)",
+      "variables": [
+        {"symbol": "x", "meaning": "`input_var`, the scalar we differentiate with respect to."},
+        {"symbol": "L", "meaning": "The scalar loss `jnp.square(input_var)`."}
+      ],
+      "operations": "Squaring; derivative by the power rule.",
+      "purpose": "Shows what `jax.grad(compute_loss)` computes for the page's example.",
+      "interpretation": "`grad_fn` is itself a function of x: the slope of the parabola at that point.",
+      "intuition": "Where the parabola is steep (large |x|) the gradient is large; at the minimum x = 0 it is 0.",
+      "numerical_example": "At $x = 3$: $L = 9$ and `grad_fn(3.0)` $= 6$ (hand computation; the book's own example call is on p.111).",
+      "source": "ai_explanation",
+      "book_ref": "p.110"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "A dense layer in JAX",
+      "original_code": "def dense(inputs, W, b):\n    return jax.nn.relu(jnp.matmul(inputs, W) + b)",
+      "language": "python",
+      "what_it_does": "Implements a dense layer as a pure function: matrix-multiply the inputs by `W`, add `b`, apply ReLU.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Parameters `W` and `b` are function arguments, not attributes of a layer object."},
+        {"lines": "2", "explanation": "`jnp.matmul(inputs, W)` is the matrix product, `+ b` broadcasts the bias over the batch, `jax.nn.relu` applies max(0, z) element-wise."}
+      ],
+      "inputs_outputs": "inputs (batch, d_in), W (d_in, d_out), b (d_out,) -> output (batch, d_out).",
+      "algorithm": "Affine transform plus ReLU.",
+      "theory_link": "Same layer as chapter 2's `relu(dot(input, W) + b)`; stateless style required by JAX transformations.",
+      "parameters": [
+        {"name": "W", "role": "Weight matrix."},
+        {"name": "b", "role": "Bias vector."}
+      ],
+      "pitfalls": [
+        "Shape mismatch: `inputs` must have last dimension equal to `W.shape[0]`."
+      ],
+      "illustrative_code": "# AI-written: using the dense function\nimport jax, jax.numpy as jnp\nk1, k2 = jax.random.split(jax.random.key(0))\nW = jax.random.normal(k1, (4, 3))\nb = jnp.zeros((3,))\nx = jax.random.normal(k2, (2, 4))\nprint(dense(x, W, b).shape)  # (2, 3)"
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "A minimal loss function",
+      "original_code": "def compute_loss(input_var):\n    return jnp.square(input_var)",
+      "language": "python",
+      "what_it_does": "Returns the square of its scalar input as the loss.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "The only (and thus first) argument is the variable we want gradients for."},
+        {"lines": "2", "explanation": "Returns a scalar, satisfying jax.grad's requirement."}
+      ],
+      "inputs_outputs": "Scalar in, scalar out ($x \\mapsto x^2$).",
+      "algorithm": "Square.",
+      "theory_link": "Satisfies both loss-function properties listed on the page.",
+      "parameters": [
+        {"name": "input_var", "role": "Variable to differentiate with respect to."}
+      ],
+      "pitfalls": [
+        "If `input_var` were a vector, `jnp.square` would return a vector and `jax.grad` would fail; you would need e.g. `jnp.sum(jnp.square(input_var))`."
+      ],
+      "illustrative_code": null
+    },
+    {
+      "id": "c3",
+      "listing": null,
+      "title": "Obtaining a gradient function",
+      "original_code": "grad_fn = jax.grad(compute_loss)",
+      "language": "python",
+      "what_it_does": "Transforms `compute_loss` into a function returning the gradient of the loss with respect to its first argument.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "No computation on data happens here; `grad_fn` is a new Python callable with the same signature as `compute_loss`."}
+      ],
+      "inputs_outputs": "Input: a function. Output: a function.",
+      "algorithm": "Reverse-mode automatic differentiation via function transformation.",
+      "theory_link": "Metaprogramming: functions that return functions.",
+      "parameters": [],
+      "pitfalls": [
+        "Passing an integer to `grad_fn` raises an error; JAX requires floating-point inputs to differentiate (beyond the book). Use e.g. `3.0` rather than `3`."
+      ],
+      "illustrative_code": "# AI-written: calling the gradient function\nprint(compute_loss(3.0))   # 9.0\nprint(grad_fn(3.0))        # 6.0  (= 2 * 3)"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Three frameworks, three gradient styles",
+      "kind": "alternative",
+      "body": "- **TensorFlow**: open a `tf.GradientTape()` scope, run the forward pass inside it, then call `tape.gradient(loss, variables)` (p.80).\n- **PyTorch**: run the forward pass, call `loss.backward()`, then read `param.grad` on each parameter (section 3.4).\n- **JAX**: write `compute_loss(state, ...)` as a pure function, build `grad_fn = jax.grad(compute_loss)`, then call `grads = grad_fn(state, ...)`.\n\nThe first two attach gradient bookkeeping to *values and objects*; JAX attaches it to *functions*. That is why JAX needs the state to be an explicit argument.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "The recipe analogy",
+      "kind": "analogy",
+      "body": "`compute_loss` is a recipe that says how to compute the error from the ingredients (`state`). `jax.grad` reads the recipe and writes a second recipe: how each ingredient should be nudged to change the error. You can keep the second recipe and use it as often as you like, on any ingredients.",
+      "source": "analogy"
+    },
+    {
+      "title": "Why the loss must be a scalar",
+      "kind": "breakdown",
+      "body": "A gradient $\\nabla_\\theta L$ is defined for a scalar function $L(\\theta)$: it has one entry per parameter, giving the slope of that single number. If the output were a vector of $m$ values, the derivative would be an $m \\times n$ Jacobian, and there would be no single 'downhill' direction to step in. Gradient descent needs one number to minimize, which is why the book requires a scalar loss value (explanation beyond the book).",
+      "source": "ai_explanation"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "The three-step JAX gradient process",
+      "why": "The page's numbered list: define compute_loss, transform it with jax.grad, call grad_fn.",
+      "mermaid": "flowchart LR\n  A[\"1. def compute_loss(state, ...)\\nreturns a scalar\"] -->|\"2. jax.grad\"| B[\"grad_fn\\n(same arguments)\"]\n  S[\"state arrays\"] --> B\n  B -->|\"3. call\"| G[\"gradients\\n(same structure as state)\"]"
+    },
+    {
+      "id": "v2",
+      "type": "widget",
+      "title": "What grad_fn computes for compute_loss = x²",
+      "why": "The page's example loss is `jnp.square(input_var)`; `jax.grad` returns its derivative, the local slope. Move x0 to see the tangent slope 2·x0.",
+      "widget": "derivative_tangent",
+      "params": {"expr": "x*x", "x0": 1.5, "h": 0.5}
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "`jax.grad(compute_loss)` returns gradient values.",
+      "correction": "It returns a function (`grad_fn`); you get values only when you call it (step 3)."
+    },
+    {
+      "claim": "`jax.grad` differentiates with respect to every argument of the loss function.",
+      "correction": "It differentiates with respect to the first argument, which should hold the state arrays you need gradients for."
+    },
+    {
+      "claim": "The state passed to the loss must be a single array.",
+      "correction": "It can be a single array, a list of arrays or a dict of arrays (and more generally a nested tree, p.111)."
+    },
+    {
+      "claim": "The JAX dense layer keeps its weights internally.",
+      "correction": "`dense(inputs, W, b)` receives `W` and `b` as arguments; JAX code is stateless."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 109, "note": "NumPy-style math in JAX (Listing 3.32), used here to build the dense layer."},
+      {"page": 80, "note": "Chapter 2's gradient computation via TensorFlow's GradientTape, the contrast to JAX's metaprogramming."},
+      {"page": 106, "note": "JAX's stateless design, which motivates passing state as a function argument."}
+    ],
+    "later": [
+      {"page": 111, "note": "Calling grad_fn, jax.value_and_grad, gradients for complex state (trees) and has_aux."},
+      {"page": 113, "note": "compute_loss(state, ...) for the pure-JAX linear classifier."},
+      {"page": 242, "note": "JAX training step in Keras with stateless_call and gradients obtained by metaprogramming."},
+      {"page": 319, "note": "jax.grad used for gradient ascent when visualizing ConvNet filters."}
+    ],
+    "prerequisites": [
+      {"page": 80, "note": "Automatic differentiation and the role of gradients in training."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 112, "note": "The JAX linear classifier's model and loss functions."}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "A JAX dense layer is a pure function: `jax.nn.relu(jnp.matmul(inputs, W) + b)`.",
+    "JAX computes gradients by metaprogramming: `jax.grad` turns a loss function into a gradient function.",
+    "Three steps: define `compute_loss`, build `grad_fn = jax.grad(compute_loss)`, call `grad_fn`.",
+    "The loss must return a scalar and take the state to differentiate as its first argument.",
+    "`state` can be an array, a list of arrays or a dict of arrays; gradients come back in the same structure.",
+    "`grad_fn` takes the same arguments as `compute_loss`."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "What does `jax.grad(compute_loss)` return?",
+      "options": [
+        "The gradient of the loss at the current parameters",
+        "The loss value and its gradient as a tuple",
+        "A new function that computes the gradient of the loss with respect to its first argument",
+        "A GradientTape object"
+      ],
+      "answer": "A new function that computes the gradient of the loss with respect to its first argument",
+      "explanation": "JAX uses metaprogramming: functions that return functions. No values are computed yet (option 1). The tuple behaviour belongs to `jax.value_and_grad` (p.111). GradientTape is TensorFlow's mechanism.",
+      "page_refs": [110, 111]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "List the two properties a loss function must satisfy to be used with `jax.grad`.",
+      "options": [],
+      "answer": "It must return a scalar loss value, and its first argument must contain the state arrays you need gradients for.",
+      "explanation": "These are the two bullets on the page; the first argument is usually named `state` and can be an array, list or dict of arrays.",
+      "page_refs": [110]
+    },
+    {
+      "id": "q3",
+      "type": "math",
+      "question": "For `compute_loss(input_var) = jnp.square(input_var)`, what does `grad_fn(-2.0)` return?",
+      "options": [],
+      "answer": "-4.0",
+      "explanation": "The derivative of $x^2$ is $2x$; at $x=-2$ that is $-4$. (Hand calculation; the book's own call is on p.111.)",
+      "page_refs": [110]
+    },
+    {
+      "id": "q4",
+      "type": "conceptual",
+      "question": "Why is it natural that JAX, a stateless framework, computes gradients by transforming functions rather than by recording operations on stateful objects?",
+      "options": [],
+      "answer": "Because all relevant state is an explicit function argument, JAX can analyse the function itself and produce a new function giving gradients with respect to that argument; there are no hidden variables to track.",
+      "explanation": "This is an inference connecting the page's metaprogramming approach with the stateless design from p.106 and the requirement that the state be the first argument.",
+      "page_refs": [106, 110]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "In `dense(inputs, W, b)`, which operation applies the nonlinearity?",
+      "options": [
+        "jnp.matmul",
+        "+ b",
+        "jax.nn.relu",
+        "The function definition itself"
+      ],
+      "answer": "jax.nn.relu",
+      "explanation": "ReLU is the nonlinearity; `matmul` and `+ b` form the affine part. The function definition just packages the computation.",
+      "page_refs": [110]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "If `state` is a dict `{\"W\": W, \"b\": b}`, what structure will `grad_fn(state, ...)` return?",
+      "options": [],
+      "answer": "A dict with the same keys, `{\"W\": dL/dW, \"b\": dL/db}`, each gradient having the shape of the corresponding array.",
+      "explanation": "The page says grad_fn returns gradient arrays corresponding to the first argument; with a single array it returns one array, so with a dict it returns a matching dict (the mirroring of structure is made explicit on p.111).",
+      "page_refs": [110, 111]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you explain the three-step JAX gradient process to someone who knows only PyTorch, pointing out what replaces `loss.backward()`?",
+      "options": [],
+      "answer": "Write the loss as a function of the parameters, transform it once with `jax.grad`, then call the resulting function with the parameters; that call replaces `loss.backward()` + reading `.grad`.",
+      "explanation": "Check yourself against the numbered list on the page and the comparison with TensorFlow/PyTorch in the first paragraph.",
+      "page_refs": [110]
+    }
+  ]
+}

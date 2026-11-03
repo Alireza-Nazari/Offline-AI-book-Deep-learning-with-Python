@@ -1,0 +1,298 @@
+{
+ "page_id": "page_436",
+ "pdf_page": 436,
+ "printed_page": "412",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:10:20Z",
+  "confidence": "high",
+  "review_flags": [
+   "Inconsistent layer names in the printed model summary (p436_e07): the layers are named input_layer_3, bidirectional_1 and dropout_1, but the \"Connected to\" column refers to input_layer_6[0][…], bidirectional_2[0…] and dropout_2[0][0]. The output was evidently pasted from different runs or sessions. This is cosmetic; shapes and parameter counts are consistent."
+  ],
+  "extraction_quality": "Clean. p436_e03 merges two printed paragraphs (\"The third argument...\" and \"Remember that when preprocessing...\"). p436_e06 merges three (\"mask_zero=True is simply a shorthand...\", \"This form of masking is implicit...\", \"Before we train this new model...\"). The model summary continues on p.437, which gives the totals: 1,986,177 parameters (7.58 MB)."
+ },
+ "overview": {
+  "title": "mask_zero: masking padding tokens, and the embedding model's summary",
+  "chapter": "14 Text classification",
+  "section": "14.5 Sequence models",
+  "subsection": "14.5.3 Using a word embedding",
+  "main_topic": "Why padded sequences need masking, how mask_zero=True in the Embedding layer marks token id 0 ([PAD]) so the LSTM outputs the last non-masked representation, the optional explicit mask argument, and the model summary of lstm_with_embedding (Embedding 1,920,000; NotEqual mask layer; Bidirectional 66,048; Dense 129)",
+  "central_idea": "Padding tokens added to reach length 600 should not influence the prediction. mask_zero=True makes the Embedding layer emit a mask (token id ≠ 0) that the LSTM uses to ignore padded steps, so the final representation corresponds to the last real token.",
+  "importance": "Masking is essential whenever variable-length sequences are padded. Without it, a recurrent model's final state would mostly reflect hundreds of [PAD] steps. The summary also documents the 10× reduction in model size.",
+  "learning_objectives": [
+   "Explain why padding tokens corrupt the final state of an RNN",
+   "Describe what mask_zero=True does and why it relies on [PAD] having id 0",
+   "Explain how the LSTM uses the mask (outputs the last non-masked representation)",
+   "Know that LSTM accepts an explicit mask call argument",
+   "Read the lstm_with_embedding summary, including the NotEqual mask layer"
+  ],
+  "prerequisites": [
+   "Listing 14.24 and the Embedding arguments input_dim and output_dim (p.435)",
+   "Padding sequences to max_length = 600 (p.430)",
+   "How an LSTM processes a sequence step by step (chapter 13)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page explains the third argument of the Embedding layer in Listing 14.24: **`mask_zero=True`**. It tells Keras which inputs are `\"[PAD]\"` tokens so they can be **masked** later in the model.\n\nWhen sequences are preprocessed to a fixed length, a lot of padding may be added, so a sequence can look like `[\"the\", \"movie\", \"was\", \"awful\", \"[PAD]\", \"[PAD]\", \"[PAD]\", \"[PAD]\"]`. Without masking, these pads are embedded and fed into the LSTM, so its final representation may be the result of processing the `[PAD]` vector over and over. What we actually want is the representation at **\"awful\"**, the last non-padding token. Equivalently, we want to mask all `[PAD]` tokens so they do not affect the prediction.\n\n`mask_zero=True` is a **shorthand** for this. Keras marks every position whose input was **0**, the assumed id of `[PAD]`. The mask is used internally by the `LSTM`: instead of outputting the last representation of the whole sequence, it outputs the **last non-masked representation**. This masking is **implicit** and easy to use. For explicit or custom masking, `LSTM` takes an optional **`mask`** call argument.\n\nThe page ends with `model.summary()` for `lstm_with_embedding`:\n\n| Layer | Output | Params |\n|---|---|---|\n| input_layer_3 | (None, 600) | 0 |\n| embedding | (None, 600, 64) | 1,920,000 |\n| not_equal (NotEqual) | (None, 600) | 0 |\n| bidirectional_1 | (None, 128) | 66,048 |\n| dropout_1 | (None, 128) | 0 |\n| dense_3 | (None, 1) | 129 |\n\nThe extra `not_equal` layer is the mask computation (input ≠ 0), and the Bidirectional layer is connected to both the embedding and the mask. The totals, 1,986,177 parameters (7.58 MB), appear at the top of p.437.",
+ "paragraphs": [
+  {
+   "ref": "p436_e03",
+   "excerpt": "The third argument, `mask_zero=True`, is a little more subtle. This argument tells",
+   "what_it_says": "mask_zero=True tells Keras which inputs are [PAD] tokens, so those entries can be masked later in the model.",
+   "what_it_means": "A mask is a boolean tensor, shape (batch, 600) here, that travels alongside the data and flags which timesteps are real. Downstream layers that support masking (RNNs, attention) use it to ignore the flagged steps.",
+   "why_it_matters": "Most IMDb reviews are shorter or longer than 600 tokens; short ones are padded with many [PAD] tokens, so masking affects most samples.",
+   "terminology": [
+    {"term": "Mask", "meaning": "A boolean tensor marking which sequence positions are valid (True) or should be ignored (False)."},
+    {"term": "[PAD]", "meaning": "The padding token used to bring sequences to a common length; its id is 0."}
+   ],
+   "connections": ["p.435: Listing 14.24 passes mask_zero=True to Embedding"]
+  },
+  {
+   "ref": "p436_e03",
+   "excerpt": "Remember that when preprocessing our sequence input, we might add a lot of",
+   "what_it_says": "Preprocessing may add many padding tokens, giving sequences such as [\"the\", \"movie\", \"was\", \"awful\", \"[PAD]\", ...].",
+   "what_it_means": "TextVectorization with output_sequence_length = 600 pads short reviews at the end with id 0 (and truncates long ones).",
+   "why_it_matters": "It shows concretely where the padding comes from.",
+   "terminology": [
+    {"term": "Padding", "meaning": "Appending filler tokens so that all sequences in a batch have equal length."}
+   ],
+   "connections": ["p.430: TextVectorization with output_sequence_length=max_length (600)"]
+  },
+  {
+   "ref": "p436_e05",
+   "excerpt": "All of those padding tokens will be first embedded and then fed into",
+   "what_it_says": "Without a mask, the pads are embedded and processed by the LSTM, so the last representation may reflect repeated processing of [PAD]. We want the representation of \"awful\", the last real token; equivalently, we want to mask all pads so they do not affect the output.",
+   "what_it_means": "An LSTM returns its state after the final timestep. With right padding, that comes after many [PAD] updates, and each one can wash out information about the actual review. The forward direction would also need to learn to \"hold\" its state through the pads.",
+   "why_it_matters": "Masking makes the representation independent of how much padding a review received.",
+   "technical_idea": "Beyond the book: a sequence of 80 real tokens padded to 600 would undergo 520 [PAD] updates in the forward LSTM. The [PAD] embedding is trainable, so the model could partly learn to cope, but masking removes the problem entirely.",
+   "terminology": [
+    {"term": "Last representation", "meaning": "The LSTM's output at the final processed timestep (return_sequences=False)."}
+   ],
+   "connections": ["p.431: the one-hot model had no masking, so its LSTM processed all pads"]
+  },
+  {
+   "ref": "p436_e06",
+   "excerpt": "`mask_zero=True` is simply a shorthand to easily do such masking in Keras",
+   "what_it_says": "Keras marks all positions whose input was 0, the assumed [PAD] id. The LSTM uses this mask internally and outputs the last non-masked representation instead of the last representation of the whole sequence.",
+   "what_it_means": "The Embedding layer computes mask = (inputs != 0), visible as the not_equal layer in the summary, and Keras attaches it to the embedding output. On masked steps the LSTM skips the update and carries its previous state forward, so the final state equals the state after the last real token.",
+   "why_it_matters": "The convention that [PAD] has id 0 is what makes the shorthand work. If your vocabulary put a real word at index 0, it would be masked away.",
+   "technical_idea": "Beyond the book: for masked step $t$, Keras RNNs set $h_t = h_{t-1}$ and $c_t = c_{t-1}$. In a Bidirectional wrapper the mask also reaches the backward LSTM, which then effectively starts at the last real token.",
+   "terminology": [
+    {"term": "Implicit masking", "meaning": "A mask created and propagated automatically by Keras (from mask_zero) without you passing it yourself."}
+   ],
+   "connections": ["p.411: TextVectorization and Keras tokenizers reserve index 0 for padding"]
+  },
+  {
+   "ref": "p436_e06",
+   "excerpt": "This form of masking is implicit and easy to use, but you can",
+   "what_it_says": "Implicit masking is convenient, but you can also mask explicitly: the LSTM layer accepts an optional mask call argument for explicit or custom masking.",
+   "what_it_means": "You can compute any boolean mask, for example ignoring special tokens other than [PAD], and call lstm(x, mask=my_mask).",
+   "why_it_matters": "Custom masks become important in later chapters (for example, attention masks in Transformers).",
+   "terminology": [
+    {"term": "mask call argument", "meaning": "A boolean tensor passed when calling the layer: layer(x, mask=...)."}
+   ],
+   "connections": []
+  },
+  {
+   "ref": "p436_e06",
+   "excerpt": "Before we train this new model, let’s take a look at the model",
+   "what_it_says": "The authors introduce the model summary.",
+   "what_it_means": "The summary shows the size reduction before any training.",
+   "why_it_matters": "It sets up the 15M → 2M comparison on p.437.",
+   "terminology": [],
+   "connections": ["p.437: total 1,986,177 parameters"]
+  },
+  {
+   "ref": "p436_e07",
+   "excerpt": ">>> model.summary()",
+   "what_it_says": "The summary of lstm_with_embedding: input (None, 600); embedding (None, 600, 64) with 1,920,000 parameters; not_equal (None, 600) with 0; bidirectional_1 (None, 128) with 66,048, connected to embedding and not_equal; dropout_1 (None, 128); dense_3 (None, 1) with 129.",
+   "what_it_means": "The NotEqual node is the mask (input ≠ 0) feeding the BiLSTM. The embedding now holds 97% of the parameters, while the LSTM dropped from 15,393,280 to 66,048 because its input is 64-dimensional rather than 30,000.",
+   "why_it_matters": "It confirms the arithmetic: 30,000 × 64 = 1,920,000, and 2 × 4 × (64·64 + 64·64 + 64) = 66,048.",
+   "technical_idea": "Beyond the book: 1,920,000 + 66,048 + 129 = 1,986,177 parameters × 4 bytes ≈ 7.58 MiB, matching the totals on p.437.",
+   "terminology": [
+    {"term": "Connected to", "meaning": "Summary column listing each layer's input tensors (layer_name[node][tensor])."}
+   ],
+   "connections": ["p.432: the one-hot model summary for comparison", "p.437: the totals line of this summary"]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "masking",
+   "name": "Masking padded timesteps",
+   "definition": "Marking sequence positions that should be ignored (typically padding) so that downstream layers skip them.",
+   "intuition": "You tell the reader which pages of the book are blank so they don't try to read them.",
+   "technical": "Embedding(mask_zero=True) produces mask = inputs != 0. Keras propagates it; RNNs carry state across masked steps and return the state at the last valid step.",
+   "significance": "It makes the LSTM's summary vector depend only on real tokens.",
+   "example": "[\"the\",\"movie\",\"was\",\"awful\",\"[PAD]\"×4] → mask [T,T,T,T,F,F,F,F]; output = state after \"awful\".",
+   "misconception": "Masking does not remove the pads from the tensor; shapes stay (batch, 600, 64). It only changes how layers treat those positions.",
+   "related": ["embedding_layer", "lstm", "padding"],
+   "source": "book"
+  },
+  {
+   "id": "padding",
+   "name": "Sequence padding",
+   "definition": "Filling sequences with a special token so that all have the same length.",
+   "intuition": "Topping up short rows with blanks so that the table is rectangular.",
+   "technical": "Here the [PAD] token has id 0, appended up to max_length = 600.",
+   "significance": "Batched tensors require equal lengths, and padding then requires masking.",
+   "example": "A 4-word review becomes 4 words + 596 [PAD].",
+   "misconception": "Padding is harmless for RNNs. Without a mask, it changes the final state.",
+   "related": ["masking"],
+   "source": "book"
+  },
+  {
+   "id": "embedding_layer",
+   "name": "Keras Embedding layer",
+   "definition": "A trainable id → vector lookup table, which can also emit a padding mask.",
+   "intuition": "A dictionary plus a note about which entries are blank.",
+   "technical": "Embedding(30000, 64, mask_zero=True): 1,920,000 weights; output (None, 600, 64) with an attached mask (None, 600).",
+   "significance": "With mask_zero it is both the representation layer and the mask source.",
+   "example": "See the not_equal node in the summary.",
+   "misconception": "mask_zero does not zero out embedding vectors; it marks positions.",
+   "related": ["masking", "embedding"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Mask from token ids",
+   "latex": "m_{b,t} = [\\,x_{b,t} \\neq 0\\,],\\qquad (h_t, c_t) = \\begin{cases}\\operatorname{LSTM}(e_t, h_{t-1}, c_{t-1}) & m_t = 1\\\\ (h_{t-1}, c_{t-1}) & m_t = 0\\end{cases}",
+   "source_text": "Keras will mark all elements in our sequence that initially contained a zero value ... it will output the last non-masked representation",
+   "variables": [
+    {"symbol": "x_{b,t}", "meaning": "Token id at batch item b, timestep t"},
+    {"symbol": "m_{b,t}", "meaning": "Mask value (1 = real token, 0 = padding)"},
+    {"symbol": "e_t", "meaning": "Embedding vector at step t"},
+    {"symbol": "h_t, c_t", "meaning": "LSTM hidden and cell state"}
+   ],
+   "operations": "Element-wise comparison with 0 (the NotEqual layer), then conditional state update.",
+   "purpose": "It states precisely what mask_zero does and how the LSTM uses it.",
+   "interpretation": "The final $h_T$ equals the hidden state after the last real token.",
+   "intuition": "On padding steps, the LSTM pauses.",
+   "numerical_example": "For ids [12, 7, 33, 905, 0, 0, 0, 0]: m = [1,1,1,1,0,0,0,0]; the output is h_4, the state after \"awful\" (id 905 is illustrative).",
+   "source": "ai_explanation",
+   "book_ref": "p.436"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "A padded token sequence",
+   "original_code": "[\"the\", \"movie\", \"was\", \"awful\", \"[PAD]\", \"[PAD]\", \"[PAD]\", \"[PAD]\"]",
+   "language": "python",
+   "what_it_does": "It shows what a short review looks like after padding: four real tokens followed by four [PAD] tokens.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "\"awful\" is the last real token; everything after it is padding, which mask_zero=True will mask."}
+   ],
+   "inputs_outputs": "Illustrative token list (before indexing to ids, where [PAD] = 0).",
+   "algorithm": "None; it is an example of data.",
+   "theory_link": "Motivates masking.",
+   "parameters": [],
+   "pitfalls": ["In the real pipeline the sequence is 600 tokens long, so a short review can have hundreds of pads."]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Model summary of lstm_with_embedding (first part)",
+   "original_code": ">>> model.summary()\nModel: \"lstm_with_embedding\"\n┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓\n┃ Layer (type)          ┃ Output Shape      ┃     Param # ┃ Connected to       ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩\n│ input_layer_3         │ (None, 600)       │           0 │ -                  │\n│ (InputLayer)          │                   │             │                    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ embedding (Embedding) │ (None, 600, 64)   │   1,920,000 │ input_layer_6[0][… │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ not_equal (NotEqual)  │ (None, 600)       │           0 │ input_layer_6[0][… │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ bidirectional_1       │ (None, 128)       │      66,048 │ embedding[0][0],   │\n│ (Bidirectional)       │                   │             │ not_equal[0][0]    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ dropout_1 (Dropout)   │ (None, 128)       │           0 │ bidirectional_2[0… │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ dense_3 (Dense)       │ (None, 1)         │         129 │ dropout_2[0][0]    │\n└───────────────────────┴───────────────────┴─────────────┴────────────────────┘",
+   "language": "python",
+   "what_it_does": "It prints the layers of the embedding-based LSTM. The totals (1,986,177 parameters, 7.58 MB) continue at the top of p.437.",
+   "line_explanations": [
+    {"lines": "input_layer_3", "explanation": "600 integer token ids per review."},
+    {"lines": "embedding", "explanation": "30,000 × 64 table = 1,920,000 parameters; output (None, 600, 64)."},
+    {"lines": "not_equal", "explanation": "The mask produced by mask_zero=True: input != 0, shape (None, 600), no weights."},
+    {"lines": "bidirectional_1", "explanation": "BiLSTM(64) on 64-dimensional inputs: 66,048 parameters; receives both the embeddings and the mask."},
+    {"lines": "dropout_1, dense_3", "explanation": "Dropout(0.5), then a sigmoid unit with 128 + 1 = 129 parameters."}
+   ],
+   "inputs_outputs": "Model input (None, 600) int32; output (None, 1).",
+   "algorithm": "Embedding lookup with mask, masked BiLSTM, dropout, dense sigmoid.",
+   "theory_link": "Dense learned inputs shrink the recurrent layer by over 200×.",
+   "parameters": [
+    {"name": "Embedding params", "role": "max_tokens × output_dim = 1,920,000"},
+    {"name": "BiLSTM params", "role": "2 × 4 × (64·64 + 64·64 + 64) = 66,048"}
+   ],
+   "pitfalls": [
+    "The \"Connected to\" names (input_layer_6, bidirectional_2, dropout_2) do not match the layer names in the first column; they come from a different run. Ignore the suffixes."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "What goes wrong without a mask",
+   "kind": "step_by_step",
+   "body": "1. A review has 80 real tokens and 520 pads.\n2. The forward LSTM reads the 80 tokens and builds a useful state.\n3. It then applies 520 more updates with the [PAD] embedding. Unless the gates learn to fully preserve the state, information decays.\n4. The backward LSTM begins with 520 pads before reaching any real word.\n5. Masking skips steps 3-4: the forward state stops at the last real token, and the backward pass effectively starts there.\n(Illustrative reasoning, not from the book.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why id 0?",
+   "kind": "breakdown",
+   "body": "Keras's TextVectorization reserves index 0 for padding and index 1 for the out-of-vocabulary token [UNK]. mask_zero=True relies on that convention. A consequence noted in the Keras documentation (not in the book) is that with mask_zero=True, index 0 cannot be used for a real word, so input_dim should be vocabulary size + 1 if your ids start at 1. TextVectorization's vocabulary already includes index 0, so max_tokens works directly here.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Reading with a highlighter",
+   "kind": "analogy",
+   "body": "The mask is like highlighting the actual sentences in a form and telling the reader to skip the blank lines below. The form is still the same length (the tensor shape is unchanged), but the reader's summary covers only the highlighted part.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "LSTM over a padded review",
+   "why": "The page's example has four real tokens and four [PAD] tokens. Step through an unrolled LSTM over 8 timesteps and picture the last 4 as masked steps that just carry the state forward.",
+   "widget": "rnn_unroll",
+   "params": {"timesteps": 8, "cell": "lstm"}
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "How mask_zero flows through the model",
+   "why": "It shows the not_equal node from the summary, which feeds the Bidirectional layer alongside the embeddings.",
+   "mermaid": "flowchart LR\n  I[\"input ids (None, 600)\"] --> E[\"Embedding 30000x64<br/>(None, 600, 64)\"]\n  I --> M[\"not_equal: ids != 0<br/>mask (None, 600)\"]\n  E --> B[\"Bidirectional LSTM(64)<br/>(None, 128)\"]\n  M --> B\n  B --> D[\"Dropout 0.5\"] --> O[\"Dense 1 sigmoid\"]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "mask_zero=True deletes the padding tokens from the input tensor.", "correction": "The tensor keeps shape (None, 600, 64). A separate boolean mask tells layers such as the LSTM to ignore those positions."},
+  {"claim": "Masking works for any token id you choose.", "correction": "mask_zero masks only id 0, which is assumed to be [PAD]. Other custom masks must be passed explicitly via the LSTM's mask argument."},
+  {"claim": "The not_equal layer adds parameters.", "correction": "It has 0 parameters; it is just the comparison ids != 0."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 435, "note": "Listing 14.24 with Embedding(..., mask_zero=True)"},
+   {"page": 430, "note": "Sequences padded to max_length = 600"},
+   {"page": 432, "note": "One-hot model summary: Bidirectional 15,393,280 params, versus 66,048 here"}
+  ],
+  "later": [
+   {"page": 437, "note": "Summary totals (1,986,177 params) and Listing 14.25 training/evaluation"}
+  ],
+  "prerequisites": [
+   {"page": 389, "note": "LSTMs for sequence data in chapter 13"}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 437, "note": "Listing 14.25 trains this model"}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "Padding to a fixed length adds many [PAD] tokens that would otherwise pass through the LSTM.",
+  "mask_zero=True marks positions with id 0 ([PAD]) and passes the mask to the LSTM.",
+  "The masked LSTM outputs the last non-masked representation, e.g. at \"awful\".",
+  "For custom masking, pass a mask argument when calling the LSTM.",
+  "The summary shows Embedding 1,920,000 + BiLSTM 66,048 + Dense 129 parameters, plus a weightless NotEqual mask node."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "What does mask_zero=True do in the Embedding layer?", "options": ["Marks positions whose token id is 0 so later layers can ignore them", "Sets the embedding vector of id 0 to all zeros and keeps it fixed", "Removes padded positions, shortening the sequence", "Zeros out embeddings with small norm"], "answer": "Marks positions whose token id is 0 so later layers can ignore them", "explanation": "Keras marks all elements whose input was 0 (the [PAD] id) and the LSTM uses the mask. The sequence length is unchanged, and nothing is zeroed or frozen.", "page_refs": [436]},
+  {"id": "q2", "type": "short", "question": "For [\"the\", \"movie\", \"was\", \"awful\", \"[PAD]\"×4], which token's representation do we want the LSTM to output?", "options": [], "answer": "\"awful\", the last non-padding token.", "explanation": "This is stated explicitly on the page.", "page_refs": [436]},
+  {"id": "q3", "type": "conceptual", "question": "Why does the summary contain a not_equal (NotEqual) layer with output (None, 600)?", "options": [], "answer": "It computes the mask ids != 0 created by mask_zero=True, and the Bidirectional layer takes it as a second input.", "explanation": "The \"Connected to\" column shows bidirectional_1 receiving embedding[0][0] and not_equal[0][0].", "page_refs": [436]},
+  {"id": "q4", "type": "math", "question": "Verify the Bidirectional layer's 66,048 parameters.", "options": [], "answer": "Per direction 4 × (64·64 + 64·64 + 64) = 33,024; × 2 = 66,048.", "explanation": "The input dimension is the embedding size of 64, and there are 64 units.", "page_refs": [436]},
+  {"id": "q5", "type": "mcq", "question": "How can you apply a custom mask, other than for id 0, to an LSTM?", "options": ["Pass it via the LSTM's optional mask call argument", "Set mask_zero to the id you want masked", "Use Dropout with rate 1.0 on those steps", "It is impossible in Keras"], "answer": "Pass it via the LSTM's optional mask call argument", "explanation": "The page says the LSTM takes an optional mask call argument. mask_zero is a boolean only for id 0, and dropout is not masking.", "page_refs": [436]},
+  {"id": "q6", "type": "short", "question": "What inconsistency can you spot in the printed summary's \"Connected to\" column?", "options": [], "answer": "It references input_layer_6, bidirectional_2 and dropout_2, while the layers are named input_layer_3, bidirectional_1 and dropout_1.", "explanation": "The output was apparently taken from different runs; it is cosmetic.", "page_refs": [436]},
+  {"id": "q7", "type": "self", "question": "Can you explain in your own words what an LSTM does at a masked timestep?", "options": [], "answer": "It skips the update and carries the previous hidden and cell states forward, so the final output is the state after the last real token.", "explanation": "This is the mechanism behind \"it will output the last non-masked representation\".", "page_refs": [436]}
+ ]
+}

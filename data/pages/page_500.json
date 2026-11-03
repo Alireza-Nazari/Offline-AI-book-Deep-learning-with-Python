@@ -1,0 +1,393 @@
+{
+  "page_id": "page_500",
+  "pdf_page": 500,
+  "printed_page": "476",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:56:00Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean. The first code block is the continuation of Listing 16.6 (its first four lines are on p.499). Listing 16.7 and the unnumbered plotting snippet match the page image. Figure 16.2 itself is on p.501."
+  },
+  "overview": {
+    "title": "Assembling mini-GPT and a learning-rate warmup",
+    "chapter": "16 Text generation",
+    "section": "16.2 Training a mini-GPT",
+    "subsection": "16.2.2 Pretraining the model",
+    "main_topic": "The end of Listing 16.6 (functional mini-GPT with eight decoder blocks and a tied output), its 41M-parameter size, and the start of pretraining: why Transformers need learning-rate warmup and a WarmupSchedule implementation (Listing 16.7)",
+    "central_idea": "The mini-GPT is a PositionalEmbedding, a LayerNormalization, eight TransformerDecoder blocks and the same embedding used in reverse to output logits, about 41 million parameters. Deep Transformer stacks are finicky to train and prone to exploding gradients, so the learning rate is ramped linearly from 0 to a peak of 2e-4 over the first 1,000 steps.",
+    "importance": "This page completes the model whose training (p.501) is the most expensive run in the book, and introduces learning-rate warmup, a standard ingredient of every large-Transformer training recipe.",
+    "learning_objectives": [
+      "Read the full functional definition of mini-GPT and explain each layer's role",
+      "Explain why the same embedding object is called twice (forward and reverse=True)",
+      "Place the model's 41M parameters in context against modern LLMs",
+      "Explain why stacked Transformers are sensitive to initialization and optimizer settings, and what exploding gradients are",
+      "Implement and plot a linear warmup schedule with keras.optimizers.schedules.LearningRateSchedule"
+    ],
+    "prerequisites": [
+      "Listings 16.4 and 16.5 (p.498-499)",
+      "The Keras functional API",
+      "Learning rate and gradient descent (p.178 on learning-rate problems)",
+      "Optimizers such as Adam"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page opens with the rest of **Listing 16.6** (begun on p.499). It sets `num_heads = 8` and `num_layers = 8`, declares `inputs = keras.Input(shape=(None,), dtype=\"int32\")`, creates one `PositionalEmbedding(sequence_length, vocab_size, hidden_dim)`, embeds the inputs, applies a `LayerNormalization`, loops eight times over `TransformerDecoder(hidden_dim, intermediate_dim, num_heads)`, and produces `outputs = embedding(x, reverse=True)`, the tied \"reverse embedding\" logits. The result, `mini_gpt`, has **41 million parameters**: large for this book, but small next to today's LLMs, which range from a couple of billion to trillions of parameters.\n\nSection **16.2.2 Pretraining the model** begins. Training a large Transformer is \"famously finicky\": it is sensitive to parameter initialization and to the choice of optimizer. With many stacked layers it is easy to get **exploding gradients**, where parameters update too quickly and the loss does not converge. A trick that works well is **warmup**: ease linearly into the full learning rate over a number of steps so that early updates are small. Keras makes this easy with a `LearningRateSchedule`.\n\n**Listing 16.7** defines `WarmupSchedule` with a peak rate `2e-4` and `warmup_steps = 1_000.0`. Its `__call__(step)` casts the step to float and returns `rate * min(step / warmup_steps, 1.0)`: a linear ramp from 0 to 2e-4 over 1,000 steps, then constant. A short snippet evaluates the schedule at steps 0, 100, ..., 4,900 and plots learning rate against train step with matplotlib, which yields figure 16.2 on p.501.",
+  "paragraphs": [
+    {
+      "ref": "p500_e04",
+      "excerpt": "This model has 41 million parameters, which is large for models in this book",
+      "what_it_says": "The mini-GPT has 41 million parameters: large for the book, but small compared with most current LLMs, which range from a couple of billion to trillions of parameters.",
+      "what_it_means": "The count follows from the hyperparameters (vocab 32,000, hidden 512, intermediate 2056, 8 layers): about 16.4M in the tied token embedding, 0.13M in position embeddings and about 3.16M in each of the eight decoder blocks, for roughly 41.8M. Without weight tying it would be closer to 58M. A billion-parameter model is about 25-50 times larger; a trillion-parameter model about 25,000 times.",
+      "why_it_matters": "It calibrates expectations: the model will produce English-like text but nothing close to modern LLM quality, which motivates using a pretrained Gemma model later in the chapter (p.508).",
+      "terminology": [
+        {"term": "Parameter count", "meaning": "Total number of trainable scalars (weights and biases) in the model."},
+        {"term": "LLM", "meaning": "Large language model: a Transformer language model with billions or more parameters."}
+      ],
+      "connections": [
+        "p.499: weight tying removes one of the two 16.4M-parameter vocabulary matrices",
+        "p.501: the authors compare it to GPT-1 (3x fewer parameters)",
+        "p.508: 16.3 switches to a pretrained LLM"
+      ]
+    },
+    {
+      "ref": "p500_e06",
+      "excerpt": "Training a large Transformer is famously finicky—the model is sensitive to initializations",
+      "what_it_says": "Training a large Transformer is finicky: it is sensitive to parameter initialization and to the optimizer. With many stacked Transformer layers it is easy to suffer exploding gradients, where parameters update too quickly and the loss does not converge. A trick that works well is to linearly ease into the full learning rate over a number of warmup steps so initial updates are small, easy to do in Keras with a LearningRateSchedule.",
+      "what_it_means": "At initialization the weights are random, so gradients are large and their directions are poorly informed. Adam's per-parameter scaling is also based on second-moment estimates that are very noisy over the first few steps. A full-size step at that point can push the network into a region where activations or the loss blow up. Warmup keeps the first hundreds of updates small, giving the optimizer statistics and the network's LayerNorm/residual dynamics time to settle before taking full-size steps.",
+      "why_it_matters": "Warmup is part of essentially every Transformer training recipe since the original 2017 paper; without it, deep post-LN Transformers like this one often diverge.",
+      "technical_idea": "$\\eta(t) = \\eta_{\\max}\\min(t/T_w, 1)$ with $\\eta_{\\max} = 2\\times 10^{-4}$ and $T_w = 1000$.",
+      "terminology": [
+        {"term": "Exploding gradients", "meaning": "Gradients (and therefore updates) becoming very large, so the training loss diverges instead of converging."},
+        {"term": "Warmup", "meaning": "Starting with a small learning rate and increasing it (here linearly) to the target value over the first steps of training."},
+        {"term": "LearningRateSchedule", "meaning": "A Keras object called with the current optimizer step that returns the learning rate for that step."}
+      ],
+      "connections": [
+        "p.178: chapter 5 shows what happens when the learning rate is too large",
+        "p.501: figure 16.2 plots the schedule; Listing 16.8 passes it to Adam"
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "decoder_only_transformer",
+      "name": "Decoder-only Transformer (mini-GPT)",
+      "definition": "A stack of causal Transformer decoder blocks between a token+position embedding and an output projection to vocabulary logits.",
+      "intuition": "Embed, refine eight times with causal attention, read out a score for every possible next token.",
+      "technical": "Input (batch, None) int32 -> PositionalEmbedding -> LayerNormalization -> 8 x TransformerDecoder(512, 2056, 8) -> embedding(x, reverse=True) -> (batch, seq, 32000) logits.",
+      "significance": "It is a faithful miniature of the GPT architecture, about 41M parameters.",
+      "example": "mini_gpt(token_ids) returns next-token logits for every position at once.",
+      "misconception": "That the input length is fixed by shape=(None,); it is variable in the Input, but the position table limits it to sequence_length (256).",
+      "related": ["transformer", "weight_tying", "causal_mask", "functional_api"],
+      "source": "book"
+    },
+    {
+      "id": "learning_rate_warmup",
+      "name": "Learning-rate warmup",
+      "definition": "Increasing the learning rate from (near) zero to its target value over the first steps of training.",
+      "intuition": "Pulling out of a driveway slowly before accelerating onto the highway.",
+      "technical": "WarmupSchedule returns 2e-4 * min(step / 1000, 1). Keras passes the optimizer's iteration counter as step.",
+      "significance": "Prevents early instability and exploding gradients in deep Transformer stacks (book).",
+      "example": "Step 0: 0; step 250: 5e-5; step 500: 1e-4; step 1000 and later: 2e-4.",
+      "misconception": "That warmup is a form of decay; this schedule never decreases, it ramps up and then stays constant.",
+      "related": ["learning_rate", "learning_rate_schedule", "adam"],
+      "source": "book"
+    },
+    {
+      "id": "learning_rate_schedule",
+      "name": "Learning-rate schedule (Keras)",
+      "definition": "A callable object that maps the training step to a learning rate and is passed to an optimizer in place of a constant.",
+      "intuition": "A dial on the optimizer that turns automatically as training proceeds.",
+      "technical": "Subclass keras.optimizers.schedules.LearningRateSchedule and implement __call__(self, step); pass an instance as the optimizer's learning_rate.",
+      "significance": "Lets the training loop change step sizes without callbacks.",
+      "example": "keras.optimizers.Adam(WarmupSchedule()) on p.501.",
+      "misconception": "That step counts epochs; it counts optimizer updates (batches).",
+      "related": ["learning_rate_warmup", "optimizer"],
+      "source": "book"
+    },
+    {
+      "id": "exploding_gradients",
+      "name": "Exploding gradients",
+      "definition": "Gradients growing so large that parameter updates overshoot and the loss fails to converge.",
+      "intuition": "Steering so hard that every correction overshoots more than the last.",
+      "technical": "In deep stacks, gradients multiply through many layers; with random initial weights and large step sizes, updates can push activations into regimes where gradients grow further.",
+      "significance": "The authors name it as a main risk when many Transformer layers are stacked.",
+      "example": "A loss that jumps to NaN after a few hundred steps at a high constant learning rate.",
+      "misconception": "That only RNNs suffer from exploding gradients; deep Transformers can too.",
+      "related": ["learning_rate_warmup", "residual_connection"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Linear warmup schedule (Listing 16.7)",
+      "latex": "\\eta(t) = \\eta_{\\max}\\cdot\\min\\!\\left(\\frac{t}{T_w},\\ 1\\right),\\qquad \\eta_{\\max} = 2\\times10^{-4},\\ T_w = 1000",
+      "source_text": "scale = ops.minimum(step / self.warmup_steps, 1.0); return self.rate * scale",
+      "variables": [
+        {"symbol": "t", "meaning": "Current optimizer step (number of updates so far)"},
+        {"symbol": "\\eta_{\\max}", "meaning": "Peak learning rate, self.rate = 2e-4"},
+        {"symbol": "T_w", "meaning": "Number of warmup steps, self.warmup_steps = 1,000"},
+        {"symbol": "\\eta(t)", "meaning": "Learning rate used at step t"}
+      ],
+      "operations": "Divide the step by the warmup length, clip at 1, multiply by the peak rate.",
+      "purpose": "Make early parameter updates small to avoid divergence.",
+      "interpretation": "A straight line from 0 at step 0 to 2e-4 at step 1,000, then flat.",
+      "intuition": "Each of the first 1,000 steps adds 2e-7 to the learning rate.",
+      "numerical_example": "$t = 300$: $\\eta = 2\\times10^{-4}\\times 0.3 = 6\\times10^{-5}$. $t = 4000$: $\\min(4, 1) = 1$, so $\\eta = 2\\times10^{-4}$. With about 3,609 steps per epoch (p.501), warmup ends early in the first epoch.",
+      "source": "book",
+      "book_ref": "p.500"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": "16.6",
+      "title": "Creating a mini-GPT functional model (continued from p.499)",
+      "original_code": "num_heads = 8\nnum_layers = 8\n\ninputs = keras.Input(shape=(None,), dtype=\"int32\", name=\"inputs\")\nembedding = PositionalEmbedding(sequence_length, vocab_size, hidden_dim)\nx = embedding(inputs)\nx = layers.LayerNormalization()(x)\nfor i in range(num_layers):\n    x = TransformerDecoder(hidden_dim, intermediate_dim, num_heads)(x)\noutputs = embedding(x, reverse=True)\nmini_gpt = keras.Model(inputs, outputs)",
+      "language": "python",
+      "what_it_does": "Completes the mini-GPT: eight attention heads per block, eight blocks, a variable-length int32 token input, a shared PositionalEmbedding used at the input and (reversed) at the output, and a keras.Model wrapping it all. The first lines of the listing (mixed precision, vocab_size, hidden_dim, intermediate_dim) are on p.499.",
+      "line_explanations": [
+        {"lines": "1-2", "explanation": "8 heads (key_dim = 512 // 8 = 64 inside each block) and 8 stacked decoder blocks."},
+        {"lines": "4", "explanation": "Symbolic input of int32 token ids with a variable sequence length (None); the batch axis is implicit."},
+        {"lines": "5-6", "explanation": "One PositionalEmbedding instance (Listing 16.5) with sequence_length = 256 positions, vocab_size rows and hidden_dim columns; called in normal mode to embed tokens plus positions."},
+        {"lines": "7", "explanation": "A LayerNormalization on the embeddings before the first block, normalizing the summed token+position vectors."},
+        {"lines": "8-9", "explanation": "Stack eight independent TransformerDecoder blocks (Listing 16.4); each has its own weights and preserves the shape (batch, seq, 512)."},
+        {"lines": "10", "explanation": "Call the same embedding object with reverse=True: hidden states times the transposed token embedding, giving (batch, seq, vocab_size) logits. This is the weight tying of p.499."},
+        {"lines": "11", "explanation": "Wrap inputs and outputs in a functional keras.Model."}
+      ],
+      "inputs_outputs": "Input: int32 token ids (batch, seq_len). Output: float logits (batch, seq_len, 32,000), one next-token score vector per position.",
+      "algorithm": "Embedding -> LayerNorm -> N causal decoder blocks -> tied linear readout.",
+      "theory_link": "Combines the causal decoder block (p.498) with weight tying (p.499) into a GPT-style causal language model; about 41M parameters.",
+      "parameters": [
+        {"name": "num_heads = 8", "role": "Attention heads per block."},
+        {"name": "num_layers = 8", "role": "Depth of the decoder stack."},
+        {"name": "sequence_length", "role": "Defined on p.496 as 256; sets the size of the position table."},
+        {"name": "reverse=True", "role": "Selects the tied output projection mode."}
+      ],
+      "pitfalls": [
+        "Creating a second PositionalEmbedding for the output would silently untie the weights and add ~16M parameters.",
+        "Although the Input allows any length, sequences longer than sequence_length (256) exceed the position table.",
+        "The loop variable i is unused; each iteration creates a new TransformerDecoder, so the eight blocks do not share weights (unlike the embedding).",
+        "Outputs are logits; the loss must use from_logits=True (it does on p.501)."
+      ],
+      "illustrative_code": "# AI-written (not from the book): inspect the model\nmini_gpt.summary()          # ~41.8M total parameters\nimport numpy as np\nids = np.random.randint(0, vocab_size, size=(2, 16))\nprint(mini_gpt(ids).shape)  # (2, 16, 32000)"
+    },
+    {
+      "id": "c2",
+      "listing": "16.7",
+      "title": "Defining a custom learning rate schedule",
+      "original_code": "class WarmupSchedule(keras.optimizers.schedules.LearningRateSchedule):\n    def __init__(self):\n        self.rate = 2e-4\n        self.warmup_steps = 1_000.0\n\n    def __call__(self, step):\n        step = ops.cast(step, dtype=\"float32\")\n        scale = ops.minimum(step / self.warmup_steps, 1.0)\n        return self.rate * scale",
+      "language": "python",
+      "what_it_does": "Implements a linear warmup: the learning rate rises from 0 to a peak of 2e-4 over 1,000 steps and then stays at 2e-4.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Subclasses Keras' LearningRateSchedule so an instance can be passed as an optimizer's learning rate."},
+        {"lines": "2-4", "explanation": "Peak learning rate 2e-4 (callout: Peak learning rate) and 1,000 warmup steps, written as a float so the division is floating point."},
+        {"lines": "6-7", "explanation": "The optimizer calls the schedule with its integer iteration counter; cast to float32 for arithmetic."},
+        {"lines": "8-9", "explanation": "Fraction of warmup completed, clipped at 1.0, times the peak rate."}
+      ],
+      "inputs_outputs": "Input: the optimizer step (integer tensor). Output: a scalar float learning rate.",
+      "algorithm": "eta(t) = 2e-4 * min(t / 1000, 1).",
+      "theory_link": "Small initial updates reduce the risk of exploding gradients when training a deep Transformer stack.",
+      "parameters": [
+        {"name": "rate", "role": "Peak learning rate, 2e-4."},
+        {"name": "warmup_steps", "role": "Length of the linear ramp, 1,000 steps."}
+      ],
+      "pitfalls": [
+        "There is no decay after warmup; many LLM recipes follow warmup with cosine or linear decay (beyond the book).",
+        "The schedule has no get_config method, so saving and reloading a model with this optimizer may require passing the class as a custom object (beyond the book).",
+        "At step 0 the learning rate is exactly 0, so the very first update does nothing."
+      ]
+    },
+    {
+      "id": "c3",
+      "listing": null,
+      "title": "Plotting the learning-rate schedule",
+      "original_code": "import matplotlib.pyplot as plt\n\nschedule = WarmupSchedule()\nx = range(0, 5_000, 100)\ny = [ops.convert_to_numpy(schedule(step)) for step in x]\nplt.plot(x, y)\nplt.xlabel(\"Train Step\")\nplt.ylabel(\"Learning Rate\")\nplt.show()",
+      "language": "python",
+      "what_it_does": "Evaluates the schedule at steps 0, 100, ..., 4,900 and plots learning rate against train step, producing figure 16.2 (p.501).",
+      "line_explanations": [
+        {"lines": "3", "explanation": "Instantiate the schedule; this same object is later passed to Adam (p.501)."},
+        {"lines": "4-5", "explanation": "50 sample steps; each schedule call returns a backend tensor, converted to NumPy for plotting."},
+        {"lines": "6-9", "explanation": "Line plot with labeled axes."}
+      ],
+      "inputs_outputs": "No inputs; displays a plot that ramps linearly to 2e-4 at step 1,000 and is flat afterwards.",
+      "algorithm": "Sample and plot a function.",
+      "theory_link": "A sanity check that the schedule behaves as intended before an expensive training run.",
+      "parameters": [
+        {"name": "range(0, 5_000, 100)", "role": "Steps at which the schedule is evaluated."}
+      ],
+      "pitfalls": [
+        "Passing a Python int to the schedule works because it is cast with ops.cast."
+      ]
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why warmup helps Adam in particular",
+      "kind": "step_by_step",
+      "body": "Beyond the book:\n1. Adam divides each gradient by a running estimate of its root-mean-square, $\\sqrt{\\hat v}$.\n2. In the first few steps $\\hat v$ is estimated from very few gradients, so for some parameters it is tiny and the effective step $\\eta\\, g/\\sqrt{\\hat v}$ can be close to $\\eta$ in every direction regardless of gradient size.\n3. With random weights, these near-maximal steps in poorly informed directions can destabilize LayerNorm statistics and attention logits.\n4. Warmup makes $\\eta$ small exactly while these estimates are unreliable; by step 1,000 the moment estimates are well averaged and full-size steps are safe.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Model at a glance",
+      "kind": "breakdown",
+      "body": "| component | instances | output shape |\n|---|---|---|\n| Input (int32) | 1 | (batch, seq) |\n| PositionalEmbedding (forward) | shared | (batch, seq, 512) |\n| LayerNormalization | 1 | (batch, seq, 512) |\n| TransformerDecoder | 8 separate | (batch, seq, 512) |\n| PositionalEmbedding (reverse) | same object | (batch, seq, 32000) |\n\nThe same object appears twice in the graph; Keras tracks its weights once.",
+      "source": "inference"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "chart",
+      "title": "WarmupSchedule evaluated as in the plotting snippet",
+      "why": "Reproduces the plot the snippet on this page draws (figure 16.2, p.501): steps 0 to 4,900 in increments of 100, peak 2e-4 reached at step 1,000.",
+      "chart": {
+        "type": "line",
+        "data": {
+          "labels": [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000, 2100, 2200, 2300, 2400, 2500, 2600, 2700, 2800, 2900, 3000, 3100, 3200, 3300, 3400, 3500, 3600, 3700, 3800, 3900, 4000, 4100, 4200, 4300, 4400, 4500, 4600, 4700, 4800, 4900],
+          "datasets": [
+            {
+              "label": "Learning rate",
+              "data": [0.0, 2e-05, 4e-05, 6e-05, 8e-05, 0.0001, 0.00012, 0.00014, 0.00016, 0.00018, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002],
+              "fill": false,
+              "pointRadius": 0
+            }
+          ]
+        },
+        "options": {
+          "scales": {
+            "x": {"title": {"display": true, "text": "Train Step"}},
+            "y": {"title": {"display": true, "text": "Learning Rate"}}
+          }
+        }
+      }
+    },
+    {
+      "id": "v2",
+      "type": "mermaid",
+      "title": "The mini-GPT graph from Listing 16.6",
+      "why": "Shows the functional model defined at the top of the page, including the shared embedding at both ends.",
+      "mermaid": "flowchart TB\n  A[\"inputs: int32 (batch, None)\"] --> B[\"PositionalEmbedding(256, 32000, 512)\"]\n  B --> C[LayerNormalization]\n  C --> D[\"TransformerDecoder x 8 (512, 2056, 8 heads)\"]\n  D --> E[\"embedding(x, reverse=True)\"]\n  E --> F[\"logits (batch, None, 32000)\"]\n  B -.same weights.- E"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "The eight TransformerDecoder blocks share weights because they are created in a loop.",
+      "correction": "Each iteration constructs a new TransformerDecoder with its own weights; only the embedding is shared, because the same object is called twice."
+    },
+    {
+      "claim": "Warmup means the learning rate decreases over time.",
+      "correction": "WarmupSchedule increases the rate linearly from 0 to 2e-4 over 1,000 steps and then keeps it constant."
+    },
+    {
+      "claim": "41 million parameters makes this a large language model by today's standards.",
+      "correction": "The book says it is small compared to most LLMs today, which range from a couple of billion to trillions of parameters."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 499, "note": "First lines of Listing 16.6 (mixed precision, vocab_size, hidden_dim = 512, intermediate_dim = 2056) and Listing 16.5 (reverse embedding)."},
+      {"page": 498, "note": "Listing 16.4, the TransformerDecoder block stacked eight times here."},
+      {"page": 496, "note": "sequence_length = 256 used for the position table."},
+      {"page": 178, "note": "Chapter 5's discussion of a learning rate that is too high."}
+    ],
+    "later": [
+      {"page": 501, "note": "Figure 16.2 (the schedule plot) and Listing 16.8, which compiles mini_gpt with Adam(schedule) and trains it."},
+      {"page": 502, "note": "Logits explained; generative decoding with the trained model."},
+      {"page": 508, "note": "16.3 Using a pretrained LLM much larger than this one."}
+    ],
+    "prerequisites": [
+      {"page": 498, "note": "Decoder block."},
+      {"page": 499, "note": "Weight tying."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 499, "note": "Listings 16.5 and the first part of 16.6."},
+      {"page": 501, "note": "Listing 16.8 training loop."}
+    ],
+    "related_figures": [
+      {"page": 501, "note": "Figure 16.2: the warmup schedule plot."}
+    ]
+  },
+  "takeaways": [
+    "mini-GPT = PositionalEmbedding -> LayerNorm -> 8 x TransformerDecoder -> same embedding with reverse=True.",
+    "It has 41 million parameters, tiny next to modern LLMs (billions to trillions).",
+    "Deep Transformers are sensitive to initialization and optimizer choice and can suffer exploding gradients.",
+    "Linear warmup keeps early updates small: lr = 2e-4 * min(step / 1000, 1).",
+    "Custom schedules subclass keras.optimizers.schedules.LearningRateSchedule and implement __call__(step).",
+    "Plot a schedule before a long training run to verify it."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "math",
+      "question": "Using Listing 16.7, what learning rate is used at steps 250, 1,000 and 3,000?",
+      "options": [],
+      "answer": "Step 250: 2e-4 x 0.25 = 5e-5. Step 1,000: 2e-4. Step 3,000: min(3, 1) = 1, so 2e-4.",
+      "explanation": "The schedule ramps linearly for 1,000 steps and is clipped at the peak afterwards.",
+      "page_refs": [500]
+    },
+    {
+      "id": "q2",
+      "type": "mcq",
+      "question": "Which problem does the book say warmup helps avoid when many Transformer layers are stacked?",
+      "options": [
+        "Vanishing vocabulary",
+        "Exploding gradients, where parameters update too quickly and the loss does not converge",
+        "Overfitting to the validation set",
+        "Running out of position embeddings"
+      ],
+      "answer": "Exploding gradients, where parameters update too quickly and the loss does not converge",
+      "explanation": "This is the stated motivation. Overfitting is addressed by dropout (p.498); position-table limits and 'vanishing vocabulary' are unrelated to the learning rate.",
+      "page_refs": [500]
+    },
+    {
+      "id": "q3",
+      "type": "short",
+      "question": "Why is the PositionalEmbedding object called twice in Listing 16.6, and what would change if a second PositionalEmbedding were created for the output instead?",
+      "options": [],
+      "answer": "The second call with reverse=True uses the same token-embedding matrix, transposed, as the output projection (weight tying). A separate layer would have its own matrix, untying the weights and adding about 16.4M parameters.",
+      "explanation": "Weight sharing in Keras happens by reusing a layer instance; see p.499.",
+      "page_refs": [499, 500]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "How many separate sets of decoder-block weights does mini_gpt contain?",
+      "options": ["1", "2", "8", "64"],
+      "answer": "8",
+      "explanation": "The loop runs num_layers = 8 times and creates a new TransformerDecoder each time. 1 would be the case if one instance were reused; 64 confuses heads x layers.",
+      "page_refs": [500]
+    },
+    {
+      "id": "q5",
+      "type": "conceptual",
+      "question": "Why is a small learning rate especially useful at the very beginning of training a deep Transformer?",
+      "options": [],
+      "answer": "At the start, weights are random and the model is sensitive to initialization and optimizer behavior; large early updates can make parameters move too quickly and cause divergence. Small initial updates let training stabilize before full-size steps are taken.",
+      "explanation": "The book states the sensitivity and the remedy; the extra point about Adam's noisy early statistics is an AI explanation (see the deeper notes).",
+      "page_refs": [500]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "What does inputs = keras.Input(shape=(None,), dtype=\"int32\") say about the data the model accepts?",
+      "options": [],
+      "answer": "Batches of integer token ids with a variable sequence length (None); the batch dimension is implicit.",
+      "explanation": "Variable length is convenient for generation on p.502, but in practice the position table limits lengths to sequence_length.",
+      "page_refs": [500]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you write a LearningRateSchedule that warms up for 500 steps to 1e-3 and then halves the rate every 10,000 steps?",
+      "options": [],
+      "answer": "One solution: scale = min(step/500, 1); decay = 0.5 ** floor(step / 10000); return 1e-3 * scale * decay, using ops.minimum, ops.floor and ops.power on a float32-cast step.",
+      "explanation": "This extends Listing 16.7's pattern; check that your schedule returns 0 at step 0, 1e-3 at step 500 and 5e-4 at step 10,000.",
+      "page_refs": [500]
+    }
+  ]
+}

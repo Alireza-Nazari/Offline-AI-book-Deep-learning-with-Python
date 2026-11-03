@@ -1,0 +1,45 @@
+
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="/assets/math/katex.min.css"><link rel="stylesheet" href="/assets/css/app.css"></head>
+<body><div id="out"></div>
+<script src="/assets/math/katex.min.js"></script><script src="/assets/math/auto-render.min.js"></script>
+<script src="/assets/vendor/marked.min.js"></script><script src="/assets/vendor/purify.min.js"></script>
+<script src="/assets/vendor/chart.umd.js"></script><script src="/assets/vendor/d3.min.js"></script>
+<script src="/assets/vendor/mermaid.min.js"></script><script src="/assets/js/widgets/widgets.js"></script>
+<script>
+window.__results = [];
+async function runPage(pkg) {
+  const out = document.getElementById('out');
+  for (const v of pkg.visualizations || []) {
+    const box = document.createElement('div'); box.className = 'viz widget'; out.append(box);
+    const rec = {page: pkg.pdf_page, id: v.id, type: v.type, widget: v.widget || null, ok: true, error: null};
+    try {
+      if (v.type === 'widget') {
+        if (!window.Widgets[v.widget]) throw new Error('unknown widget ' + v.widget);
+        window.Widgets[v.widget](box, v.params || {}, {});
+        if (!box.querySelector('svg, table, canvas, .grid, .info')) throw new Error('widget rendered nothing');
+        // exercise controls once
+        for (const inp of box.querySelectorAll('input[type=range]')) { inp.value = inp.min; inp.dispatchEvent(new Event('input')); }
+        for (const b of [...box.querySelectorAll('button')].slice(0, 3)) b.click();
+      } else if (v.type === 'mermaid') {
+        mermaid.initialize({startOnLoad: false, securityLevel: 'strict'});
+        const {svg} = await mermaid.render('m' + Math.random().toString(36).slice(2), v.mermaid);
+        if (!svg.includes('<svg')) throw new Error('no svg');
+      } else if (v.type === 'chart') {
+        const c = document.createElement('canvas'); box.append(c);
+        const cfg = JSON.parse(JSON.stringify(v.chart)); cfg.options = Object.assign({}, cfg.options, {animation: false, responsive: false});
+        const ch = new Chart(c, cfg); ch.destroy();
+      } else if (v.type === 'svg') {
+        box.innerHTML = DOMPurify.sanitize(v.svg, {USE_PROFILES: {svg: true}});
+        if (!box.querySelector('svg')) throw new Error('svg did not parse');
+      }
+    } catch (e) { rec.ok = false; rec.error = String(e && e.message || e).slice(0, 300); }
+    window.__results.push(rec);
+  }
+  for (const m of pkg.math || []) {
+    const rec = {page: pkg.pdf_page, id: m.id, type: 'katex', ok: true, error: null};
+    try { katex.renderToString(m.latex, {displayMode: true, throwOnError: true}); } catch (e) { rec.ok = false; rec.error = String(e.message).slice(0, 300); }
+    window.__results.push(rec);
+  }
+}
+</script></body></html>

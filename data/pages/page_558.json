@@ -1,0 +1,532 @@
+{
+ "page_id": "page_558",
+ "pdf_page": 558,
+ "printed_page": "534",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:40:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. Listing 17.9 (e05) is extracted without its blank lines; content matches the image. Its three callouts are 'Creates pure noise to denoise into an image' (random.normal line), 'We don’t care about negative prompts here, but the model expects them.' (negative_token_ids line) and 'Rescales our images back to [0, 255]' (scale_output). The numbered list of three steps is split across e07 and e08. The last paragraph (e10) continues on p.559. `ops` and `np` are used in the listing but imported elsewhere (np on p.557, ops in Listing 17.10 and earlier in the chapter)."
+ },
+ "overview": {
+  "title": "Breaking down generate(): text encoding, denoising, rescaling",
+  "chapter": "17 Image generation",
+  "section": "17.3 Text-to-image models",
+  "subsection": "17.3.1 Exploring the latent space of a text-to-image model",
+  "main_topic": "Listing 17.9 decomposes Stable Diffusion's high-level generate() into three functions (get_text_embeddings, denoise_with_text_embeddings, scale_output), and the shapes of the four text-embedding tensors.",
+  "central_idea": "To manipulate text embeddings, for example to interpolate between prompts, we need access to the intermediate stages of generation: (1) tokenize and encode the prompt (plus an empty negative prompt) into embeddings, (2) denoise pure latent noise step by step using those embeddings, (3) map the decoded output from [-1, 1] to [0, 255]. The embeddings consist of four tensors with shapes (1, 154, 4096), (1, 154, 4096), (1, 2048), (1, 2048).",
+  "importance": "This page shows that the 'magic' generate() call is the same three-stage diffusion pipeline the reader built for flowers, plus a text encoder. It also exposes the embeddings as a variable you can edit, which the morphing experiment on pp.559–560 relies on.",
+  "learning_objectives": [
+   "Trace the three stages of SD3 generation and map each to a function in Listing 17.9.",
+   "Explain why an empty negative prompt is still encoded.",
+   "Explain the latent noise shape (1, height // 8, width // 8, 16) and the role of decode_step.",
+   "Derive the pixel rescaling round(255 · clip((x + 1)/2, 0, 1)).",
+   "Interpret the four embedding tensor shapes."
+  ],
+  "prerequisites": [
+   "The TextToImage task and negative prompts (pp.555–556)",
+   "The flower model's generation loop (p.551)",
+   "Tensor shapes and keras.ops"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "To walk the text latent space (announced on p.557), the authors first break `generate()` into parts in **Listing 17.9**:\n\n1. **`get_text_embeddings(prompt)`**: `task.preprocessor.generate_preprocess` tokenizes the prompt and an empty string `\"\"` for the negative prompt. The callout says we don't care about negative prompts here, but the model expects them. `task.backbone.encode_text_step(token_ids, negative_token_ids)` turns both into embeddings.\n2. **`denoise_with_text_embeddings(embeddings, num_steps=28, guidance_scale=7.0)`**: creates pure Gaussian noise `latents = random.normal((1, height // 8, width // 8, 16))`, which for 512×512 is a 64×64×16 latent. It then calls `task.backbone.denoise_step(latents, embeddings, step, num_steps, guidance_scale)` once per step, and finally `task.backbone.decode_step(latents)[0]` maps the latent to an image (first item of the batch).\n3. **`scale_output(x)`**: converts to NumPy, maps $[-1, 1]$ to $[0, 1]$ with `(x + 1) / 2`, clips, multiplies by 255, rounds and casts to `uint8`.\n\nThe last three lines chain these steps for the astronaut prompt.\n\nThe text then summarizes the three steps: tokenize and embed the prompts; progressively denoise pure noise using the embeddings, the same as the flower model; and map outputs from `[-1, 1]` back to `[0, 255]` for display.\n\nThe embeddings are not one tensor but **four**:\n\n```\n[(1, 154, 4096), (1, 154, 4096), (1, 2048), (1, 2048)]\n```\n\nThe page ends by starting to explain why. Rather than passing only the final embedded text vector, the Stable Diffusion authors pass both the final output vector and the last representation of the entire token sequence (continued on p.559).",
+ "paragraphs": [
+  {
+   "ref": "p558_e03",
+   "excerpt": "Before we can do this, we will need to break up our",
+   "what_it_says": "Before walking between prompts, the high-level generate() function needs to be broken into its constituent parts.",
+   "what_it_means": "generate() hides the text embeddings inside one call. To interpolate between two prompts we need to compute embeddings, modify them, and feed the modified embeddings to the denoiser. That requires separate access to the encoding and denoising stages.",
+   "why_it_matters": "This is a general lesson about high-level APIs: they are convenient, but research-style experiments often need the lower-level building blocks. KerasHub exposes them as backbone methods (encode_text_step, denoise_step, decode_step).",
+   "technical_idea": "",
+   "terminology": [
+    {
+     "term": "Constituent parts",
+     "meaning": "Here: text encoding, iterative denoising, and output decoding/rescaling."
+    }
+   ],
+   "connections": [
+    "p.557: the plan to morph between two images via their prompts."
+   ]
+  },
+  {
+   "ref": "p558_e07",
+   "excerpt": "1 First, we take our prompts, tokenize them, and embed them with",
+   "what_it_says": "Introduced by 'Our generation process has three distinct steps' (e06): first, tokenize the prompts and embed them with the text encoder; second, take the text embeddings and pure noise and progressively 'denoise' the noise into an image (continued in e08).",
+   "what_it_means": "Step 1 corresponds to get_text_embeddings, step 2 to denoise_with_text_embeddings. Tokenization turns strings into token IDs for the model's text encoders. Encoding turns token IDs into embedding tensors. Denoising starts from random latents and repeatedly applies the denoiser conditioned on those embeddings.",
+   "why_it_matters": "Separating conditioning (step 1) from generation (step 2) is what makes the embeddings an editable intermediate result.",
+   "technical_idea": "Beyond the book: SD3 actually denoises in the latent space of an image autoencoder, not in pixel space. That is why the noise has 16 channels at 1/8 resolution and why a decode_step is needed at the end.",
+   "terminology": [
+    {
+     "term": "Tokenize",
+     "meaning": "Convert text into a sequence of integer token IDs."
+    },
+    {
+     "term": "generate_preprocess",
+     "meaning": "The preprocessor method that prepares raw prompts for the backbone (tokenization, padding)."
+    }
+   ],
+   "connections": [
+    "p.551: the flower model's generation loop has the same structure."
+   ]
+  },
+  {
+   "ref": "p558_e08",
+   "excerpt": "the noise into an image. This is the same as the flower",
+   "what_it_says": "The denoising step is the same as the flower model's. Third, model outputs in [-1, 1] are mapped back to [0, 255] so the image can be rendered. The text embeddings contain four separate tensors, whose shapes are printed: [(1, 154, 4096), (1, 154, 4096), (1, 2048), (1, 2048)].",
+   "what_it_means": "Generative image models usually work with values normalized to [-1, 1], a symmetric range suited to Gaussian noise, while image formats need 8-bit integers in [0, 255]. The four tensors are, per p.559: positive-prompt sequence, negative-prompt sequence, positive-prompt vector, negative-prompt vector. Each sequence has 154 token positions with 4096 features; each vector is a single 2048-dimensional summary of the prompt.",
+   "why_it_matters": "Knowing the structure of the embeddings tells you what to interpolate. Listing 17.10 (p.559) interpolates only elements 0 and 2 (the positive prompt's sequence and vector) and leaves the negative ones unchanged.",
+   "technical_idea": "Beyond the book: 154 = 77 + 77 tokens, the CLIP token sequence concatenated with the T5 sequence along the token axis. 4096 is T5-XXL's width; the CLIP features (768 + 1280 = 2048) are zero-padded to 4096. The pooled vector 2048 = 768 (CLIP-L) + 1280 (CLIP-G). When T5 is not loaded, its part is filled with zeros.",
+   "terminology": [
+    {
+     "term": "Encoder sequence",
+     "meaning": "Per-token output vectors of the text encoder: shape (batch, tokens, features)."
+    },
+    {
+     "term": "Encoder vector (pooled)",
+     "meaning": "One vector summarizing the whole prompt: shape (batch, features)."
+    }
+   ],
+   "connections": [
+    "p.559: the list of the four tensors and Listing 17.10.",
+    "p.550: the flower model normalized images and denormalized outputs for display."
+   ]
+  },
+  {
+   "ref": "p558_e10",
+   "excerpt": "Rather than only passing the final, embedded text vector to the denoising",
+   "what_it_says": "Instead of only passing the final embedded text vector, the Stable Diffusion authors pass both the final output vector and the last (continued on p.559) representation of the entire token sequence learned by the text encoder.",
+   "what_it_means": "The pooled vector gives a global summary of the prompt (style, overall content). The token sequence keeps word-level detail that the denoiser can attend to position by position (for example, which object is 'origami' and which is 'NASA').",
+   "why_it_matters": "Giving the denoiser both granularities improves prompt adherence. It also explains the (1, 154, 4096) and (1, 2048) shapes.",
+   "technical_idea": "Beyond the book: in SD3, the pooled vector is combined with the timestep embedding to modulate the network's normalization layers, while the token sequence is concatenated with image patch tokens in joint attention.",
+   "terminology": [],
+   "connections": [
+    "p.559: the sentence and the bullet list of the four tensors continue."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "latent_diffusion",
+   "name": "Denoising in a compressed latent space",
+   "definition": "Running the diffusion process on a smaller latent representation produced by an image autoencoder, then decoding the final latent into pixels.",
+   "intuition": "Sketching on a small, information-dense canvas, then rendering it at full resolution.",
+   "technical": "latents = random.normal((1, H//8, W//8, 16)), i.e. (1, 64, 64, 16) for 512×512; after denoising, decode_step maps latents to (1, 512, 512, 3) in [-1, 1].",
+   "significance": "Denoising 64·64·16 = 65,536 numbers instead of 512·512·3 = 786,432 makes each step much cheaper.",
+   "example": "random.normal((1, height // 8, width // 8, 16)) in Listing 17.9.",
+   "misconception": "The 16 channels are not colors; they are learned latent features.",
+   "related": [
+    "diffusion_model",
+    "vae"
+   ],
+   "source": "ai_explanation"
+  },
+  {
+   "id": "classifier_free_guidance",
+   "name": "Guidance scale",
+   "definition": "A weight controlling how strongly each denoising step follows the prompt relative to the negative/unconditional prediction.",
+   "intuition": "A volume knob for 'listen to the prompt'.",
+   "technical": "noise = noise_neg + s · (noise_pos − noise_neg); s = guidance_scale = 7.0 by default here.",
+   "significance": "Explains why the negative prompt must be encoded even when unused: guidance needs the second prediction.",
+   "example": "denoise_with_text_embeddings(embeddings, num_steps=28, guidance_scale=7.0).",
+   "misconception": "A higher guidance scale is not always better; very high values oversaturate images and reduce diversity.",
+   "related": [
+    "negative_prompt",
+    "text_conditioning"
+   ],
+   "source": "ai_explanation"
+  },
+  {
+   "id": "text_embeddings_sd3",
+   "name": "The four SD3 text-embedding tensors",
+   "definition": "Positive and negative token sequences (1, 154, 4096) and positive and negative pooled vectors (1, 2048).",
+   "intuition": "Two levels of detail (per-word and whole-sentence) for two prompts (what to draw, what to avoid).",
+   "technical": "Returned by task.backbone.encode_text_step(token_ids, negative_token_ids) as a 4-tuple, ordered positive sequence, negative sequence, positive vector, negative vector (p.559).",
+   "significance": "These are the objects interpolated in Listing 17.10.",
+   "example": "[x.shape for x in embeddings] → [(1, 154, 4096), (1, 154, 4096), (1, 2048), (1, 2048)]",
+   "misconception": "The embedding is not a single vector per prompt.",
+   "related": [
+    "embedding",
+    "text_encoder"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Rescaling model output to 8-bit pixels",
+   "latex": "\\text{pixel} = \\operatorname{round}\\!\\left(255 \\cdot \\operatorname{clip}\\!\\left(\\frac{x + 1}{2},\\ 0,\\ 1\\right)\\right)",
+   "source_text": "x = np.clip((x + 1.0) / 2.0, 0.0, 1.0); return np.round(x * 255.0).astype(\"uint8\")",
+   "variables": [
+    {
+     "symbol": "x",
+     "meaning": "A decoded image value, nominally in [-1, 1]."
+    },
+    {
+     "symbol": "\\text{pixel}",
+     "meaning": "The resulting 8-bit integer intensity in [0, 255]."
+    }
+   ],
+   "operations": "Shift by +1 and divide by 2 (affine map [-1, 1] → [0, 1]); clip to guard against values slightly outside the range; scale by 255; round to the nearest integer; cast to uint8.",
+   "purpose": "Convert the model's normalized output into a displayable image (step 3 of generation).",
+   "interpretation": "-1 maps to black (0), 0 to mid-gray (about 128), +1 to full intensity (255).",
+   "intuition": "Stretch the interval [-1, 1] onto [0, 255].",
+   "numerical_example": "x = −1 → 0; x = 0 → round(127.5) = 128 (NumPy rounds half to even, and 127.5 → 128); x = 0.6 → round(0.8·255) = round(204) = 204; x = 1.2 → clipped to 1 → 255.",
+   "source": "book",
+   "book_ref": "p.558"
+  },
+  {
+   "id": "m2",
+   "title": "Classifier-free guidance inside denoise_step (not in the book)",
+   "latex": "\\hat\\epsilon = \\hat\\epsilon_\\theta(z_t, c_{neg}) + s\\,\\big(\\hat\\epsilon_\\theta(z_t, c_{pos}) - \\hat\\epsilon_\\theta(z_t, c_{neg})\\big)",
+   "source_text": "guidance_scale=7.0 (the formula itself is not printed in the book)",
+   "variables": [
+    {
+     "symbol": "z_t",
+     "meaning": "The current noisy latent at step t, shape (1, 64, 64, 16)."
+    },
+    {
+     "symbol": "c_{pos}, c_{neg}",
+     "meaning": "Positive and negative (here empty-prompt) text embeddings."
+    },
+    {
+     "symbol": "\\hat\\epsilon_\\theta",
+     "meaning": "The denoiser's prediction (noise, or a velocity in SD3's flow-matching formulation)."
+    },
+    {
+     "symbol": "s",
+     "meaning": "guidance_scale (7.0 by default in Listing 17.9)."
+    }
+   ],
+   "operations": "Two forward passes per step (positive and negative condition), then linear extrapolation from the negative toward the positive prediction.",
+   "purpose": "Explains why the negative prompt is encoded even when we 'don't care' about it, and what guidance_scale does.",
+   "interpretation": "s = 1 gives ordinary conditional prediction; s > 1 exaggerates the effect of the prompt.",
+   "intuition": "Measure how the prompt changes the prediction, and amplify that change.",
+   "numerical_example": "If for one latent value the negative prediction is 0.10 and the positive is 0.16, then with s = 7: 0.10 + 7 × 0.06 = 0.52.",
+   "source": "ai_explanation",
+   "book_ref": "p.558"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "17.9",
+   "title": "Breaking down the generate() function",
+   "original_code": "from keras import random\ndef get_text_embeddings(prompt):\n    token_ids = task.preprocessor.generate_preprocess([prompt])\n    negative_token_ids = task.preprocessor.generate_preprocess([\"\"])\n    return task.backbone.encode_text_step(token_ids, negative_token_ids)\ndef denoise_with_text_embeddings(embeddings, num_steps=28, guidance_scale=7.0):\n    latents = random.normal((1, height // 8, width // 8, 16))\n    for step in range(num_steps):\n        latents = task.backbone.denoise_step(\n            latents,\n            embeddings,\n            step,\n            num_steps,\n            guidance_scale,\n        )\n    return task.backbone.decode_step(latents)[0]\ndef scale_output(x):\n    x = ops.convert_to_numpy(x)\n    x = np.clip((x + 1.0) / 2.0, 0.0, 1.0)\n    return np.round(x * 255.0).astype(\"uint8\")\nembeddings = get_text_embeddings(prompt)\nimage = denoise_with_text_embeddings(embeddings)\nscale_output(image)",
+   "language": "python",
+   "what_it_does": "Re-implements task.generate(prompt) as three explicit functions: encode the prompt (and an empty negative prompt) into text embeddings, run num_steps guided denoising steps on random latent noise and decode the result, and rescale to uint8 pixels. The last three lines produce an image for the astronaut prompt.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "keras.random provides backend-agnostic random sampling (random.normal)."
+    },
+    {
+     "lines": "2-5",
+     "explanation": "get_text_embeddings: tokenize the prompt (as a batch of one) and the empty string as the negative prompt (callout: we don't care about negative prompts here, but the model expects them). encode_text_step runs the text encoders on both and returns the 4-tuple of embeddings."
+    },
+    {
+     "lines": "6",
+     "explanation": "Defaults: 28 denoising steps and guidance scale 7.0."
+    },
+    {
+     "lines": "7",
+     "explanation": "Callout: creates pure noise to denoise into an image. Shape (1, 64, 64, 16) for 512×512: the autoencoder's latent is 8× smaller in each spatial dimension with 16 channels."
+    },
+    {
+     "lines": "8-15",
+     "explanation": "The denoising loop. Each denoise_step takes the current latents, the embeddings, the current step index and the total number of steps (to place the step on the noise schedule), plus the guidance scale, and returns slightly less noisy latents."
+    },
+    {
+     "lines": "16",
+     "explanation": "decode_step maps the final latents to pixel space, shape (1, 512, 512, 3) in about [-1, 1]; [0] takes the first (only) image of the batch."
+    },
+    {
+     "lines": "17-20",
+     "explanation": "scale_output (callout: rescales our images back to [0, 255]): convert the backend tensor to NumPy, map [-1, 1] to [0, 1], clip, scale to [0, 255], round and cast to uint8."
+    },
+    {
+     "lines": "21-23",
+     "explanation": "Run the three stages for `prompt`; in a notebook, the uint8 array from scale_output is displayed as an image."
+    }
+   ],
+   "inputs_outputs": "Input: a prompt string (and the globals task, height, width). Output: a (512, 512, 3) uint8 array, equivalent to task.generate(prompt).",
+   "algorithm": "encode(prompt, \"\") → z ~ N(0, I) with shape (1, H/8, W/8, 16) → for step in 0..num_steps−1: z ← denoise_step(z, emb, step, num_steps, s) → x = decode(z)[0] → pixels = round(255·clip((x+1)/2, 0, 1)).",
+   "theory_link": "The same structure as the flower model's generate() (p.551), plus text conditioning (p.555), latent-space diffusion and guidance.",
+   "parameters": [
+    {
+     "name": "num_steps",
+     "role": "Number of denoising iterations (28 by default here); see figure 17.15 for its effect."
+    },
+    {
+     "name": "guidance_scale",
+     "role": "Strength of prompt adherence via classifier-free guidance (7.0)."
+    },
+    {
+     "name": "height // 8, width // 8, 16",
+     "role": "Latent noise shape matching the image autoencoder's downsampling and channel count."
+    }
+   ],
+   "pitfalls": [
+    "random.normal is called without a seed, so each call starts from different noise. For a smooth morph across interpolated embeddings (p.560), you would want the same noise for every frame.",
+    "The negative prompt must still be encoded; the backbone expects all four embedding tensors.",
+    "The listing relies on np and ops being imported elsewhere (np on p.557; ops from keras).",
+    "decode_step returns a batch; forgetting [0] leaves a leading batch dimension that PIL cannot display."
+   ],
+   "illustrative_code": "# AI-written (not from the book): reuse fixed noise for reproducible comparisons\nfrom keras import random\nseed = random.SeedGenerator(1337)\nfixed_noise = random.normal((1, height // 8, width // 8, 16), seed=seed)\n\ndef denoise_from(latents, embeddings, num_steps=28, guidance_scale=7.0):\n    for step in range(num_steps):\n        latents = task.backbone.denoise_step(latents, embeddings, step, num_steps, guidance_scale)\n    return task.backbone.decode_step(latents)[0]"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Inspecting the shapes of the text embeddings",
+   "original_code": ">>> [x.shape for x in embeddings]\n[(1, 154, 4096), (1, 154, 4096), (1, 2048), (1, 2048)]",
+   "language": "python",
+   "what_it_does": "Prints the shapes of the four tensors returned by encode_text_step.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "A list comprehension over the tuple of embeddings."
+    },
+    {
+     "lines": "2",
+     "explanation": "Positive and negative token sequences of 154 tokens × 4096 features, and positive and negative pooled vectors of 2048 features, each with batch size 1."
+    }
+   ],
+   "inputs_outputs": "Input: the embeddings tuple. Output: a list of four shape tuples.",
+   "algorithm": "Shape inspection.",
+   "theory_link": "SD3 conditions the denoiser on both per-token and pooled text representations, for both positive and negative prompts (p.559).",
+   "parameters": [],
+   "pitfalls": [
+    "Interpolating all four tensors would also blend the (identical) negative embeddings; Listing 17.10 interpolates only indices 0 and 2."
+   ],
+   "illustrative_code": ""
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Mapping generate() onto the flower model you built",
+   "kind": "breakdown",
+   "body": "| Stage | Flower model (pp.550–552) | Stable Diffusion 3 (Listing 17.9) |\n|---|---|---|\n| Conditioning | none | `encode_text_step(token_ids, negative_token_ids)` |\n| Initial noise | Gaussian images of shape (n, 128, 128, 3) | Gaussian latents `(1, H//8, W//8, 16)` |\n| Loop | `denoise()` at decreasing noise rates | `denoise_step(latents, embeddings, step, num_steps, guidance_scale)` |\n| Back to pixels | denormalize | `decode_step` then `scale_output` |\n\nThe only new ingredients are the text embeddings, guidance and the latent autoencoder. The loop is the same idea. (The flower model uses image_size = 128, set on p.545.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why 154 tokens and 4096/2048 features",
+   "kind": "numerical",
+   "body": "Beyond the book, from the SD3 design:\n\n- Two CLIP text encoders produce token sequences of 77 tokens with 768 (CLIP-L) and 1280 (CLIP-G) features. Concatenated along features: 77 × 2048, zero-padded to 77 × 4096.\n- The T5-XXL encoder produces 77 × 4096 (zeros if T5 is not loaded).\n- Concatenating along the token axis gives **154 × 4096**.\n- Pooled CLIP outputs: 768 + 1280 = **2048**.\n\nThat gives the shapes printed in the book.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Tensor shapes through Listing 17.9",
+   "why": "Listing 17.9 starts from latent noise of shape (1, height // 8, width // 8, 16) and ends with a (512, 512, 3) uint8 image; this traces those shapes for height = width = 512.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "random.normal latents",
+      "shape": [1, 64, 64, 16]
+     },
+     {
+      "op": "28 × denoise_step",
+      "shape": [1, 64, 64, 16]
+     },
+     {
+      "op": "decode_step",
+      "shape": [1, 512, 512, 3]
+     },
+     {
+      "op": "[0]",
+      "shape": [512, 512, 3]
+     },
+     {
+      "op": "scale_output → uint8",
+      "shape": [512, 512, 3]
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "The three stages of generation",
+   "why": "The page lists three distinct steps; this maps them to the functions of Listing 17.9.",
+   "mermaid": "flowchart LR\n  P[prompt] --> T[generate_preprocess: token ids]\n  NP[empty negative prompt] --> T2[generate_preprocess: negative token ids]\n  T --> E[encode_text_step]\n  T2 --> E\n  E --> EMB[\"4 tensors: (1,154,4096) x2, (1,2048) x2\"]\n  N[\"random.normal (1,64,64,16)\"] --> L[denoise_step x num_steps, guidance_scale]\n  EMB --> L\n  L --> D[decode_step -> image in -1..1]\n  D --> S[scale_output -> uint8 0..255]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Stable Diffusion denoises a 512×512×3 pixel image directly.",
+   "correction": "Listing 17.9 shows the noise has shape (1, 64, 64, 16): denoising happens in a compressed latent space, and decode_step converts to pixels at the end."
+  },
+  {
+   "claim": "If you don't use a negative prompt, you can skip encoding it.",
+   "correction": "The callout notes that the model expects it; an empty prompt \"\" is encoded and used in guidance."
+  },
+  {
+   "claim": "A prompt is represented by a single embedding vector.",
+   "correction": "SD3 uses a per-token sequence (154×4096) and a pooled vector (2048) for each of the positive and negative prompts: four tensors."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 557,
+    "note": "Motivates decomposing generate(): walking the text latent space to morph images; num_steps experiment."
+   },
+   {
+    "page": 556,
+    "note": "Negative prompts, which explains the negative_token_ids here."
+   },
+   {
+    "page": 551,
+    "note": "The flower model's generation process, the same denoising loop."
+   },
+   {
+    "page": 555,
+    "note": "Listing 17.8 defines task, height and width used here."
+   }
+  ],
+  "later": [
+   {
+    "page": 559,
+    "note": "Explains the four tensors and interpolates them with slerp (Listing 17.10)."
+   },
+   {
+    "page": 560,
+    "note": "Uses these functions to generate images along the interpolation (figure 17.17)."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 547,
+    "note": "Diffusion time and schedule: why denoise_step needs step and num_steps."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 550,
+    "note": "Reconstructing a denoised image from predicted noise in the flower model."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 552,
+    "note": "VisualizationCallback converts generated images to uint8 for plotting."
+   },
+   {
+    "page": 559,
+    "note": "Listing 17.10 operates on the embeddings tuple produced here."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 557,
+    "note": "Figure 17.15: effect of num_steps."
+   }
+  ]
+ },
+ "takeaways": [
+  "generate() = (1) tokenize and encode prompt plus empty negative prompt, (2) iteratively denoise random latents with guidance, (3) decode and rescale to [0, 255].",
+  "Latent noise has shape (1, height // 8, width // 8, 16): SD3 denoises in a compressed latent space and decodes at the end.",
+  "denoise_step needs the step index and total num_steps (position on the schedule) and the guidance_scale (7.0).",
+  "scale_output maps [-1, 1] to uint8 via round(255 · clip((x + 1)/2, 0, 1)).",
+  "The text embeddings are four tensors: positive/negative token sequences (1, 154, 4096) and positive/negative pooled vectors (1, 2048)."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In Listing 17.9, why is an empty string tokenized as negative_token_ids?",
+   "options": [
+    "To remove all colors from the image",
+    "Because the model expects a negative prompt even if we don't use one",
+    "To pad the positive prompt to 154 tokens",
+    "To initialize the latent noise"
+   ],
+   "answer": "Because the model expects a negative prompt even if we don't use one",
+   "explanation": "The callout: 'We don’t care about negative prompts here, but the model expects them.' It is not about colors, padding the positive prompt, or noise initialization.",
+   "page_refs": [
+    558
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Using scale_output, what uint8 values do model outputs x = −1, x = −0.2 and x = 1.4 become?",
+   "options": [],
+   "answer": "0, 102, and 255.",
+   "explanation": "(−1+1)/2 = 0 → 0. (−0.2+1)/2 = 0.4 → 0.4·255 = 102 → 102. (1.4+1)/2 = 1.2 → clipped to 1 → 255.",
+   "page_refs": [
+    558
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "For height = width = 512, what is the shape of the initial latent noise, and what does that suggest about where denoising happens?",
+   "options": [],
+   "answer": "(1, 64, 64, 16). Denoising happens in a compressed latent space (8× smaller spatially, 16 channels), and decode_step converts the result to pixels.",
+   "explanation": "From random.normal((1, height // 8, width // 8, 16)) and the final decode_step call. The term 'latent diffusion' is not used in the book.",
+   "page_refs": [
+    558
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "Which shapes does `[x.shape for x in embeddings]` print?",
+   "options": [
+    "[(1, 77, 768), (1, 768)]",
+    "[(1, 154, 4096), (1, 154, 4096), (1, 2048), (1, 2048)]",
+    "[(1, 64, 64, 16)]",
+    "[(1, 4096), (1, 4096), (1, 154, 2048), (1, 154, 2048)]"
+   ],
+   "answer": "[(1, 154, 4096), (1, 154, 4096), (1, 2048), (1, 2048)]",
+   "explanation": "Printed on the page. Option 1 resembles a single CLIP encoder's output, option 3 is the latent noise shape, and option 4 swaps the dimensions.",
+   "page_refs": [
+    558
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "Why does Stable Diffusion pass both a token sequence and a pooled vector for each prompt?",
+   "options": [],
+   "answer": "The pooled vector is a compact global summary of the prompt, and the token sequence preserves word-level detail the denoiser can use for specific objects and attributes. Together they give the denoiser more information.",
+   "explanation": "The book says this 'effectively gives our denoising model more information to work with' (pp.558–559). The global vs word-level interpretation is an explanation beyond the text.",
+   "page_refs": [
+    558,
+    559
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "Which three backbone methods does Listing 17.9 call, and what does each do?",
+   "options": [],
+   "answer": "encode_text_step (token IDs → text embeddings), denoise_step (one guided denoising iteration on the latents), decode_step (latents → image in [-1, 1]).",
+   "explanation": "Read directly from the listing's three functions.",
+   "page_refs": [
+    558
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you rewrite denoise_with_text_embeddings so that it accepts the initial latents as an argument? Why would that help with morphing between prompts?",
+   "options": [],
+   "answer": "Add a `latents` parameter instead of sampling inside the function. Using the same initial noise for every interpolated embedding means the only thing changing between frames is the text condition, so the morph is smooth rather than jumping between unrelated random images.",
+   "explanation": "This builds on the page's code; see the illustrative variant in the code notes.",
+   "page_refs": [
+    558,
+    560
+   ]
+  }
+ ]
+}

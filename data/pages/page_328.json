@@ -1,0 +1,393 @@
+{
+ "page_id": "page_328",
+ "pdf_page": 328,
+ "printed_page": "304",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:45:30Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. Callouts were matched to code lines from the page image: the 'mean intensity of the gradient' callout points at pooled_grads; 'Multiplies each channel ...' at the for-loop; 'The channel-wise mean ...' at heatmap = np.mean(...). Figure 10.8 is a 10 x 10 heatmap rendered with matplotlib's default (viridis) colormap, axes ticked 0-8; its brightest cells are around rows 3-4 and columns 3-6, with nearly zero values along the bottom rows. These descriptions are read from the image, not from extracted labels."
+ },
+ "overview": {
+  "title": "Pooling gradients into channel weights and building the heatmap",
+  "chapter": "10 Interpreting what ConvNets learn",
+  "section": "10.3 Visualizing heatmaps of class activation",
+  "subsection": "10.3.4 Displaying the class activation heatmap",
+  "main_topic": "Turning the gradient tensor and the last conv feature map into a class activation heatmap: average the gradients per channel to get channel importances, multiply each feature-map channel by its importance, average over channels, then clip negatives, normalize to [0, 1] and display the result (Figure 10.8).",
+  "central_idea": "Grad-CAM's heatmap is a weighted combination of feature-map channels, where each channel's weight is the spatial mean of the class gradient for that channel. Keeping only positive values and normalizing gives a coarse map (here 10 x 10) of where the image supports the class African elephant.",
+  "importance": "This is the step where the abstract recipe from p.323 ('weight every channel by the gradient of the class with respect to the channel') becomes five lines of NumPy. It is backend-independent and produces the map that is overlaid on the photo on p.329-p.330.",
+  "learning_objectives": [
+   "Compute per-channel importance weights by averaging gradients over the batch and spatial axes.",
+   "Weight each channel of the feature map by its importance and take the channel-wise mean.",
+   "Explain why the heatmap is passed through max(., 0) and divided by its maximum.",
+   "Read Figure 10.8 and relate its 10 x 10 resolution to the last conv layer's spatial size.",
+   "Write the Grad-CAM heatmap as a formula."
+  ],
+  "prerequisites": [
+   "grads and last_conv_layer_output as NumPy arrays (p.326-p.327)",
+   "NumPy axis arguments for mean and broadcasting-style per-channel operations (chapter 2)",
+   "The Grad-CAM description on p.323",
+   "Global average pooling (chapter 8/9)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "Section **10.3.4** turns the gradients into a picture.\n\n**Listing 10.23, gradient pooling and channel importance weighting.**\n\n- `pooled_grads = np.mean(grads, axis=(0, 1, 2))` averages the gradient over the batch axis and the two spatial axes. The result is a vector with one entry per channel: \"the mean intensity of the gradient for a given channel\", which \"quantifies the importance of each channel with regard to the top predicted class\" (callout).\n- `last_conv_layer_output = last_conv_layer_output[0].copy()` drops the batch axis and makes a copy so the original array is not modified.\n- The `for` loop multiplies each channel `[:, :, i]` by `pooled_grads[i]`: \"each channel in the output of the last convolutional layer\" is scaled \"by how important this channel is\".\n- `heatmap = np.mean(last_conv_layer_output, axis=-1)`: \"the channel-wise mean of the resulting feature map is our heatmap of class activation\".\n\n**Listing 10.24, heatmap post-processing.** For visualization the heatmap is normalized between 0 and 1: `np.maximum(heatmap, 0)` sets negative values to zero, `heatmap /= np.max(heatmap)` scales the maximum to 1, and `plt.matshow(heatmap)` displays it.\n\n**Figure 10.8** shows the standalone heatmap: a coarse 10 x 10 grid (one cell per spatial position of the last conv layer) with a bright blob in the upper-middle part and dark values elsewhere, especially at the bottom. On its own it is hard to interpret; p.329 superimposes it on the elephant photo.\n\nIn formula form, the heatmap is $\\max\\big(0, \\tfrac{1}{K}\\sum_k \\alpha_k A^k\\big)$ normalized to a maximum of 1, with $\\alpha_k$ the spatially averaged gradient of channel $k$.",
+ "paragraphs": [
+  {
+   "ref": "p328_e04",
+   "excerpt": "Now, we apply pooling and importance weighting to the gradient tensor to obtain",
+   "what_it_says": "Pooling and importance weighting are applied to the gradient tensor to obtain the heatmap of class activation.",
+   "what_it_means": "'Pooling' here is global average pooling of the gradients: each channel's gradient map is reduced to one number. 'Importance weighting' then uses these numbers to scale the feature-map channels.",
+   "why_it_matters": "It is the core of Grad-CAM: gradients tell us which channels matter for the class, the feature map tells us where those channels are active, and the product combines both.",
+   "technical_idea": "Averaging the gradient over space gives a single importance per channel instead of a separate weight per location, which makes the map more stable than raw gradients and ties it to whole features rather than to individual pixels.",
+   "terminology": [
+    {"term": "gradient pooling", "meaning": "Averaging the gradient tensor over the batch and spatial axes to get one value per channel."},
+    {"term": "importance weighting", "meaning": "Multiplying each feature-map channel by its pooled gradient."},
+    {"term": "heatmap of class activation", "meaning": "A 2D grid of scores indicating how much each location supports the class (p.323)."}
+   ],
+   "connections": [
+    "p.323: Grad-CAM weights a spatial map of 'how intensely the input image activates different channels' by 'how important each channel is with regard to the class'.",
+    "p.326: grads is the gradient of the top class with respect to the last conv feature map."
+   ]
+  },
+  {
+   "ref": "p328_e07",
+   "excerpt": "For visualization purposes, you’ll also normalize the heatmap between 0 and 1.",
+   "what_it_says": "For visualization, the heatmap is normalized between 0 and 1, and the result is shown in Figure 10.8 (Listing 10.24).",
+   "what_it_means": "Raw heatmap values are tiny and of arbitrary scale (products of activations and gradients). Clipping negatives and dividing by the maximum gives a [0, 1] map suitable for a colormap and, on p.329, for conversion to 0-255 pixel values.",
+   "why_it_matters": "Normalization does not change which areas are highlighted, only the scale. The clipping step (np.maximum(heatmap, 0)), which the sentence does not mention explicitly, does change the map: it discards regions that argue against the class.",
+   "technical_idea": "Beyond the book: the ReLU on the heatmap follows the original Grad-CAM paper, which keeps only features with a positive influence on the class of interest. Without it, dividing by the maximum could leave negative values below 0.",
+   "terminology": [
+    {"term": "normalization", "meaning": "Rescaling values into a fixed range, here [0, 1]."},
+    {"term": "plt.matshow", "meaning": "Matplotlib function that displays a 2D array as a colored grid."}
+   ],
+   "connections": [
+    "p.329: the normalized heatmap is rescaled to 0-255 and colorized with the jet colormap.",
+    "p.313: section 10.1 also normalized activation channels for display."
+   ]
+  },
+  {
+   "ref": "p328_e10",
+   "excerpt": "Figure 10.8 Standalone class activation heatmap",
+   "what_it_says": "Figure 10.8 shows the class activation heatmap on its own, as a grid of colored cells.",
+   "what_it_means": "From the image: the grid is 10 x 10 (axis ticks 0, 2, 4, 6, 8), matching the spatial size of Xception's last conv layer. The brightest cells (yellow) are around rows 3-4 and columns 3-6, surrounded by green and blue, and the lower rows are near zero (dark purple).",
+   "why_it_matters": "It shows how coarse Grad-CAM's raw output is: each cell covers about 30 x 30 pixels of a 299 x 299 input. That is why it must be upsampled and overlaid on the photo (p.329) to be meaningful.",
+   "technical_idea": "The coarse resolution is the price of using the last conv layer, the layer with the most class-specific features.",
+   "terminology": [
+    {"term": "standalone heatmap", "meaning": "The heatmap displayed without the underlying image."}
+   ],
+   "connections": [
+    "p.329: Figure 10.9 overlays this heatmap on the test picture.",
+    "p.330: the strongly activated region includes the calf's ears."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "grad_cam",
+   "name": "Grad-CAM heatmap",
+   "definition": "The ReLU of the importance-weighted combination of the last conv feature map's channels, where each channel's importance is the spatial mean of the class gradient.",
+   "intuition": "Light up the places where the features that matter for the class are active.",
+   "technical": "alpha_k = mean_{ij} dy^c/dA^k_{ij}; heatmap = relu(mean_k alpha_k A^k), normalized to [0, 1].",
+   "significance": "Gives a class-specific, coarse localization of evidence without any extra training.",
+   "example": "Figure 10.8 for class African elephant.",
+   "misconception": "The book's np.mean over channels differs from the paper's sum only by the constant 1/K, which normalization removes.",
+   "related": ["class_activation_map", "global_average_pooling", "convolution"],
+   "source": "book"
+  },
+  {
+   "id": "channel_importance",
+   "name": "Channel importance weights (pooled gradients)",
+   "definition": "One number per channel: the average over batch and spatial positions of the gradient of the class with respect to that channel.",
+   "intuition": "A vote for how much a feature detector helps the class.",
+   "technical": "pooled_grads = np.mean(grads, axis=(0, 1, 2)), shape (channels,).",
+   "significance": "Turns a large gradient tensor into a compact weighting vector.",
+   "example": "For Xception's last conv layer, a vector of 2,048 weights (channel count from the architecture, not printed on the page).",
+   "misconception": "Negative weights are not errors: they mark channels whose activation lowers the class score.",
+   "related": ["grad_cam", "global_average_pooling"],
+   "source": "book"
+  },
+  {
+   "id": "global_average_pooling",
+   "name": "Global average pooling",
+   "definition": "Averaging a feature map over all spatial positions, giving one value per channel.",
+   "intuition": "Summarize each channel by its overall level.",
+   "technical": "Here applied to the gradient tensor rather than to activations.",
+   "significance": "Provides the per-channel importance weights in Grad-CAM.",
+   "example": "np.mean(grads, axis=(0, 1, 2))",
+   "misconception": "Pooling here is not a layer of the network; it is a NumPy operation on gradients.",
+   "related": ["pooling", "channel_importance"],
+   "source": "book"
+  },
+  {
+   "id": "heatmap_normalization",
+   "name": "Heatmap post-processing",
+   "definition": "Clipping negative values to 0 and dividing by the maximum so the heatmap lies in [0, 1].",
+   "intuition": "Keep only evidence for the class, then stretch it to the full color range.",
+   "technical": "np.maximum(heatmap, 0); heatmap /= np.max(heatmap)",
+   "significance": "Makes heatmaps comparable and ready for colormapping.",
+   "example": "Listing 10.24.",
+   "misconception": "Normalization does not make heatmaps of different images comparable in absolute terms; each is scaled by its own maximum.",
+   "related": ["grad_cam"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Channel importance weights",
+   "latex": "\\alpha_k = \\frac{1}{H W} \\sum_{i=1}^{H} \\sum_{j=1}^{W} \\frac{\\partial\\, y^{c^*}}{\\partial A^{k}_{ij}}",
+   "source_text": "pooled_grads = np.mean(grads, axis=(0, 1, 2))",
+   "variables": [
+    {"symbol": "\\alpha_k", "meaning": "pooled_grads[k], importance of channel k for the top class."},
+    {"symbol": "H, W", "meaning": "Spatial height and width of the last conv feature map (10 x 10 in Figure 10.8)."},
+    {"symbol": "A^k_{ij}", "meaning": "Activation of channel k at position (i, j)."},
+    {"symbol": "y^{c^*}", "meaning": "Output of the top predicted class."}
+   ],
+   "operations": "Average of the gradient over all spatial positions (and the batch axis of size 1).",
+   "purpose": "Quantifies the importance of each channel with regard to the top predicted class (callout).",
+   "interpretation": "Large positive alpha_k: increasing channel k anywhere raises the class score.",
+   "intuition": "How much the class 'likes' feature k on average.",
+   "source": "book",
+   "book_ref": "p.328"
+  },
+  {
+   "id": "m2",
+   "title": "Grad-CAM heatmap",
+   "latex": "M_{ij} = \\frac{1}{K}\\sum_{k=1}^{K} \\alpha_k A^{k}_{ij}, \\qquad \\tilde M = \\frac{\\max(M, 0)}{\\max_{ij} \\max(M_{ij}, 0)}",
+   "source_text": "last_conv_layer_output[:, :, i] *= pooled_grads[i]\nheatmap = np.mean(last_conv_layer_output, axis=-1)\nheatmap = np.maximum(heatmap, 0)\nheatmap /= np.max(heatmap)",
+   "variables": [
+    {"symbol": "K", "meaning": "Number of channels of the last conv layer."},
+    {"symbol": "M_{ij}", "meaning": "Raw heatmap value at position (i, j): channel-wise mean of the weighted feature map."},
+    {"symbol": "\\tilde M", "meaning": "Final heatmap in [0, 1] displayed in Figure 10.8."}
+   ],
+   "operations": "Weighted average over channels, elementwise ReLU, division by the maximum.",
+   "purpose": "Produces a 2D map of how strongly each location activates the class.",
+   "interpretation": "Bright cells are where class-relevant features are strongly active.",
+   "intuition": "Weighted 'vote' of feature detectors at every location.",
+   "numerical_example": "Beyond the book: a toy example with K = 2 channels on a 2 x 2 grid. Let $A^1 = \\begin{pmatrix}4&0\\\\0&0\\end{pmatrix}$, $A^2 = \\begin{pmatrix}0&2\\\\2&2\\end{pmatrix}$ and $\\alpha = (0.5, -0.25)$. Weighted channels: $\\begin{pmatrix}2&0\\\\0&0\\end{pmatrix}$ and $\\begin{pmatrix}0&-0.5\\\\-0.5&-0.5\\end{pmatrix}$. Mean over channels: $M = \\begin{pmatrix}1&-0.25\\\\-0.25&-0.25\\end{pmatrix}$. After ReLU and division by the max: $\\tilde M = \\begin{pmatrix}1&0\\\\0&0\\end{pmatrix}$, only the top-left location supports the class.",
+   "source": "book",
+   "book_ref": "p.328"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "10.23",
+   "title": "Gradient pooling and channel importance weighting",
+   "original_code": "pooled_grads = np.mean(grads, axis=(0, 1, 2))\nlast_conv_layer_output = last_conv_layer_output[0].copy()\nfor i in range(pooled_grads.shape[-1]):\n    last_conv_layer_output[:, :, i] *= pooled_grads[i]\nheatmap = np.mean(last_conv_layer_output, axis=-1)",
+   "language": "python",
+   "what_it_does": "Computes one importance weight per channel from the gradients, scales each channel of the feature map by its weight, and averages over channels to get the raw 2D heatmap.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Mean over batch, rows and columns: a vector with one entry per channel, 'the mean intensity of the gradient for a given channel' (callout)."},
+    {"lines": "2", "explanation": "Takes the first (only) image of the batch, shape (rows, cols, channels), and copies it so in-place multiplication does not alter the original array."},
+    {"lines": "3-4", "explanation": "Multiplies each channel by how important it is (callout)."},
+    {"lines": "5", "explanation": "Channel-wise mean of the weighted feature map: the heatmap of class activation (callout), shape (rows, cols)."}
+   ],
+   "inputs_outputs": "Inputs: grads and last_conv_layer_output, NumPy arrays of shape (1, rows, cols, channels). Output: heatmap of shape (rows, cols); 10 x 10 in Figure 10.8.",
+   "algorithm": "Global-average-pool gradients -> per-channel scaling -> channel mean.",
+   "theory_link": "Implements $\\alpha_k$ and $M_{ij}$ (math m1, m2), the Grad-CAM recipe of p.323.",
+   "parameters": [
+    {"name": "axis=(0, 1, 2)", "role": "Average over batch and spatial axes, keep the channel axis."},
+    {"name": "axis=-1", "role": "Average over channels."}
+   ],
+   "pitfalls": [
+    "Averaging over the wrong axes (e.g. axis=-1 for the gradients) would give spatial weights instead of channel weights.",
+    "Without .copy(), the in-place *= would modify the array returned by the gradient function.",
+    "The loop can be replaced by broadcasting, but the result is the same."
+   ],
+   "illustrative_code": "# AI-written equivalent (not from the book), using broadcasting\nweights = grads.mean(axis=(0, 1, 2))            # (channels,)\nheatmap = (last_conv_output[0] * weights).mean(axis=-1)  # (rows, cols)\n# here last_conv_output is the un-weighted array returned by get_top_class_gradients"
+  },
+  {
+   "id": "c2",
+   "listing": "10.24",
+   "title": "Heatmap post-processing",
+   "original_code": "heatmap = np.maximum(heatmap, 0)\nheatmap /= np.max(heatmap)\nplt.matshow(heatmap)",
+   "language": "python",
+   "what_it_does": "Clips negative values, normalizes the heatmap to [0, 1] and displays it (Figure 10.8).",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Elementwise ReLU: keeps only locations with positive evidence for the class."},
+    {"lines": "2", "explanation": "Divides by the maximum so the brightest cell equals 1."},
+    {"lines": "3", "explanation": "Shows the array as a colored grid with matplotlib (default colormap)."}
+   ],
+   "inputs_outputs": "Input: raw heatmap (rows, cols). Output: heatmap in [0, 1] and a plot.",
+   "algorithm": "ReLU + max normalization.",
+   "theory_link": "Matches the ReLU used in Grad-CAM to retain only features with a positive influence on the class.",
+   "parameters": [],
+   "pitfalls": [
+    "If all values were negative (the class has no positive evidence), np.max would be 0 and the division would produce NaNs; a small epsilon avoids this.",
+    "plt must be imported as matplotlib.pyplot earlier in the notebook."
+   ],
+   "illustrative_code": "# AI-written safe variant (not from the book)\nheatmap = np.maximum(heatmap, 0)\nheatmap /= (np.max(heatmap) + 1e-8)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "From gradients to heatmap, step by step with shapes",
+   "kind": "step_by_step",
+   "body": "Assuming Xception's last conv layer has shape (1, 10, 10, 2048) (the 10 x 10 grid matches Figure 10.8; the 2,048 channels come from the architecture, not from the page):\n\n1. `grads`: (1, 10, 10, 2048).\n2. `pooled_grads`: mean over axes 0, 1, 2 -> (2048,).\n3. `last_conv_layer_output[0]`: (10, 10, 2048).\n4. Weighted channels: still (10, 10, 2048).\n5. `heatmap`: mean over the last axis -> (10, 10).\n6. ReLU and division by the max -> (10, 10), values in [0, 1].",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the mean of gradients is a sensible channel weight",
+   "kind": "breakdown",
+   "body": "If the head is global pooling followed by a dense layer, the gradient of the class with respect to every location of channel $k$ is (before softmax effects) proportional to the dense weight connecting channel $k$ to the class. Averaging over locations recovers that weight. Grad-CAM therefore generalizes the original CAM method, which used those dense weights directly; averaging also smooths out noise when the head is more complex. (Background beyond the book.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Mixing a recipe",
+   "kind": "analogy",
+   "body": "Each channel is a transparent overlay showing where one ingredient (a feature such as 'large ear' or 'grey wrinkled skin') appears in the image. The pooled gradient says how much the dish 'African elephant' depends on that ingredient. Stacking the overlays with those weights, and ignoring ingredients that spoil the dish (ReLU), shows where the image tastes most like African elephant.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Listings 10.23-10.24 as a pipeline",
+   "why": "The page computes the heatmap in a fixed sequence of NumPy operations.",
+   "mermaid": "flowchart LR\n  G[\"grads<br/>(1, H, W, K)\"] --> P[\"np.mean axis=(0,1,2)<br/>pooled_grads (K,)\"]\n  A[\"last_conv_layer_output[0]<br/>(H, W, K)\"] --> X[\"channel i *= pooled_grads[i]\"]\n  P --> X\n  X --> M[\"np.mean axis=-1<br/>heatmap (H, W)\"]\n  M --> R[\"np.maximum(heatmap, 0)\"]\n  R --> N[\"heatmap /= np.max(heatmap)\"]\n  N --> S[\"plt.matshow -> Figure 10.8\"]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Tensor shapes from gradients to heatmap",
+   "why": "Follows the arrays through Listing 10.23; the 10 x 10 grid is visible in Figure 10.8, the 2,048 channels are Xception's (not printed here).",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "grads", "shape": [1, 10, 10, 2048]},
+     {"op": "pooled_grads", "shape": [2048]},
+     {"op": "weighted feature map", "shape": [10, 10, 2048]},
+     {"op": "heatmap (mean over channels)", "shape": [10, 10]}
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The heatmap has the same resolution as the input image.",
+   "correction": "It has the spatial resolution of the last conv layer (10 x 10 in Figure 10.8); it must be resized to overlay it on the image (p.329)."
+  },
+  {
+   "claim": "Normalizing to [0, 1] is the only post-processing step.",
+   "correction": "Listing 10.24 also applies np.maximum(heatmap, 0), discarding negative evidence, before dividing by the maximum."
+  },
+  {
+   "claim": "pooled_grads is a spatial map.",
+   "correction": "It is a vector with one entry per channel; the spatial axes have been averaged away."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 326, "note": "grads and last_conv_layer_output computed with TensorFlow."},
+   {"page": 327, "note": "PyTorch and JAX versions producing the same arrays."},
+   {"page": 323, "note": "The Grad-CAM idea of weighting channels by class gradients."},
+   {"page": 313, "note": "Displaying activation channels in section 10.1."}
+  ],
+  "later": [
+   {"page": 329, "note": "The heatmap is rescaled to 0-255, colorized with jet and resized to the image."},
+   {"page": 330, "note": "Superimposed image saved; interpretation of why and where."}
+  ],
+  "prerequisites": [
+   {"page": 323, "note": "Definition of a class activation heatmap."}
+  ],
+  "related_math": [
+   {"page": 326, "note": "Gradient of the top class with respect to the feature map."}
+  ],
+  "related_code": [
+   {"page": 326, "note": "Listing 10.20 returns grads and last_conv_layer_output."},
+   {"page": 329, "note": "Listing 10.25 consumes heatmap."}
+  ],
+  "related_figures": [
+   {"page": 329, "note": "Figure 10.9 overlays this heatmap on the test picture."},
+   {"page": 324, "note": "Figure 10.7, the test picture."}
+  ]
+ },
+ "takeaways": [
+  "pooled_grads = mean of grads over batch and spatial axes: one importance weight per channel.",
+  "Each channel of the last conv output is multiplied by its weight; the channel-wise mean is the heatmap.",
+  "np.maximum(heatmap, 0) keeps positive evidence; dividing by the max normalizes to [0, 1].",
+  "Figure 10.8 is a coarse 10 x 10 map with a bright region in the upper middle, matching the last conv layer's grid.",
+  "This step is pure NumPy and identical for all backends."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What does pooled_grads = np.mean(grads, axis=(0, 1, 2)) produce?",
+   "options": [
+    "A 2D spatial map of gradient magnitude",
+    "A vector with one importance value per channel",
+    "The final heatmap",
+    "A single scalar for the whole image"
+   ],
+   "answer": "A vector with one importance value per channel",
+   "explanation": "Axes 0, 1, 2 are batch, rows and columns; only the channel axis remains. The callout calls it the mean intensity of the gradient per channel. A spatial map would keep axes 1-2; a scalar would average all axes.",
+   "page_refs": [328]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Two channels on a 1 x 2 grid: A^1 = [3, 1], A^2 = [0, 4], pooled gradients alpha = (1, -0.5). Compute the heatmap after Listing 10.23 and 10.24.",
+   "options": [],
+   "answer": "Weighted: [3, 1] and [0, -2]; mean over channels: [1.5, -0.5]; ReLU: [1.5, 0]; normalized: [1, 0].",
+   "explanation": "Apply alpha_k to each channel, average over k, clip negatives, divide by the maximum (1.5).",
+   "page_refs": [328]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why is the heatmap in Figure 10.8 only 10 x 10 cells?",
+   "options": [],
+   "answer": "Because it is computed on the last convolutional layer's feature map, whose spatial grid is 10 x 10 for Xception; each cell corresponds to a large patch of the input.",
+   "explanation": "The figure's axes show 10 positions; the layer choice (block14_sepconv2_act, p.325) fixes the resolution.",
+   "page_refs": [325, 328]
+  },
+  {
+   "id": "q4",
+   "type": "short",
+   "question": "What is the role of np.maximum(heatmap, 0) in Listing 10.24?",
+   "options": [],
+   "answer": "It sets negative values to zero, keeping only locations that positively support the top class, before normalization.",
+   "explanation": "The text mentions normalization only; the clipping step is visible in the code.",
+   "page_refs": [328]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Why does Listing 10.23 call last_conv_layer_output[0].copy()?",
+   "options": [
+    "To add a batch dimension",
+    "To drop the batch axis and avoid modifying the original array during the in-place multiplication",
+    "To convert the array to a TensorFlow tensor",
+    "To normalize the feature map"
+   ],
+   "answer": "To drop the batch axis and avoid modifying the original array during the in-place multiplication",
+   "explanation": "[0] selects the single image (removing the batch axis); .copy() protects the original. It does not add axes, convert types or normalize.",
+   "page_refs": [328]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "The book averages the weighted channels (np.mean) while the Grad-CAM paper sums them. Does this change Figure 10.8?",
+   "options": [],
+   "answer": "No. Mean = sum / K, a positive constant factor, which does not change the sign pattern and is removed by dividing by the maximum.",
+   "explanation": "Added comparison; both ReLU and max-normalization are invariant to positive scaling.",
+   "page_refs": [328]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you state, in one sentence each, what pooled gradients, weighted channels and the channel-wise mean represent?",
+   "options": [],
+   "answer": "Pooled gradients: how important each channel is for the class. Weighted channels: where each feature is active, scaled by its importance. Channel-wise mean: the combined evidence for the class at each location.",
+   "explanation": "Compare with the three callouts on Listing 10.23.",
+   "page_refs": [328]
+  }
+ ]
+}

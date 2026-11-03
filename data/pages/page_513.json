@@ -1,0 +1,601 @@
+{
+ "page_id": "page_513",
+ "pdf_page": 513,
+ "printed_page": "489",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T10:00:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Data split: `ds = ...shuffle(2000).batch(2)` followed by `ds.take(100)` / `ds.skip(100)`. Because `tf.data` shuffles with `reshuffle_each_iteration=True` by default, every pass over `val_ds` or `train_ds` draws a new shuffle order, so the 'validation' batches are not a fixed held-out subset and can overlap with training examples (the validation run at the end of the epoch in listing 16.14 re-iterates the dataset). A leak-free split would shuffle with `reshuffle_each_iteration=False` (or split before shuffling). Worth checking against the authors' notebook."
+  ],
+  "extraction_quality": "Good. e03 is the tail of Listing 16.12 (started on p.512). The REPL output in e06 lost the blank line between the two prompts; restored from the page image. e12 continues on p.514 (the padding_mask shape is printed there)."
+ },
+ "overview": {
+  "title": "Finishing the Dolly dataset, tf.data split, and the CausalLM preprocessor",
+  "chapter": "16 Text generation",
+  "section": "16.3 Using a pretrained LLM",
+  "subsection": "16.3.2 Instruction fine-tuning",
+  "main_topic": "Turning Dolly-15k instruction/response records into a batched tf.data pipeline and inspecting what Gemma's preprocessor produces from a batch.",
+  "central_idea": "Each Dolly record becomes a templated prompt string and a templated response string; these are batched into a tf.data.Dataset, and the CausalLM's preprocessor layer turns a batch into fixed-length token IDs, next-token labels and a sample-weight mask.",
+  "importance": "This is the data plumbing for supervised instruction fine-tuning. Understanding the prompt template and the (x, y, sample_weight) triple explains how a base LLM is trained to answer rather than merely continue text.",
+  "learning_objectives": [
+   "Read the end of Listing 16.12 and explain why records with non-empty `context` are skipped.",
+   "Describe what the prompt and response templates look like for one concrete Dolly example.",
+   "Explain how a decoder-only model like Gemma can be used in a sequence-to-sequence setting.",
+   "Build a batched tf.data.Dataset and split off validation batches with take()/skip().",
+   "Name the two components wrapped by a KerasHub `CausalLM` and what each does.",
+   "Predict the shapes produced by the preprocessor for batch size 2 and sequence_length 512."
+  ],
+  "prerequisites": [
+   "Instruction fine-tuning idea and Listing 16.12's templates (p.512)",
+   "Loading Gemma with `CausalLM.from_preset` (p.509)",
+   "Next-token prediction / causal language modeling (p.505)",
+   "tf.data.Dataset basics (shuffle, batch, take, skip)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page completes **Listing 16.12**, which reads the Databricks Dolly-15k file line by line. Each line is parsed with `json.loads`; if the record has a non-empty `\"context\"` field it is skipped with `continue`, otherwise the instruction is wrapped with `PROMPT_TEMPLATE` and appended to `data[\"prompts\"]`, and the response is wrapped with `RESPONSE_TEMPLATE` and appended to `data[\"responses\"]`. The authors explain that some examples carry additional context (textual information related to the instruction) and that, to keep things simple, those are discarded.\n\nPrinting the first element shows the format: the prompt is `[instruction]`, a newline, `Which is a species of fish? Tope or Rope[end]`, a newline, `[response]`; the response is `Tope[end]`. The authors point out that this template gives every example a **predictable structure**. Gemma is not a sequence-to-sequence (encoder-decoder) model like the English-to-Spanish translator of chapter 15, yet it can be used in a sequence-to-sequence way: train on such prompts and, at inference, only generate the output after the `\"[response]\"` marker.\n\nNext, the dict of two string lists becomes a `tf.data.Dataset` via `from_tensor_slices`, shuffled with a 2,000-element buffer and batched in pairs (`batch(2)`). The first 100 batches (200 examples) become `val_ds`, the rest `train_ds`.\n\nFinally, the authors open up the `CausalLM` task object: it wraps a **`preprocessor`** layer (text in, tensors out) and a **`backbone`** model (the numerics of the forward pass). Preprocessing runs automatically inside `fit()` and `predict()`, but here it is called by hand on one batch with `sequence_length = 512`. It returns a triple `x, y, sample_weight`; `x[\"token_ids\"]` has shape `(2, 512)`, and the listing continues on p.514 with the shapes of `padding_mask`, `y` and `sample_weight`.",
+ "paragraphs": [
+  {
+   "ref": "p513_e04",
+   "excerpt": "Note that some examples have additional context—textual information related to the",
+   "what_it_says": "Some Dolly records have a non-empty context field (extra text related to the instruction); the code drops them for simplicity.",
+   "what_it_means": "In Dolly, tasks such as closed question answering, information extraction and summarization supply a reference passage in `context`. Keeping them would require a third slot in the template (e.g. a `[context]` block). By filtering them out, every training example is just instruction → response.",
+   "why_it_matters": "It explains the `if features[\"context\"]: continue` line and tells you the fine-tuning set is a subset of the 15,000 examples, biased toward open-ended, brainstorming, classification and general QA tasks that need no reference passage.",
+   "technical_idea": "An empty string is falsy in Python, so `if features[\"context\"]:` is true only when context text is present.",
+   "terminology": [
+    {
+     "term": "context (Dolly field)",
+     "meaning": "Optional reference text that accompanies an instruction, e.g. a Wikipedia paragraph for a reading-comprehension question."
+    }
+   ],
+   "connections": [
+    "p.512: Listing 16.12 begins with the templates and the download of databricks-dolly-15k.jsonl."
+   ]
+  },
+  {
+   "ref": "p513_e07",
+   "excerpt": "Our prompt template gives our examples a predictable structure. Although Gemma is",
+   "what_it_says": "The template makes the examples predictably structured. Gemma is not a sequence-to-sequence model, but it can be used like one by training on such prompts and generating only after the `[response]` marker.",
+   "what_it_means": "A decoder-only model sees a single token stream. By concatenating 'source' (instruction) and 'target' (response) with a fixed separator, the separator acts as the boundary an encoder-decoder model would have. At inference you feed the prompt ending with `[response]\\n` and let the model continue; it has learned that what follows is an answer, terminated by `[end]`.",
+   "why_it_matters": "It is the key conceptual move of instruction tuning: no architecture change is needed to turn an autocomplete model into a question-answering one, only a consistent data format.",
+   "technical_idea": "Causal attention means the response tokens can attend to all prompt tokens, which plays the role of the encoder output plus cross-attention in a seq2seq Transformer.",
+   "terminology": [
+    {
+     "term": "sequence-to-sequence model",
+     "meaning": "A model mapping an input sequence to a separate output sequence, typically an encoder plus a decoder with cross-attention (chapter 15)."
+    },
+    {
+     "term": "marker / special string",
+     "meaning": "Plain text such as `[response]` used consistently to delimit parts of the sequence."
+    }
+   ],
+   "connections": [
+    "p.454: the English-to-Spanish translation task of section 15.2.1.",
+    "p.518: generation with `[instruction]...[response]\\n` prompts after fine-tuning.",
+    "p.521: instruction-tuned checkpoints require their own matching template."
+   ]
+  },
+  {
+   "ref": "p513_e08",
+   "excerpt": "Let’s make a tf.data.Dataset and split some validation data:",
+   "what_it_says": "Introduces the code that builds the dataset and the validation split.",
+   "what_it_means": "The lists of strings are converted to a tf.data pipeline so they can be streamed in batches to `fit()`.",
+   "why_it_matters": "Sets up `train_ds` and `val_ds`, used in listing 16.14 on p.517.",
+   "terminology": [],
+   "connections": [
+    "p.517: `gemma_lm.fit(train_ds, validation_data=val_ds, epochs=1)`."
+   ]
+  },
+  {
+   "ref": "p513_e10",
+   "excerpt": "The CausalLM we loaded from the KerasHub library is a high-level object",
+   "what_it_says": "`CausalLM` is a high-level object for end-to-end causal language modeling that wraps a `preprocessor` layer (text preprocessing) and a `backbone` model (the forward-pass numerics).",
+   "what_it_means": "KerasHub splits a task into string-handling code (tokenizer, packing, padding, label creation) and the neural network proper (embeddings, decoder blocks). The task object glues them together and adds the output projection to vocabulary logits.",
+   "why_it_matters": "Knowing this split lets you inspect preprocessing on its own (as done next) and, on p.515, call `enable_lora` on the backbone only.",
+   "technical_idea": "'Causal' means each position can only attend to earlier positions, so the model predicts token t+1 from tokens ≤ t.",
+   "terminology": [
+    {
+     "term": "preprocessor",
+     "meaning": "A Keras layer that tokenizes raw strings and produces model-ready tensors (and labels during training)."
+    },
+    {
+     "term": "backbone",
+     "meaning": "The core network mapping token IDs to hidden states; in Gemma 3 1B, `gemma3_backbone` with 1152-dimensional outputs (p.510)."
+    }
+   ],
+   "connections": [
+    "p.509: CausalLM as another high-level task API, like ImageClassifier.",
+    "p.510: the summary lists `gemma3_causal_lm_preprocessor` and `gemma3_backbone`.",
+    "p.515: `gemma_lm.backbone.enable_lora(rank=8)`."
+   ]
+  },
+  {
+   "ref": "p513_e11",
+   "excerpt": "Preprocessing is included by default in high-level Keras functions like fit() and",
+   "what_it_says": "`fit()` and `predict()` run preprocessing automatically, but the authors apply it manually to one batch to see what it does.",
+   "what_it_means": "When you pass raw strings to `gemma_lm.fit`, the preprocessor converts them internally. Calling it directly exposes the intermediate tensors: `x` (a dict with `token_ids` and `padding_mask`), `y` (labels) and `sample_weight`.",
+   "why_it_matters": "Seeing the triple makes clear how the next-token objective and the response-only loss are implemented (explained on p.514).",
+   "technical_idea": "Setting `preprocessor.sequence_length = 512` fixes the padded/truncated length; the batch of 2 examples therefore yields `(2, 512)` tensors.",
+   "terminology": [
+    {
+     "term": "sample_weight",
+     "meaning": "Per-position weights multiplying the loss; 0 excludes a position from the loss."
+    }
+   ],
+   "connections": [
+    "p.514: shapes of padding_mask, y and sample_weight, and the meaning of each."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "instruction_fine_tuning",
+   "name": "Instruction fine-tuning",
+   "definition": "Further training of a pretrained LLM on instruction/response pairs, serialized into one marked-up sequence and trained with the next-token loss.",
+   "intuition": "Show the autocomplete model many 'request → good answer' examples until an answer becomes the most likely continuation of a request.",
+   "technical": "Here: `[instruction]\\n{instruction}[end]\\n[response]\\n` + `{response}[end]`, with loss restricted to response tokens via sample_weight (p.514).",
+   "significance": "The standard first step from a base model to a chatbot (also the first step of RLHF, p.519).",
+   "example": "Prompt 'Which is a species of fish? Tope or Rope' → response 'Tope'.",
+   "misconception": "That the model's architecture must change; only the data format and training continue.",
+   "related": [
+    "prompt_template",
+    "language_model",
+    "lora"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "prompt_template",
+   "name": "Prompt/response template",
+   "definition": "A fixed text format with markers that wraps each instruction and response, used identically in training and inference.",
+   "intuition": "A form with labeled fields so the model knows where the question ends and where its answer must start and stop.",
+   "technical": "Python `str.format` with `PROMPT_TEMPLATE` and `RESPONSE_TEMPLATE`; the `[end]` marker teaches the model when to stop.",
+   "significance": "Gives examples a predictable structure that lets a decoder-only model behave like a seq2seq model.",
+   "example": "`[instruction]\\nWhich is a species of fish? Tope or Rope[end]\\n[response]\\n` and `Tope[end]`.",
+   "misconception": "That the exact marker strings matter; the book says only consistency matters (p.512).",
+   "related": [
+    "instruction_fine_tuning",
+    "tokenization"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "causal_lm_task",
+   "name": "KerasHub CausalLM (preprocessor + backbone)",
+   "definition": "A high-level Keras model for end-to-end causal language modeling composed of a preprocessor layer and a backbone model.",
+   "intuition": "The preprocessor is the clerk who turns text into numbers; the backbone is the engine that computes.",
+   "technical": "`gemma_lm.preprocessor(batch)` → `(x, y, sample_weight)` with `x = {token_ids, padding_mask}`; `gemma_lm.backbone` maps token IDs to hidden states.",
+   "significance": "Allows inspecting and customizing preprocessing and the network separately.",
+   "example": "`preprocessor.sequence_length = 512` → `x[\"token_ids\"].shape == (2, 512)`.",
+   "misconception": "That you must tokenize data yourself before `fit()`; preprocessing is included by default.",
+   "related": [
+    "language_model",
+    "tokenization",
+    "keras_model"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "sequence_to_sequence",
+   "name": "Sequence-to-sequence via a decoder-only model",
+   "definition": "Using a single causal decoder on concatenated source + separator + target so that it learns to generate the target given the source.",
+   "intuition": "Instead of separate reader and writer networks, one network reads the question and keeps writing the answer.",
+   "technical": "Causal self-attention over the prompt replaces encoder + cross-attention; generation begins after the `[response]` marker.",
+   "significance": "The format underlying essentially all chat LLMs.",
+   "example": "Feed `[instruction]\\nHow can I make brownies?[end]\\n[response]\\n` and let the model continue (p.518).",
+   "misconception": "That only encoder-decoder models can do translation-like tasks.",
+   "related": [
+    "transformer",
+    "language_model",
+    "instruction_fine_tuning"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "16.12",
+   "title": "Loading an instruction fine-tuning dataset (end of the loop, continued from p.512)",
+   "original_code": "        features = json.loads(line)\n        if features[\"context\"]:\n            continue\n        data[\"prompts\"].append(PROMPT_TEMPLATE.format(features[\"instruction\"]))\n        data[\"responses\"].append(RESPONSE_TEMPLATE.format(features[\"response\"]))",
+   "language": "python",
+   "what_it_does": "Inside the `for line in file:` loop started on p.512: parses each JSON line, skips records with context, and appends the templated prompt and response strings to the `data` dict.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Each line of a .jsonl file is a complete JSON object; `json.loads` turns it into a dict with keys like `instruction`, `context`, `response`, `category`."
+    },
+    {
+     "lines": "2-3",
+     "explanation": "Skip any example whose `context` string is non-empty (falsy empty string otherwise)."
+    },
+    {
+     "lines": "4",
+     "explanation": "Insert the instruction into `PROMPT_TEMPLATE` (`[instruction]\\n{}[end]\\n[response]\\n`) and store it."
+    },
+    {
+     "lines": "5",
+     "explanation": "Insert the response into `RESPONSE_TEMPLATE` (`{}[end]`) and store it; the two lists stay aligned index by index."
+    }
+   ],
+   "inputs_outputs": "Input: the downloaded databricks-dolly-15k.jsonl file. Output: `data = {\"prompts\": [...], \"responses\": [...]}`, two equal-length lists of strings.",
+   "algorithm": "Stream, parse, filter, format, append.",
+   "theory_link": "Implements the instruction/response serialization described in section 16.3.2 (p.512).",
+   "parameters": [
+    {
+     "name": "PROMPT_TEMPLATE / RESPONSE_TEMPLATE",
+     "role": "Define the markers the model learns; must match the prompts used at generation time (p.518)."
+    }
+   ],
+   "pitfalls": [
+    "Dropping context examples removes the reading-comprehension and summarization tasks from training.",
+    "The PROMPT_TEMPLATE on p.512 is printed with four opening quotes, which would prepend a literal `\"`; the output below shows no such quote (flagged on p.512)."
+   ],
+   "illustrative_code": "# Not in the book: a variant that keeps context examples\nCTX_TEMPLATE = \"[instruction]\\n{}\\n[context]\\n{}[end]\\n[response]\\n\"\nif features[\"context\"]:\n    prompt = CTX_TEMPLATE.format(features[\"instruction\"], features[\"context\"])\nelse:\n    prompt = PROMPT_TEMPLATE.format(features[\"instruction\"])"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Inspecting the first prompt and response",
+   "original_code": ">>> data[\"prompts\"][0]\n[instruction]\nWhich is a species of fish? Tope or Rope[end]\n[response]\n\n>>> data[\"responses\"][0]\nTope[end]",
+   "language": "python",
+   "what_it_does": "Prints the first formatted prompt and its response so you can see the template applied.",
+   "line_explanations": [
+    {
+     "lines": "1-4",
+     "explanation": "The prompt: `[instruction]` on its own line, the question followed by `[end]`, then `[response]`. A trailing newline follows (not visible)."
+    },
+    {
+     "lines": "6-7",
+     "explanation": "The response, `Tope` (a small shark species), followed by the `[end]` stop marker."
+    }
+   ],
+   "inputs_outputs": "Input: the `data` dict. Output: two strings.",
+   "algorithm": "Indexing into Python lists.",
+   "theory_link": "Shows the 'predictable structure' that lets the model learn where answers begin and end.",
+   "parameters": [],
+   "pitfalls": [
+    "The REPL shows strings unquoted because they are printed with newlines rendered; they are ordinary Python strings."
+   ]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Building the tf.data pipeline and validation split",
+   "original_code": "ds = tf.data.Dataset.from_tensor_slices(data).shuffle(2000).batch(2)\nval_ds = ds.take(100)\ntrain_ds = ds.skip(100)",
+   "language": "python",
+   "what_it_does": "Creates a dataset whose elements are `{\"prompts\": str, \"responses\": str}`, shuffles, batches by 2, and splits off the first 100 batches for validation.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "`from_tensor_slices` on a dict of lists slices along the first axis, giving one dict per example; `shuffle(2000)` uses a 2,000-element buffer; `batch(2)` groups pairs (a small batch keeps memory low for a 1B-parameter model)."
+    },
+    {
+     "lines": "2",
+     "explanation": "`take(100)`: the first 100 batches, i.e. 200 examples, for validation."
+    },
+    {
+     "lines": "3",
+     "explanation": "`skip(100)`: everything after those batches, for training."
+    }
+   ],
+   "inputs_outputs": "Input: `data`. Output: `train_ds`, `val_ds` yielding batches of dicts of string tensors of shape (2,).",
+   "algorithm": "Shuffle-then-split with tf.data transformations.",
+   "theory_link": "Holding out validation data to measure generalization (chapter 5 practice).",
+   "parameters": [
+    {
+     "name": "buffer_size=2000",
+     "role": "Shuffle buffer; smaller than the dataset, so shuffling is only approximately uniform."
+    },
+    {
+     "name": "batch_size=2",
+     "role": "Examples per training step."
+    },
+    {
+     "name": "100",
+     "role": "Number of validation batches."
+    }
+   ],
+   "pitfalls": [
+    "By default `shuffle` reshuffles on every iteration, so `take`/`skip` after it does not give a fixed, disjoint split across iterations (see review flag). Use `shuffle(..., reshuffle_each_iteration=False)` or split before shuffling.",
+    "A 2,000-element buffer only partially shuffles a ~10k-example file."
+   ],
+   "illustrative_code": "# Not in the book: a split that stays fixed across epochs\nds = tf.data.Dataset.from_tensor_slices(data)\nds = ds.shuffle(2000, seed=0, reshuffle_each_iteration=False)\nval_ds = ds.take(200).batch(2)\ntrain_ds = ds.skip(200).batch(2)"
+  },
+  {
+   "id": "c4",
+   "listing": null,
+   "title": "Running the CausalLM preprocessor on one batch (continues on p.514)",
+   "original_code": ">>> preprocessor = gemma_lm.preprocessor\n>>> preprocessor.sequence_length = 512\n>>> batch = next(iter(train_ds))\n>>> x, y, sample_weight = preprocessor(batch)\n>>> x[\"token_ids\"].shape\n(2, 512)\n>>> x[\"padding_mask\"].shape",
+   "language": "python",
+   "what_it_does": "Grabs the preprocessor, fixes its sequence length to 512, pulls one training batch and converts it to model inputs, labels and weights.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "The `gemma3_causal_lm_preprocessor` layer inside the task model."
+    },
+    {
+     "lines": "2",
+     "explanation": "All sequences will be padded or truncated to 512 tokens."
+    },
+    {
+     "lines": "3",
+     "explanation": "One batch: a dict with `prompts` and `responses`, each a string tensor of shape (2,)."
+    },
+    {
+     "lines": "4",
+     "explanation": "In training mode the preprocessor returns `(x, y, sample_weight)`: inputs, next-token labels, and a loss mask."
+    },
+    {
+     "lines": "5-6",
+     "explanation": "Token IDs: 2 sequences × 512 positions."
+    },
+    {
+     "lines": "7",
+     "explanation": "The padding mask's shape; its output, `(2, 512)`, is printed at the top of p.514."
+    }
+   ],
+   "inputs_outputs": "Input: a batch of 2 prompt/response string pairs. Output: `x = {token_ids, padding_mask}`, `y`, `sample_weight`, all (2, 512).",
+   "algorithm": "Tokenize prompt and response, concatenate, add start token, pad/truncate, shift by one for labels, mask prompt and padding.",
+   "theory_link": "Implements causal language modeling targets: label at position t is token t+1 (shown on p.514).",
+   "parameters": [
+    {
+     "name": "sequence_length",
+     "role": "Fixed length; longer sequences are truncated, shorter padded with 0."
+    }
+   ],
+   "pitfalls": [
+    "Longer sequence_length raises activation memory, a concern on p.514.",
+    "Responses longer than the remaining room are truncated and may lose their `[end]` marker."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why a single stream works like seq2seq",
+   "kind": "breakdown",
+   "source": "ai_explanation",
+   "body": "In the chapter 15 translator, an encoder reads the source and the decoder cross-attends to it. In a decoder-only model, the prompt tokens sit to the left of the response tokens in the same sequence. Causal attention lets every response position look at every prompt position, so the 'encoding' happens in the same layers that generate. The marker `[response]\\n` marks where generation begins, and `[end]` lets you stop decoding. This is why the book can say Gemma can be used 'in a sequence-to-sequence setting'."
+  },
+  {
+   "title": "What the preprocessor does, step by step",
+   "kind": "step_by_step",
+   "source": "ai_explanation",
+   "body": "1. Tokenize prompt and response strings with the Gemma tokenizer.\n2. Concatenate them and prepend the start token (ID 2, visible on p.514).\n3. Pad with 0 or truncate to `sequence_length + 1` tokens.\n4. `token_ids` = first 512 tokens; `y` = the same tokens shifted left by one.\n5. `padding_mask` = 1 for real tokens, 0 for padding.\n6. `sample_weight` = 1 only on positions whose label is a response token, so the loss ignores the prompt and padding (p.514)."
+  },
+  {
+   "title": "A recipe card analogy",
+   "kind": "analogy",
+   "source": "analogy",
+   "body": "Think of each training example as an index card with two printed headings, QUESTION and ANSWER. After thousands of cards, someone handed a card with only the QUESTION filled in and the ANSWER heading printed will naturally fill in an answer, then sign off with the familiar closing mark (`[end]`)."
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "From JSONL line to (x, y, sample_weight)",
+   "why": "Traces the full pipeline on this page: end of Listing 16.12, the tf.data split, and the preprocessor call.",
+   "mermaid": "flowchart LR\n A[\"JSONL line\"] --> B[\"json.loads\"]\n B --> C{\"context non-empty?\"}\n C -->|yes| D[\"skip\"]\n C -->|no| E[\"PROMPT_TEMPLATE / RESPONSE_TEMPLATE\"]\n E --> F[\"data dict of 2 lists\"]\n F --> G[\"from_tensor_slices, shuffle 2000, batch 2\"]\n G --> H[\"take 100 = val_ds\"]\n G --> I[\"skip 100 = train_ds\"]\n I --> J[\"preprocessor, sequence_length 512\"]\n J --> K[\"x token_ids and padding_mask, y, sample_weight: all 2 x 512\"]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Shapes through the preprocessing step",
+   "widget": "tensor_shapes",
+   "why": "The page shows a batch of 2 strings becoming (2, 512) token IDs.",
+   "params": {
+    "steps": [
+     {
+      "op": "batch of prompt strings",
+      "shape": [
+       2
+      ]
+     },
+     {
+      "op": "tokenize + pad to 512",
+      "shape": [
+       2,
+       512
+      ]
+     },
+     {
+      "op": "backbone hidden states",
+      "shape": [
+       2,
+       512,
+       1152
+      ]
+     },
+     {
+      "op": "vocab logits",
+      "shape": [
+       2,
+       512,
+       262144
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Gemma needs an encoder-decoder architecture to answer instructions.",
+   "correction": "The book uses the decoder-only Gemma in a sequence-to-sequence setting simply by training on templated prompt+response sequences and generating after `[response]`."
+  },
+  {
+   "claim": "You must tokenize the strings before calling `fit()`.",
+   "correction": "KerasHub's CausalLM includes preprocessing by default in `fit()` and `predict()`; it is only called manually here to inspect it."
+  },
+  {
+   "claim": "`ds.take(100)` gives 100 validation examples.",
+   "correction": "`take` operates after `batch(2)`, so it yields 100 batches, i.e. 200 examples."
+  },
+  {
+   "claim": "All 15,000 Dolly examples are used.",
+   "correction": "Examples with non-empty context are discarded."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 512,
+    "note": "Start of Listing 16.12 and the instruction fine-tuning idea."
+   },
+   {
+    "page": 509,
+    "note": "Gemma loaded as a KerasHub CausalLM task."
+   },
+   {
+    "page": 510,
+    "note": "The model summary showing the preprocessor and backbone."
+   }
+  ],
+  "later": [
+   {
+    "page": 514,
+    "note": "Shapes of padding_mask, y, sample_weight; labels are next tokens; LoRA motivation."
+   },
+   {
+    "page": 517,
+    "note": "Listing 16.14 fits on train_ds with val_ds."
+   },
+   {
+    "page": 518,
+    "note": "Prompting the fine-tuned model with the same template."
+   },
+   {
+    "page": 521,
+    "note": "Instruction-tuned Gemma has its own template that must be matched."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 505,
+    "note": "Causal next-token objective."
+   },
+   {
+    "page": 454,
+    "note": "English-to-Spanish translation as a sequence-to-sequence task."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 512,
+    "note": "First half of Listing 16.12."
+   },
+   {
+    "page": 514,
+    "note": "Output of the preprocessor call."
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "Dolly records with a non-empty `context` are skipped to keep the format to instruction → response.",
+  "The template gives each example a predictable structure: `[instruction]\\n…[end]\\n[response]\\n` then `…[end]`.",
+  "A decoder-only LLM can act as a seq2seq model by generating only after the `[response]` marker.",
+  "`batch(2)` then `take(100)`/`skip(100)` yields 200 validation examples and the rest for training.",
+  "A KerasHub CausalLM = `preprocessor` (text → tensors) + `backbone` (forward-pass numerics).",
+  "In training mode the preprocessor returns `(x, y, sample_weight)`; with sequence_length 512 and batch 2, token IDs are (2, 512)."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why does the loop contain `if features[\"context\"]: continue`?",
+   "options": [
+    "To remove duplicate instructions",
+    "To discard examples that come with additional context text, keeping the format simple",
+    "To skip examples that have no response",
+    "To remove examples longer than 512 tokens"
+   ],
+   "answer": "To discard examples that come with additional context text, keeping the format simple",
+   "explanation": "The page says some examples have additional context related to the instruction and that they are discarded to keep things simple. The code checks only the `context` field, not duplicates, missing responses or length.",
+   "page_refs": [
+    513
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "How many examples end up in `val_ds`, and why?",
+   "options": [],
+   "answer": "200 examples (100 batches of 2).",
+   "explanation": "`take(100)` is applied after `batch(2)`, so it takes 100 batches, each holding 2 examples.",
+   "page_refs": [
+    513
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Gemma is not a sequence-to-sequence model. How can it still be used like one here?",
+   "options": [],
+   "answer": "By training on single sequences that concatenate a templated instruction and response, and at inference feeding the prompt up to `[response]` and only generating the output after that marker.",
+   "explanation": "The page states this directly. Causal attention lets response tokens see the whole prompt, which plays the role of the encoder.",
+   "page_refs": [
+    513
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "Which two objects does a KerasHub `CausalLM` wrap?",
+   "options": [
+    "A tokenizer and an optimizer",
+    "A preprocessor layer and a backbone model",
+    "An encoder and a decoder",
+    "A backbone model and a reward model"
+   ],
+   "answer": "A preprocessor layer and a backbone model",
+   "explanation": "The page names a `preprocessor` layer for text input and a `backbone` model containing the forward-pass numerics. The tokenizer lives inside the preprocessor; optimizers and reward models are not part of the task object; Gemma has no separate encoder.",
+   "page_refs": [
+    513
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "What three things does calling the preprocessor on a training batch return?",
+   "options": [],
+   "answer": "`x` (a dict with `token_ids` and `padding_mask`), `y` (labels) and `sample_weight`.",
+   "explanation": "From `x, y, sample_weight = preprocessor(batch)`; their roles are explained on p.514.",
+   "page_refs": [
+    513,
+    514
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Why does the response template end with `[end]`?",
+   "options": [],
+   "answer": "So the model learns to emit a stop marker after an answer, letting generation (and the reader) know where the response ends.",
+   "explanation": "The marker delimits the response in the combined sequence (p.512); at inference the model ends its answer with `[end]` (p.518). This explanation goes slightly beyond the page's wording.",
+   "page_refs": [
+    512,
+    513,
+    518
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you rewrite the dataset code so that context examples are kept, with a `[context]` block in the prompt?",
+   "options": [],
+   "answer": "Yes if you can add a second template with two `{}` slots and choose between the two templates based on whether `features[\"context\"]` is empty.",
+   "explanation": "Self-check: it tests whether you understand that the template is just a string format and must also be used at inference.",
+   "page_refs": [
+    513
+   ]
+  }
+ ]
+}

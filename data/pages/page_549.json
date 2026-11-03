@@ -1,0 +1,373 @@
+{
+ "page_id": "page_549",
+ "pdf_page": 549,
+ "printed_page": "525",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:10:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. Plotting code extracted verbatim; the single callout ('These lines are only necessary if you're using PyTorch...') brackets the three convert_to_numpy lines. Figure 17.11 is an image; curve values read from the page and cross-checked by computing Listing 17.7. In e08 the inline code `mean(abs(...))` is split by a line-break hyphen in print."
+ },
+ "overview": {
+  "title": "Plotting the schedule; starting the DiffusionModel",
+  "chapter": "17 Image generation",
+  "section": "17.2 Diffusion models",
+  "subsection": "17.2.4 The training process",
+  "main_topic": "Visualizing the cosine diffusion schedule (Figure 17.11) and listing the ingredients of the DiffusionModel training class: the denoiser, an MAE loss on noise masks, and an image normalization layer.",
+  "central_idea": "Plotted against diffusion time, the noise rate rises from about 0.31 to 1 while the signal rate falls from 0.95 to 0.02. The training class will predict the noise that was added, scored with mean absolute error, on images normalized to match the zero-mean, unit-variance noise.",
+  "importance": "Figure 17.11 makes the schedule concrete, and the two bullets fix the two key design decisions of training: what the model predicts (the noise mask) and on what scale the images live (normalized like the noise).",
+  "learning_objectives": [
+   "Run the plotting snippet and read Figure 17.11.",
+   "Explain why ops.convert_to_numpy is needed with the PyTorch backend.",
+   "Name the three components the DiffusionModel class needs: denoiser, loss, normalization layer.",
+   "Write the MAE noise-prediction loss.",
+   "Explain why images are normalized to zero mean and unit variance."
+  ],
+  "prerequisites": [
+   "diffusion_schedule() from Listing 17.7 (p.548)",
+   "Matplotlib basics",
+   "Mean absolute error as a loss",
+   "Keras Normalization layer (feature-wise standardization)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens by **plotting the diffusion schedule** from Listing 17.7 (p.548). The snippet builds 100 diffusion times with `ops.arange(0.0, 1.0, 0.01)`, calls `diffusion_schedule()`, converts the three tensors to NumPy and plots noise rate and signal rate against diffusion time. A callout notes that the three `ops.convert_to_numpy()` lines are only needed with the **PyTorch** backend, where turning a tensor into NumPy is not automatic.\n\n**Figure 17.11** shows the result. The noise rate (blue) climbs from about 0.31 at t = 0 to about 1.0 at t = 1, and the signal rate (orange) falls from 0.95 to about 0.02. The curves cross near t of about 0.38, where both equal about 0.707. Both are smooth trigonometric curves: the signal rate drops slowly at first and steeply near the end, and the noise rate flattens out as it approaches 1.\n\nSection **17.2.4 The training process** then begins. The training logic will live in a `DiffusionModel` class, which holds the U-Net denoising autoencoder (pp.545-547) as an attribute and needs two more things:\n\n- **A loss function**: mean absolute error between the real noise mask and the predicted one, `mean(abs(real_noise_mask - predicted_noise_mask))`. In other words, the network is trained to **predict the noise** that was added, not the clean image directly.\n- **An image normalization layer**: the added noise has zero mean and unit variance, so the images should be normalized the same way, so that the value ranges of noise and images match.\n\nThe class itself is built on pp.550-552.",
+ "paragraphs": [
+  {
+   "ref": "p549_e03",
+   "excerpt": "Let’s plot how this function maps diffusion times (between 0 and 1)",
+   "what_it_says": "Introduces a plot of how diffusion_schedule() maps diffusion times between 0 and 1 to noise rates and signal rates, shown in Figure 17.11.",
+   "what_it_means": "The code samples t = 0.00, 0.01, ..., 0.99 (arange excludes the endpoint 1.0), computes the two rates and plots both as functions of t. The callout explains that the convert_to_numpy calls are only needed with PyTorch: with TensorFlow or JAX, Matplotlib can consume the tensors directly, but a PyTorch tensor (possibly on a GPU) must be converted first. Figure 17.11 reads: noise rate from about 0.31 to 1.0, signal rate from 0.95 to about 0.02, crossing near t = 0.38.",
+   "why_it_matters": "Seeing the curves tells you what the training data look like: for most of the range (roughly t > 0.38) noise dominates signal. It also shows that the step from t = 0.95 to t = 1 changes the signal rate a lot (0.08 to 0.02) while the noise rate barely moves.",
+   "technical_idea": "The curves are s(t) = cos(theta(t)) and n(t) = sin(theta(t)) with theta linear in t from 0.318 to 1.551 rad.",
+   "terminology": [
+    {"term": "ops.arange", "meaning": "Backend-agnostic version of numpy.arange: evenly spaced values in [start, stop)."},
+    {"term": "ops.convert_to_numpy", "meaning": "Converts a backend tensor to a NumPy array."}
+   ],
+   "connections": [
+    "p.548: Listing 17.7 defines diffusion_schedule(); Figure 17.10 shows the same rates against each other."
+   ]
+  },
+  {
+   "ref": "p549_e07",
+   "excerpt": "Let’s create a DiffusionModel class to implement the training procedure.",
+   "what_it_says": "Starts section 17.2.4: a DiffusionModel class will implement training. It will hold the denoising autoencoder as an attribute and needs a couple more components.",
+   "what_it_means": "Like the VAE of section 17.1.3, training is wrapped in a subclass of keras.Model so you can call compile() and fit(). The U-Net from get_model() (p.547) is a sub-model; the DiffusionModel adds the logic for noising images, computing the loss and later generating images.",
+   "why_it_matters": "Separating the denoiser (a plain functional model) from the diffusion logic (the subclassed model) keeps the network reusable and the training recipe readable.",
+   "terminology": [
+    {"term": "Denoising autoencoder", "meaning": "Here the U-Net that takes a noisy image and its noise rate and predicts the noise mask."}
+   ],
+   "connections": [
+    "p.547: get_model() builds the U-Net denoiser.",
+    "p.550: the DiffusionModel constructor."
+   ]
+  },
+  {
+   "ref": "p549_e08",
+   "excerpt": "A loss function—We’ll use mean absolute error as our loss, that is",
+   "what_it_says": "The loss is mean absolute error: mean(abs(real_noise_mask - predicted_noise_mask)).",
+   "what_it_means": "The training target is the noise mask itself: the Gaussian noise tensor that was mixed into the clean image. The model sees the noisy image and the noise rate and must output that noise. MAE averages the absolute per-pixel, per-channel differences.",
+   "why_it_matters": "Predicting noise is easier and better scaled than predicting the clean image directly: the target is always standard Gaussian, whatever the diffusion time. The clean image can then be recovered algebraically (denoise() on p.550).",
+   "technical_idea": "Beyond the book: the classic DDPM paper (Ho et al., 2020) trains with mean squared error on the noise; MAE (L1) is a common alternative that is less sensitive to large errors. The choice here follows the book.",
+   "terminology": [
+    {"term": "Noise mask", "meaning": "The book's name for the random Gaussian noise tensor added to an image (same shape as the image)."},
+    {"term": "Mean absolute error (MAE)", "meaning": "The average of |y_true - y_pred| over all elements."}
+   ],
+   "connections": [
+    "p.550: self.loss = keras.losses.MeanAbsoluteError().",
+    "p.551: compute_loss() returns self.loss(noise_masks, pred_noise_masks)."
+   ]
+  },
+  {
+   "ref": "p549_e09",
+   "excerpt": "An image normalization layer—The noise we’ll add to the images will have",
+   "what_it_says": "The noise added to images has zero mean and unit variance, so the images should be normalized the same way, so that the value ranges of noise and images match.",
+   "what_it_means": "Raw images have pixel values in [0, 255]. Mixed with N(0, 1) noise, the image would completely dominate, even with a small signal rate. Standardizing images (subtract mean, divide by standard deviation) puts them on the same scale as the noise, so the signal and noise rates really mean what they say.",
+   "why_it_matters": "With the unit-circle schedule of p.548, normalized images and unit-variance noise make every noisy input roughly unit-variance (an explanation beyond the book). After generation, the normalization must be undone to get displayable pixels (p.552).",
+   "terminology": [
+    {"term": "keras.layers.Normalization", "meaning": "A preprocessing layer that subtracts a mean and divides by a standard deviation, learned with adapt() (p.553)."}
+   ],
+   "connections": [
+    "p.550: self.normalizer = keras.layers.Normalization().",
+    "p.552: images = normalizer.mean + pred_images * normalizer.variance**0.5 reverses it.",
+    "p.553: model.normalizer.adapt(dataset) computes the statistics."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "diffusion_schedule",
+   "name": "Diffusion schedule (cosine)",
+   "definition": "The mapping from diffusion time to (noise rate, signal rate); Figure 17.11 plots it.",
+   "intuition": "Signal fades out and noise fades in as diffusion time goes from 0 to 1.",
+   "technical": "Noise rate from sin(arccos 0.95) = 0.312 to about 1.0; signal rate from 0.95 to 0.02; crossing at t of about 0.38.",
+   "significance": "Defines the noise level of every training example and every generation step.",
+   "example": "t = 0.5: noise about 0.80, signal about 0.59.",
+   "misconception": "That the noise rate starts at 0. With the book's defaults it starts at about 0.31.",
+   "related": ["diffusion_time", "diffusion_model"],
+   "source": "book"
+  },
+  {
+   "id": "noise_prediction",
+   "name": "Noise prediction objective",
+   "definition": "Training the denoiser to output the noise mask that was added to a clean image, scored against the real mask.",
+   "intuition": "Instead of asking 'what did the picture look like?', ask 'what is the static you see?'. Subtract the static and you get the picture back.",
+   "technical": "Loss = mean(|epsilon - epsilon_hat|) with epsilon ~ N(0, I) and epsilon_hat = denoiser(x_t, n(t)).",
+   "significance": "The target has the same distribution at every noise level, which makes learning across all diffusion times well conditioned.",
+   "example": "For a 128 x 128 x 3 image, the loss averages 49,152 absolute differences.",
+   "misconception": "That the model is trained to output clean images. It outputs noise; clean images are reconstructed from it (p.550).",
+   "related": ["diffusion_model", "mae", "loss_function"],
+   "source": "book"
+  },
+  {
+   "id": "mae",
+   "name": "Mean absolute error",
+   "definition": "The average absolute difference between targets and predictions.",
+   "intuition": "Each error counts in proportion to its size; large errors are not squared.",
+   "technical": "MAE = (1/N) sum_i |y_i - yhat_i|; implemented by keras.losses.MeanAbsoluteError.",
+   "significance": "The loss chosen for the diffusion model's noise prediction.",
+   "example": "Errors 0.1, -0.3, 0.2 give MAE 0.2.",
+   "misconception": "That MAE and MSE always lead to the same model; they weight large errors differently.",
+   "related": ["loss_function", "mse"],
+   "source": "book"
+  },
+  {
+   "id": "input_normalization",
+   "name": "Image normalization",
+   "definition": "Standardizing images to zero mean and unit variance with a Normalization layer.",
+   "intuition": "Put images and noise in the same 'units' so the mixing coefficients mean what they say.",
+   "technical": "x_norm = (x - mean) / sqrt(variance), with statistics computed by adapt() over the dataset.",
+   "significance": "Matches the scale of the N(0, 1) noise; must be inverted after generation.",
+   "example": "A pixel value of 200 with mean 110 and std 70 becomes about 1.29.",
+   "misconception": "That dividing by 255 is enough. That gives [0, 1] values with mean about 0.4, not zero-mean unit-variance data.",
+   "related": ["normalization"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "MAE noise-prediction loss",
+   "latex": "\\mathcal{L} = \\frac{1}{N}\\sum_{i=1}^{N} \\left| \\varepsilon_i - \\hat\\varepsilon_i \\right|",
+   "source_text": "mean(abs(real_noise_mask - predicted_noise_mask))",
+   "variables": [
+    {"symbol": "\\varepsilon", "meaning": "real_noise_mask: the Gaussian noise actually added to the image"},
+    {"symbol": "\\hat\\varepsilon", "meaning": "predicted_noise_mask: the denoiser's output"},
+    {"symbol": "N", "meaning": "number of elements averaged (batch x height x width x channels)"}
+   ],
+   "operations": "Element-wise difference, absolute value, average.",
+   "purpose": "Scores how well the model recovers the added noise.",
+   "interpretation": "0 means a perfect noise prediction; for a model that always outputs 0, the expected loss is E|epsilon| = sqrt(2/pi), about 0.80 for standard Gaussian noise.",
+   "intuition": "The average size of the mistake per pixel and channel, in noise units.",
+   "numerical_example": "Real noise (0.5, -1.2, 0.3), predicted (0.4, -0.9, 0.0): absolute errors 0.1, 0.3, 0.3, MAE = 0.7/3 = 0.233.",
+   "source": "book",
+   "book_ref": "p.549"
+  },
+  {
+   "id": "m2",
+   "title": "Normalization to match the noise",
+   "latex": "\\tilde{x} = \\frac{x - \\mu}{\\sigma}, \\qquad \\mathbb{E}[\\tilde x] = 0,\\ \\operatorname{Var}[\\tilde x] = 1",
+   "source_text": "The noise we'll add to the images will have unit variance and zero mean, so we'd like our images to be normalized as such too",
+   "variables": [
+    {"symbol": "x", "meaning": "raw pixel value in [0, 255]"},
+    {"symbol": "\\mu", "meaning": "dataset mean (per channel, computed by adapt())"},
+    {"symbol": "\\sigma", "meaning": "dataset standard deviation (square root of the variance)"},
+    {"symbol": "\\tilde x", "meaning": "normalized pixel value"}
+   ],
+   "operations": "Subtract mean, divide by standard deviation.",
+   "purpose": "Make images and noise share the same value range.",
+   "interpretation": "After normalization a typical pixel lies within a few units of 0, like a sample from N(0, 1).",
+   "intuition": "Express pixel brightness in 'standard deviations from average'.",
+   "numerical_example": "With mean 110 and standard deviation 70: pixel 40 becomes -1.0, pixel 180 becomes +1.0.",
+   "source": "book",
+   "book_ref": "p.549"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Plotting the cosine diffusion schedule (Figure 17.11)",
+   "original_code": "diffusion_times = ops.arange(0.0, 1.0, 0.01)\nnoise_rates, signal_rates = diffusion_schedule(diffusion_times)\ndiffusion_times = ops.convert_to_numpy(diffusion_times)\nnoise_rates = ops.convert_to_numpy(noise_rates)\nsignal_rates = ops.convert_to_numpy(signal_rates)\nplt.plot(diffusion_times, noise_rates, label=\"Noise rate\")\nplt.plot(diffusion_times, signal_rates, label=\"Signal rate\")\nplt.xlabel(\"Diffusion time\")\nplt.legend()",
+   "language": "python",
+   "what_it_does": "Evaluates diffusion_schedule() on 100 evenly spaced diffusion times and plots the noise and signal rates against diffusion time, producing Figure 17.11.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "100 diffusion times 0.00, 0.01, ..., 0.99 (arange excludes the stop value 1.0)."},
+    {"lines": "2", "explanation": "Computes the rates. Note the unpacking order matches the function's return order: noise first."},
+    {"lines": "3-5", "explanation": "Callout: only needed with PyTorch, where tensor conversion to NumPy is not trivial. With TensorFlow or JAX, Matplotlib can take the tensors as they are."},
+    {"lines": "6-7", "explanation": "Two line plots on the same axes, labeled for the legend."},
+    {"lines": "8-9", "explanation": "Label the x-axis and show the legend."}
+   ],
+   "inputs_outputs": "Input: the diffusion_schedule() function. Output: a Matplotlib figure with two curves (Figure 17.11).",
+   "algorithm": "Sample t on a grid, evaluate the schedule, convert to NumPy, plot.",
+   "theory_link": "Visualizes the cosine schedule of Listing 17.7 as functions of diffusion time; Figure 17.10 (p.548) plotted the same pairs against each other.",
+   "parameters": [
+    {"name": "0.01", "role": "Grid step: 100 sample points."}
+   ],
+   "pitfalls": [
+    "The last point is t = 0.99, not 1.0, so the plotted signal rate ends just above 0.02 (about 0.032).",
+    "Assumes `from matplotlib import pyplot as plt` (imported on p.545) and `from keras import ops`.",
+    "With PyTorch on a GPU, skipping convert_to_numpy can raise an error when Matplotlib tries to read the tensor."
+   ],
+   "illustrative_code": "# AI-written: print a few values instead of plotting\nfor t, n, s in zip(diffusion_times[::25], noise_rates[::25], signal_rates[::25]):\n    print(f\"t={t:.2f}  noise={n:.3f}  signal={s:.3f}\")\n# t=0.00 noise=0.312 signal=0.950\n# t=0.25 noise=0.586 signal=0.811\n# t=0.50 noise=0.804 signal=0.594\n# t=0.75 noise=0.947 signal=0.322"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Reading Figure 17.11 shape by shape",
+   "kind": "breakdown",
+   "body": "- **Signal rate** $\\cos\\theta(t)$: the slope is $-\\sin\\theta \\cdot \\theta'$, so it is gentle where the noise rate is small (early t) and steepest near t = 1. The curve looks concave, bending downward.\n- **Noise rate** $\\sin\\theta(t)$: its slope is $\\cos\\theta \\cdot \\theta'$, large at first and almost 0 near t = 1, so the curve flattens as it approaches 1.\n- **Crossing** at $\\theta = \\pi/4$, $t \\approx 0.38$: beyond this point every training image is more noise than image.\n\nThis asymmetry matters for generation: the steps near t = 1 change the noise rate very little but triple the signal rate (0.02 to about 0.08 between t = 1 and t = 0.95). (Explanation beyond the book.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why predict the noise rather than the image?",
+   "kind": "alternative",
+   "body": "Three equivalent parametrizations exist: predict the clean image $x_0$, predict the noise $\\varepsilon$, or predict a mix (the 'v-prediction'). Given the noisy image $x_t = s\\,x_0 + n\\,\\varepsilon$ and the rates, any one determines the others. The book's choice, noise prediction, keeps the target distribution fixed (always standard Gaussian) across all diffusion times, which makes the regression problem uniform. Its weak spot is very low signal rates, where recovering $x_0 = (x_t - n\\hat\\varepsilon)/s$ amplifies errors by $1/s$ (up to 50 times here); see p.550. (Explanation beyond the book.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Units analogy for normalization",
+   "kind": "analogy",
+   "body": "Mixing raw pixels (0-255) with unit-variance noise is like mixing a recipe where one ingredient is measured in grams and the other in kilograms: '0.5 of each' is no longer half and half. Normalizing puts both ingredients in the same unit, so a signal rate of 0.6 and a noise rate of 0.8 really describe the proportions of image and noise.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Figure 17.11 recomputed: noise and signal rate vs diffusion time",
+   "why": "Reproduces Figure 17.11 from Listing 17.7's formulas so you can hover over exact values, e.g. the crossing near t = 0.38.",
+   "chart": {
+    "type": "line",
+    "data": {
+     "labels": [0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0],
+     "datasets": [
+      {"label": "Noise rate", "data": [0.312, 0.37, 0.427, 0.482, 0.535, 0.586, 0.635, 0.681, 0.725, 0.766, 0.804, 0.839, 0.871, 0.9, 0.925, 0.947, 0.965, 0.979, 0.99, 0.997, 1.0], "pointRadius": 0},
+      {"label": "Signal rate", "data": [0.95, 0.929, 0.904, 0.876, 0.845, 0.81, 0.773, 0.732, 0.689, 0.643, 0.594, 0.544, 0.491, 0.436, 0.38, 0.322, 0.263, 0.204, 0.143, 0.082, 0.02], "pointRadius": 0}
+     ]
+    },
+    "options": {
+     "scales": {
+      "x": {"title": {"display": true, "text": "Diffusion time"}},
+      "y": {"min": 0, "max": 1.05}
+     }
+    }
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "At diffusion time 0 the image is completely noise-free.",
+   "correction": "Figure 17.11 shows the noise rate at t = 0 is about 0.31, because the maximum signal rate is 0.95."
+  },
+  {
+   "claim": "The diffusion model's output is a denoised image.",
+   "correction": "The network outputs a predicted noise mask; the loss compares it with the real noise mask. The denoised image is derived from it afterwards (p.550)."
+  },
+  {
+   "claim": "The convert_to_numpy lines are always required.",
+   "correction": "The callout says they are only necessary with the PyTorch backend."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 548, "note": "Listing 17.7 defines diffusion_schedule(); Figure 17.10 shows noise^2 + signal^2 = 1."},
+   {"page": 547, "note": "get_model() builds the U-Net denoiser that will become an attribute of DiffusionModel."},
+   {"page": 545, "note": "The Oxford Flowers dataset and the matplotlib import."}
+  ],
+  "later": [
+   {"page": 550, "note": "DiffusionModel constructor with MeanAbsoluteError loss and Normalization layer, and the denoise() method."},
+   {"page": 551, "note": "call() and compute_loss() implement the noise-prediction training step."},
+   {"page": 553, "note": "model.normalizer.adapt(dataset) computes the normalization statistics before training."}
+  ],
+  "prerequisites": [
+   {"page": 548, "note": "The diffusion schedule function and the meaning of diffusion time."}
+  ],
+  "related_math": [
+   {"page": 548, "note": "The cosine parametrization behind both curves."}
+  ],
+  "related_code": [
+   {"page": 548, "note": "Listing 17.7, the function being plotted."},
+   {"page": 552, "note": "Denormalization of generated images, the inverse of the normalization introduced here."}
+  ],
+  "related_figures": [
+   {"page": 548, "note": "Figure 17.10: the same schedule in the (noise rate, signal rate) plane."}
+  ]
+ },
+ "takeaways": [
+  "Figure 17.11: noise rate rises from about 0.31 to 1, signal rate falls from 0.95 to 0.02; they cross near t = 0.38.",
+  "ops.convert_to_numpy is only needed before plotting when using the PyTorch backend.",
+  "Training lives in a DiffusionModel class that wraps the U-Net denoiser.",
+  "The model is trained to predict the added noise mask, with mean absolute error as the loss.",
+  "Images are normalized to zero mean and unit variance to match the scale of the Gaussian noise."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What does the denoising model learn to predict during training?",
+   "options": ["The clean image", "The noise mask that was added to the image", "The diffusion time", "The signal rate"],
+   "answer": "The noise mask that was added to the image",
+   "explanation": "The loss is mean(abs(real_noise_mask - predicted_noise_mask)), so the target is the noise mask. The clean image is reconstructed from the predicted noise (p.550); the diffusion time and rates are inputs, not targets.",
+   "page_refs": [549, 551]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Why are the convert_to_numpy() lines in the plotting snippet only needed for PyTorch?",
+   "options": [],
+   "answer": "Because with PyTorch, converting a tensor (possibly on a GPU) to a NumPy array that Matplotlib can plot is not automatic, whereas TensorFlow and JAX tensors can be passed to Matplotlib directly.",
+   "explanation": "The callout: 'These lines are only necessary if you're using PyTorch, in which case tensor conversion to NumPy is no longer trivial.'",
+   "page_refs": [549]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why must images be normalized to zero mean and unit variance before mixing them with noise?",
+   "options": [],
+   "answer": "Because the noise is zero-mean, unit-variance. If raw 0-255 pixels were mixed with it, the image would dominate regardless of the rates; normalizing makes the value ranges match so the signal and noise rates control the actual proportions.",
+   "explanation": "The book states the matching-value-range reason in the second bullet. Beyond the book: together with noise^2 + signal^2 = 1, it keeps noisy inputs at unit variance.",
+   "page_refs": [549, 548]
+  },
+  {
+   "id": "q4",
+   "type": "math",
+   "question": "Compute the MAE between a real noise mask (1.0, -0.5, 0.2, 0.0) and a prediction (0.8, -0.1, 0.2, 0.3).",
+   "options": [],
+   "answer": "(0.2 + 0.4 + 0.0 + 0.3) / 4 = 0.225",
+   "explanation": "Take absolute differences element-wise and average them, as in mean(abs(real_noise_mask - predicted_noise_mask)).",
+   "page_refs": [549]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "In Figure 17.11, approximately what is the noise rate at diffusion time 0?",
+   "options": ["0.0", "0.31", "0.5", "0.95"],
+   "answer": "0.31",
+   "explanation": "The signal rate at t = 0 is 0.95, so the noise rate is sqrt(1 - 0.95^2), about 0.31, which is where the blue curve starts. 0.95 is the signal rate, 0.0 would require signal 1, and 0.5 is not on the curve at t = 0.",
+   "page_refs": [549, 548]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "How many diffusion times does ops.arange(0.0, 1.0, 0.01) produce, and what is the last one?",
+   "options": [],
+   "answer": "100 values; the last is 0.99 (the stop value 1.0 is excluded).",
+   "explanation": "arange follows NumPy semantics: half-open interval [start, stop).",
+   "page_refs": [549]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you sketch Figure 17.11 from memory, marking the start and end values of both curves and their crossing point?",
+   "options": [],
+   "answer": "Noise: 0.31 -> 1.0 (rising, flattening). Signal: 0.95 -> 0.02 (falling, steepening). Crossing at about t = 0.38, value about 0.71.",
+   "explanation": "If you can derive these numbers from Listing 17.7 you understand the schedule.",
+   "page_refs": [549, 548]
+  }
+ ]
+}

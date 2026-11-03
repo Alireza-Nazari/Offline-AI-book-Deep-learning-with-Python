@@ -1,0 +1,605 @@
+{
+ "page_id": "page_514",
+ "pdf_page": 514,
+ "printed_page": "490",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T10:20:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. e03 is the end of the preprocessor session from p.513 (its first line is the output of `x[\"padding_mask\"].shape`). e09 merges three printed paragraphs ('Our 1-billion-parameter model…', 'We’ve seen earlier in this book…', 'Researchers have experimented…'); each gets its own note."
+ },
+ "overview": {
+  "title": "Padding masks, response-only loss, and the memory wall that motivates LoRA",
+  "chapter": "16 Text generation",
+  "section": "16.3 Using a pretrained LLM",
+  "subsection": "16.3.3 Low-Rank Adaptation (LoRA)",
+  "main_topic": "What the preprocessor's outputs mean (padding mask, next-token labels, sample weights) and why full fine-tuning of a 1B-parameter model does not fit in 16 GB of GPU memory.",
+  "central_idea": "Instruction fine-tuning uses ordinary next-token labels but weights the loss so only response tokens count; however, training all ~1B parameters with Adam needs ~15 GB just for weights and optimizer state, so we must reduce what is trainable.",
+  "importance": "It connects the data format to the loss actually optimized, and it introduces the practical constraint (accelerator memory) that drives parameter-efficient fine-tuning such as LoRA.",
+  "learning_objectives": [
+   "Explain what the padding mask and sample_weight tensors are for.",
+   "Verify from printed token IDs that labels are inputs shifted by one position.",
+   "Estimate the memory needed to train a model with Adam from its parameter count.",
+   "Explain why freezing parameters saves memory beyond saving compute.",
+   "State which part of a Transformer is most important to leave unfrozen during fine-tuning, according to the book."
+  ],
+  "prerequisites": [
+   "The preprocessor call and dataset of p.513",
+   "Adam optimizer and its per-parameter state",
+   "Freezing layers during fine-tuning (earlier chapters)",
+   "Gemma 3 1B model summary (p.510)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page first completes the preprocessor inspection begun on p.513: `padding_mask`, `y` and `sample_weight` all have shape `(2, 512)`, matching `token_ids`. The authors explain the roles: the preprocessor **pads every input to a fixed length** and computes a **padding mask** marking which positions are just padded zeros. The **`sample_weight`** tensor makes the loss count **only response tokens**: the user prompt is fixed, so its loss does not matter, and the zero padding should certainly not be scored.\n\nPrinting the first five token IDs and labels of the first example shows `[2, 77074, 22768, 236842, 107]` and `[77074, 22768, 236842, 107, 24249]`: each label is simply the **next token**, the regular language-model setup (ID 2 is the start-of-sequence token).\n\nSection **16.3.3 Low-Rank Adaptation (LoRA)** then raises a problem: calling `fit()` now on a Colab GPU with 16 GB would immediately run **out of memory**, even though loading and generating worked. The 1-billion-parameter model takes about **3.7 GB**. Adam needs **three extra floats per parameter**: the gradient, a velocity value and a momentum value. That gives about **15 GB for weights plus optimizer state**, leaving nothing for the few gigabytes of forward-pass activations, so training would crash on the first step. For LLMs, fitting the model in accelerator memory matters more than raw throughput.\n\nThe authors recall that **freezing** parts of a model during fine-tuning (seen earlier in the book) also **saves memory**, because frozen parameters need no optimizer variables. Research on which Transformer parameters to leave trainable found that the **attention mechanism** matters most, but attention layers alone still hold hundreds of millions of parameters. \"Can we do even better?\" sets up LoRA on p.515.",
+ "paragraphs": [
+  {
+   "ref": "p514_e04",
+   "excerpt": "The preprocessor layer will pad all inputs to a fixed length and compute",
+   "what_it_says": "The preprocessor pads all inputs to a fixed length and builds a padding mask; `sample_weight` restricts the loss to response tokens, excluding the fixed prompt and the zero padding.",
+   "what_it_means": "Every row is 512 positions long. The padding mask (1 = real token, 0 = pad) tells attention to ignore pad positions. `sample_weight` is 1 where the label is a response token and 0 elsewhere, so the cross-entropy is averaged only over the answer.",
+   "why_it_matters": "This is how supervised instruction tuning differs from plain pretraining in practice: same next-token loss, but the model is graded only on what it should produce, not on reproducing user questions or predicting padding.",
+   "technical_idea": "Weighted loss: $\\mathcal{L} = \\sum_t w_t\\,\\ell_t / \\sum_t w_t$ (Keras normalizes weighted losses; the exact reduction is an implementation detail). Listing 16.14 also uses `weighted_metrics` so accuracy is computed over the same positions (p.517).",
+   "terminology": [
+    {
+     "term": "padding mask",
+     "meaning": "Binary tensor marking real tokens (1) versus padding (0)."
+    },
+    {
+     "term": "sample_weight",
+     "meaning": "Per-position loss weights; 0 removes a position from the loss."
+    }
+   ],
+   "connections": [
+    "p.513: `x, y, sample_weight = preprocessor(batch)`.",
+    "p.517: `weighted_metrics=[SparseCategoricalAccuracy()]` uses these weights.",
+    "p.524: image token positions are likewise zeroed out of the loss in multimodal training."
+   ]
+  },
+  {
+   "ref": "p514_e05",
+   "excerpt": "If we print a snippet of our token IDs and labels, we can see",
+   "what_it_says": "Printing the first five token IDs and labels shows the regular language-model setup: each label is the next token.",
+   "what_it_means": "`y[0, t] == x[\"token_ids\"][0, t+1]`. Position 0 holds the start token (2), whose label is the first real token 77074; and so on.",
+   "why_it_matters": "Confirms instruction tuning reuses the exact pretraining objective; nothing about the model or loss changes, only the data and weights.",
+   "terminology": [
+    {
+     "term": "start token",
+     "meaning": "Special token (ID 2 here) prepended to every sequence."
+    }
+   ],
+   "connections": [
+    "p.505: next-token prediction as the core objective.",
+    "p.512: 'the same guess the next word loss we used to pretrain an LLM'."
+   ]
+  },
+  {
+   "ref": "p514_e08",
+   "excerpt": "If we ran fit() right now on a Colab GPU with 16 GB",
+   "what_it_says": "Running `fit()` on a 16 GB Colab GPU would cause an out-of-memory error, even though loading and generation worked.",
+   "what_it_means": "Inference only needs the weights plus small activations; training needs extra per-parameter buffers and stored activations for backpropagation.",
+   "why_it_matters": "Introduces the memory problem LoRA is designed to solve.",
+   "terminology": [
+    {
+     "term": "OOM (out of memory)",
+     "meaning": "Allocation failure when the accelerator's memory is exhausted."
+    }
+   ],
+   "connections": [
+    "p.510: generation with the loaded model ran fine."
+   ]
+  },
+  {
+   "ref": "p514_e09",
+   "excerpt": "Our 1-billion-parameter model takes up about 3.7 GB of memory.",
+   "what_it_says": "The 1B model uses about 3.7 GB; Adam tracks three extra floats per parameter (gradient, velocity, momentum), giving ~15 GB for weights and optimizer state, with nothing left for forward-pass intermediates. Fitting the model in memory is a bigger concern than throughput when training LLMs.",
+   "what_it_means": "With float32 weights (the model was loaded with `dtype=\"float32\"` on p.509), each parameter costs 4 bytes, so $\\approx 10^9 \\times 4$ B ≈ 3.7 GiB. Four copies (weights, gradients, two Adam moments) ≈ 15 GB, nearly the whole 16 GB card, before any activations are stored.",
+   "why_it_matters": "Gives a rule of thumb: full fine-tuning with Adam in float32 costs about 16 bytes per parameter plus activations.",
+   "technical_idea": "Keras's Adam stores two slot variables per parameter, named `momentums` (first-moment estimate) and `velocities` (second-moment estimate); the gradient buffer is the third extra float. In the original Adam paper these are $m_t$ and $v_t$.",
+   "terminology": [
+    {
+     "term": "optimizer state",
+     "meaning": "Per-parameter variables an optimizer keeps between steps (for Adam, two moment estimates)."
+    },
+    {
+     "term": "accelerator memory",
+     "meaning": "On-device memory of a GPU/TPU (16 GB here)."
+    }
+   ],
+   "connections": [
+    "p.510: the summary reports 999,885,952 parameters (3.72 GB).",
+    "p.517: Figure 16.5 splits total memory into parameters, gradients, optimizer state and forward pass."
+   ]
+  },
+  {
+   "ref": "p514_e09",
+   "excerpt": "We’ve seen earlier in this book how we can freeze certain parts",
+   "what_it_says": "Freezing parts of a model during fine-tuning, seen earlier, also saves a lot of memory because frozen parameters need no optimizer variables.",
+   "what_it_means": "A frozen weight still occupies its 4 bytes, but it needs no gradient buffer and no Adam moments. For a frozen parameter the cost drops from ~16 bytes to ~4 bytes.",
+   "why_it_matters": "This is the lever LoRA pulls to the extreme: freeze almost everything.",
+   "terminology": [
+    {
+     "term": "freezing",
+     "meaning": "Setting `trainable = False` so the optimizer never updates a weight."
+    }
+   ],
+   "connections": [
+    "p.484: fine-tuning a pretrained Transformer backbone in chapter 15.",
+    "p.516: `gemma_lm.backbone.trainable = False` in the LoRA sidebar."
+   ]
+  },
+  {
+   "ref": "p514_e09",
+   "excerpt": "Researchers have experimented extensively with freezing different parameters in a Transformer model",
+   "what_it_says": "Research shows the most important weights to keep trainable during fine-tuning are in the attention mechanism, but attention layers still have hundreds of millions of parameters.",
+   "what_it_means": "Training only attention weights would still need several GB of optimizer state, which is better but still large.",
+   "why_it_matters": "Sets up the question 'Can we do even better?', answered by LoRA's low-rank updates on p.515.",
+   "terminology": [
+    {
+     "term": "attention projections",
+     "meaning": "The query, key, value and output dense layers of each attention block."
+    }
+   ],
+   "connections": [
+    "p.515: LoRA adds small trainable matrices to the attention projections."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "loss_masking",
+   "name": "Loss masking with sample weights",
+   "definition": "Using per-position weights to include only some positions (here response tokens) in the loss.",
+   "intuition": "Grade only the student's answer, not their copy of the question or the blank lines.",
+   "technical": "`sample_weight` of shape (batch, seq_len), 1 on response-label positions, 0 on prompt and padding.",
+   "significance": "Focuses fine-tuning on producing answers.",
+   "example": "For a (2, 512) batch, most positions are padding and get weight 0.",
+   "misconception": "That padding is harmless to include in the loss; it would teach the model to predict pad tokens.",
+   "related": [
+    "instruction_fine_tuning",
+    "cross_entropy",
+    "language_model"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "padding_mask",
+   "name": "Padding mask",
+   "definition": "A binary tensor marking which token positions are real and which are padding.",
+   "intuition": "A highlighter over the real text in a fixed-size box.",
+   "technical": "`x[\"padding_mask\"]`, shape (2, 512), consumed by the backbone's attention.",
+   "significance": "Allows variable-length texts in fixed-shape batches.",
+   "example": "A 40-token example padded to 512 has 40 ones followed by 472 zeros.",
+   "misconception": "That the padding mask removes padding from the loss; that is the job of sample_weight here.",
+   "related": [
+    "tokenization",
+    "attention"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "optimizer_memory",
+   "name": "Training memory: weights, gradients, optimizer state",
+   "definition": "Memory needed to train is weights + gradients + optimizer state + activations.",
+   "intuition": "Training needs several notebooks for every number in the model, not just the number itself.",
+   "technical": "Adam in float32: ~4 bytes × 4 per parameter (weight, gradient, two moments).",
+   "significance": "Determines whether full fine-tuning of an LLM is even possible on a given GPU.",
+   "example": "1B params: 3.7 GB × 4 ≈ 15 GB > what is left on a 16 GB GPU after activations.",
+   "misconception": "That GPU speed is the main obstacle; the book says fitting in memory is the primary concern.",
+   "related": [
+    "adam",
+    "optimizer",
+    "lora"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "freezing_layers",
+   "name": "Freezing parameters",
+   "definition": "Marking weights non-trainable so they receive no updates.",
+   "intuition": "Lock most of the knobs and only turn a few.",
+   "technical": "No gradients or optimizer slots are kept for frozen weights.",
+   "significance": "Saves memory, which the book stresses had not been mentioned before.",
+   "example": "Freezing the entire backbone except LoRA weights (p.516-517).",
+   "misconception": "That freezing only saves compute.",
+   "related": [
+    "transfer_learning",
+    "lora"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Labels are the next tokens",
+   "latex": "y_{b,t} = x_{b,t+1}, \\qquad t = 0,\\dots,510",
+   "source_text": "each label is the next token value",
+   "variables": [
+    {
+     "symbol": "x_{b,t}",
+     "meaning": "token ID at position t of example b"
+    },
+    {
+     "symbol": "y_{b,t}",
+     "meaning": "label at position t"
+    }
+   ],
+   "operations": "Shift left by one position.",
+   "purpose": "Defines the causal language-modeling target.",
+   "interpretation": "At each position the model must predict what comes next.",
+   "intuition": "Reading a sentence and guessing each next word before you see it.",
+   "numerical_example": "From the page: $x_{0,0..4} = [2, 77074, 22768, 236842, 107]$, $y_{0,0..4} = [77074, 22768, 236842, 107, 24249]$; indeed $y_{0,0}=x_{0,1}=77074$, …, $y_{0,3}=x_{0,4}=107$.",
+   "source": "book",
+   "book_ref": "p.514"
+  },
+  {
+   "id": "m2",
+   "title": "Response-only weighted loss",
+   "latex": "\\mathcal{L} = \\frac{\\sum_{t} w_t\\,\\bigl(-\\log p_\\theta(y_t \\mid x_{\\le t})\\bigr)}{\\sum_t w_t}, \\qquad w_t = \\begin{cases}1 & y_t \\text{ is a response token}\\\\ 0 & \\text{prompt or padding}\\end{cases}",
+   "source_text": "The sample_weight tensor allows us to only compute a loss value for our response tokens.",
+   "variables": [
+    {
+     "symbol": "w_t",
+     "meaning": "sample weight at position t"
+    },
+    {
+     "symbol": "p_\\theta(y_t\\mid x_{\\le t})",
+     "meaning": "model probability of the correct next token"
+    }
+   ],
+   "operations": "Weighted average of per-token cross-entropy.",
+   "purpose": "Train only on producing responses.",
+   "interpretation": "Prompt and padding contribute zero gradient.",
+   "intuition": "Only the answer is graded.",
+   "numerical_example": "If a row has per-token losses [2.0, 1.5, 0.7, 0.3] with weights [0, 0, 1, 1], the loss is (0.7 + 0.3)/2 = 0.5.",
+   "source": "ai_explanation",
+   "book_ref": "p.514"
+  },
+  {
+   "id": "m3",
+   "title": "Memory for full fine-tuning with Adam",
+   "latex": "M_{\\text{weights+opt}} \\approx \\underbrace{N \\cdot 4\\,\\text{B}}_{\\text{weights}} + \\underbrace{N \\cdot 4\\,\\text{B}}_{\\text{gradients}} + \\underbrace{2 \\cdot N \\cdot 4\\,\\text{B}}_{\\text{Adam moments}} = 16N\\ \\text{bytes}",
+   "source_text": "Our 1-billion-parameter model takes up about 3.7 GB … three extra floating-point numbers for each parameter … 15 GB just for the weights and optimizer state.",
+   "variables": [
+    {
+     "symbol": "N",
+     "meaning": "number of trainable parameters"
+    },
+    {
+     "symbol": "4\\,\\text{B}",
+     "meaning": "bytes per float32 number"
+    }
+   ],
+   "operations": "Multiply parameter count by bytes per value and number of copies.",
+   "purpose": "Estimate whether training fits on a GPU.",
+   "interpretation": "Training costs about 4× the memory of inference weights, before activations.",
+   "intuition": "Each weight brings three companions to training.",
+   "numerical_example": "$N = 999{,}885{,}952$: $4N$ B ≈ 4.0×10⁹ B ≈ 3.72 GiB; $16N$ B ≈ 14.9 GiB ≈ the book's 15 GB, leaving ~1 GB of a 16 GB GPU for activations.",
+   "source": "book",
+   "book_ref": "p.514"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Shapes of padding_mask, y and sample_weight (continued from p.513)",
+   "original_code": "(2, 512)\n>>> y.shape\n(2, 512)\n>>> sample_weight.shape\n(2, 512)",
+   "language": "python",
+   "what_it_does": "Shows that the padding mask (first line, output of the last command on p.513), labels and sample weights all have shape (2, 512).",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Output of `x[\"padding_mask\"].shape` from p.513."
+    },
+    {
+     "lines": "2-3",
+     "explanation": "Labels: one next-token ID per position."
+    },
+    {
+     "lines": "4-5",
+     "explanation": "Sample weights: one loss weight per position."
+    }
+   ],
+   "inputs_outputs": "Output of the preprocessor for a batch of 2 with sequence_length 512.",
+   "algorithm": "Inspection only.",
+   "theory_link": "All per-position tensors share the (batch, sequence) layout.",
+   "parameters": [],
+   "pitfalls": [
+    "Shapes alone do not show which positions are masked; inspect values to see the zeros."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Token IDs versus labels",
+   "original_code": ">>> x[\"token_ids\"][0, :5], y[0, :5]\n(Array([     2,  77074,  22768, 236842,    107], dtype=int32),\n Array([ 77074,  22768, 236842,    107,  24249], dtype=int32))",
+   "language": "python",
+   "what_it_does": "Prints the first five token IDs and labels of the first example, showing a one-position shift.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Slices position 0-4 of example 0 from both tensors."
+    },
+    {
+     "lines": "2",
+     "explanation": "Inputs: the start token 2, then the first tokens of `[instruction]\\n…` (IDs depend on the Gemma 3 tokenizer)."
+    },
+    {
+     "lines": "3",
+     "explanation": "Labels: the same IDs moved one step left, ending with the next token 24249."
+    }
+   ],
+   "inputs_outputs": "Two int32 arrays (`Array` indicates the JAX backend).",
+   "algorithm": "Shifted copy.",
+   "theory_link": "Causal language modeling target construction.",
+   "parameters": [],
+   "pitfalls": [
+    "These first positions belong to the prompt, so their sample weights are 0 even though labels exist."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Where 15 GB comes from",
+   "kind": "numerical",
+   "source": "ai_explanation",
+   "body": "The summary on p.510 lists 999,885,952 parameters. In float32 that is 3,999,543,808 bytes ≈ 3.72 GiB. Adam adds a gradient, a first-moment (`momentums`) and a second-moment (`velocities`) buffer of the same size: 4 × 3.72 ≈ 14.9 GiB. A 16 GB Colab GPU has roughly 15 GiB usable, and backprop must also store activations for 2 × 512 tokens across 26 decoder blocks plus the 262,144-way logits (2 × 512 × 262,144 floats ≈ 1 GiB for the logits alone). It does not fit."
+  },
+  {
+   "title": "Why the prompt is not graded",
+   "kind": "breakdown",
+   "source": "inference",
+   "body": "The book says the prompt is 'fixed': at inference it is supplied by the user, so the model never has to produce it. Training on it would spend capacity on modelling user questions. Padding is meaningless and would bias predictions toward the pad token."
+  },
+  {
+   "title": "Packing a suitcase",
+   "kind": "analogy",
+   "source": "analogy",
+   "body": "Loading the model is like carrying one suitcase. Training with Adam means carrying four identical suitcases (weights, gradients, two moments) plus a backpack (activations). Freezing weights means you only carry their suitcase, and LoRA (next page) shrinks the extra suitcases to the size of a wallet."
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Memory budget for full fine-tuning on a 16 GB GPU",
+   "why": "The page's numbers: 3.7 GB weights and three extra floats per parameter for Adam add up to ~15 GB.",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": [
+      "Inference (weights only)",
+      "Full fine-tuning with Adam"
+     ],
+     "datasets": [
+      {
+       "label": "Weights (GB)",
+       "data": [
+        3.7,
+        3.7
+       ]
+      },
+      {
+       "label": "Gradients (GB)",
+       "data": [
+        0,
+        3.7
+       ]
+      },
+      {
+       "label": "Adam momentum (GB)",
+       "data": [
+        0,
+        3.7
+       ]
+      },
+      {
+       "label": "Adam velocity (GB)",
+       "data": [
+        0,
+        3.7
+       ]
+      }
+     ]
+    },
+    "options": {
+     "indexAxis": "y",
+     "scales": {
+      "x": {
+       "stacked": true,
+       "max": 16,
+       "title": {
+        "display": true,
+        "text": "GB (16 GB GPU)"
+       }
+      },
+      "y": {
+       "stacked": true
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "What sample_weight keeps in the loss",
+   "why": "Illustrates the page's statement that only response tokens are scored.",
+   "mermaid": "flowchart LR\n S[\"start token\"] --> P[\"[instruction] ... [end] [response] (prompt, weight 0)\"]\n P --> R[\"response tokens ... [end] (weight 1)\"]\n R --> Z[\"padding zeros to 512 (weight 0, mask 0)\"]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Instruction tuning uses a special loss different from pretraining.",
+   "correction": "Labels are just the next tokens; only the sample weights change which positions count."
+  },
+  {
+   "claim": "If a model fits in memory for generation, it fits for training.",
+   "correction": "Training with Adam needs ~4× the weight memory plus activations; here ~15 GB vs 3.7 GB."
+  },
+  {
+   "claim": "Freezing layers only speeds training up.",
+   "correction": "It also saves memory, because frozen parameters need no gradients or optimizer variables."
+  },
+  {
+   "claim": "The padding mask and sample_weight are the same thing.",
+   "correction": "The padding mask marks padding for the model; sample_weight additionally zeros the prompt in the loss."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 513,
+    "note": "Preprocessor call that produced these tensors."
+   },
+   {
+    "page": 510,
+    "note": "Model summary: ~1B parameters, 3.72 GB."
+   },
+   {
+    "page": 509,
+    "note": "Gemma loaded in float32."
+   }
+  ],
+  "later": [
+   {
+    "page": 515,
+    "note": "LoRA: low-rank trainable updates on a frozen kernel."
+   },
+   {
+    "page": 517,
+    "note": "Trainable params drop to 1.3M; Figure 16.5 memory breakdown; listing 16.14 trains with weighted metrics."
+   },
+   {
+    "page": 521,
+    "note": "Choosing bfloat16 for a larger model to save memory."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 505,
+    "note": "Next-token prediction objective."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 515,
+    "note": "Parameter counts of full versus low-rank kernels."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 517,
+    "note": "compile with weighted_metrics and fit."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 517,
+    "note": "Figure 16.5: memory for normal versus LoRA training."
+   }
+  ]
+ },
+ "takeaways": [
+  "The preprocessor pads to a fixed length and returns a padding mask, next-token labels and sample weights, all (2, 512).",
+  "sample_weight restricts the loss to response tokens; prompt and padding get weight 0.",
+  "Labels are inputs shifted by one: the same objective as pretraining.",
+  "Full fine-tuning of a 1B float32 model with Adam needs ~15 GB for weights + gradients + two moment buffers, too much for a 16 GB GPU with activations.",
+  "Frozen parameters need no optimizer state, so freezing saves memory.",
+  "Attention weights matter most during fine-tuning, but they are still hundreds of millions of parameters, which motivates LoRA."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What is the purpose of `sample_weight` in this setup?",
+   "options": [
+    "To weight rare tokens more heavily",
+    "To compute the loss only on response tokens, ignoring prompt and padding",
+    "To mask future tokens in attention",
+    "To scale gradients for the LoRA weights"
+   ],
+   "answer": "To compute the loss only on response tokens, ignoring prompt and padding",
+   "explanation": "The page says sample_weight lets us compute loss only for response tokens. Causal masking is internal to attention; token frequency weighting and LoRA scaling are not mentioned.",
+   "page_refs": [
+    514
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Given x[\"token_ids\"][0, :5] = [2, 77074, 22768, 236842, 107], what is y[0, 3]?",
+   "options": [],
+   "answer": "107",
+   "explanation": "y[0, t] = x[0, t+1], so y[0, 3] = x[0, 4] = 107, as printed on the page.",
+   "page_refs": [
+    514
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "math",
+   "question": "A 1-billion-parameter float32 model is fine-tuned with Adam. Estimate memory for weights plus optimizer state, following the page.",
+   "options": [],
+   "answer": "About 15 GB: 3.7 GB × 4 (weights, gradients, and two Adam variables).",
+   "explanation": "The page lists three extra floats per parameter on top of the weights.",
+   "page_refs": [
+    514
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why does freezing parameters save memory, not just compute?",
+   "options": [],
+   "answer": "Frozen parameters never update, so no gradients or optimizer variables need to be stored for them.",
+   "explanation": "Stated on the page: we do not need to track optimizer variables for frozen parameters.",
+   "page_refs": [
+    514
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "According to the page, what is the primary concern when training LLMs?",
+   "options": [
+    "GPU throughput",
+    "CPU preprocessing speed",
+    "Fitting the model and its training state in accelerator memory",
+    "Network bandwidth for downloading weights"
+   ],
+   "answer": "Fitting the model and its training state in accelerator memory",
+   "explanation": "The page says throughput is a secondary concern to fitting the model on accelerator memory.",
+   "page_refs": [
+    514
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "Which weights does the research cited on the page find most important to leave unfrozen?",
+   "options": [],
+   "answer": "Those in the attention mechanism.",
+   "explanation": "Stated directly; the page adds that attention layers still have hundreds of millions of parameters.",
+   "page_refs": [
+    514
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you explain to someone why generation worked but `fit()` would crash?",
+   "options": [],
+   "answer": "Generation needs only the weights (3.7 GB) and small activations; training adds gradients, two Adam buffers and stored activations, exceeding 16 GB.",
+   "explanation": "Self-check on the memory reasoning of section 16.3.3.",
+   "page_refs": [
+    514
+   ]
+  }
+ ]
+}

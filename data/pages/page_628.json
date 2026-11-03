@@ -1,0 +1,329 @@
+{
+ "page_id": "page_628",
+ "pdf_page": 628,
+ "printed_page": "604",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:00:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "The RNN template is introduced as 'a single RNN layer for binary classification', but its output is Dense(num_classes, activation=\"sigmoid\"), which is the multilabel head from p.625; the book's own binary-classification rule (p.625) is a single sigmoid unit, Dense(1, ...). The code works for binary classification only if num_classes = 1. Notes explain this."
+  ],
+  "extraction_quality": "Good. Three code blocks (decoder half of the seq2seq Transformer from p.627, an encoder-only classifier, a single-LSTM classifier) and three text paragraphs; e08 in the extraction merges three printed paragraphs ('Three RNN layers...', 'To stack multiple RNN layers...', 'Following is a single RNN layer...'). Callouts 'Target sequence so far' (decoder_inputs line) and 'Predictions for target sequence one step in the future' (decoder_outputs line) are reflected in the code notes."
+ },
+ "overview": {
+  "title": "Transformer templates and RNNs in review",
+  "chapter": "20 Conclusions",
+  "section": "20.1 Key concepts in review",
+  "subsection": "20.1.6 Key network architectures",
+  "main_topic": "The decoder half of the KerasHub seq2seq Transformer, an encoder-only Transformer classifier, and a recap of recurrent neural networks: when to use them, which layer to pick, how to stack them, and a single-LSTM template.",
+  "central_idea": "A seq2seq Transformer joins the encoder and decoder into a two-input model that predicts the next target token; an encoder alone plus pooling makes a sequence classifier. RNNs process sequences step by step with a state and are preferable to 1D ConvNets when patterns depend on position in time; use LSTM or GRU and return full sequences from all but the last stacked layer.",
+  "importance": "These are ready-to-use templates for text and sequence problems, connecting chapters 13, 14 and 15.",
+  "learning_objectives": [
+   "Explain the inputs and outputs of the full seq2seq Transformer model, including teacher-forcing style training.",
+   "Build an encoder-only Transformer classifier and explain the role of GlobalMaxPooling1D.",
+   "State when an RNN should be preferred over a 1D ConvNet.",
+   "Choose between SimpleRNN, GRU and LSTM.",
+   "Use return_sequences correctly when stacking RNN layers."
+  ],
+  "prerequisites": [
+   "The encoder half of the template and the Transformer recap on p.627.",
+   "Recurrent layers in Keras (p.392) and stacking recurrent layers (p.399)."
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page first completes the **sequence-to-sequence Transformer** from p.627. The decoder side takes `decoder_inputs`, the **target sequence so far** (integer ids of length `dst_seq_length`), embeds tokens and positions with `TokenAndPositionEmbedding`, and runs a `TransformerDecoder(intermediate_dim=256, num_heads=8)` called on `(x, encoder_outputs)`, so the target positions can attend to the encoded source. A `Dense(vocab_size, softmax)` gives, at each position, a probability distribution over the vocabulary: **predictions for the target sequence one step in the future**. The model has two inputs, `[encoder_inputs, decoder_inputs]`, and is compiled with `adamw` and `categorical_crossentropy`.\n\nNext comes a **lone `TransformerEncoder`** for binary classification of integer sequences: token+position embedding, one encoder block, `GlobalMaxPooling1D` to collapse the sequence into one vector, then `Dense(1, sigmoid)` with `binary_crossentropy`.\n\nThe **recurrent neural networks** recap follows. RNNs process a sequence **one timestep at a time while maintaining a state** (a vector or set of vectors). The authors recommend them over 1D ConvNets when the patterns of interest are **not invariant to temporal translation**, for example timeseries where the recent past matters more than the distant past. Keras offers `SimpleRNN`, `GRU` and `LSTM`; in practice use **GRU or LSTM**. LSTM is more powerful but more expensive; GRU is a simpler, cheaper alternative. To **stack** RNN layers, every layer except the last must return its full output sequence (`return_sequences=True`); the last layer usually returns only its final output, which summarizes the whole sequence.\n\nThe page ends with a single `LSTM(32)` model for classification of vector sequences, compiled with `rmsprop` and `binary_crossentropy`. Note that its output layer is `Dense(num_classes, sigmoid)`, the multilabel head; for strictly binary classification the p.625 rule is a single sigmoid unit.",
+ "paragraphs": [
+  {
+   "ref": "p628_e04",
+   "excerpt": "And this is a lone TransformerEncoder for binary classification of integer sequences:",
+   "what_it_says": "The next template is an encoder-only Transformer that classifies integer sequences into two classes.",
+   "what_it_means": "'Integer sequences' are tokenized text (token ids). Because nothing has to be generated, only the encoder is needed, as p.627 noted; a pooling layer turns the per-token outputs into one vector for the classifier head.",
+   "why_it_matters": "This is the shape of most text classifiers built on Transformers, including the fine-tuned pretrained encoder of section 15.4.",
+   "connections": [
+    "p.627: 'If you're only processing a single sequence (or set) of vectors, you'd only use the TransformerEncoder.'",
+    "p.478: classification with a pretrained Transformer encoder."
+   ]
+  },
+  {
+   "ref": "p628_e07",
+   "excerpt": "Recurrent neural networks (RNNs) work by processing sequences of inputs one timestep",
+   "what_it_says": "RNNs process sequences one timestep at a time, keeping a state (typically a vector or set of vectors). They should be preferred over 1D ConvNets for sequences whose patterns of interest are not invariant to temporal translation, such as timeseries where the recent past matters more than the distant past.",
+   "what_it_means": "At each step t, an RNN computes a new state from the current input and the previous state, $h_t = f(x_t, h_{t-1})$, with the same weights at every step. Because information enters the state in order, the network naturally knows what is recent and what is old. A 1D ConvNet, by contrast, applies the same window detector everywhere and pools, so it treats a pattern the same way whether it happened yesterday or a month ago: good for translation-invariant patterns, bad when position in time carries meaning.",
+   "why_it_matters": "It gives a concrete decision rule for sequence data: order-sensitive, recency-weighted signals favour RNNs; local motifs that can appear anywhere favour 1D ConvNets (and long text favours Transformers, p.627).",
+   "technical_idea": "The forecasting experiments of chapter 13 illustrated this: the 1D ConvNet did worse than even the densely connected model on temperature data, which the book (p.387) attributes to weather data not respecting the translation invariance assumption and to order information being lost; recurrent models fared better.",
+   "terminology": [
+    {"term": "State", "meaning": "The memory an RNN carries from one timestep to the next; for an LSTM, an output state plus a carry (cell) state."},
+    {"term": "Temporal translation invariance", "meaning": "The assumption that a pattern means the same thing wherever it occurs in time."}
+   ],
+   "connections": [
+    "p.389: understanding recurrent neural networks (13.3.1).",
+    "p.386: the 1D convolutional model on temperature data, and why it struggled.",
+    "p.431: RNNs for text classification in chapter 14."
+   ]
+  },
+  {
+   "ref": "p628_e08",
+   "excerpt": "Three RNN layers are available in Keras: SimpleRNN, GRU, and LSTM.",
+   "what_it_says": "Keras has three RNN layers: SimpleRNN, GRU and LSTM. In practice use GRU or LSTM; LSTM is more powerful but more expensive, and GRU is a simpler, cheaper alternative. To stack RNN layers, every layer before the last must return its full output sequence (one output per input timestep); when you don't stack further RNN layers, it's common to return only the last output, which contains information about the whole sequence. A single-RNN-layer template for binary classification of vector sequences follows.",
+   "what_it_means": "SimpleRNN suffers from vanishing gradients and effectively forgets long-range information, which is why it is rarely used. LSTM adds a carry track controlled by gates, letting information pass across many timesteps; GRU merges some of these gates and has fewer parameters. The stacking rule is about shapes: a recurrent layer expects a 3D input (batch, timesteps, features). With return_sequences=True a layer outputs (batch, timesteps, units), a valid input for the next RNN; with the default False it outputs only (batch, units), which is what a Dense head needs.",
+   "why_it_matters": "Forgetting return_sequences=True in a stack is one of the most common shape errors with RNNs; the rule here prevents it.",
+   "technical_idea": "Parameter counts per layer (input dim d, units u): SimpleRNN u(d+u+1), GRU about 3u(d+u+1), LSTM 4u(d+u+1). This is the precise sense in which LSTM is 'more expensive' (counts beyond the book; Keras's GRU adds a few extra bias terms).",
+   "terminology": [
+    {"term": "GRU", "meaning": "Gated recurrent unit: a gated RNN with fewer gates than LSTM, cheaper to run."},
+    {"term": "LSTM", "meaning": "Long short-term memory: a gated RNN with a separate carry track that preserves information over long sequences."},
+    {"term": "return_sequences", "meaning": "If True, the layer outputs its state at every timestep; if False (default), only the final output."}
+   ],
+   "connections": [
+    "p.392: SimpleRNN and return_sequences introduced in 13.3.2.",
+    "p.399: stacking recurrent layers in 13.3.5.",
+    "p.629: the stacked LSTM template that applies this rule."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "transformer",
+   "name": "Encoder-decoder Transformer model",
+   "definition": "A two-input Keras model in which a TransformerDecoder reads the target-so-far and attends to the TransformerEncoder's outputs to predict the next target token at every position.",
+   "intuition": "Write the translation one word at a time while looking back at the encoded source sentence.",
+   "technical": "Model([encoder_inputs, decoder_inputs], decoder_outputs) with decoder_outputs of shape (batch, dst_seq_length, vocab_size).",
+   "significance": "Standard architecture for translation, summarization and question answering.",
+   "example": "Source 'the cat' → decoder input '[start] el' → target 'el gato'.",
+   "misconception": "At inference time the target is not available; you generate it token by token, feeding predictions back in.",
+   "related": ["attention", "positional_encoding", "language_model"],
+   "source": "book"
+  },
+  {
+   "id": "rnn",
+   "name": "Recurrent neural network",
+   "definition": "A network that processes a sequence one timestep at a time while maintaining a state.",
+   "intuition": "Reading a sentence word by word and updating a running mental summary.",
+   "technical": "$h_t = f(x_t, h_{t-1})$ with shared weights across time; Keras layers SimpleRNN, GRU, LSTM.",
+   "significance": "The right inductive bias when order and recency matter, as in many timeseries.",
+   "example": "Forecasting temperature 24 hours ahead from the last 5 days of measurements (chapter 13).",
+   "misconception": "RNNs are not obsolete for all tasks: for small timeseries problems they are often a strong, cheap choice.",
+   "related": ["lstm", "gru", "rnn_stacking"],
+   "source": "book"
+  },
+  {
+   "id": "lstm",
+   "name": "LSTM",
+   "definition": "Long short-term memory layer: a gated RNN with a carry track that lets information persist across many timesteps.",
+   "intuition": "A conveyor belt running alongside the sequence, onto which gates load and unload information.",
+   "technical": "Four weight sets (input, forget, output gates and candidate), so roughly 4u(d+u+1) parameters.",
+   "significance": "The book's 'more powerful' recurrent layer.",
+   "example": "layers.LSTM(32) on (batch, num_timesteps, num_features) returns (batch, 32).",
+   "misconception": "More powerful does not always mean better on small data; GRU may train faster with similar accuracy.",
+   "related": ["rnn", "gru"],
+   "source": "book"
+  },
+  {
+   "id": "gru",
+   "name": "GRU",
+   "definition": "Gated recurrent unit: a simpler, cheaper alternative to LSTM.",
+   "intuition": "An LSTM with fewer moving parts.",
+   "technical": "Update and reset gates, no separate carry state; about 3/4 of the LSTM's parameters.",
+   "significance": "A good default when compute is tight.",
+   "example": "layers.GRU(32) is a drop-in replacement for layers.LSTM(32).",
+   "misconception": "GRU is not a 'simple RNN'; it is gated and handles long dependencies far better than SimpleRNN.",
+   "related": ["rnn", "lstm"],
+   "source": "book"
+  },
+  {
+   "id": "rnn_stacking",
+   "name": "Stacking RNN layers with return_sequences",
+   "definition": "Every RNN layer except the last returns its full output sequence so the next RNN layer receives a sequence.",
+   "intuition": "Each layer must hand the next a whole sequence to read, not just a summary.",
+   "technical": "return_sequences=True: output (batch, timesteps, units); default: (batch, units).",
+   "significance": "Adds representational power to recurrent models.",
+   "example": "LSTM(32, return_sequences=True) → LSTM(32, return_sequences=True) → LSTM(32) on p.629.",
+   "misconception": "Setting return_sequences=True on the last layer and feeding a Dense layer gives per-timestep predictions, not one per sequence.",
+   "related": ["rnn", "lstm"],
+   "source": "book"
+  },
+  {
+   "id": "global_pooling",
+   "name": "GlobalMaxPooling1D for sequences",
+   "definition": "Reduces a (batch, seq_length, dim) tensor to (batch, dim) by taking the maximum over the sequence axis.",
+   "intuition": "For each feature, ask 'was it strongly present anywhere in the text?'",
+   "technical": "Element-wise max over timesteps; no trainable weights.",
+   "significance": "Bridges the per-token Transformer output to a single classification vector.",
+   "example": "A strongly negative phrase anywhere in a review can dominate the pooled sentiment feature.",
+   "misconception": "It discards order information; the ordering was used inside the encoder, before pooling.",
+   "related": ["transformer", "max_pooling"],
+   "source": "ai_explanation"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Sequence-to-sequence Transformer, decoder half and model assembly",
+   "original_code": "decoder_inputs = keras.Input(shape=(dst_seq_length,), dtype=\"int64\")\nx = TokenAndPositionEmbedding(vocab_size, dst_seq_length, embed_dim)(\n    decoder_inputs\n)\nx = TransformerDecoder(intermediate_dim=256, num_heads=8)(x, encoder_outputs)\ndecoder_outputs = layers.Dense(vocab_size, activation=\"softmax\")(x)\ntransformer = keras.Model([encoder_inputs, decoder_inputs], decoder_outputs)\ntransformer.compile(optimizer=\"adamw\", loss=\"categorical_crossentropy\")",
+   "language": "python",
+   "what_it_does": "Builds the target-side branch (embedding + TransformerDecoder attending to encoder_outputs), adds a per-position softmax over the vocabulary, and assembles the two-input seq2seq model.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Target sequence so far (callout): integer token ids of length dst_seq_length, typically the target shifted right with a start token."},
+    {"lines": "2-4", "explanation": "Token + learned position embeddings for the target side: (batch, dst_seq_length, embed_dim)."},
+    {"lines": "5", "explanation": "TransformerDecoder called on (decoder sequence, encoder sequence): causal self-attention over the target (KerasHub applies the causal mask by default), cross-attention to encoder_outputs, then a 256-unit feed-forward sublayer."},
+    {"lines": "6", "explanation": "Predictions for the target sequence one step in the future (callout): softmax over vocab_size at every position, shape (batch, dst_seq_length, vocab_size)."},
+    {"lines": "7", "explanation": "A Model with two inputs (source and target-so-far) and one output."},
+    {"lines": "8", "explanation": "AdamW optimizer and categorical crossentropy, which expects one-hot next-token targets."}
+   ],
+   "inputs_outputs": "Inputs: source ids (batch, src_seq_length), target-so-far ids (batch, dst_seq_length). Output: (batch, dst_seq_length, vocab_size) next-token probabilities.",
+   "algorithm": "Teacher-forced next-token prediction: at training time the true previous target tokens are fed to the decoder, and the loss compares each position's prediction with the following token.",
+   "theory_link": "Implements the TransformerDecoder bullet of p.627 and the seq2seq setup of 15.3.4 (p.472).",
+   "parameters": [
+    {"name": "dst_seq_length", "role": "Length of target sequences."},
+    {"name": "vocab_size", "role": "Shared here for source and target; real translation models may use separate vocabularies."},
+    {"name": "optimizer=\"adamw\"", "role": "Adam with decoupled weight decay, the usual choice for Transformers."}
+   ],
+   "pitfalls": [
+    "Chapter 15 trained this kind of model with integer targets and sparse_categorical_crossentropy (p.474); categorical_crossentropy requires one-hot targets of size vocab_size, which is memory-hungry for large vocabularies.",
+    "The same vocab_size is used for both embeddings and the output; this is a simplification of the template.",
+    "Generation at inference requires a decoding loop that feeds predictions back as decoder_inputs."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Encoder-only Transformer for binary classification",
+   "original_code": "inputs = keras.Input(shape=(seq_length,), dtype=\"int64\")\nx = TokenAndPositionEmbedding(vocab_size, seq_length, embed_dim)(inputs)\nx = TransformerEncoder(intermediate_dim=256, num_heads=8)(x)\nx = layers.GlobalMaxPooling1D()(x)\noutputs = layers.Dense(1, activation=\"sigmoid\")(x)\nmodel = keras.Model(inputs, outputs)\nmodel.compile(optimizer=\"adamw\", loss=\"binary_crossentropy\")",
+   "language": "python",
+   "what_it_does": "Classifies a token sequence into one of two classes: embeddings with positions, one Transformer encoder block, max-pooling over the sequence, and a single sigmoid unit.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Integer token ids of length seq_length."},
+    {"lines": "2", "explanation": "Token + position embedding: (batch, seq_length, embed_dim)."},
+    {"lines": "3", "explanation": "One encoder block producing context-aware token vectors of the same shape."},
+    {"lines": "4", "explanation": "GlobalMaxPooling1D takes, for each of the embed_dim features, the maximum over the sequence: (batch, embed_dim)."},
+    {"lines": "5", "explanation": "Single sigmoid unit: probability of the positive class, the binary head from p.625."},
+    {"lines": "6-7", "explanation": "Build and compile with AdamW and binary crossentropy; targets are 0 or 1."}
+   ],
+   "inputs_outputs": "Input (batch, seq_length) ints; output (batch, 1) probability.",
+   "algorithm": "Self-attention encoding → max pooling over time → logistic classifier.",
+   "theory_link": "Applies 'If you're only processing a single sequence, you'd only use the TransformerEncoder' (p.627).",
+   "parameters": [
+    {"name": "seq_length", "role": "Maximum sequence length; also the size of the position table."},
+    {"name": "GlobalMaxPooling1D", "role": "Collapses the time axis to one vector."}
+   ],
+   "pitfalls": [
+    "Padding positions should be masked so they cannot win the max pooling; check that a padding mask is propagated.",
+    "Training a Transformer from scratch on a small dataset often underperforms a bag-of-words model; pretrained encoders (15.4) help."
+   ]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Single-LSTM sequence classifier",
+   "original_code": "inputs = keras.Input(shape=(num_timesteps, num_features))\nx = layers.LSTM(32)(inputs)\noutputs = layers.Dense(num_classes, activation=\"sigmoid\")(x)\nmodel = keras.Model(inputs, outputs)\nmodel.compile(optimizer=\"rmsprop\", loss=\"binary_crossentropy\")",
+   "language": "python",
+   "what_it_does": "Encodes a sequence of feature vectors with one 32-unit LSTM (last output only) and classifies it with sigmoid outputs and binary crossentropy.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Vector sequences: num_timesteps steps, each with num_features values (float input, unlike the integer token inputs above)."},
+    {"lines": "2", "explanation": "LSTM with 32 units; return_sequences defaults to False, so it returns only the last output, shape (batch, 32), which summarizes the whole sequence."},
+    {"lines": "3", "explanation": "Dense(num_classes, sigmoid): independent probabilities per class. For true binary classification, num_classes would be 1 (see the review flag)."},
+    {"lines": "4-5", "explanation": "Build and compile with RMSprop and binary crossentropy."}
+   ],
+   "inputs_outputs": "Input (batch, num_timesteps, num_features); output (batch, num_classes).",
+   "algorithm": "Recurrent encoding of the sequence into a fixed vector, then a logistic head.",
+   "theory_link": "Implements 'if you aren't stacking any further RNN layers, it's common to return only the last output' (e08).",
+   "parameters": [
+    {"name": "32", "role": "Number of LSTM units (size of the state)."},
+    {"name": "num_classes", "role": "Number of sigmoid outputs; 1 for binary classification."}
+   ],
+   "pitfalls": [
+    "The text calls this binary classification, but Dense(num_classes, sigmoid) is the multilabel head; use Dense(1, sigmoid) for a single binary label.",
+    "Normalize the input features per channel before training, as done for the temperature data in chapter 13."
+   ],
+   "illustrative_code": "# AI-written: the strict binary version, and a cheaper GRU variant\nx = layers.GRU(32)(inputs)\noutputs = layers.Dense(1, activation=\"sigmoid\")(x)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "How the decoder is trained: shifted targets",
+   "kind": "step_by_step",
+   "body": "For the pair English 'the cat sat' → Spanish 'el gato se sentó':\n\n1. `encoder_inputs` = ids of `the cat sat`.\n2. `decoder_inputs` (target so far) = `[start] el gato se`.\n3. Training targets = `el gato se sentó` (the same sequence shifted one step left).\n4. At position 0 the decoder sees only `[start]` (causal mask) plus the whole encoded source and must predict `el`; at position 1 it sees `[start] el` and must predict `gato`, and so on.\n\nAll positions are trained in parallel in one forward pass, which is a major efficiency advantage over RNN decoders. At inference, you start with `[start]`, pick the most likely next token, append it, and repeat (chapter 15).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Choosing a sequence architecture: the book's rules of thumb",
+   "kind": "breakdown",
+   "body": "Collecting the recap's guidance (p.626–628):\n\n- **1D ConvNet**: local patterns that can appear anywhere in the sequence (translation invariant); cheap.\n- **RNN (LSTM/GRU)**: order and recency matter (e.g. timeseries where the recent past is more important).\n- **Transformer**: long text, global context; excels at sequence-to-sequence.\n\nThe distinction between sets and sequences (chapter 14, p.419) underlies all of these.",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "An LSTM unrolled over time",
+   "why": "Paragraph e07 says RNNs process sequences one timestep at a time while maintaining a state; the template uses layers.LSTM(32).",
+   "widget": "rnn_unroll",
+   "params": {"timesteps": 4, "cell": "lstm"}
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Shapes in the encoder-only Transformer classifier",
+   "why": "The second code block: token ids → embeddings → encoder → GlobalMaxPooling1D → one sigmoid unit (example with seq_length 200, embed_dim 256).",
+   "widget": "tensor_shapes",
+   "params": {"steps": [
+    {"op": "input ids", "shape": [null, 200]},
+    {"op": "TokenAndPositionEmbedding", "shape": [null, 200, 256]},
+    {"op": "TransformerEncoder", "shape": [null, 200, 256]},
+    {"op": "GlobalMaxPooling1D", "shape": [null, 256]},
+    {"op": "Dense sigmoid", "shape": [null, 1]}
+   ]}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "The Transformer decoder sees the entire target sequence when predicting each token.", "correction": "It sees only the target so far; a causal mask hides future positions, so each position predicts the next token."},
+  {"claim": "SimpleRNN is a good default recurrent layer.", "correction": "The page says that for most practical purposes you should use GRU or LSTM."},
+  {"claim": "Every layer in an RNN stack should return only its last output.", "correction": "All layers before the last must return full sequences (return_sequences=True)."},
+  {"claim": "RNNs and 1D ConvNets are interchangeable for any sequence.", "correction": "Prefer RNNs when patterns aren't invariant to temporal translation, e.g. when recent data matters more."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 627, "note": "Encoder half of the seq2seq template and the Transformer recap."},
+   {"page": 625, "note": "The binary-classification head rule (single sigmoid unit + binary_crossentropy)."},
+   {"page": 472, "note": "Sequence-to-sequence learning with a Transformer (15.3.4)."},
+   {"page": 389, "note": "Understanding recurrent neural networks."},
+   {"page": 392, "note": "Recurrent layers in Keras and return_sequences."},
+   {"page": 399, "note": "Stacking recurrent layers."}
+  ],
+  "later": [
+   {"page": 629, "note": "Stacked LSTM template; then section 20.2 on the limitations of deep learning."}
+  ],
+  "prerequisites": [
+   {"page": 470, "note": "Transformer decoder block and causal masking."},
+   {"page": 386, "note": "1D ConvNets on timeseries, the comparison point for RNNs."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 474, "note": "Chapter 15 compiled the translation Transformer with sparse_categorical_crossentropy."},
+   {"page": 431, "note": "Training a recurrent model for text classification."},
+   {"page": 478, "note": "Classification with a pretrained Transformer encoder."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "The seq2seq Transformer has two inputs (source, target so far) and outputs next-token probabilities at every target position.",
+  "An encoder-only Transformer + GlobalMaxPooling1D + Dense(1, sigmoid) is a complete text classifier.",
+  "RNNs keep a state across timesteps and suit sequences where position in time (recency) matters.",
+  "Use LSTM (more powerful) or GRU (cheaper); avoid SimpleRNN in practice.",
+  "When stacking RNNs, all but the last layer need return_sequences=True."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "What does decoder_outputs represent in the seq2seq Transformer template?", "options": ["The encoded source sentence", "A probability distribution over the vocabulary for the next target token at each position", "A single class probability for the whole sequence", "The attention weights between source and target"], "answer": "A probability distribution over the vocabulary for the next target token at each position", "explanation": "Dense(vocab_size, softmax) on the decoder sequence gives per-position next-token distributions (callout: 'Predictions for target sequence one step in the future'). The encoded source is encoder_outputs; a single probability is the classifier head; attention weights are internal.", "page_refs": [628]},
+  {"id": "q2", "type": "short", "question": "Why does the encoder-only classifier need a GlobalMaxPooling1D layer before the Dense output?", "options": [], "answer": "The encoder outputs one vector per token (batch, seq_length, embed_dim); pooling collapses the sequence axis into a single vector per sample so one prediction can be made per sequence.", "explanation": "Without pooling, Dense would produce a prediction per token.", "page_refs": [628]},
+  {"id": "q3", "type": "conceptual", "question": "When does the book recommend an RNN over a 1D ConvNet?", "options": [], "answer": "When the patterns of interest aren't invariant to temporal translation, e.g. timeseries where the recent past is more important than the distant past.", "explanation": "A 1D ConvNet treats a pattern identically wherever it occurs; an RNN processes inputs in order and its state naturally emphasizes recent inputs.", "page_refs": [628, 386]},
+  {"id": "q4", "type": "mcq", "question": "You stack three LSTM layers before a Dense classifier. Which configuration is correct?", "options": ["return_sequences=True on all three", "return_sequences=True on the first two, default on the last", "return_sequences=True only on the last", "Default (False) on all three"], "answer": "return_sequences=True on the first two, default on the last", "explanation": "Each layer before the last must output a full sequence for the next RNN; the last returns only its final output for the Dense head. Other options either break the shape expected by the next LSTM or give per-timestep outputs to the head.", "page_refs": [628, 629, 399]},
+  {"id": "q5", "type": "short", "question": "How does the book compare GRU and LSTM?", "options": [], "answer": "LSTM is more powerful but more expensive; GRU is a simpler, cheaper alternative.", "explanation": "Stated in e08; both are preferred over SimpleRNN.", "page_refs": [628]},
+  {"id": "q6", "type": "conceptual", "question": "The single-LSTM template is described as binary classification but uses Dense(num_classes, activation=\"sigmoid\"). What value of num_classes makes it a binary classifier, and what is the head otherwise?", "options": [], "answer": "num_classes = 1 gives the binary head (one sigmoid unit). With num_classes > 1 it is the multilabel head (independent sigmoids with binary_crossentropy).", "explanation": "Compare with the head rules on p.625.", "page_refs": [625, 628]},
+  {"id": "q7", "type": "self", "question": "Could you explain to someone why the seq2seq model has two inputs at training time but generates text with only the source at inference?", "options": [], "answer": "At training time the true target-so-far is fed to the decoder (teacher forcing). At inference the target is built step by step from the model's own predictions, starting from a start token.", "explanation": "Review 15.3.4 (p.472) if this isn't clear.", "page_refs": [472, 628]}
+ ]
+}

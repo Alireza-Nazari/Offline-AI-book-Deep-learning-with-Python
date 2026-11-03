@@ -1,0 +1,563 @@
+{
+ "page_id": "page_467",
+ "pdf_page": 467,
+ "printed_page": "443",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T11:00:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Code bug: inside the loop the einsums use `target` and `source` (`np.einsum(\"btd,bsd->bts\", target, source)` and `np.einsum(\"bts,bsd->btd\", scores, source)`) instead of the projected `query`, `key`, `value`. As printed, the per-head projections are computed but never used, so every head computes identical, unparameterized attention, which contradicts the text ('different attention heads running the same computation with different parameters').",
+   "Code bug: the loop reassigns `query = query_dense[i](query)` (likewise key, value), so head i projects the output of head i−1's projection instead of the original inputs. Heads should use separate variables (e.g. `q = query_dense[i](query)`). A corrected version is given in illustrative_code."
+  ],
+  "extraction_quality": "Good. e03 continues the sentence started on p.466. The code element matches the image (blank lines restored). Figure 15.7 has no extracted labels; from the image, the Spanish target words 'Te' 'traeré' 'la' 'bolsa' sit on top, the English source words 'I' 'will' 'bring' 'the' 'bag' 'to' 'you' at the bottom, and arrows from 'traeré' in two color families (yellow and red) point to different subsets of source words."
+ },
+ "overview": {
+  "title": "Multi-head attention",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "15.3.1 Dot-product attention",
+  "main_topic": "Running several attention heads, each with its own query/key/value projections, concatenating their outputs and projecting them, so that different heads can focus on different parts of the source; figure 15.7; and the move to Keras's `MultiHeadAttention` layer",
+  "central_idea": "A single softmax-weighted sum blurs features when a token needs information from many places. Multi-head attention runs the same scaled dot-product computation `num_heads` times with different learned projections into smaller `head_dim` spaces, then concatenates the head outputs (each head fills its own slice of the final vector) and applies an output projection.",
+  "importance": "Multi-head attention is the exact form of attention used in every Transformer. This page gives its structure, and the `MultiHeadAttention` layer on p.468 packages it.",
+  "learning_objectives": [
+   "Explain the 'washed out' problem and how multiple heads address it",
+   "Trace shapes through the multi-head pseudocode: per-head (b,t,head_dim), concatenated (b,t,num_heads·head_dim)",
+   "Identify the √head_dim scaling in the code",
+   "Spot and fix the two bugs in the printed pseudocode",
+   "Interpret figure 15.7 as heads attending to different source subsets"
+  ],
+  "prerequisites": [
+   "Parameterized query/key/value attention and the √d scaling (p.466)",
+   "Einsum notation (p.463)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page completes the second refinement from \"Attention Is All You Need\". If attention spreads over too many tokens at once, \"the interesting features of individual source tokens will get 'washed out' in the combined representation.\" The fix is to do the attention operation **several times for the same sequence**, with several attention **heads** that run the same computation with different parameters.\n\nThe pseudocode creates `num_heads` separate `Dense(head_dim)` projections for queries, keys and values, plus one `output_dense` of size `head_dim * num_heads`. `multi_head_attention` loops over heads. Each head projects, computes the einsum scores, applies `softmax(scores / math.sqrt(head_dim), axis=-1)` (the **scaling** from p.466 now appears explicitly) and computes the weighted sum. The head outputs are concatenated on the last axis with `ops.concatenate` and passed through `output_dense`. As on p.466, it is called with `query=target, key=source, value=source`.\n\n*Caution:* the printed loop has two bugs. Its einsums use `target`/`source` instead of the projected tensors, and it overwrites `query`/`key`/`value` each iteration. See the code notes for a corrected version.\n\nBecause each head projects queries and keys differently, \"one head might learn to match the subject of the source sentence, while another head might attend to punctuation.\" Multi-head attention therefore avoids the limit of combining the entire source with a **single** softmax sum. **Figure 15.7** shows the target word \"traeré\" attending to different English words in separate partitions of its output vector.\n\nFinally, the authors note that in practice this should be a reusable layer, and Keras provides one: the `MultiHeadAttention` layer (used on p.468).",
+ "paragraphs": [
+  {
+   "ref": "p467_e03",
+   "excerpt": "tokens at once, the interesting features of individual source tokens will get",
+   "what_it_says": "(Continuing p.466.) If the model attends to too many tokens at once, the features of individual source tokens get 'washed out' in the combined representation. A simple trick that works well is to perform the attention operation several times on the same sequence, with several attention heads running the same computation with different parameters.",
+   "what_it_means": "A head outputs one weighted average of value vectors per target position. Averaging many different vectors produces a vector that resembles none of them, so specific information is lost. With $h$ heads, each target position gets $h$ independent averages, each computed with its own learned notion of relevance (its own $W_Q, W_K$) and its own extracted content (its own $W_V$). Each head works in a smaller space of size `head_dim`, so the total cost stays similar to one large head.",
+   "why_it_matters": "It is the 'multi-head' in `MultiHeadAttention`. Without it, a Transformer layer could gather only one kind of contextual information per token per layer.",
+   "technical_idea": "$\\text{MHA}(Q,K,V) = \\operatorname{Concat}(\\text{head}_1,\\dots,\\text{head}_h)\\,W_O$, with $\\text{head}_i = \\operatorname{softmax}\\big(QW_Q^{(i)}(KW_K^{(i)})^\\top/\\sqrt{d_h}\\big)\\,VW_V^{(i)}$.",
+   "terminology": [
+    {
+     "term": "Attention head",
+     "meaning": "One independent attention computation with its own query, key and value projections."
+    },
+    {
+     "term": "head_dim",
+     "meaning": "The size each head projects into (e.g. 32 when hidden size 256 is split over 8 heads, as in Listing 15.14 on p.469)."
+    }
+   ],
+   "connections": [
+    "p.466: the 'blunt' summation that motivates heads.",
+    "p.469: `key_dim = hidden_dim // num_heads` in the Transformer encoder."
+   ]
+  },
+  {
+   "ref": "p467_e05",
+   "excerpt": "By projecting the query and key differently, one head might learn to",
+   "what_it_says": "Because each head projects the query and key differently, one head might learn to match the subject of the source sentence while another attends to punctuation. Multi-head attention thus avoids having to combine the entire source sequence with a single softmax sum (figure 15.7).",
+   "what_it_means": "The projections define *what counts as relevant*. Head A's $W_Q, W_K$ might map a verb's query near the keys of its subject. Head B's might map it near nearby function words. The heads specialize through training. Nobody assigns roles, and the 'subject' and 'punctuation' examples are illustrative ('might learn'). In figure 15.7, the target word 'traeré' (I will bring) has one group of arrows to 'I', 'will', 'bring' (the person, tense and verb it encodes) and another group to 'the', 'bag', 'to', and both feed separate partitions of its output vector.",
+   "why_it_matters": "This specialization makes Transformers expressive. Analyses of trained models do find heads that track syntax, coreference or position, though many heads are redundant (outside knowledge).",
+   "technical_idea": "Concatenation keeps head outputs in separate slices of the vector instead of averaging them together, so no information is mixed until the learned `output_dense` combines them.",
+   "terminology": [
+    {
+     "term": "Partition of the output vector",
+     "meaning": "The slice of the concatenated output that comes from one head: indices i·head_dim to (i+1)·head_dim − 1."
+    }
+   ],
+   "connections": [
+    "p.457: the 'I will bring the bag to you' / 'Te traeré la bolsa' example sentence."
+   ]
+  },
+  {
+   "ref": "p467_e07",
+   "excerpt": "Of course, in practice, you would want to write this code as",
+   "what_it_says": "In practice you would write this as a reusable layer, and Keras provides it: the code can be recreated with the `MultiHeadAttention` layer, shown next.",
+   "what_it_means": "`keras.layers.MultiHeadAttention` holds all the weights (query/key/value projections for all heads, as single einsum-dense layers, plus the output projection), handles scaling, masking and dropout, and computes all heads in parallel instead of in a Python loop.",
+   "why_it_matters": "From p.468 on, the book's Transformer blocks are built on this layer.",
+   "terminology": [
+    {
+     "term": "MultiHeadAttention",
+     "meaning": "Keras layer implementing multi-head scaled dot-product attention, called as `layer(query=…, value=…, key=…)`."
+    }
+   ],
+   "connections": [
+    "p.468: `keras.layers.MultiHeadAttention(num_heads=num_heads, head_dim=head_dim)` and its call."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "multi_head_attention",
+   "name": "Multi-head attention",
+   "definition": "Several attention operations (heads) run in parallel on the same inputs, each with its own learned projections. Their outputs are concatenated and linearly projected.",
+   "intuition": "A committee of readers, each looking for something different in the source, who then pool their notes side by side instead of averaging them into one opinion.",
+   "technical": "For $i = 1..h$: $\\text{head}_i = \\operatorname{softmax}(Q_iK_i^\\top/\\sqrt{d_h})V_i$ with $Q_i = QW_Q^{(i)}$ etc.; output $= [\\text{head}_1;\\dots;\\text{head}_h]W_O$.",
+   "significance": "The standard attention form in every Transformer encoder and decoder block (pp.469-471).",
+   "example": "8 heads × 32 dims = 256-dim output, matching the model width in Listing 15.16 (p.473).",
+   "misconception": "That more heads means proportionally more computation. With head_dim = model_dim / h, the total projection size is constant.",
+   "related": [
+    "attention",
+    "query_key_value",
+    "scaled_dot_product",
+    "self_attention"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "scaled_dot_product",
+   "name": "Scaling by 1/√head_dim",
+   "definition": "Dividing each head's scores by the square root of its vector size before the softmax.",
+   "intuition": "Normalizes away the growth of dot products with dimension.",
+   "technical": "`softmax(scores / math.sqrt(head_dim), axis=-1)`, since the vectors dotted inside a head have length head_dim.",
+   "significance": "First appearance in code of the refinement described on p.466.",
+   "example": "head_dim = 32 → divide by ≈ 5.66.",
+   "misconception": "That one should divide by √(model_dim). The relevant length is the per-head dimension.",
+   "related": [
+    "dot_product_attention",
+    "multi_head_attention"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "head_concatenation",
+   "name": "Concatenation + output projection",
+   "definition": "Stacking head outputs along the feature axis and mixing them with a final Dense layer.",
+   "intuition": "Keep each head's findings in its own column, then let a learned layer decide how to combine them.",
+   "technical": "`ops.concatenate(head_outputs, axis=-1)` gives shape (b, t, h·d_h). `output_dense` maps it to `head_dim * num_heads` in the pseudocode. Keras's layer maps back to the query's feature size by default.",
+   "significance": "Preserves head-specific information (figure 15.7's 'separate partitions') while still producing one vector per token.",
+   "example": "8 outputs of shape (64, 20, 32) → (64, 20, 256).",
+   "misconception": "That heads are averaged. They are concatenated.",
+   "related": [
+    "multi_head_attention"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "One attention head",
+   "latex": "\\text{head}_i = \\operatorname{softmax}\\!\\left(\\frac{(X_t W_Q^{(i)})(X_s W_K^{(i)})^{\\top}}{\\sqrt{d_h}}\\right) X_s W_V^{(i)}",
+   "source_text": "query = query_dense[i](query); key = key_dense[i](key); value = value_dense[i](value); scores = softmax(scores / math.sqrt(head_dim), axis=-1); head_output = np.einsum(\"bts,bsd->btd\", scores, …)",
+   "variables": [
+    {
+     "symbol": "X_t",
+     "meaning": "Target (query) sequence, shape (t, d_model) per example"
+    },
+    {
+     "symbol": "X_s",
+     "meaning": "Source (key/value) sequence, shape (s, d_model)"
+    },
+    {
+     "symbol": "W_Q^{(i)}, W_K^{(i)}, W_V^{(i)}",
+     "meaning": "Head i's projection matrices (query_dense[i], key_dense[i], value_dense[i]), each d_model × d_h"
+    },
+    {
+     "symbol": "d_h",
+     "meaning": "head_dim"
+    },
+    {
+     "symbol": "\\text{head}_i",
+     "meaning": "Head i's output, shape (t, d_h)"
+    }
+   ],
+   "operations": "Project, compute the t × s score matrix, scale, softmax per row, multiply by the projected values.",
+   "purpose": "Compute one 'view' of which source tokens matter to each target token.",
+   "interpretation": "Different $W^{(i)}$ give different relevance patterns, so different heads attend to different words.",
+   "intuition": "Each head asks its own question of the source.",
+   "numerical_example": "With d_h = 32, scores are divided by √32 ≈ 5.66. A raw score of 11.3 becomes 2.0.",
+   "source": "book",
+   "book_ref": "p.467 (as intended; the printed code uses `target`/`source` instead of the projections, see review flags)"
+  },
+  {
+   "id": "m2",
+   "title": "Combining heads",
+   "latex": "\\operatorname{MHA}(X_t, X_s) = \\big[\\text{head}_1 \\,\\Vert\\, \\text{head}_2 \\,\\Vert\\, \\cdots \\,\\Vert\\, \\text{head}_h\\big]\\, W_O + b_O",
+   "source_text": "outputs = ops.concatenate(head_outputs, axis=-1); return output_dense(outputs)",
+   "variables": [
+    {
+     "symbol": "\\Vert",
+     "meaning": "Concatenation along the feature axis"
+    },
+    {
+     "symbol": "h",
+     "meaning": "num_heads"
+    },
+    {
+     "symbol": "W_O, b_O",
+     "meaning": "output_dense weights, (h·d_h) × (h·d_h) in the pseudocode"
+    }
+   ],
+   "operations": "Concatenate h tensors of shape (t, d_h) into (t, h·d_h), then apply a Dense layer.",
+   "purpose": "Merge the heads' findings into one representation per token.",
+   "interpretation": "Each head owns a slice of the concatenated vector ('separate partitions', figure 15.7). $W_O$ learns how to mix them.",
+   "intuition": "Side-by-side reports, then an editor writes a combined summary.",
+   "numerical_example": "h = 8, d_h = 32: concatenated size 256; `output_dense` has 256·256 + 256 = 65,792 parameters.",
+   "source": "book",
+   "book_ref": "p.467"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Multi-head attention (pseudocode)",
+   "original_code": "query_dense = [layers.Dense(head_dim) for i in range(num_heads)]\nkey_dense = [layers.Dense(head_dim) for i in range(num_heads)]\nvalue_dense = [layers.Dense(head_dim) for i in range(num_heads)]\noutput_dense = layers.Dense(head_dim * num_heads)\n\ndef multi_head_attention(query, key, value):\n    head_outputs = []\n    for i in range(num_heads):\n        query = query_dense[i](query)\n        key = key_dense[i](key)\n        value = value_dense[i](value)\n        scores = np.einsum(\"btd,bsd->bts\", target, source)\n        scores = softmax(scores / math.sqrt(head_dim), axis=-1)\n        head_output = np.einsum(\"bts,bsd->btd\", scores, source)\n        head_outputs.append(head_output)\n    outputs = ops.concatenate(head_outputs, axis=-1)\n    return output_dense(outputs)\n\nmulti_head_attention(query=target, key=source, value=source)",
+   "language": "python",
+   "what_it_does": "Intends to run `num_heads` scaled dot-product attention heads, each with its own query/key/value Dense projections of size `head_dim`, concatenate their outputs and apply an output Dense layer. It is called as cross-attention from target to source.",
+   "line_explanations": [
+    {
+     "lines": "1-3",
+     "explanation": "Lists of `num_heads` independent Dense layers: separate parameters per head, which is the essence of multi-head attention."
+    },
+    {
+     "lines": "4",
+     "explanation": "Output projection whose size equals the concatenated width `head_dim * num_heads`."
+    },
+    {
+     "lines": "6-7",
+     "explanation": "The function collects one output per head."
+    },
+    {
+     "lines": "9-11",
+     "explanation": "Head i's projections. Bug: reassigning `query`, `key` and `value` means head 2 projects head 1's projected tensors, and so on. Separate names (`q`, `k`, `v`) are needed."
+    },
+    {
+     "lines": "12",
+     "explanation": "Bug: the score einsum uses the raw `target` and `source` (globals) instead of the projected query and key, so the projections are ignored. The intended code is `np.einsum(\"btd,bsd->bts\", query, key)`."
+    },
+    {
+     "lines": "13",
+     "explanation": "The √head_dim scaling from p.466, applied to the scores before the softmax over source positions."
+    },
+    {
+     "lines": "14",
+     "explanation": "Weighted sum. Bug: it uses `source` instead of the projected `value`. As printed, all heads compute the same thing."
+    },
+    {
+     "lines": "15",
+     "explanation": "Store this head's (b, t, head_dim) output."
+    },
+    {
+     "lines": "16",
+     "explanation": "Concatenate along the last axis to (b, t, num_heads·head_dim). Note the mix of `np` and Keras `ops`; this is pseudocode."
+    },
+    {
+     "lines": "17",
+     "explanation": "Final learned projection."
+    },
+    {
+     "lines": "19",
+     "explanation": "Cross-attention call: target queries, source keys and values."
+    }
+   ],
+   "inputs_outputs": "Inputs: query (b, t, d), key and value (b, s, d). Intended output: (b, t, num_heads·head_dim).",
+   "algorithm": "For each head: project Q, K, V → scaled scores → softmax → weighted sum. Then concatenate heads → Dense.",
+   "theory_link": "Implements $\\operatorname{Concat}(\\text{head}_1..\\text{head}_h)W_O$ from Vaswani et al. The per-head projections are what let heads specialize (subject vs. punctuation in the text).",
+   "parameters": [
+    {
+     "name": "num_heads",
+     "role": "Number of independent attention computations (8 in the book's Transformer, p.473)."
+    },
+    {
+     "name": "head_dim",
+     "role": "Size of each head's projected space and the √ scaling denominator."
+    },
+    {
+     "name": "axis=-1 (softmax)",
+     "role": "Normalize over source positions."
+    },
+    {
+     "name": "axis=-1 (concatenate)",
+     "role": "Place heads side by side in the feature axis."
+    }
+   ],
+   "pitfalls": [
+    "As printed, the einsums ignore the projections (`target`, `source` instead of `query`, `key`, `value`). Every head would be identical and parameter-free.",
+    "Reassigning `query`/`key`/`value` inside the loop chains the projections across heads. Use new variable names.",
+    "Looping over heads in Python is slow. Real layers compute all heads with one reshaped tensor (b, t, h, d_h) in a single einsum.",
+    "`output_dense` here outputs `head_dim * num_heads`. Keras's `MultiHeadAttention` by default projects back to the query's last dimension instead."
+   ],
+   "illustrative_code": "# AI-written corrected sketch (not from the book). Each head uses its *own*\n# projections of the original inputs, and the projected tensors are used in the einsums.\nimport math\nfrom keras import layers, ops\n\nnum_heads, head_dim = 8, 32\nquery_dense = [layers.Dense(head_dim) for _ in range(num_heads)]\nkey_dense = [layers.Dense(head_dim) for _ in range(num_heads)]\nvalue_dense = [layers.Dense(head_dim) for _ in range(num_heads)]\noutput_dense = layers.Dense(head_dim * num_heads)\n\ndef multi_head_attention(query, key, value):\n    head_outputs = []\n    for i in range(num_heads):\n        q = query_dense[i](query)          # (b, t, head_dim): new names, inputs untouched\n        k = key_dense[i](key)              # (b, s, head_dim)\n        v = value_dense[i](value)          # (b, s, head_dim)\n        scores = ops.einsum(\"btd,bsd->bts\", q, k)\n        scores = ops.softmax(scores / math.sqrt(head_dim), axis=-1)\n        head_outputs.append(ops.einsum(\"bts,bsd->btd\", scores, v))\n    outputs = ops.concatenate(head_outputs, axis=-1)   # (b, t, num_heads * head_dim)\n    return output_dense(outputs)\n\n# Real implementations do all heads at once: one Dense to num_heads*head_dim,\n# reshape to (b, t, num_heads, head_dim), and einsum \"bthd,bshd->bhts\"."
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why heads are cheap",
+   "kind": "numerical",
+   "body": "Compare one head of size 256 with 8 heads of size 32 on a 256-dim input:\n- Projections: one head uses 3 × 256 × 256 weights. Eight heads use 3 × 8 × (256 × 32) = 3 × 256 × 256, the same.\n- Score matrices: one head computes one t × s matrix with 256-long dot products. Eight heads compute 8 matrices with 32-long dot products, the same number of multiply-adds.\n- Output: 8 × 32 = 256, the same width.\n\nSo multi-head attention gives 8 different attention patterns per token at about the same cost as one. This is outside knowledge consistent with `key_dim = hidden_dim // num_heads` in Listing 15.14 (p.469).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Reading figure 15.7",
+   "kind": "breakdown",
+   "body": "The figure shows one target token, \"traeré\" (\"I will bring\"), and its attention over the English source. Two families of arrows (yellow and red) represent two heads. One head connects strongly to \"I\", \"will\" and \"bring\", the words whose meaning is fused into the single Spanish verb form. The other head points to \"the\", \"bag\" and \"to\", the object and its context. Faint arrows toward \"you\" show low weights. Each family's weighted sum lands in a different slice of the output vector for \"traeré\".",
+   "source": "inference"
+  },
+  {
+   "title": "A useful mental model",
+   "kind": "analogy",
+   "body": "A single head is like asking one person to read a document and summarize 'what's relevant' in one sentence. Multi-head is like asking eight specialists (grammar, names, dates, tone, …) each for a short note and stapling the notes together. The stapled notes keep distinctions a single blended summary would lose.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Data flow of multi-head attention",
+   "why": "Shows the structure of the pseudocode: per-head Dense projections, scaled dot-product attention in each head, concatenation and the output Dense.",
+   "mermaid": "flowchart LR\n  T[\"query = target (b,t,d)\"]\n  S[\"key = value = source (b,s,d)\"]\n  subgraph H1[\"head 1\"]\n    a1[\"Dense Q/K/V -> head_dim\"] --> b1[\"softmax(QK^T / sqrt(head_dim)) V\"]\n  end\n  subgraph H2[\"head 2\"]\n    a2[\"Dense Q/K/V -> head_dim\"] --> b2[\"softmax(QK^T / sqrt(head_dim)) V\"]\n  end\n  subgraph H3[\"head ... num_heads\"]\n    a3[\"Dense Q/K/V -> head_dim\"] --> b3[\"softmax(QK^T / sqrt(head_dim)) V\"]\n  end\n  T --> H1 & H2 & H3\n  S --> H1 & H2 & H3\n  H1 & H2 & H3 --> C[\"concatenate axis=-1 -> (b,t,num_heads*head_dim)\"]\n  C --> O[\"output_dense\"]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Shapes through one multi-head attention call",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "target (query)",
+      "shape": [
+       null,
+       20,
+       256
+      ]
+     },
+     {
+      "op": "query_dense[i]",
+      "shape": [
+       null,
+       20,
+       32
+      ]
+     },
+     {
+      "op": "scores per head (t x s)",
+      "shape": [
+       null,
+       20,
+       20
+      ]
+     },
+     {
+      "op": "head output",
+      "shape": [
+       null,
+       20,
+       32
+      ]
+     },
+     {
+      "op": "concat 8 heads",
+      "shape": [
+       null,
+       20,
+       256
+      ]
+     },
+     {
+      "op": "output_dense",
+      "shape": [
+       null,
+       20,
+       256
+      ]
+     }
+    ]
+   },
+   "why": "Traces the shapes for the configuration later used in the book's Transformer (8 heads × 32 = 256, p.469/p.473) with 20-token target and source sentences."
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Head outputs are averaged together.",
+   "correction": "They are concatenated along the feature axis, so each occupies its own partition, and then projected by `output_dense`."
+  },
+  {
+   "claim": "Each head is told what to attend to (subject, punctuation, …).",
+   "correction": "Roles emerge from training. The book's examples are what a head 'might learn'."
+  },
+  {
+   "claim": "The printed loop is correct runnable code.",
+   "correction": "It has two bugs: the einsums use `target`/`source` instead of the projected tensors, and the inputs are overwritten across heads. See the corrected illustrative code."
+  },
+  {
+   "claim": "Multi-head attention costs num_heads times more than single-head attention.",
+   "correction": "With head_dim = model_dim / num_heads, the parameter count and FLOPs are about the same as one full-width head."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 466,
+    "note": "Parameterized attention, the √d scaling, and the 'blunt summation' problem."
+   },
+   {
+    "page": 465,
+    "note": "Why queries, keys and values get learned projections."
+   },
+   {
+    "page": 457,
+    "note": "The 'I will bring the bag to you' / 'Te traeré la bolsa' sentence pair used in figure 15.7."
+   }
+  ],
+  "later": [
+   {
+    "page": 468,
+    "note": "`keras.layers.MultiHeadAttention`, cross-attention and self-attention."
+   },
+   {
+    "page": 469,
+    "note": "Transformer encoder block built with `MultiHeadAttention(num_heads, key_dim)`."
+   },
+   {
+    "page": 471,
+    "note": "Decoder block with self-attention and cross-attention."
+   },
+   {
+    "page": 473,
+    "note": "num_heads = 8 and hidden_dim = 256 in the full Transformer."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 466,
+    "note": "Single-head query/key/value attention."
+   },
+   {
+    "page": 463,
+    "note": "Einsum notation."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 466,
+    "note": "Scaled dot-product scores."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 466,
+    "note": "`parameterized_attention`."
+   },
+   {
+    "page": 468,
+    "note": "Keras `MultiHeadAttention` usage."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 466,
+    "note": "Figure 15.6 query/key/value retrieval analogy."
+   }
+  ]
+ },
+ "takeaways": [
+  "One softmax sum per token blurs ('washes out') features when attention is spread widely.",
+  "Multi-head attention runs several heads, each with its own Q/K/V projections into a smaller head_dim space.",
+  "Each head's scores are divided by √head_dim before the softmax.",
+  "Head outputs are concatenated (separate partitions, figure 15.7) and mixed by an output Dense layer.",
+  "The printed pseudocode has two bugs (unused projections, overwritten inputs). Keras's `MultiHeadAttention` implements the intended computation."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "How are the outputs of the different heads combined in multi-head attention?",
+   "options": [
+    "Concatenated along the feature axis, then passed through a Dense layer",
+    "Averaged element-wise",
+    "Summed and then softmax-normalized",
+    "Only the head with the highest score is kept"
+   ],
+   "answer": "Concatenated along the feature axis, then passed through a Dense layer",
+   "explanation": "`ops.concatenate(head_outputs, axis=-1)` followed by `output_dense`. Averaging or summing would bring back the washing-out problem, and nothing selects a single head.",
+   "page_refs": [
+    467
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "What problem do multiple heads solve, in the book's words?",
+   "options": [],
+   "answer": "When attending to too many tokens at once, the interesting features of individual source tokens get 'washed out' in the combined representation. Multiple heads avoid having to combine the entire source sequence with a single softmax sum.",
+   "explanation": "From e03 and e05.",
+   "page_refs": [
+    466,
+    467
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Find the bug on the `scores = np.einsum(...)` line of the printed pseudocode and explain its consequence.",
+   "options": [],
+   "answer": "It uses `target` and `source` instead of the projected `query` and `key` (and the weighted sum uses `source` instead of `value`). The learned projections are therefore never used, and every head computes the same unparameterized attention, so multiple heads would be pointless.",
+   "explanation": "The text says heads run 'the same computation with different parameters'. That only holds if the projected tensors are used.",
+   "page_refs": [
+    467
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "math",
+   "question": "With hidden size 256 split over 8 heads, what is head_dim, what is the scaling divisor, and what is the concatenated output width?",
+   "options": [],
+   "answer": "head_dim = 32; divisor = √32 ≈ 5.66; concatenated width = 8 × 32 = 256.",
+   "explanation": "Matches `key_dim = hidden_dim // num_heads` in Listing 15.14 (p.469) and the model in Listing 15.16 (p.473).",
+   "page_refs": [
+    467,
+    469,
+    473
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Why can one head learn to match the subject while another attends to punctuation?",
+   "options": [
+    "Each head has its own learned query and key projections",
+    "Each head sees a different part of the input sentence",
+    "Heads use different activation functions",
+    "Each head uses a different softmax temperature chosen by hand"
+   ],
+   "answer": "Each head has its own learned query and key projections",
+   "explanation": "'By projecting the query and key differently…' All heads see the whole sequence, there are no activation functions in attention, and the scaling is the same √head_dim for every head.",
+   "page_refs": [
+    467
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "In figure 15.7, what do the 'separate partitions of the eventual output vector' correspond to in the code?",
+   "options": [],
+   "answer": "The slices of the concatenated tensor contributed by each head: head i occupies features i·head_dim to (i+1)·head_dim − 1 before `output_dense` mixes them.",
+   "explanation": "Concatenation along axis -1 places head outputs side by side.",
+   "page_refs": [
+    467
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you rewrite the pseudocode correctly from memory and state every intermediate shape?",
+   "options": [],
+   "answer": "Self-check against the illustrative code: q,k,v = Dense_i(query/key/value) → (b,t,dh),(b,s,dh),(b,s,dh); scores (b,t,s); head (b,t,dh); concat (b,t,h·dh); Dense.",
+   "explanation": "Use new variable names inside the loop.",
+   "page_refs": [
+    467
+   ]
+  }
+ ]
+}

@@ -1,0 +1,445 @@
+{
+ "page_id": "page_459",
+ "pdf_page": 459,
+ "printed_page": "435",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:18:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "The inference paragraph (e07) says the decoder loop proceeds by 'sampling one new target token at each iteration', but Listing 15.13 on p.460 picks the token with `np.argmax` (greedy decoding), not by sampling from the distribution. The notes explain this as greedy decoding."
+  ],
+  "extraction_quality": "Good. e03 is the continuation of the summary table started on p.458; the `gru_2` 'Connected to' cell is truncated in the book itself (`bidirectional[0][…`). All parameter counts match the page image."
+ },
+ "overview": {
+  "title": "Model summary totals, training the seq2seq RNN, and why next-token accuracy misleads",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.2 Sequence-to-sequence learning",
+  "subsection": "15.2.2 Sequence-to-sequence learning with RNNs",
+  "main_topic": "The remaining layers and the 34.9M-parameter total of the RNN translator, compiling and fitting it with sparse categorical crossentropy and weighted accuracy, the meaning and limits of the 65% next-token accuracy, BLEU, and the plan for autoregressive inference",
+  "central_idea": "The RNN translator (about 35M parameters, 44% of them in the output Dense layer) reaches about 65% next-token validation accuracy. That metric is crude because it assumes all previous target tokens are correct (teacher forcing), whereas real translation generates from scratch. Proper MT evaluation uses metrics like BLEU against reference translations. Inference feeds `[start]` plus the encoded source to the decoder and re-injects each predicted token until `[end]` or the maximum length.",
+  "importance": "This page links the training objective to real-world evaluation. It explains why a high training metric does not guarantee good translations, which is a recurring theme, and it sets up the generation loop of Listing 15.13 on p.460.",
+  "learning_objectives": [
+   "Read the rest of the summary and verify the Bidirectional, GRU and Dense parameter counts",
+   "Explain the choice of `sparse_categorical_crossentropy` and of `weighted_metrics` instead of `metrics`",
+   "Interpret '65% accuracy' precisely as weighted, teacher-forced next-token accuracy",
+   "Explain why next-token accuracy overstates translation quality (exposure to one's own errors at inference)",
+   "Describe what BLEU measures and why it tolerates misaligned sequences",
+   "Outline the autoregressive inference procedure"
+  ],
+  "prerequisites": [
+   "Listings 15.10-15.12 (pp.456-458)",
+   "Crossentropy loss for integer labels",
+   "Sample weights as a padding mask (p.456)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The top of the page finishes `seq2seq_rnn.summary()`:\n- `embedding_2` (Spanish Embedding): `(None, None, 256)`, **3,840,000** params.\n- `bidirectional`: `(None, 1024)`, **7,876,608** params, connected to `embedding_1` and the `not_equal` mask.\n- `gru_2` (decoder GRU): `(None, None, 1024)`, **3,938,304** params, connected to `embedding_2` and `bidirectional` (as initial state).\n- `dropout_1`: 0 params.\n- `dense_1`: `(None, None, 15000)`, **15,375,000** params.\n- **Total 34,869,912 params (133.02 MB)**, all trainable.\n\nTraining is then a single `compile` + `fit`: `optimizer=\"adam\"`, `loss=\"sparse_categorical_crossentropy\"` (integer labels against a softmax over 15,000 tokens), and `weighted_metrics=[\"accuracy\"]`, so the accuracy respects the padding sample weights from p.456. The model is trained for 15 epochs on `train_ds`, validated on `val_ds`.\n\nThe authors call accuracy \"a crude way to monitor validation set performance\". The model reaches **65%**: on average it correctly predicts the next Spanish word 65% of the time. Next-token accuracy is a poor MT metric, though, because it *assumes the correct target tokens 0 to N are already known* when predicting token N + 1. At inference you generate from scratch, and earlier generated tokens may be wrong. Real MT systems need carefully designed metrics, such as **BLEU**, which measures similarity between the machine output and a set of high-quality reference translations and tolerates slightly misaligned sequences.\n\nFinally, the authors describe inference. Pick test sentences, start the decoder with the seed token `\"[start]\"` and the encoded English sentence, get a next-token prediction, and re-inject it into the decoder repeatedly, one new token per iteration, until `\"[end]\"` appears or the maximum sentence length is reached. The code is Listing 15.13 on p.460.",
+ "paragraphs": [
+  {
+   "ref": "p459_e03",
+   "excerpt": "embedding_2 │ (None, None, 256) │ 3,840,000 │ spanish[0][0]",
+   "what_it_says": "The remaining summary rows: Spanish embedding 3,840,000; Bidirectional GRU 7,876,608; decoder GRU 3,938,304; dropout 0; Dense 15,375,000. Total 34,869,912 parameters (133.02 MB), all trainable.",
+   "what_it_means": "The Bidirectional layer has exactly twice the decoder GRU's parameters (two directions, same input size 256 and units 1024). The output Dense layer alone is 44% of the model, because each of 15,000 output tokens needs a 1,024-weight row plus a bias. 133.02 MB is 34,869,912 float32 values × 4 bytes, expressed in MiB.",
+   "why_it_matters": "Reading parameter counts tells you where capacity and cost sit. Here they sit in the vocabulary-sized layers (two embeddings plus the output, 23M of 35M), not in the recurrent 'reasoning' part. The 'Connected to' column confirms that `gru_2` receives the `bidirectional` output (as its initial state).",
+   "technical_idea": "GRU params (Keras, reset_after=True) = $3[u(d+u)+2u]$ = 3 × (1024 × 1280 + 2048) = 3,938,304.",
+   "terminology": [
+    {"term": "Trainable params", "meaning": "Weights updated by the optimizer; here all of them."}
+   ],
+   "connections": [
+    "p.458: first part of the summary (inputs, embedding_1, not_equal)"
+   ]
+  },
+  {
+   "ref": "p459_e04",
+   "excerpt": "Our model and data are both ready. We can now begin training",
+   "what_it_says": "This introduces the compile/fit call: Adam, sparse categorical crossentropy, weighted accuracy, 15 epochs with validation on `val_ds`.",
+   "what_it_means": "Because the dataset yields `(inputs, labels, sample_weights)`, `fit` automatically applies the weights to the loss. Listing accuracy under `weighted_metrics` makes the metric use them too.",
+   "why_it_matters": "Using `metrics=[\"accuracy\"]` instead would count padding positions and report a misleadingly high number.",
+   "terminology": [
+    {"term": "sparse_categorical_crossentropy", "meaning": "Crossentropy for integer class labels, avoiding one-hot vectors of size 15,000."},
+    {"term": "weighted_metrics", "meaning": "Metrics that take the sample_weight into account."}
+   ],
+   "connections": [
+    "p.456: `sample_weights = labels != 0`"
+   ]
+  },
+  {
+   "ref": "p459_e06",
+   "excerpt": "We picked accuracy as a crude way to monitor validation set performance",
+   "what_it_says": "Accuracy is a crude monitor. The model reaches 65%, meaning it predicts the next Spanish word correctly 65% of the time on average. Next-token accuracy is a poor MT metric because it assumes target tokens 0 to N are correct when predicting N + 1, whereas inference generates from scratch and previous tokens may be wrong. Real MT systems need carefully designed metrics such as BLEU, which compares output against high-quality references and tolerates slightly misaligned sequences.",
+   "what_it_means": "The 65% is teacher-forced: every prediction is made from a perfect prefix. In free generation (p.460), one wrong word changes the decoder's input for every later step, and errors compound. Also, a translation can be correct yet differ from the reference word for word (\"te lo diré mañana\" against \"mañana te lo digo\"), and next-token accuracy would score it badly. BLEU's n-gram overlap is more forgiving of such shifts.",
+   "why_it_matters": "It distinguishes the training proxy from the real objective, a lesson that applies to all generative models in chapters 15-16. It also explains why the sample outputs on p.460 contain clear errors despite '65% accuracy'.",
+   "technical_idea": "Training measures $\\mathbb{E}[\\,[\\arg\\max p(\\cdot\\mid y^{*}_{\\le N}, x) = y^{*}_{N+1}]\\,]$ with ground-truth prefixes $y^{*}$. Inference conditions on the model's own prefixes $\\hat y_{\\le N}$, a distribution shift often called exposure bias.",
+   "terminology": [
+    {"term": "next-token accuracy", "meaning": "Fraction of target positions where the argmax prediction equals the true next token, given the true prefix."},
+    {"term": "BLEU score", "meaning": "A standard MT metric based on n-gram overlap between candidate and reference translations, with a brevity penalty."},
+    {"term": "reference translations", "meaning": "Human, high-quality translations used as the gold standard for scoring."}
+   ],
+   "connections": [
+    "p.460: actual generated translations with mistakes",
+    "p.456: why accuracy is weighted"
+   ]
+  },
+  {
+   "ref": "p459_e07",
+   "excerpt": "At last, let’s use our model for inference. We’ll pick a few",
+   "what_it_says": "For inference: pick test sentences, start from the seed token `\"[start]\"`, feed it to the decoder along with the encoded English sentence, get a next-token prediction, re-inject it repeatedly, sampling one new target token per iteration, until `\"[end]\"` or the maximum sentence length.",
+   "what_it_means": "This is autoregressive generation, the same loop as the Shakespeare generator (p.450) but conditioned on a source sentence. Listing 15.13 (p.460) picks the most likely token with `argmax` at each step (greedy decoding) rather than drawing a random sample.",
+   "why_it_matters": "This loop is where the teacher-forcing gap shows up: each step's input is the model's own previous output.",
+   "terminology": [
+    {"term": "seed token", "meaning": "The first decoder input, `[start]`, that kicks off generation."},
+    {"term": "autoregressive decoding", "meaning": "Generating one token at a time, feeding each output back in as the next input."}
+   ],
+   "connections": [
+    "p.453: the inference procedure described generically for figure 15.1",
+    "p.460: Listing 15.13 implements it",
+    "p.461: the inefficiency of recomputing everything each step"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "next_token_accuracy",
+   "name": "Next-token (teacher-forced) accuracy",
+   "definition": "The share of non-padding target positions where the model's top prediction equals the true next token, given the true previous tokens.",
+   "intuition": "It is like a quiz where you're always shown the correct previous words and asked only for the next one.",
+   "technical": "Computed by Keras `accuracy` with sample weights. The model gets 65% on validation.",
+   "significance": "It is convenient during training but optimistic for real translation, where prefixes come from the model itself.",
+   "example": "Predicting `sabes` after the true prefix `[start] tú lo` counts as correct even if, in free generation, the model would have produced `[start] yo` and gone astray.",
+   "misconception": "That '65% accuracy' means 65% of sentences are translated correctly. It is per token, under perfect prefixes.",
+   "related": ["teacher_forcing", "bleu"],
+   "source": "book"
+  },
+  {
+   "id": "exposure_bias",
+   "name": "Train/inference mismatch (exposure bias)",
+   "definition": "During training the decoder sees ground-truth prefixes. At inference it sees its own, possibly wrong, outputs.",
+   "intuition": "It is like practicing a speech with a prompter who corrects every slip, then delivering it alone.",
+   "technical": "Training conditions on $y^{*}_{\\le t}$ while inference conditions on $\\hat y_{\\le t}$. Errors can compound along the sequence.",
+   "significance": "It is the book's main reason why next-token accuracy is a poor proxy for MT quality.",
+   "example": "On p.460, \"The prisoner was set free yesterday\" becomes \"el plan fue ayer a un atasco\": once a wrong word appears, the rest follows it.",
+   "misconception": "That a model trained to 65% token accuracy will get roughly 65% of each generated sentence right. Compounding errors can make free generation much worse.",
+   "related": ["teacher_forcing", "next_token_accuracy"],
+   "source": "inference"
+  },
+  {
+   "id": "bleu",
+   "name": "BLEU score",
+   "definition": "A machine-translation metric that measures n-gram overlap between a candidate translation and one or more reference translations.",
+   "intuition": "It counts how many word chunks of the output also appear in good human translations.",
+   "technical": "Beyond the book: the geometric mean of clipped n-gram precisions (n = 1..4) times a brevity penalty for outputs shorter than the references.",
+   "significance": "The book names it as a standard metric that 'can tolerate slightly misaligned sequences', unlike position-wise accuracy.",
+   "example": "Candidate \"te lo diré mañana\" against reference \"mañana te lo diré\" shares all unigrams and the bigrams \"te lo\" and \"lo diré\", despite the shift.",
+   "misconception": "That BLEU measures meaning. It measures surface overlap, so a correct paraphrase can still score low.",
+   "related": ["next_token_accuracy"],
+   "source": "book"
+  },
+  {
+   "id": "cross_entropy",
+   "name": "Sparse categorical crossentropy",
+   "definition": "Negative log-probability of the true class, with integer labels.",
+   "intuition": "It punishes the model for putting low probability on the correct next word.",
+   "technical": "$-\\log p_{b,t}(y_{b,t})$ per position, weighted by the padding mask.",
+   "significance": "It is the training loss for the 15,000-way next-token classification.",
+   "example": "If the model gives the correct token probability 0.25, the loss is −ln 0.25 ≈ 1.386.",
+   "misconception": "That labels must be one-hot. The 'sparse' variant takes integer ids directly.",
+   "related": ["softmax", "loss_function"],
+   "source": "book"
+  },
+  {
+   "id": "parameter_counting",
+   "name": "Parameter budget of the RNN translator",
+   "definition": "The breakdown of the 34,869,912 parameters across layers.",
+   "intuition": "Most of the model is lookup tables and the output projection, not recurrence.",
+   "technical": "Embeddings 2 × 3.84M, Bidirectional GRU 7.88M, decoder GRU 3.94M, Dense 15.38M.",
+   "significance": "Vocabulary size drives model size. Halving the vocabulary would remove about 11.5M parameters.",
+   "example": "15,375,000 / 34,869,912 ≈ 44% for the output layer.",
+   "misconception": "That bigger recurrent layers are where most parameters live. Here the vocabulary-sized layers dominate.",
+   "related": ["embedding", "gru", "dense_layer"],
+   "source": "inference"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "GRU and Bidirectional GRU parameter counts",
+   "latex": "\\begin{aligned} P_{\\mathrm{GRU}} &= 3\\bigl[u(d+u) + 2u\\bigr] = 3\\bigl[1024\\cdot(256+1024) + 2048\\bigr] = 3{,}938{,}304 \\\\ P_{\\mathrm{BiGRU}} &= 2\\,P_{\\mathrm{GRU}} = 7{,}876{,}608 \\end{aligned}",
+   "source_text": "bidirectional (Bidirectional) │ (None, 1024) │ 7,876,608 ... gru_2 (GRU) │ (None, None, 1024) │ 3,938,304",
+   "variables": [
+    {"symbol": "u", "meaning": "GRU units, hidden_dim = 1024"},
+    {"symbol": "d", "meaning": "Input dimension, embed_dim = 256"},
+    {"symbol": "3", "meaning": "Number of weight groups: update gate, reset gate, candidate state"},
+    {"symbol": "2u", "meaning": "Two bias vectors per group (Keras default reset_after=True)"}
+   ],
+   "operations": "For each of 3 groups: input kernel d×u, recurrent kernel u×u, and 2u biases.",
+   "purpose": "Verify the summary's numbers and see that the Bidirectional layer is two independent GRUs.",
+   "interpretation": "The counts match the book exactly, which confirms the Keras GRU uses two bias vectors per gate.",
+   "intuition": "Each gate is a small dense layer over [input, previous state].",
+   "numerical_example": "1024 × 1280 = 1,310,720; + 2,048 = 1,312,768; × 3 = 3,938,304; × 2 = 7,876,608.",
+   "source": "ai_explanation",
+   "book_ref": "p.459"
+  },
+  {
+   "id": "m2",
+   "title": "Output layer and total parameters",
+   "latex": "\\begin{aligned} P_{\\mathrm{Dense}} &= 1024 \\times 15000 + 15000 = 15{,}375{,}000 \\\\ P_{\\mathrm{total}} &= 2(3{,}840{,}000) + 7{,}876{,}608 + 3{,}938{,}304 + 15{,}375{,}000 = 34{,}869{,}912 \\\\ \\text{memory} &= 34{,}869{,}912 \\times 4\\,\\text{B} / 2^{20} \\approx 133.02\\,\\text{MB} \\end{aligned}",
+   "source_text": "dense_1 (Dense) │ (None, None, 15000) │ 15,375,000 ... Total params: 34,869,912 (133.02 MB)",
+   "variables": [
+    {"symbol": "1024", "meaning": "Decoder GRU output size"},
+    {"symbol": "15000", "meaning": "Spanish vocabulary size"},
+    {"symbol": "4 B", "meaning": "Bytes per float32 weight"}
+   ],
+   "operations": "Sum of all layer parameter counts, converted to mebibytes.",
+   "purpose": "Explains the totals printed in the summary.",
+   "interpretation": "The 'MB' figure is binary megabytes (MiB) of float32 storage.",
+   "intuition": "Each parameter is 4 bytes, so 35M parameters come to about 133 MiB.",
+   "numerical_example": "139,479,648 bytes / 1,048,576 ≈ 133.02.",
+   "source": "ai_explanation",
+   "book_ref": "p.459"
+  },
+  {
+   "id": "m3",
+   "title": "Teacher-forced next-token accuracy versus generation",
+   "latex": "\\text{acc}_{\\text{train}} = \\Pr\\bigl[\\arg\\max_y p(y\\mid y^{*}_{0:N}, x) = y^{*}_{N+1}\\bigr] \\quad\\text{vs.}\\quad \\hat y_{N+1} = \\arg\\max_y p(y\\mid \\hat y_{0:N}, x)",
+   "source_text": "it makes the assumption that the correct target tokens from 0 to N are already known when predicting token N + 1",
+   "variables": [
+    {"symbol": "y^{*}_{0:N}", "meaning": "Ground-truth target tokens 0..N"},
+    {"symbol": "\\hat y_{0:N}", "meaning": "The model's own previously generated tokens"},
+    {"symbol": "x", "meaning": "The source (English) sentence"}
+   ],
+   "operations": "The same model, conditioned on different prefixes.",
+   "purpose": "Makes precise why the 65% figure is optimistic.",
+   "interpretation": "The training metric never sees the model's own mistakes, while inference is built entirely on them.",
+   "intuition": "Grading with the answer key in hand versus answering in sequence on your own.",
+   "numerical_example": "Illustrative: if each step were independently correct with probability 0.65, a fully correct 5-token output would have probability 0.65^5 ≈ 0.116. Real errors are not independent, but this shows how per-token accuracy and whole-sentence accuracy diverge.",
+   "source": "ai_explanation",
+   "book_ref": "p.459"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "seq2seq_rnn.summary() (continued from p.458)",
+   "original_code": "├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ embedding_2           │ (None, None, 256) │   3,840,000 │ spanish[0][0]      │\n│ (Embedding)           │                   │             │                    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ bidirectional         │ (None, 1024)      │   7,876,608 │ embedding_1[0][0], │\n│ (Bidirectional)       │                   │             │ not_equal[0][0]    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ gru_2 (GRU)           │ (None, None,      │   3,938,304 │ embedding_2[0][0], │\n│                       │ 1024)             │             │ bidirectional[0][… │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ dropout_1 (Dropout)   │ (None, None,      │           0 │ gru_2[0][0]        │\n│                       │ 1024)             │             │                    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ dense_1 (Dense)       │ (None, None,      │  15,375,000 │ dropout_1[0][0]    │\n│                       │ 15000)            │             │                    │\n└───────────────────────┴───────────────────┴─────────────┴────────────────────┘\n Total params: 34,869,912 (133.02 MB)\n Trainable params: 34,869,912 (133.02 MB)\n Non-trainable params: 0 (0.00 B)",
+   "language": "text",
+   "what_it_does": "The second half of the model summary begun on p.458 (whose rows cover the two inputs, embedding_1 and not_equal): the Spanish embedding, the encoder, the decoder, dropout, the output layer and the totals.",
+   "line_explanations": [
+    {"lines": "2-3", "explanation": "Spanish embedding, 15,000 × 256 = 3,840,000, fed by the `spanish` input."},
+    {"lines": "5-6", "explanation": "Bidirectional GRU encoder: output `(None, 1024)` (summed directions), inputs are the English embeddings plus the padding mask."},
+    {"lines": "8-9", "explanation": "Decoder GRU: per-step outputs `(None, None, 1024)`, inputs are the Spanish embeddings and the encoder output (as initial state; the cell is truncated with '…' in the book)."},
+    {"lines": "11-12", "explanation": "Dropout has no parameters."},
+    {"lines": "14-15", "explanation": "Output Dense: 1024 × 15000 + 15000 = 15,375,000."},
+    {"lines": "17-19", "explanation": "Totals: 34,869,912 parameters, about 133 MiB in float32, all trainable."}
+   ],
+   "inputs_outputs": "Printed table.",
+   "algorithm": "n/a",
+   "theory_link": "Confirms the encoder-decoder wiring of figure 15.2: the only edge from the English branch into the Spanish branch is `bidirectional → gru_2`.",
+   "parameters": [],
+   "pitfalls": [
+    "Layer name suffixes (`_1`, `_2`) depend on what was created earlier in the session."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Compiling and training the seq2seq RNN",
+   "original_code": "seq2seq_rnn.compile(\n    optimizer=\"adam\",\n    loss=\"sparse_categorical_crossentropy\",\n    weighted_metrics=[\"accuracy\"],\n)\nseq2seq_rnn.fit(train_ds, epochs=15, validation_data=val_ds)",
+   "language": "python",
+   "what_it_does": "Configures Adam, integer-label crossentropy and sample-weighted accuracy, then trains for 15 epochs with validation.",
+   "line_explanations": [
+    {"lines": "2", "explanation": "Adam with default settings."},
+    {"lines": "3", "explanation": "Integer labels `(batch, 20)` against probabilities `(batch, 20, 15000)`, with a crossentropy term per position."},
+    {"lines": "4", "explanation": "Accuracy weighted by the dataset's sample weights, so padding positions are ignored."},
+    {"lines": "6", "explanation": "The datasets yield `(x_dict, y, sample_weight)`. Keras routes the dict entries by input name and applies the weights."}
+   ],
+   "inputs_outputs": "Input: `train_ds`, `val_ds` from p.456. Output: a trained model and a History object; validation accuracy reaches about 65% per the book.",
+   "algorithm": "Mini-batch gradient descent with Adam on a masked next-token crossentropy (teacher forcing).",
+   "theory_link": "Maximum-likelihood training of the conditional language model $p(y_{t+1}\\mid y_{\\le t}, x)$.",
+   "parameters": [
+    {"name": "optimizer", "role": "Adam (default learning rate)."},
+    {"name": "weighted_metrics", "role": "Makes the metric respect sample weights."},
+    {"name": "epochs=15", "role": "Number of passes over the training data."}
+   ],
+   "pitfalls": [
+    "Putting accuracy in `metrics=` instead of `weighted_metrics=` would include padding and inflate accuracy.",
+    "Validation accuracy is teacher-forced and does not measure free-running translation quality.",
+    "No callbacks (early stopping, checkpointing) are used, so the final epoch's weights are kept even if validation loss has started to rise."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Where the 35M parameters live",
+   "kind": "numerical",
+   "body": "| Component | Params | Share |\n|---|---|---|\n| English embedding | 3,840,000 | 11.0% |\n| Spanish embedding | 3,840,000 | 11.0% |\n| Bidirectional GRU encoder | 7,876,608 | 22.6% |\n| Decoder GRU | 3,938,304 | 11.3% |\n| Output Dense | 15,375,000 | 44.1% |\n| **Total** | **34,869,912** | 100% |\n\nThe three vocabulary-sized layers account for about 66% of the model. (Shares computed from the summary; not stated in the book.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why BLEU tolerates misalignment and accuracy doesn't",
+   "kind": "breakdown",
+   "body": "Position-wise accuracy compares token t of the output with token t of the reference. Insert one extra word near the start and every following token is 'wrong'. BLEU instead counts matching n-grams anywhere in the sentence (with clipping so repeats are not over-counted) and adds a brevity penalty so that very short outputs cannot cheat. A shifted but correct phrase therefore still earns most of its n-gram credit. This is the property the book describes as tolerating 'slightly misaligned sequences'. Beyond the book: BLEU is usually computed at corpus level, with n-grams up to length 4.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Greedy decoding versus sampling",
+   "kind": "alternative",
+   "body": "The text says the loop samples one new token per iteration. The code on p.460 actually takes `np.argmax`, which is **greedy decoding**: always pick the single most likely next token. Sampling (drawing from the softmax, perhaps with a temperature, as in the Shakespeare generator) gives more diverse output. Beam search keeps the k best partial translations, and it is the classic choice for MT because it usually finds higher-probability sentences than greedy decoding does. Beam search is not in this part of the book.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Parameter count per layer of seq2seq_rnn",
+   "why": "Plots the Param # column of the summary on pp.458-459 to show that the output Dense layer dominates.",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": ["embedding_1 (EN)", "embedding_2 (ES)", "bidirectional GRU", "gru_2 (decoder)", "dense_1 (output)"],
+     "datasets": [{"label": "Parameters", "data": [3840000, 3840000, 7876608, 3938304, 15375000]}]
+    },
+    "options": {
+     "indexAxis": "y",
+     "plugins": {"legend": {"display": false}, "title": {"display": true, "text": "Total 34,869,912 parameters"}},
+     "scales": {"x": {"title": {"display": true, "text": "parameters"}}}
+    }
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "Autoregressive inference loop described on this page",
+   "why": "Diagrams the e07 paragraph: seed with [start], predict, re-inject, stop at [end] or max length.",
+   "mermaid": "flowchart TD\n  A[\"English test sentence\"] --> E[\"Encode with encoder\"]\n  S[\"decoded = '[start]'\"] --> D\n  E --> D[\"Decoder predicts next-token distribution\"]\n  D --> P[\"pick next token\"]\n  P --> C{\"token == '[end]' or max length?\"}\n  C -- no --> R[\"append token to decoded\"] --> D\n  C -- yes --> O[\"output translation\"]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "65% accuracy means 65% of test sentences are translated correctly.",
+   "correction": "It is per-token accuracy on non-padding positions, with ground-truth previous tokens supplied. Full-sentence correctness in free generation is much lower."
+  },
+  {
+   "claim": "If next-token accuracy goes up, translation quality must go up proportionally.",
+   "correction": "The two are correlated, but next-token accuracy ignores error compounding at inference and penalizes valid rephrasings. The book recommends metrics like BLEU for real systems."
+  },
+  {
+   "claim": "Most of the model's parameters are in the recurrent layers.",
+   "correction": "The output Dense layer alone has 15.4M of 34.9M parameters, and the embeddings another 7.7M."
+  },
+  {
+   "claim": "`metrics=[\"accuracy\"]` and `weighted_metrics=[\"accuracy\"]` behave the same when the dataset provides sample weights.",
+   "correction": "Only weighted metrics use the sample weights. Plain metrics would count padding positions."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 458, "note": "Listings 15.11-15.12 and the first rows of this summary."},
+   {"page": 456, "note": "`sample_weights = labels != 0`, which makes `weighted_metrics` meaningful."},
+   {"page": 453, "note": "The generic inference procedure: seed token, loop until a stop token."},
+   {"page": 450, "note": "The Shakespeare generator's autoregressive loop."}
+  ],
+  "later": [
+   {"page": 460, "note": "Listing 15.13 implements the inference loop; sample translations show the errors."},
+   {"page": 461, "note": "Inefficiency of the loop and fundamental limits of RNN seq2seq."},
+   {"page": 472, "note": "The Transformer seq2seq model is trained with the same setup for comparison."}
+  ],
+  "prerequisites": [
+   {"page": 456, "note": "Data pipeline and masking."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 460, "note": "generate_translation()"}
+  ],
+  "related_figures": [
+   {"page": 457, "note": "Figure 15.2, the architecture being trained."}
+  ]
+ },
+ "takeaways": [
+  "The RNN translator has 34,869,912 parameters (133.02 MB); the output Dense layer alone has 15,375,000.",
+  "Training: Adam + sparse categorical crossentropy + `weighted_metrics=[\"accuracy\"]`, 15 epochs.",
+  "About 65% next-token validation accuracy is a crude, teacher-forced measure.",
+  "Next-token accuracy assumes correct prefixes; real inference builds on the model's own guesses.",
+  "Real MT evaluation uses metrics like BLEU that compare against reference translations and tolerate misalignment.",
+  "Inference: seed with `[start]` and the encoded source, re-inject predictions until `[end]` or the maximum length."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Which layer contributes the most parameters to `seq2seq_rnn`?",
+   "options": [
+    "The Bidirectional GRU encoder",
+    "The decoder GRU",
+    "The output Dense layer",
+    "The English Embedding layer"
+   ],
+   "answer": "The output Dense layer",
+   "explanation": "The Dense layer has 15,375,000 parameters, compared with 7,876,608 for the Bidirectional GRU, 3,938,304 for the decoder GRU and 3,840,000 for each embedding. Its size comes from the 15,000-token vocabulary times the 1,024-d input.",
+   "page_refs": [459]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Show that the Bidirectional encoder's 7,876,608 parameters are exactly twice the decoder GRU's count, using GRU units 1,024 and input dimension 256.",
+   "options": [],
+   "answer": "One GRU: 3 × (1024 × (256 + 1024) + 2 × 1024) = 3 × 1,312,768 = 3,938,304. A Bidirectional layer has two independent GRUs: 2 × 3,938,304 = 7,876,608.",
+   "explanation": "Keras GRUs have, per gate group, an input kernel, a recurrent kernel and two bias vectors (reset_after=True). The decoder GRU also takes 256-d embeddings, so its count matches one direction.",
+   "page_refs": [459, 458]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "According to the authors, why is next-token accuracy not a great metric for machine translation?",
+   "options": [],
+   "answer": "It assumes the correct target tokens 0 to N are known when predicting token N + 1. At inference the model generates from scratch, and its previous tokens may be wrong, so the metric does not reflect real generation quality.",
+   "explanation": "This is stated directly in e06. BLEU against reference translations is offered as a better, standard alternative.",
+   "page_refs": [459]
+  },
+  {
+   "id": "q4",
+   "type": "short",
+   "question": "Why does the compile call use `weighted_metrics=[\"accuracy\"]` rather than `metrics=[\"accuracy\"]`?",
+   "options": [],
+   "answer": "The dataset provides sample weights that zero out padding positions, and only weighted metrics use them. Plain metrics would count padding predictions and inflate accuracy.",
+   "explanation": "See `sample_weights = labels != 0` on p.456.",
+   "page_refs": [459, 456]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "What property of BLEU does the book highlight?",
+   "options": [
+    "It is differentiable and can be used as a training loss",
+    "It measures similarity to high-quality reference translations and tolerates slightly misaligned sequences",
+    "It counts only exact sentence matches",
+    "It requires no reference translations"
+   ],
+   "answer": "It measures similarity to high-quality reference translations and tolerates slightly misaligned sequences",
+   "explanation": "This paraphrases the page. BLEU is not differentiable in its standard form, it rewards partial (n-gram) matches rather than only exact sentences, and it needs references.",
+   "page_refs": [459]
+  },
+  {
+   "id": "q6",
+   "type": "math",
+   "question": "Verify that 34,869,912 float32 parameters occupy about 133.02 MB as printed.",
+   "options": [],
+   "answer": "34,869,912 × 4 bytes = 139,479,648 bytes; ÷ 1,048,576 ≈ 133.02 MiB.",
+   "explanation": "Keras reports sizes in binary megabytes. Each float32 weight is 4 bytes.",
+   "page_refs": [459]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Describe the inference loop in your own words: what goes into the decoder at the first step, what happens to each prediction, and when does it stop?",
+   "options": [],
+   "answer": "First step: the `[start]` token plus the encoded English sentence. Each predicted token is appended to the decoded sequence and fed back in. The loop stops at `[end]` or at the maximum sentence length.",
+   "explanation": "Compare with e07 and Listing 15.13 on p.460.",
+   "page_refs": [459, 460]
+  }
+ ]
+}

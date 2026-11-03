@@ -1,0 +1,491 @@
+{
+ "page_id": "page_546",
+ "pdf_page": 546,
+ "printed_page": "522",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T09:50:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. The numbered list of three stages was split: e07 holds the start of item 1, and e08 holds the rest of the list plus the following paragraph and the 'Let's assemble the model' line. Figure 17.9 was read from the page image. The code block (start of residual_block) continues on p.547."
+ },
+ "overview": {
+  "title": "The U-Net denoiser: noise-rate input, noise-mask output, three stages",
+  "chapter": "17 Image generation",
+  "section": "17.2 Diffusion models",
+  "subsection": "17.2.2 A U-Net denoising autoencoder",
+  "main_topic": "What the denoising model takes in (noisy image plus noise rate) and outputs (a predicted noise mask), the U-Net architecture of Figure 17.9 with its downsampling, middle and upsampling stages and concatenative skip connections, and the start of the residual_block helper.",
+  "central_idea": "The denoiser is a U-Net that receives the noisy image and its noise rate, and outputs the noise to subtract. Its encoder-decoder shape with skip connections lets it reason globally at 16 × 16 while keeping pixel-level detail at 128 × 128.",
+  "importance": "This page defines the network at the heart of the diffusion model. Predicting noise instead of the clean image, and the U-Net's skip connections, are design choices found in essentially all modern image diffusion models.",
+  "learning_objectives": [
+   "Explain the role of the noise_rates input and why the model outputs a noise mask rather than a denoised image.",
+   "Describe the three stages of the U-Net in Figure 17.9 and the resolutions involved (128 × 128 down to 16 × 16 and back).",
+   "Explain what the concatenative skip connections do and why they preserve image detail.",
+   "Read the first lines of residual_block: the conditional 1 × 1 projection and the non-affine BatchNormalization."
+  ],
+  "prerequisites": [
+   "Convolution and pooling layers (chapter 8)",
+   "Residual connections and batch normalization (chapter 9)",
+   "Image segmentation and U-Net-like encoder-decoder models (chapter 11, p.336)",
+   "The Keras Functional API"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The sentence from p.545 finishes: the denoiser is told how much noise it should extract, through the **`noise_rates` input**. Rather than outputting a denoised image, the model outputs a **predicted noise mask**, which can be **subtracted from the input** to denoise it.\n\nThe denoiser is a **U-Net**, a kind of ConvNet originally developed for image segmentation. Figure 17.9 shows it: a noise rate and a 128 × 128 image enter a **Concat** node; three blocks form the **downsampling stage**, which reaches a **16 × 16 feature map**; a **middle stage** keeps that size; three blocks form the **upsampling stage**, which returns to a **128 × 128 image**. Long arrows link each downsampling block to its mirror upsampling block through **Concat** nodes.\n\nThe text spells out the stages: (1) downsampling with several blocks of convolution layers, from 128 × 128 to 16 × 16; (2) a middle stage at constant size; (3) upsampling back to 128 × 128. Each upsampling block is the inverse of a downsampling block (a 1:1 mapping). **Concatenative residual connections** run from each downsampling block to its corresponding upsampling block and help avoid loss of image detail across the successive downsampling and upsampling operations.\n\nThe model is assembled with the **Functional API**. The page shows the start of the helper `residual_block(x, width)`: if the input's channel count (`x.shape[3]`) already equals `width`, the residual is `x` itself; otherwise a **1 × 1 `Conv2D`** projects it to `width` channels. Then `BatchNormalization(center=False, scale=False)` normalizes `x` without a learned shift or scale. The block continues on p.547 with two 3 × 3 convolutions and the residual addition.",
+ "paragraphs": [
+  {
+   "ref": "p546_e03",
+   "excerpt": "extract for a given input image—that’s the `noise_rates` input. Rather than outputting",
+   "what_it_says": "The amount of noise the model should extract from a given input image is given to it as the `noise_rates` input. Rather than outputting a denoised image, the model outputs a predicted noise mask, which can be subtracted from the input to denoise it.",
+   "what_it_means": "The model has two inputs (the noisy image and a scalar per image saying how noisy it is) and one output with the same shape as the image, 128 × 128 × 3. That output is the model's estimate of the noise component. Removing it from the input gives the denoised estimate. It is the same information as predicting the clean image, but expressed as the noise to remove.",
+   "why_it_matters": "Predicting noise is easier to learn and better behaved than predicting the image directly. The target always has the same statistics (zero mean, unit variance; p.549) whatever the image content, and at low noise levels the model only needs to output a small correction. It also determines the loss on p.549: mean absolute error between the real and predicted noise masks.",
+   "technical_idea": "Beyond the book: in the training and generation code, the subtraction is scaled by the schedule's rates. If noisy = signal_rate · image + noise_rate · noise, then image ≈ (noisy − noise_rate · predicted_noise) / signal_rate. The book's phrase 'subtract from the input' is the conceptual version of that step (see the training process on p.549-550).",
+   "terminology": [
+    {
+     "term": "noise_rates",
+     "meaning": "Model input giving the amount of noise in each image, a value derived from the diffusion time via the schedule (p.548)."
+    },
+    {
+     "term": "noise mask",
+     "meaning": "An image-shaped tensor of the noise the model believes was added; the model's output."
+    },
+    {
+     "term": "noise prediction (ε-prediction)",
+     "meaning": "Training a diffusion denoiser to output the added noise rather than the clean image."
+    }
+   ],
+   "connections": [
+    "p.545: the same denoiser is reused at every step and is told how much noise to remove.",
+    "p.548: diffusion_schedule() turns diffusion times into noise_rates and signal_rates.",
+    "p.549: the loss is mean(abs(real_noise_mask - predicted_noise_mask))."
+   ]
+  },
+  {
+   "ref": "p546_e04",
+   "excerpt": "For our denoising model, we’re going to use a U-Net—a kind of ConvNet",
+   "what_it_says": "The denoiser is a U-Net, a kind of ConvNet originally developed for image segmentation, shown in Figure 17.9.",
+   "what_it_means": "Segmentation and denoising are both image-to-image tasks: the output has the same spatial size as the input and needs a value per pixel. The U-Net, named after its U-shaped diagram (down, across the bottom, back up), is the standard architecture for such tasks. Figure 17.9 draws it flattened left to right: Concat → three down blocks → middle block at 16 × 16 → three up blocks → 128 × 128 output, with long skip arrows into Concat nodes.",
+   "why_it_matters": "The denoiser needs both global context (what object this is, where its parts are) and exact pixel detail (where each edge lies). The U-Net provides the first through downsampling and the second through skip connections.",
+   "technical_idea": "Note (not in the book): Figure 17.9 is simplified. It draws one block and one skip per resolution level, while the code on p.547 with block_depth=2 has two residual blocks and two skip connections per level, six skips in total.",
+   "terminology": [
+    {
+     "term": "U-Net",
+     "meaning": "An encoder-decoder ConvNet with skip connections between matching resolutions, introduced for biomedical image segmentation (Ronneberger et al., 2015)."
+    },
+    {
+     "term": "image segmentation",
+     "meaning": "Assigning a class to every pixel of an image."
+    }
+   ],
+   "connections": [
+    "p.336: chapter 11 trains a segmentation model from scratch, the original use case of U-Net-style models.",
+    "p.547: get_model() implements the architecture of Figure 17.9."
+   ]
+  },
+  {
+   "ref": "p546_e08",
+   "excerpt": "inputs get downsampled from their original 128 × 128 size down to a",
+   "what_it_says": "(The list begins in e07: 'This architecture features three stages: 1 A downsampling stage, made of several blocks of convolution layers, where the...') The inputs are downsampled from 128 × 128 to 16 × 16. 2: a middle stage where the feature map has a constant size. 3: an upsampling stage where the feature map is upsampled back to 128 × 128. Downsampling and upsampling blocks map 1:1, each upsampling block being the inverse of a downsampling block. The model has concatenative residual connections from each downsampling block to the corresponding upsampling block, which help avoid loss of image detail across the successive downsampling and upsampling operations. 'Let's assemble the model using the Functional API.'",
+   "what_it_means": "Downsampling by a factor of 8 (128/16 = 2³) means three halvings, so three resolution levels before the middle. At 16 × 16 each feature-map position summarizes an 8 × 8 pixel patch and, through stacked convolutions, sees a large part of the image, which allows global reasoning. Upsampling restores resolution, but interpolated 16 × 16 features cannot recover fine detail on their own. The skip connections pass each down-level's high-resolution features straight across and concatenate them with the up-path features at the same resolution, so the decoder has both the coarse 'what' and the fine 'where'.",
+   "why_it_matters": "Without the skips, the 16 × 16 bottleneck would act like a lossy compression and the predicted noise mask, and therefore the denoised image, would be blurry. For denoising, which has to work at pixel precision, the skip connections are essential. The Functional API is needed because the graph is not a simple stack: it has two inputs and branching skip paths.",
+   "technical_idea": "Terminology note (not in the book): the book calls these 'concatenative residual connections'. Most literature calls them skip connections and reserves 'residual connection' for additive shortcuts like the `x + residual` inside residual_block. Both kinds appear in this model. Also, a minor grammar slip in the text: 'the feature map get upsampled' should be 'gets'.",
+   "terminology": [
+    {
+     "term": "downsampling stage (encoder)",
+     "meaning": "Blocks that reduce spatial resolution (here with average pooling) while increasing channel width."
+    },
+    {
+     "term": "middle stage (bottleneck)",
+     "meaning": "Blocks operating at the lowest resolution (16 × 16) with constant feature-map size."
+    },
+    {
+     "term": "upsampling stage (decoder)",
+     "meaning": "Blocks that restore resolution back to 128 × 128, each mirroring a downsampling block."
+    },
+    {
+     "term": "concatenative skip connection",
+     "meaning": "Concatenating an earlier feature map with a later one along the channel axis, instead of adding them."
+    }
+   ],
+   "connections": [
+    "p.547: AveragePooling2D(pool_size=2) implements downsampling, UpSampling2D(size=2, interpolation=\"bilinear\") upsampling, and Concatenate()([x, skips.pop()]) the skip connections.",
+    "p.547: widths=[32, 64, 96, 128] gives three halvings, 128 → 64 → 32 → 16."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "u_net",
+   "name": "U-Net",
+   "definition": "An encoder-decoder ConvNet that downsamples, processes at low resolution, and upsamples back, with skip connections between matching resolutions.",
+   "intuition": "Zoom out to understand the scene, zoom back in to draw it, while keeping your close-up notes from the way down.",
+   "technical": "Here: 128 × 128 → 16 × 16 (three average-pooling steps), middle residual blocks, three bilinear upsampling steps back to 128 × 128, with Concatenate skips; output is a 3-channel noise mask.",
+   "significance": "The standard denoiser architecture of image diffusion models.",
+   "example": "Figure 17.9; get_model() on p.547.",
+   "misconception": "That the U shape is literal in the code. It refers to the classic diagram; Figure 17.9 draws it flat.",
+   "related": [
+    "skip_connection",
+    "residual_connection",
+    "convolution",
+    "denoising_autoencoder"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "skip_connection",
+   "name": "Concatenative skip connection",
+   "definition": "Passing a feature map from an earlier layer directly to a later one and concatenating it along the channel axis.",
+   "intuition": "A side road that carries fine detail past the low-resolution bottleneck.",
+   "technical": "In get_model(), every downsampling residual block's output is saved in `skips` and later concatenated with the upsampled features at the same resolution: Concatenate()([x, skips.pop()]).",
+   "significance": "Avoids loss of image detail across downsampling and upsampling (the book's stated reason).",
+   "example": "At 128 × 128, a 64-channel upsampled map concatenated with a 32-channel skip gives 96 channels.",
+   "misconception": "That concatenation and addition are interchangeable. Concatenation keeps both feature sets separately and increases the channel count; addition merges them and requires equal shapes.",
+   "related": [
+    "u_net",
+    "residual_connection"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "noise_prediction",
+   "name": "Predicting the noise mask",
+   "definition": "Training the denoiser to output the noise present in its input rather than the clean image.",
+   "intuition": "Instead of repainting the whole picture, point out the specks to remove.",
+   "technical": "Output shape equals the image shape (128, 128, 3); the denoised estimate is obtained by removing the predicted noise from the input (scaled by the schedule rates in the actual training code).",
+   "significance": "Gives a target with consistent statistics at all noise levels; defines the MAE loss on p.549.",
+   "example": "At low noise the ideal output is close to a small-magnitude mask; at very high noise the noisy input is mostly noise, and the mask is mostly the input.",
+   "misconception": "That predicting noise means the model ignores image content. Separating noise from signal requires knowing what the signal looks like.",
+   "related": [
+    "diffusion_model",
+    "denoising_autoencoder"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "residual_connection",
+   "name": "Residual connection (in residual_block)",
+   "definition": "Adding a block's input (possibly projected) to its output.",
+   "intuition": "The block only has to learn a correction to its input.",
+   "technical": "If the input has `width` channels, the residual is x; otherwise it is projected with a 1 × 1 Conv2D so the shapes match for the later `x + residual` (p.547).",
+   "significance": "Eases optimization of deep networks; used in every block of this U-Net.",
+   "example": "First block: input has 33 channels (32 image features + 1 noise-rate channel), width 32, so a 1 × 1 projection is used.",
+   "misconception": "That a residual connection requires identical channel counts. A 1 × 1 convolution projection solves mismatches.",
+   "related": [
+    "batch_normalization",
+    "skip_connection"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "batch_normalization",
+   "name": "Batch normalization without affine parameters",
+   "definition": "Normalizing activations to zero mean and unit variance per channel, here without the learned shift (beta) and scale (gamma).",
+   "intuition": "Standardize the inputs before the block's convolutions process them.",
+   "technical": "`BatchNormalization(center=False, scale=False)`: center=False drops beta, scale=False drops gamma. The following Conv2D has its own weights and bias, so it can rescale and shift anyway.",
+   "significance": "Stabilizes training of the residual blocks.",
+   "example": "A channel with batch mean 5 and std 2 maps a value 9 to (9 − 5)/2 = 2 (ignoring epsilon).",
+   "misconception": "That center=False/scale=False disables normalization. It only removes the learned affine transform afterward.",
+   "related": [
+    "residual_connection"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Denoising by subtracting the predicted noise mask",
+   "latex": "\\hat{x}_{\\text{denoised}} = x_{\\text{noisy}} - \\hat{\\varepsilon}, \\qquad \\hat{\\varepsilon} = f_\\theta\\!\\left(x_{\\text{noisy}},\\, r_{\\text{noise}}\\right)",
+   "source_text": "we make our model output a predicted noise mask, which we can subtract from the input to denoise it",
+   "variables": [
+    {
+     "symbol": "x_{\\text{noisy}}",
+     "meaning": "The noisy input image, shape (128, 128, 3)."
+    },
+    {
+     "symbol": "r_{\\text{noise}}",
+     "meaning": "The noise rate given to the model as the noise_rates input, shape (1, 1, 1) per image."
+    },
+    {
+     "symbol": "f_\\theta",
+     "meaning": "The U-Net denoiser with weights θ."
+    },
+    {
+     "symbol": "\\hat{\\varepsilon}",
+     "meaning": "The predicted noise mask, same shape as the image."
+    },
+    {
+     "symbol": "\\hat{x}_{\\text{denoised}}",
+     "meaning": "The denoised estimate."
+    }
+   ],
+   "operations": "A forward pass of the U-Net, then elementwise subtraction.",
+   "purpose": "Defines the model's output and how it is used to remove noise.",
+   "interpretation": "The model separates its input into 'noise' (its output) and 'signal' (what is left).",
+   "intuition": "If you know exactly which specks were sprinkled on a photo, removing them gives back the photo.",
+   "numerical_example": "One pixel channel: noisy value 0.9, predicted noise 0.3 → denoised 0.6. Beyond the book: the actual code on p.549-551 uses the schedule rates, e.g. with noise_rate 0.6 and signal_rate 0.8, (0.9 − 0.6 × 0.5) / 0.8 = 0.75 for a predicted unit-variance noise of 0.5.",
+   "source": "book",
+   "book_ref": "p.546"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "residual_block (first part): residual projection and normalization",
+   "original_code": "def residual_block(x, width):\n    input_width = x.shape[3]\n    if input_width == width:\n        residual = x\n    else:\n        residual = layers.Conv2D(width, 1)(x)\n    x = layers.BatchNormalization(center=False, scale=False)(x)",
+   "language": "python",
+   "what_it_does": "Begins the helper that applies a block of layers with a residual connection (callout: 'Utility function to apply a block of layers with a residual connection'). It prepares the residual branch, as identity or a 1 × 1 convolution projection, and batch-normalizes the main branch. The two 3 × 3 convolutions and the addition are on p.547.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Takes a feature map x (shape (batch, H, W, C)) and a target channel width."
+    },
+    {
+     "lines": "2",
+     "explanation": "Reads the channel count C from axis 3 (channels-last layout)."
+    },
+    {
+     "lines": "3-4",
+     "explanation": "If C already equals width, the residual is x unchanged (identity shortcut)."
+    },
+    {
+     "lines": "5-6",
+     "explanation": "Otherwise, a 1 × 1 Conv2D with `width` filters projects x to the right number of channels, so the shapes match when added back on p.547."
+    },
+    {
+     "lines": "7",
+     "explanation": "Batch normalization without learned offset (center=False) or scale (scale=False); it only standardizes activations per channel."
+    }
+   ],
+   "inputs_outputs": "Input: x (batch, H, W, C) and width. At this point: residual has shape (batch, H, W, width); x is still (batch, H, W, C), normalized.",
+   "algorithm": "Shortcut = identity if widths match, else 1 × 1 projection; normalize main branch; (p.547) conv 3 × 3 with swish → conv 3 × 3 → add shortcut.",
+   "theory_link": "Residual connections (chapter 9) ease optimization. The 1 × 1 projection is needed when channels change: in this U-Net, at the first block (33 → 32 channels), at each new width level, and after every skip concatenation in the upsampling stage.",
+   "parameters": [
+    {
+     "name": "width",
+     "role": "Number of output channels of the block (the Conv2D filter count)."
+    },
+    {
+     "name": "center=False, scale=False",
+     "role": "Disable BatchNormalization's learned beta and gamma."
+    }
+   ],
+   "pitfalls": [
+    "x.shape[3] assumes channels-last data format, the Keras default.",
+    "Note that normalization is applied only to the main branch, after the residual is taken, so the shortcut carries the unnormalized input."
+   ],
+   "illustrative_code": "# Full residual_block as it reads across p.546-547 (lines after BatchNormalization are on p.547)\ndef residual_block(x, width):\n    input_width = x.shape[3]\n    if input_width == width:\n        residual = x\n    else:\n        residual = layers.Conv2D(width, 1)(x)\n    x = layers.BatchNormalization(center=False, scale=False)(x)\n    x = layers.Conv2D(width, 3, padding=\"same\", activation=\"swish\")(x)\n    x = layers.Conv2D(width, 3, padding=\"same\")(x)\n    x = x + residual\n    return x"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why the 16 × 16 bottleneck alone would lose detail",
+   "kind": "numerical",
+   "body": "Beyond the book: a 128 × 128 × 3 image has 49,152 values. A 16 × 16 feature map with 128 channels (the middle stage, p.547) has 32,768 values, fewer than the image, and each position summarizes an 8 × 8 patch after several nonlinear layers. Upsampling it by bilinear interpolation produces smooth maps. Precise per-pixel structure, such as the exact location of a thin petal edge, would be lost. The skips feed the decoder the 128 × 128 × 32, 64 × 64 × 64 and 32 × 32 × 96 encoder features directly, so it can place edges exactly.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Walking through Figure 17.9",
+   "kind": "step_by_step",
+   "body": "1. **Concat** at the left: the 128 × 128 image (after a 1 × 1 conv in the code) and the noise rate (stretched to a 128 × 128 map) are joined along channels.\n2. **Downsampling stage**: three blocks; after each, the resolution halves (128 → 64 → 32 → 16).\n3. **Middle stage**: blocks at 16 × 16.\n4. **Upsampling stage**: three blocks, each preceded by a ×2 upsampling (16 → 32 → 64 → 128) and a **Concat** with the output of the mirror down block. The innermost down block connects to the first up block, the outermost to the last.\n5. Output: a 128 × 128 map, which in the code is the 3-channel predicted noise mask.",
+   "source": "inference"
+  },
+  {
+   "title": "Encoder–decoder as an editor with notes",
+   "kind": "analogy",
+   "body": "The downsampling path is like reading a manuscript and writing a short summary of its overall meaning; the upsampling path rewrites it in full from the summary. On its own, the rewrite would lose the exact wording. The skip connections are your sticky notes from the first read, kept at each level of detail, so the rewrite keeps both the global sense and the exact wording.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Figure 17.9 as a graph",
+   "why": "Redraws the U-Net of Figure 17.9 with its three stages, resolutions, the noise-rate input and the concatenative skip connections.",
+   "mermaid": "flowchart LR\n  NR[\"Noise rate\"] --> C0((Concat))\n  IMG[\"128 x 128 image\"] --> C0\n  C0 --> D1[\"Down block 1<br/>128 x 128\"] --> D2[\"Down block 2<br/>64 x 64\"] --> D3[\"Down block 3<br/>32 x 32\"]\n  D3 --> M[\"Middle stage<br/>16 x 16 feature map\"]\n  M --> U1[\"Up block 1<br/>32 x 32\"] --> U2[\"Up block 2<br/>64 x 64\"] --> U3[\"Up block 3<br/>128 x 128\"] --> OUT[\"128 x 128 output<br/>(noise mask)\"]\n  D3 -. Concat .-> U1\n  D2 -. Concat .-> U2\n  D1 -. Concat .-> U3"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "A residual block with a toggleable shortcut",
+   "why": "residual_block (started on this page, finished on p.547) wraps two convolution layers with a residual connection; toggle the shortcut to see what it adds.",
+   "widget": "residual_block",
+   "params": {
+    "layers": 2
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The denoiser outputs the clean image.",
+   "correction": "It outputs a predicted noise mask, which is removed from the input to obtain the denoised image."
+  },
+  {
+   "claim": "U-Nets were invented for diffusion models.",
+   "correction": "They were originally developed for image segmentation; diffusion models reuse them because denoising is also an image-to-image task."
+  },
+  {
+   "claim": "The skip connections in Figure 17.9 add features element-wise.",
+   "correction": "They are concatenative: features are joined along the channel axis (Concat nodes), unlike the additive residual inside residual_block."
+  },
+  {
+   "claim": "BatchNormalization(center=False, scale=False) does nothing.",
+   "correction": "It still normalizes each channel with batch statistics; it just has no learned beta/gamma afterward."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 545,
+    "note": "The same denoiser is reused at every step and told how much noise to remove."
+   },
+   {
+    "page": 336,
+    "note": "Chapter 11's segmentation model, the task U-Nets were designed for."
+   },
+   {
+    "page": 544,
+    "note": "A diffusion model is a denoising autoencoder in a loop."
+   }
+  ],
+  "later": [
+   {
+    "page": 547,
+    "note": "The rest of residual_block and get_model(), with widths=[32, 64, 96, 128] and block_depth=2."
+   },
+   {
+    "page": 548,
+    "note": "The diffusion schedule that produces noise_rates and signal_rates."
+   },
+   {
+    "page": 549,
+    "note": "The MAE loss between real and predicted noise masks."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 336,
+    "note": "Training a segmentation model from scratch (image-to-image ConvNets)."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 548,
+    "note": "noise_rates ** 2 + signal_rates ** 2 == 1."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 547,
+    "note": "Continuation of this code block: residual addition and get_model()."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 544,
+    "note": "Figure 17.7 shows the denoiser applied repeatedly."
+   }
+  ]
+ },
+ "takeaways": [
+  "The denoiser takes two inputs: the noisy image and noise_rates (how much noise to extract).",
+  "It outputs a predicted noise mask, which is removed from the input to denoise it.",
+  "The denoiser is a U-Net: downsampling from 128 × 128 to 16 × 16, a constant-size middle stage, and upsampling back to 128 × 128.",
+  "Concatenative skip connections from each down block to its mirror up block preserve image detail.",
+  "residual_block uses an identity shortcut when channel counts match and a 1 × 1 Conv2D projection otherwise, then non-affine batch normalization."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What does the denoising U-Net output?",
+   "options": [
+    "A predicted noise mask to subtract from the input",
+    "The fully denoised clean image",
+    "A class label for the flower species",
+    "The noise rate of the input image"
+   ],
+   "answer": "A predicted noise mask to subtract from the input",
+   "explanation": "The page says 'Rather than outputting a denoised image, we make our model output a predicted noise mask'. Labels are not used (p.545), and the noise rate is an input, not an output.",
+   "page_refs": [
+    546
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Name the three stages of the U-Net and give the feature-map resolutions where they operate.",
+   "options": [],
+   "answer": "Downsampling stage (128 × 128 down to 16 × 16), middle stage (constant 16 × 16), upsampling stage (16 × 16 back up to 128 × 128).",
+   "explanation": "From the numbered list and Figure 17.9.",
+   "page_refs": [
+    546
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "What problem do the concatenative connections from downsampling to upsampling blocks solve?",
+   "options": [],
+   "answer": "They avoid losing image detail across the successive downsampling and upsampling operations, by giving each upsampling block the high-resolution features of its mirror downsampling block.",
+   "explanation": "Stated on the page; the low-resolution bottleneck alone cannot carry precise pixel-level detail.",
+   "page_refs": [
+    546
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "math",
+   "question": "How many 2× downsampling steps are needed to go from 128 × 128 to 16 × 16, and how many values does a 16 × 16 map with 128 channels hold?",
+   "options": [],
+   "answer": "3 steps (128/16 = 8 = 2³); 16 × 16 × 128 = 32,768 values.",
+   "explanation": "Each average pooling with pool_size=2 halves height and width: 128 → 64 → 32 → 16.",
+   "page_refs": [
+    546,
+    547
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "In residual_block, when is residual computed with a 1 × 1 Conv2D instead of being x itself?",
+   "options": [
+    "When the input's channel count differs from width",
+    "When the input's spatial size is larger than 16 × 16",
+    "Always, during training only",
+    "When BatchNormalization is disabled"
+   ],
+   "answer": "When the input's channel count differs from width",
+   "explanation": "The code compares input_width = x.shape[3] with width. Spatial size doesn't matter (the block preserves it), the choice is structural rather than training-dependent, and batch normalization is not involved.",
+   "page_refs": [
+    546
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Why is a U-Net, originally developed for segmentation, a natural choice for a denoiser?",
+   "options": [],
+   "answer": "Both are image-to-image tasks needing a per-pixel output of the same spatial size as the input, which requires both global context (from downsampling) and precise local detail (from skip connections).",
+   "explanation": "The page notes the U-Net's segmentation origin and the role of its skip connections; the task similarity is an added explanation.",
+   "page_refs": [
+    546
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you sketch Figure 17.9 from memory, including where the noise rate enters and which down block connects to which up block?",
+   "options": [],
+   "answer": "Self-check: noise rate and image are concatenated at the input; down blocks at 128, 64, 32 then a 16 × 16 middle; up blocks at 32, 64, 128; innermost down block ↔ first up block, outermost ↔ last up block, each via Concat.",
+   "explanation": "Compare with Figure 17.9 on this page.",
+   "page_refs": [
+    546
+   ]
+  }
+ ]
+}

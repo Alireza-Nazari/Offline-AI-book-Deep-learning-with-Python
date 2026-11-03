@@ -1,0 +1,421 @@
+{
+ "page_id": "page_360",
+ "pdf_page": 360,
+ "printed_page": "336",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:39:38Z",
+  "confidence": "high",
+  "review_flags": [
+   "Typo in the book (p360_e03): \"we will make our training problem easier and a halve the data size\" contains a stray \"a\"; it should read \"and halve the data size\"."
+  ],
+  "extraction_quality": "Good. The extractor merged the five printed paragraphs of section 12.2.2 (\"Our model will divide…\", \"Most images will not have…\", \"Like many models…\", \"Instead of using the Xception…\", \"Let's load up…\") into one element p360_e08; notes are written per printed paragraph. Italic terms (confidence score, backbone, spatial location) are visible only in the image. The short code snippet matches the page."
+ },
+ "overview": {
+  "title": "Filtering COCO and the design of a single-stage YOLO model",
+  "chapter": "12 Object detection",
+  "section": "12.2 Training a YOLO model from scratch",
+  "subsection": "12.2.2 Creating a YOLO model",
+  "main_topic": "Shrinking and shuffling the COCO metadata, then laying out the YOLO design: a grid of predictions (one box, one confidence score and one class label per cell) computed on top of a pretrained ResNet backbone at 448 x 448 input resolution",
+  "central_idea": "After reducing COCO to images with at most four boxes and shuffling it, the authors describe YOLO as a single-stage detector that splits the image into a grid and, at every cell, predicts a bounding box with a confidence score and a class label, using a pretrained ConvNet backbone (ResNet, chosen because its strided convolutions preserve spatial information better than pooling).",
+  "importance": "This page fixes the conceptual blueprint that the next four pages implement: the grid-of-detectors output format, the role of the confidence score, and the choice of backbone and input size. Understanding why each grid cell carries a confidence value is essential for understanding the targets (p.364) and the loss (p.366) later.",
+  "learning_objectives": [
+   "Explain why the authors filter the COCO metadata to images with four or fewer boxes and why the data must be shuffled.",
+   "Describe what makes YOLO a single-stage detector in contrast to a two-stage R-CNN detector.",
+   "Describe the YOLO output format used in this chapter: per grid cell, one bounding box, one confidence score and a class label.",
+   "Explain what the confidence score is supposed to learn and why most grid cells should output near-zero confidence.",
+   "Explain why a pretrained ResNet backbone, rather than Xception, is chosen here, and how strided convolutions relate to spatial location.",
+   "Recognize that the input resolution (448 x 448) matters for detection."
+  ],
+  "prerequisites": [
+   "The distinction between single-stage and two-stage detectors (p.354-356)",
+   "The COCO metadata format built in listing 12.2 (p.357): boxes as (x, y, w, h) in a unit square plus integer labels",
+   "ConvNet feature extraction with pretrained models (chapter 8)",
+   "Residual connections and the idea of a backbone (chapter 9)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes the data-loading part of section 12.2 and opens subsection 12.2.2.\n\n**Trimming the dataset.** The full COCO training data is about 18 GB. To keep the example runnable on modest hardware, the authors keep only images with **four or fewer bounding boxes**, which, they say, both makes the learning problem easier and roughly halves the data. They then call `random.shuffle(metadata)` because the metadata is grouped by object type; feeding batches in that order would expose the model to long runs of a single kind of image, which is bad for stochastic gradient descent.\n\n**YOLO as a single-stage detector.** Unlike the two-stage R-CNN family (p.354), which first proposes candidate regions and then classifies them, YOLO proposes boxes and labels **in one go**.\n\n**The output format.** The model divides the image into a **grid** and predicts, at each grid location, a **bounding box** and a **class label**. The original paper by Redmon et al. predicted several boxes per cell; the book simplifies to **one box per cell**. Because objects are not spread evenly over the grid, each box comes with a **confidence score**, which should be high where an object is detected and zero where there is none. Most cells contain no object, so most confidences should be near zero.\n\n**The backbone.** Like many vision models, YOLO computes high-level features with a **ConvNet backbone** (chapter 8). The paper's authors designed and ImageNet-pretrained their own; the book instead loads a pretrained **ResNet** through KerasHub rather than the Xception used so far. ResNet's structure is similar but it downsamples with **strides instead of pooling**, and as chapter 11 noted, strided convolutions are preferable when the spatial location of features matters, which is exactly the case in detection.\n\nFinally, images will be resized to **448 x 448**; the authors stress that input size is important for object detection. The loading code itself (listing 12.5) appears on the next page (p.361).",
+ "paragraphs": [
+  {
+   "ref": "p360_e03",
+   "excerpt": "While it would be fun to train on all 18 gigabytes of our input data",
+   "what_it_says": "Training on all 18 GB of COCO would be too heavy for modest hardware, so the authors keep only images with four or fewer boxes, which makes the problem easier and roughly halves the data. They also shuffle the data, because the images are grouped by object type, which would be terrible for training.",
+   "what_it_means": "Two practical preprocessing decisions. (1) A filter on the number of annotated objects: images with many objects (up to 63, p.358) are the hardest for a one-box-per-cell detector because several objects can fall in the same cell. Dropping them simplifies the task. (2) Shuffling: the metadata list built in listing 12.2 inherits an ordering from the annotation file; if batches were drawn in order, consecutive gradient updates would all come from similar images, giving biased, highly correlated gradient estimates.",
+   "why_it_matters": "These choices determine how the reader's model will behave: the trained detector will only have seen relatively uncluttered scenes, which partly explains its limited performance discussed on p.370. Shuffling is a general rule for any SGD-based training.",
+   "technical_idea": "Mini-batch SGD assumes each batch is an approximately i.i.d. sample of the training distribution. Ordered data violates this and can make the model drift toward whatever class the current stretch of data contains.",
+   "terminology": [
+    {"term": "metadata", "meaning": "The list of per-image dictionaries with `boxes`, `labels` and `path` keys built in listing 12.2 (p.357)."},
+    {"term": "shuffle", "meaning": "Randomly permute the order of samples so that batches are representative of the whole dataset."}
+   ],
+   "connections": [
+    "p.357: listing 12.2 builds `metadata` with boxes rescaled to the unit square.",
+    "p.358: images have between 1 and 63 boxes; there are 117,266 images in total.",
+    "p.370: the authors list using the whole COCO dataset as one way to improve the model."
+   ]
+  },
+  {
+   "ref": "p360_e05",
+   "excerpt": "That's it for data loading! Let's start creating our YOLO model.",
+   "what_it_says": "A transition: data loading is complete and model building begins.",
+   "what_it_means": "The data pipeline so far only produces image paths and box/label lists; it is not yet in the grid format the model needs. That conversion happens in section 12.2.3 (p.363-364), after the model's output format has been defined.",
+   "why_it_matters": "It signals the order of the chapter: model design first, then target encoding that matches the model's outputs.",
+   "terminology": [],
+   "connections": [
+    "p.363: section 12.2.3 converts the data to grid targets."
+   ]
+  },
+  {
+   "ref": "p360_e07",
+   "excerpt": "As mentioned previously, the YOLO model is a single stage detector.",
+   "what_it_says": "YOLO is a single-stage detector: instead of first identifying candidate objects and then classifying those regions, it proposes bounding boxes and labels in one go.",
+   "what_it_means": "In a two-stage detector, a region-proposal step produces a set of candidate boxes, and a second network classifies (and refines) each crop. YOLO collapses both steps into one forward pass of a single network whose output tensor directly encodes boxes and classes for the whole image.",
+   "why_it_matters": "This is the source of YOLO's speed and the reason single-stage detectors suit real-time applications (summary on p.374).",
+   "technical_idea": "A single network maps image to a fixed-size output tensor; detection becomes a (multi-output) regression plus classification problem rather than a search over regions.",
+   "terminology": [
+    {"term": "single-stage detector", "meaning": "An object detector that predicts boxes and classes in one network pass, without a separate region-proposal stage."},
+    {"term": "two-stage detector", "meaning": "A detector (e.g. R-CNN) that first proposes regions of interest and then classifies each region."}
+   ],
+   "connections": [
+    "p.354: two-stage R-CNN detectors are introduced in 12.1.1.",
+    "p.356: single-stage detectors are introduced in 12.1.2."
+   ]
+  },
+  {
+   "ref": "p360_e08",
+   "excerpt": "Our model will divide an image up into a grid and predict two separate outputs",
+   "what_it_says": "The model splits the image into a grid and, at each grid location, predicts two separate outputs: a bounding box and a class label. The original paper by Redmon et al. predicted multiple boxes per cell; the book predicts just one box per grid square.",
+   "what_it_means": "Each grid cell acts as its own small detector. The class output forms a 'class probability map' over the grid, and the box output gives one candidate box per cell. Predicting only one box per cell means two objects whose centers fall in the same cell cannot both be detected, a limitation that the four-boxes filter helps to soften.",
+   "why_it_matters": "This defines the shape of the model's output, which on p.362 becomes a `(6, 6, 96)` tensor split into box and class parts.",
+   "technical_idea": "The original YOLO used a 7 x 7 grid with B = 2 boxes per cell and 20 PASCAL VOC classes (beyond the book). The book's variant uses one box per cell and COCO's 91 label ids.",
+   "terminology": [
+    {"term": "grid location / grid cell", "meaning": "One of the S x S regions the image is divided into; each produces its own predictions."},
+    {"term": "bounding box", "meaning": "An axis-aligned rectangle (x, y, w, h) locating an object."}
+   ],
+   "connections": [
+    "p.361: figure 12.4 shows the grid, boxes + confidence and class probability map from the original paper.",
+    "p.362: listing 12.6 uses `grid_size = 6`."
+   ]
+  },
+  {
+   "ref": "p360_e08",
+   "excerpt": "Most images will not have objects evenly distributed across a grid",
+   "what_it_says": "Because objects are not spread evenly over the grid, the model outputs a confidence score with every box (figure 12.4). Confidence should be high where an object is detected and zero where there is no object; most grid cells contain no object and should report near-zero confidence.",
+   "what_it_means": "Every cell always outputs a box, even an empty cell, so the network needs a way to say 'ignore my box'. The confidence score plays that role. At inference time, boxes are kept only if their confidence exceeds a cutoff (as in `draw_prediction(..., cutoff=...)` on p.365).",
+   "why_it_matters": "The confidence output is the trickiest part of the YOLO loss (p.366) and is what makes the fixed-size output usable for a variable number of objects.",
+   "technical_idea": "Confidence turns a fixed set of S x S candidate boxes into a variable-size set of detections via thresholding. Later in the chapter, its target is tied to the intersection over union of predicted and true boxes (p.374 summary).",
+   "terminology": [
+    {"term": "confidence score", "meaning": "A per-box scalar trained to be high when the box contains an object and near zero otherwise."}
+   ],
+   "connections": [
+    "p.364: in the targets, confidence is 1 for cells with a real box and 0 elsewhere.",
+    "p.366: the loss gives special treatment to the confidence output.",
+    "p.370: the trained model learns very low confidence values."
+   ]
+  },
+  {
+   "ref": "p360_e08",
+   "excerpt": "Like many models in computer vision, the YOLO model uses a ConvNet backbone",
+   "what_it_says": "YOLO extracts high-level image features with a ConvNet backbone, an idea from chapter 8. The YOLO authors built and ImageNet-pretrained their own backbone; the book instead loads a pretrained backbone from KerasHub.",
+   "what_it_means": "The backbone is the feature-extraction part of a network, reused across tasks; task-specific 'heads' are attached on top. Reusing an ImageNet-pretrained backbone is transfer learning: the detector starts from features that already recognize edges, textures and object parts.",
+   "why_it_matters": "Pretraining a backbone on ImageNet from scratch is very expensive; loading one makes the chapter's example feasible.",
+   "terminology": [
+    {"term": "backbone", "meaning": "The pretrained convolutional base that converts an image into feature maps, on top of which a task-specific head is added."},
+    {"term": "KerasHub", "meaning": "The Keras library of pretrained models and presets used throughout the book."}
+   ],
+   "connections": [
+    "p.361: listing 12.5 loads `resnet_50_imagenet` with `keras_hub.models.Backbone.from_preset`."
+   ]
+  },
+  {
+   "ref": "p360_e08",
+   "excerpt": "Instead of using the Xception backbone we've used so far in this book",
+   "what_it_says": "The book switches from Xception to ResNet, a model family mentioned in chapter 9. The architectures are similar, but ResNet downsamples with strides instead of pooling layers; as chapter 11 said, strided convolutions are better when the spatial location of the input matters.",
+   "what_it_means": "Max pooling keeps the strongest activation in a window but discards where in the window it was; a strided convolution learns how to summarize the window and can preserve positional information. For detection, where the model must output coordinates, retaining location information in the feature maps is valuable.",
+   "why_it_matters": "Backbone choice is a task-dependent design decision; classification can tolerate (even benefit from) the translation invariance of pooling, but localization cannot.",
+   "technical_idea": "ResNet-50 does use one max-pooling layer in its stem, but its stage-to-stage downsampling is done with stride-2 convolutions (beyond the book; the book's statement is a simplification).",
+   "terminology": [
+    {"term": "ResNet", "meaning": "Residual network family built from blocks with skip (residual) connections."},
+    {"term": "strided convolution", "meaning": "A convolution whose window moves by more than one pixel, reducing the spatial size of the output."},
+    {"term": "spatial location", "meaning": "Where in the image a feature occurs, as opposed to just whether it occurs."}
+   ],
+   "connections": [
+    "p.361: the ResNet-50 backbone outputs 14 x 14 x 2048 feature maps (shown in the summary on p.362)."
+   ]
+  },
+  {
+   "ref": "p360_e08",
+   "excerpt": "Let's load up our pretrained model and matching preprocessing (to rescale the image).",
+   "what_it_says": "The model and its matching preprocessing (which rescales images) will be loaded next; images will be resized to 448 x 448 because input size is important for object detection.",
+   "what_it_means": "Detection needs enough resolution for small objects to occupy several pixels in the backbone's feature maps. With a 448 input and a total stride of 32, ResNet-50 produces a 14 x 14 feature grid (p.362); at the 224 x 224 used for ImageNet classification it would be only 7 x 7.",
+   "why_it_matters": "448 x 448 is also the input size of the original YOLO paper (beyond the book), and the backbone's preprocessing must match what it saw during pretraining.",
+   "terminology": [
+    {"term": "ImageConverter", "meaning": "KerasHub preprocessing layer that resizes and rescales images to match a preset (used in listing 12.5, p.361)."}
+   ],
+   "connections": [
+    "p.361: listing 12.5 sets `image_size = 448`."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "single_stage_detector",
+   "name": "Single-stage object detector",
+   "definition": "A detector that predicts bounding boxes and class labels directly in one network pass, without a separate region-proposal step.",
+   "intuition": "Instead of first circling candidate objects and then asking 'what is this?', the network looks once and fills in a table of boxes and labels for the whole image.",
+   "technical": "The network maps an image to a fixed-size tensor (here per grid cell: box coordinates, confidence, class scores). Training is a combined regression and classification problem; inference is a single forward pass plus thresholding.",
+   "significance": "Much faster than two-stage detectors; suited to real-time use.",
+   "example": "YOLO (this chapter) and RetinaNet (p.370) are single-stage detectors.",
+   "misconception": "Single-stage does not mean 'single layer' or 'no backbone'; it means no separate proposal-then-classify stages.",
+   "related": ["yolo", "two_stage_detector", "bounding_box"],
+   "source": "book"
+  },
+  {
+   "id": "yolo",
+   "name": "YOLO (You Only Look Once)",
+   "definition": "A single-stage detector that divides the image into a grid and predicts, at each grid cell, bounding box(es) with confidence scores and a class probability map.",
+   "intuition": "Each grid cell is a tiny detector responsible for objects whose center lands in it.",
+   "technical": "In the book's simplified version: one box (x, y, w, h) plus one confidence per cell and a softmax over 91 labels per cell, computed by dense layers on top of a ResNet-50 backbone.",
+   "significance": "The prototypical single-stage detector; the 2015 original is the one recreated in this chapter.",
+   "example": "With a 6 x 6 grid (p.362), the model always outputs 36 candidate boxes per image.",
+   "misconception": "The book's model is not the full YOLO recipe; it predicts only one box per cell (the original predicted several).",
+   "related": ["single_stage_detector", "confidence_score", "convnet_backbone"],
+   "source": "book"
+  },
+  {
+   "id": "confidence_score",
+   "name": "Box confidence score",
+   "definition": "A scalar predicted with each box, trained to be high when an object is present at that grid location and zero otherwise.",
+   "intuition": "A 'there is really something here' flag that lets the model ignore boxes in empty cells.",
+   "technical": "Thresholding confidences converts the fixed number of predicted boxes into a variable number of detections. Later in the chapter its target is related to the IoU between predicted and true boxes (p.366, p.374).",
+   "significance": "Without it, a fixed-output model could not express 'no object here'.",
+   "example": "In the training targets (p.364) a cell containing a box center has confidence 1.0; every other cell has 0.",
+   "misconception": "It is not the class probability; class identity comes from the separate class map.",
+   "related": ["yolo", "bounding_box"],
+   "source": "book"
+  },
+  {
+   "id": "convnet_backbone",
+   "name": "ConvNet backbone",
+   "definition": "A (usually pretrained) convolutional network used as a feature extractor, onto which task-specific layers are attached.",
+   "intuition": "A general-purpose visual 'eye' that you reuse and fit with a different 'brain' for each task.",
+   "technical": "Here, KerasHub's `resnet_50_imagenet` backbone maps a 448 x 448 x 3 image to a 14 x 14 x 2048 feature map (p.362).",
+   "significance": "Lets the detector benefit from ImageNet pretraining without the cost of training it from scratch.",
+   "example": "Chapter 8 reused pretrained convolutional bases for classification; here the same idea serves detection.",
+   "misconception": "A backbone is not frozen by definition; in this chapter almost all of its parameters remain trainable (p.363).",
+   "related": ["transfer_learning", "resnet", "residual_connection"],
+   "source": "book"
+  },
+  {
+   "id": "strided_convolution",
+   "name": "Strided convolution (vs. pooling)",
+   "definition": "A convolution applied with a step larger than 1, which downsamples feature maps while learning how to do so.",
+   "intuition": "Pooling keeps 'the strongest signal' in a window and forgets where it was; a strided conv can learn a summary that still encodes position.",
+   "technical": "Stride s reduces each spatial dimension by roughly a factor s. Unlike max pooling, its output is a learned linear combination of the whole window, so positional information can be retained.",
+   "significance": "The book cites this as the reason to prefer ResNet for detection, where spatial location matters.",
+   "example": "Listing 12.6 (p.362) itself adds a `Conv2D(512, (3, 3), strides=(2, 2))` that downsamples 14 x 14 to 6 x 6.",
+   "misconception": "Strided convolutions do not make a network more translation-invariant; if anything they preserve more location detail than max pooling.",
+   "related": ["convolution", "pooling"],
+   "source": "book"
+  },
+  {
+   "id": "data_shuffling",
+   "name": "Shuffling training data",
+   "definition": "Randomly permuting the training samples so that each batch is representative of the whole dataset.",
+   "intuition": "Like shuffling a deck before dealing: you do not want all the hearts in one hand.",
+   "technical": "Mini-batch SGD's gradient estimate is unbiased only if batches are random samples; ordered data yields correlated, biased updates.",
+   "significance": "The book's reason: the COCO metadata is grouped by object type.",
+   "example": "`random.shuffle(metadata)` permutes the list in place.",
+   "misconception": "Shuffling once before building a dataset is not the same as reshuffling every epoch; Keras `fit()` on NumPy arrays reshuffles each epoch by default (beyond the book).",
+   "related": ["sgd"],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Filtering to images with at most four boxes and shuffling",
+   "original_code": "import random\n\nmetadata = list(filter(lambda x: len(x[\"boxes\"]) <= 4, metadata))\nrandom.shuffle(metadata)",
+   "language": "python",
+   "what_it_does": "Keeps only the images whose annotation list has four or fewer bounding boxes, then randomly reorders the remaining metadata in place.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Imports Python's standard `random` module."},
+    {"lines": "3", "explanation": "`filter` with a lambda keeps each metadata dict `x` whose `\"boxes\"` list has length at most 4; `list(...)` materializes the lazy filter object back into a list."},
+    {"lines": "4", "explanation": "`random.shuffle` permutes the list in place (it returns `None`), breaking up the grouping by object type."}
+   ],
+   "inputs_outputs": "Input: `metadata`, the list of dicts with `boxes`, `labels` and `path` from listing 12.2 (117,266 entries, p.358). Output: a shorter, shuffled list of the same dicts.",
+   "algorithm": "A linear-time filter followed by an in-place Fisher-Yates shuffle.",
+   "theory_link": "Simplifies the detection problem (fewer co-located objects per grid cell) and satisfies SGD's need for randomly ordered batches.",
+   "parameters": [
+    {"name": "4", "role": "Maximum number of boxes per image kept; lowering it makes the task easier and the dataset smaller."}
+   ],
+   "pitfalls": [
+    "`random.shuffle` returns `None`; writing `metadata = random.shuffle(metadata)` would destroy the list.",
+    "Without a fixed seed (`random.seed(...)`), the order and therefore the first image used in later visualizations (e.g. `metadata[0]` on p.365) differ between runs.",
+    "The filter changes indices: `metadata[435]` inspected on p.358 is no longer the same image after this step."
+   ],
+   "illustrative_code": "# AI-written: check how much data the filter keeps\nbefore = len(metadata)\nsmall = [m for m in metadata if len(m[\"boxes\"]) <= 4]\nprint(before, len(small), len(small) / before)\nrandom.seed(42)  # make the shuffle reproducible\nrandom.shuffle(small)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why one box per cell plus a confidence score works",
+   "kind": "step_by_step",
+   "body": "1. The network's output has a fixed size: for an $S \\times S$ grid it always produces $S^2$ boxes.\n2. Real images contain a variable number of objects (1 to 4 after filtering).\n3. Each object is assigned to the single cell containing its center (made explicit on p.363).\n4. Cells with an assigned object get a confidence target of 1; all others get 0 (p.364).\n5. At prediction time, keep only boxes whose confidence exceeds a threshold.\n\nThe confidence channel thus bridges a fixed-size output and a variable-size answer. With one box per cell, two objects centered in the same cell collide; the original paper's multiple boxes per cell (and, later, anchor boxes in later YOLO versions; beyond the book) address this.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Pooling versus strides for localization",
+   "kind": "numerical",
+   "body": "Consider a 2 x 2 window with activations `[[0, 9], [0, 0]]` and another with `[[9, 0], [0, 0]]`. A 2 x 2 max pool outputs `9` for both: the position of the strong feature inside the window is lost. A stride-2 convolution with kernel `[[1, 2], [3, 4]]` outputs `18` and `9` respectively, so the result still depends on *where* the feature was. This is the intuition behind the book's statement that strided convolutions are better when spatial location matters. (Illustrative numbers, not from the book.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "A cafeteria-tray analogy for the grid",
+   "kind": "analogy",
+   "body": "Picture the image as a tray divided into compartments. Each compartment has a little card on which it must write: 'is there a food item centered here?' (confidence), 'how big is it and where exactly?' (box) and 'what is it?' (class). Most compartments write 'nothing here' with near-zero confidence. A two-stage detector would instead first walk around drawing circles on the tray, then inspect each circle.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "The YOLO design described on this page",
+   "why": "The page lays out the pipeline in prose: resize to 448 x 448, pretrained ResNet backbone, then per-grid-cell outputs (box + confidence, class label). This flow shows how those pieces connect; listings 12.5 and 12.6 on p.361-362 implement them.",
+   "mermaid": "flowchart LR\n  A[COCO metadata<br/>filter boxes <= 4<br/>shuffle] --> B[Image resized<br/>448 x 448]\n  B --> C[Pretrained ResNet backbone<br/>KerasHub]\n  C --> D[Detection head]\n  D --> E[Per grid cell:<br/>box x,y,w,h + confidence]\n  D --> F[Per grid cell:<br/>class label]\n  E --> G[Keep boxes with<br/>high confidence]\n  F --> G"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "YOLO predicts boxes only in cells that contain objects.",
+   "correction": "Every grid cell always outputs a box; the confidence score is what indicates whether that box should be trusted. Most cells should output near-zero confidence."
+  },
+  {
+   "claim": "The book's model is the original YOLO.",
+   "correction": "It is a simplified recreation: it predicts one box per grid cell (the paper predicted multiple) and uses a pretrained KerasHub ResNet instead of the authors' own ImageNet-pretrained backbone."
+  },
+  {
+   "claim": "Shuffling is optional because the model sees all the data each epoch anyway.",
+   "correction": "Order matters for SGD: grouped data produces long runs of correlated batches that bias each update. The book calls grouped order 'terrible for training'."
+  },
+  {
+   "claim": "Any classification backbone is equally good for detection.",
+   "correction": "The book prefers ResNet over Xception here because downsampling with strides retains spatial location better than pooling, which matters when predicting box coordinates."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 354, "note": "Two-stage R-CNN detectors, the contrast for 'single stage'."},
+   {"page": 356, "note": "Single-stage detectors and the decision to recreate the 2015 YOLO."},
+   {"page": 357, "note": "Listing 12.2 builds the `metadata` list filtered here."},
+   {"page": 358, "note": "Listing 12.3 shows 1 to 63 boxes per image and 91 labels."}
+  ],
+  "later": [
+   {"page": 361, "note": "Figure 12.4 and listing 12.5 load the ResNet-50 backbone at 448 x 448."},
+   {"page": 362, "note": "Listing 12.6 attaches the YOLO head with a 6 x 6 grid."},
+   {"page": 363, "note": "Section 12.2.3 defines the (x, y, w, h, confidence) box encoding relative to the grid."},
+   {"page": 364, "note": "Listing 12.7 creates targets with confidence 1 for real boxes, 0 elsewhere."},
+   {"page": 366, "note": "The YOLO loss and its special handling of confidence."},
+   {"page": 370, "note": "Results and suggested improvements, including using the whole dataset."}
+  ],
+  "prerequisites": [
+   {"page": 354, "note": "Section 12.1 on detector families."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 357, "note": "Listing 12.2, parsing the COCO data."},
+   {"page": 361, "note": "Listing 12.5, loading the ResNet model."}
+  ],
+  "related_figures": [
+   {"page": 361, "note": "Figure 12.4, YOLO outputs as visualized in the first YOLO paper."}
+  ]
+ },
+ "takeaways": [
+  "The dataset is reduced to images with at most four boxes (easier problem, about half the data) and shuffled because it is grouped by object type.",
+  "YOLO is single-stage: boxes and labels are predicted in one pass, with no region-proposal step.",
+  "The image is divided into a grid; each cell predicts one bounding box, a confidence score and a class label (the paper used several boxes per cell).",
+  "Confidence should be high where an object is present and near zero elsewhere, which is the case for most cells.",
+  "A pretrained ResNet backbone from KerasHub is used instead of Xception, because its strided downsampling preserves spatial location better than pooling.",
+  "Input resolution matters for detection; images are resized to 448 x 448."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why do the authors shuffle `metadata` after filtering it?",
+   "options": [
+    "Because the images are grouped by object type, which would be terrible for training",
+    "Because shuffling halves the data size",
+    "Because the ResNet backbone requires randomly ordered inputs to load its weights",
+    "Because shuffling removes images with more than four boxes"
+   ],
+   "answer": "Because the images are grouped by object type, which would be terrible for training",
+   "explanation": "The page states the images are grouped by object type. Halving the data comes from the filter, not the shuffle; the backbone's weights have nothing to do with data order; and the removal of crowded images is done by `filter`, not `shuffle`.",
+   "page_refs": [360]
+  },
+  {
+   "id": "q2",
+   "type": "conceptual",
+   "question": "What distinguishes YOLO, a single-stage detector, from a two-stage detector such as R-CNN?",
+   "options": [],
+   "answer": "A two-stage detector first identifies candidate object regions and then classifies them; YOLO proposes bounding boxes and labels in one go, in a single pass of one network.",
+   "explanation": "This is the definition given at the start of 12.2.2, contrasting with section 12.1.1.",
+   "page_refs": [360, 354]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What is the role of the confidence score output with each box, and what value should it take in most grid cells?",
+   "options": [],
+   "answer": "It indicates whether an object is actually detected at that grid location: high when there is an object, zero when there is not. Since most cells contain no object, most confidences should be near zero.",
+   "explanation": "Because every cell always outputs a box, the confidence score is needed to separate real detections from empty cells.",
+   "page_refs": [360]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "According to the page, why does the book switch from an Xception backbone to ResNet for object detection?",
+   "options": [
+    "ResNet uses strides rather than pooling to downsample, and strided convolutions are better when spatial location matters",
+    "ResNet has no convolutional layers, so it is faster",
+    "Xception cannot be loaded from KerasHub",
+    "ResNet was the backbone used in the original YOLO paper"
+   ],
+   "answer": "ResNet uses strides rather than pooling to downsample, and strided convolutions are better when spatial location matters",
+   "explanation": "The page gives exactly this reason, citing chapter 11. ResNet is convolutional; Xception has been loaded from KerasHub earlier in the book; and the YOLO authors created their own backbone rather than using ResNet.",
+   "page_refs": [360]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "The book predicts only one box per grid cell. What kind of situation can such a model not handle, and how does the dataset filter on this page help?",
+   "options": [],
+   "answer": "Two objects whose centers fall in the same grid cell cannot both be predicted. Restricting training to images with at most four boxes makes such collisions rarer and the problem easier.",
+   "explanation": "The page states the simplification (one box per cell vs. multiple in the paper) and that filtering makes the problem easier; the link between the two is an inference.",
+   "page_refs": [360]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "What input resolution does the book use, and what does it say about this choice?",
+   "options": [],
+   "answer": "Images are resized to 448 x 448; the book says image input size is quite important for the object detection task.",
+   "explanation": "Stated in the last paragraph of the page; listing 12.5 (p.361) sets `image_size = 448`.",
+   "page_refs": [360, 361]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Without looking, sketch the output of the book's YOLO model for a single grid cell. Which quantities does it contain, and which one tells you whether to draw the box?",
+   "options": [],
+   "answer": "A bounding box, a confidence score and a class label; the confidence score decides whether the box is drawn.",
+   "explanation": "If you could list the three outputs and the role of confidence, you have the blueprint for listings 12.6 and 12.7.",
+   "page_refs": [360]
+  }
+ ]
+}

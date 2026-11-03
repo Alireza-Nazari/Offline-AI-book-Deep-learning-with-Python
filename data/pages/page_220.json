@@ -1,0 +1,316 @@
+{
+  "page_id": "page_220",
+  "pdf_page": 220,
+  "printed_page": "196",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:52:00Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean. The final summary() table ends at the bottom of the page without the totals lines; the totals presumably continue on p.221 (not visible here)."
+  },
+  "overview": {
+    "title": "Symbolic tensors and the Model constructor",
+    "chapter": "7 A deep dive on Keras",
+    "section": "7.2 Different ways to build Keras models",
+    "subsection": "7.2.2 The Functional API",
+    "main_topic": "Step-by-step explanation of Listing 7.8: what a symbolic tensor is, how layers called on symbolic tensors return new symbolic tensors, and how keras.Model is built from inputs and outputs.",
+    "central_idea": "keras.Input returns a symbolic tensor — a data-free placeholder carrying shape and dtype that stands for future tensors. Calling layers on symbolic tensors produces new symbolic tensors with updated shapes, and keras.Model(inputs, outputs) captures the resulting graph of layers.",
+    "importance": "The symbolic tensor is the core mechanism of the Functional API. Understanding it explains why Functional models are built immediately, why Keras can inspect their structure, and how multi-input/multi-output models (next page) are wired.",
+    "learning_objectives": [
+      "Define a symbolic tensor and explain what it does and does not contain.",
+      "Read inputs.shape (None, 3) and inputs.dtype float32.",
+      "Explain that layers accept both real and symbolic tensors, returning a symbolic tensor in the latter case.",
+      "Describe how keras.Model is instantiated from inputs and outputs.",
+      "Read a Functional model summary, including the InputLayer row with 0 parameters."
+    ],
+    "prerequisites": [
+      "Listing 7.8 (p.219)",
+      "keras.Input and the None batch dimension (pp.217-218)",
+      "Dense layer parameter counts (p.217)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "This page walks through Listing 7.8 line by line.\n\n**The input.** `inputs = keras.Input(shape=(3,), name=\"my_input\")` produces an object that holds the **shape** and **dtype** of the data the model will process: `inputs.shape` is `(None, 3)` and `inputs.dtype` is `\"float32\"`. The callouts explain: the model will process batches where each sample has shape `(3,)`, the number of samples per batch is variable (the `None`), and the batches will have dtype float32.\n\nThe book calls this a **symbolic tensor**: it *doesn't contain any actual data*, but it *encodes the specifications* of the actual data tensors the model will see. It *stands for* future tensors of data.\n\n**Calling a layer.** `features = layers.Dense(64, activation=\"relu\")(inputs)` creates a layer and calls it on the input. **All Keras layers can be called on real tensors or on symbolic tensors**; on a symbolic tensor they return **a new symbolic tensor with updated shape and dtype**, so `features.shape` is `(None, 64)`.\n\n**Building the model.** After getting the final `outputs = layers.Dense(10, activation=\"softmax\")(features)`, the model is created with `keras.Model(inputs=inputs, outputs=outputs, name=\"my_functional_model\")`.\n\n**The summary** of `\"my_functional_model\"` lists three rows: `my_input (InputLayer)` `(None, 3)` with **0** parameters, `dense_8 (Dense)` `(None, 64)` 256, and `dense_9 (Dense)` `(None, 10)` 650. Unlike the Sequential summaries on pp.217-219, the Functional summary shows the input as its own `InputLayer` row; the named input appears as `my_input`.",
+  "paragraphs": [
+    {
+      "ref": "p220_e03",
+      "excerpt": "This inputs object holds information about the shape and dtype of the",
+      "what_it_says": "The inputs object records the shape and dtype of the data the model will process: (None, 3) and float32.",
+      "what_it_means": "shape=(3,) in keras.Input becomes (None, 3): Keras prepends a batch axis of unknown size. dtype defaults to float32.",
+      "why_it_matters": "These two pieces of information are all a downstream layer needs to create its weights, which is why Functional models are built as soon as they are defined.",
+      "terminology": [
+        {"term": "dtype", "meaning": "Data type of tensor elements, here float32 (32-bit floating point)."},
+        {"term": "batch size None", "meaning": "The number of samples per batch is variable."}
+      ],
+      "connections": ["p.217: the None batch dimension in build(input_shape=(None, 3))."]
+    },
+    {
+      "ref": "p220_e05",
+      "excerpt": "We call such an object a symbolic tensor. It doesn’t contain any",
+      "what_it_says": "Such an object is a symbolic tensor: it has no data but encodes the specifications of the actual tensors the model will see; it stands for future tensors of data.",
+      "what_it_means": "A symbolic tensor is a placeholder in a graph-under-construction. Operations on it record structure (which layer consumes what) and propagate shape/dtype, without performing any arithmetic.",
+      "why_it_matters": "This is what lets the Functional API describe a model's computation graph ahead of time and lets Keras inspect, summarize and plot it.",
+      "technical_idea": "In Keras 3 these are KerasTensor objects; they also remember which layer call produced them, which is how keras.Model can trace back from outputs to inputs.",
+      "terminology": [
+        {"term": "symbolic tensor", "meaning": "A data-free object specifying the shape and dtype of tensors that will flow through a model; stands for future data."}
+      ],
+      "connections": ["p.219: Listing 7.8 creates the symbolic input."]
+    },
+    {
+      "ref": "p220_e06",
+      "excerpt": "Next, we created a layer and called it on the input:",
+      "what_it_says": "The second step creates a Dense layer and calls it on the input.",
+      "what_it_means": "Dense(64, activation=\"relu\") constructs the layer; the trailing (inputs) calls it. Because the input shape (3) is known, the layer is built (kernel (3, 64)) at this moment.",
+      "why_it_matters": "Creating and calling in one expression is the idiomatic Functional style.",
+      "terminology": [],
+      "connections": ["p.217: layers get built when they are called for the first time."]
+    },
+    {
+      "ref": "p220_e08",
+      "excerpt": "All Keras layers can be called both on real tensors of data",
+      "what_it_says": "Layers can be called on real tensors or symbolic tensors; on symbolic tensors they return a new symbolic tensor with updated shape and dtype.",
+      "what_it_means": "The same layer object serves both to define a graph (symbolic call) and to compute (eager call on arrays). The output symbolic tensor's shape is the layer's computed output shape, here (None, 64).",
+      "why_it_matters": "This duality is why a Functional model is just a reusable function: after construction, calling model(real_data) runs the same layers on real tensors.",
+      "terminology": [
+        {"term": "real tensor", "meaning": "A tensor holding actual numerical data (e.g. a NumPy array or backend tensor)."}
+      ],
+      "connections": ["p.221: multi-input models use the same mechanism with several Input objects."]
+    },
+    {
+      "ref": "p220_e10",
+      "excerpt": "After obtaining the final outputs, we instantiated the model by specifying its",
+      "what_it_says": "With the final outputs in hand, the model is created by passing inputs and outputs to the Model constructor.",
+      "what_it_means": "keras.Model walks the graph from outputs back to inputs, collecting every layer call in between. Anything not on a path between them is excluded.",
+      "why_it_matters": "The model is defined entirely by its endpoints, which is what makes multi-input and multi-output models straightforward: pass lists (or dicts) of tensors.",
+      "terminology": [
+        {"term": "keras.Model constructor (functional form)", "meaning": "keras.Model(inputs=..., outputs=..., name=...) builds a model from symbolic tensors."}
+      ],
+      "connections": ["p.221: Listing 7.9 passes lists of inputs and outputs."]
+    },
+    {
+      "ref": "p220_e12",
+      "excerpt": "Here’s the summary of our model:",
+      "what_it_says": "Introduces the summary of my_functional_model.",
+      "what_it_means": "The table shows my_input (InputLayer) (None, 3) 0 params, dense_8 (None, 64) 256, dense_9 (None, 10) 650 — the same 906 trainable parameters as the Sequential versions, with an explicit input row.",
+      "why_it_matters": "Confirms that Listing 7.8 is the same model as Listings 7.1-7.7, and shows that the Functional summary includes the input.",
+      "terminology": [
+        {"term": "InputLayer", "meaning": "The layer Keras creates to represent a keras.Input in the model graph; it has no weights."}
+      ],
+      "connections": ["p.219: the Sequential summary lists only dense_4 and dense_5."]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "symbolic_tensor",
+      "name": "Symbolic tensor",
+      "definition": "An object that contains no data but encodes the shape and dtype of the tensors a model will process; it stands for future tensors of data.",
+      "intuition": "A blueprint label on an empty conveyor belt: 'batches of 3 float32 numbers will travel here'.",
+      "technical": "Returned by keras.Input; calling a layer on it returns another symbolic tensor with the layer's output shape/dtype, and records the connection.",
+      "significance": "The mechanism underpinning the Functional API.",
+      "example": "inputs.shape == (None, 3); features.shape == (None, 64).",
+      "misconception": "That inputs holds a batch of data or random values; it holds none.",
+      "related": ["functional_api", "keras_input", "tensor"],
+      "source": "book"
+    },
+    {
+      "id": "functional_api",
+      "name": "Functional API",
+      "definition": "Building models by calling layers on symbolic tensors and passing inputs/outputs to keras.Model.",
+      "intuition": "Wire the graph, then box it up.",
+      "technical": "keras.Model(inputs=inputs, outputs=outputs, name=...).",
+      "significance": "Most commonly used Keras API.",
+      "example": "my_functional_model.",
+      "misconception": "That the model must be compiled or called to be built; Functional models are built when constructed.",
+      "related": ["symbolic_tensor", "sequential_model"],
+      "source": "book"
+    },
+    {
+      "id": "keras_layer",
+      "name": "Keras layer (dual call)",
+      "definition": "A Keras layer is callable on real tensors (computes) or symbolic tensors (records structure and returns a symbolic output).",
+      "intuition": "The same machine can run on real parts or be drawn into a factory plan.",
+      "technical": "On symbolic input the layer is built if needed and its output spec is computed.",
+      "significance": "Lets one object serve for both model definition and computation.",
+      "example": "Dense(64, activation=\"relu\")(inputs).",
+      "misconception": "That you need different layer classes for graph definition and execution.",
+      "related": ["symbolic_tensor", "dense_layer"],
+      "source": "book"
+    }
+  ],
+  "math": [],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Inspecting the symbolic input",
+      "original_code": ">>> inputs.shape\n(None, 3)\n>>> inputs.dtype\n\"float32\"",
+      "language": "python",
+      "what_it_does": "Shows the shape and dtype recorded by the symbolic input tensor.",
+      "line_explanations": [
+        {"lines": "1-2", "explanation": "Callout: batches where each sample has shape (3,); the number of samples per batch is variable (None)."},
+        {"lines": "3-4", "explanation": "Callout: these batches will have dtype float32."}
+      ],
+      "inputs_outputs": "Shape tuple and dtype string.",
+      "algorithm": "",
+      "theory_link": "Symbolic tensors carry specifications, not data.",
+      "parameters": [],
+      "pitfalls": ["If your data is integer-typed (e.g. token ids), declare dtype explicitly in keras.Input."],
+      "illustrative_code": ""
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Calling a layer on the symbolic input",
+      "original_code": "features = layers.Dense(64, activation=\"relu\")(inputs)",
+      "language": "python",
+      "what_it_does": "Creates a Dense(64, relu) layer and calls it on the symbolic input, getting a new symbolic tensor.",
+      "line_explanations": [{"lines": "1", "explanation": "Constructor arguments configure the layer; the second pair of parentheses calls it on inputs."}],
+      "inputs_outputs": "Input: symbolic (None, 3). Output: symbolic (None, 64).",
+      "algorithm": "",
+      "theory_link": "Layer is built with a (3, 64) kernel during this call.",
+      "parameters": [{"name": "64", "role": "Output units."}],
+      "pitfalls": [],
+      "illustrative_code": ""
+    },
+    {
+      "id": "c3",
+      "listing": null,
+      "title": "Shape of the intermediate symbolic tensor",
+      "original_code": ">>> features.shape\n(None, 64)",
+      "language": "python",
+      "what_it_does": "Shows the updated shape after the Dense(64) call.",
+      "line_explanations": [{"lines": "1-2", "explanation": "The last axis became 64 (the number of units); the batch axis stays None."}],
+      "inputs_outputs": "Shape tuple.",
+      "algorithm": "",
+      "theory_link": "Shape propagation through symbolic calls.",
+      "parameters": [],
+      "pitfalls": [],
+      "illustrative_code": ""
+    },
+    {
+      "id": "c4",
+      "listing": null,
+      "title": "Final layer and the Model constructor",
+      "original_code": "outputs = layers.Dense(10, activation=\"softmax\")(features)\nmodel = keras.Model(inputs=inputs, outputs=outputs, name=\"my_functional_model\")",
+      "language": "python",
+      "what_it_does": "Produces the output tensor and wraps the graph from inputs to outputs into a named Model.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "outputs: symbolic tensor of shape (None, 10)."},
+        {"lines": "2", "explanation": "Model defined by its inputs and outputs; Keras collects the layers between them."}
+      ],
+      "inputs_outputs": "A built keras.Model.",
+      "algorithm": "Graph traversal from outputs back to inputs.",
+      "theory_link": "",
+      "parameters": [
+        {"name": "inputs", "role": "Symbolic input tensor(s)."},
+        {"name": "outputs", "role": "Symbolic output tensor(s)."},
+        {"name": "name", "role": "Model name shown in summary()."}
+      ],
+      "pitfalls": ["Passing a tensor as outputs that does not depend on inputs raises a graph-disconnected error."],
+      "illustrative_code": "# AI-written: the finished model now runs on real data\nimport numpy as np\npreds = model(np.random.random((2, 3)))\nprint(preds.shape)  # (2, 10)"
+    },
+    {
+      "id": "c5",
+      "listing": null,
+      "title": "Summary of the Functional model",
+      "original_code": ">>> model.summary()\nModel: \"my_functional_model\"\n┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓\n┃ Layer (type)                      ┃ Output Shape             ┃       Param # ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩\n│ my_input (InputLayer)             │ (None, 3)                │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ dense_8 (Dense)                   │ (None, 64)               │           256 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ dense_9 (Dense)                   │ (None, 10)               │           650 │\n└───────────────────────────────────┴──────────────────────────┴───────────────┘",
+      "language": "text",
+      "what_it_does": "Prints the layer table of my_functional_model (the totals lines are not on this page).",
+      "line_explanations": [
+        {"lines": "6", "explanation": "The named input appears as an InputLayer with shape (None, 3) and 0 parameters."},
+        {"lines": "8", "explanation": "First Dense: 3·64+64 = 256."},
+        {"lines": "10", "explanation": "Second Dense: 64·10+10 = 650."}
+      ],
+      "inputs_outputs": "Prints to stdout.",
+      "algorithm": "",
+      "theory_link": "Same 906 parameters as the Sequential versions.",
+      "parameters": [],
+      "pitfalls": [],
+      "illustrative_code": ""
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Symbolic vs eager: two modes of the same layer",
+      "kind": "step_by_step",
+      "body": "AI explanation of what the page describes:\n1. `keras.Input(shape=(3,))` → symbolic tensor `(None, 3)`, float32. No numbers exist.\n2. `Dense(64)(inputs)`: the layer sees a symbolic tensor, builds its `(3, 64)` kernel and `(64,)` bias, computes the output spec `(None, 64)`, and records \"this tensor came from this layer applied to that tensor\".\n3. `Dense(10)(features)`: same, giving `(None, 10)`.\n4. `keras.Model(inputs, outputs)` follows those records backward to collect the layers.\n5. Later, `model(x)` with a real array replays the recorded layer calls in eager mode, now doing arithmetic.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Symbolic tensors as function parameters",
+      "kind": "analogy",
+      "body": "When you write `def f(x): return 2 * x + 1`, `x` is not a number — it stands for any future number. A symbolic tensor plays the same role for a model: `inputs` is the parameter name, the layer calls are the function body, and `keras.Model(inputs, outputs)` is the `def`.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "widget",
+      "title": "Shape propagation through symbolic tensors",
+      "why": "Traces inputs.shape (None, 3) → features.shape (None, 64) → outputs (None, 10), exactly the shapes printed on this page.",
+      "widget": "tensor_shapes",
+      "params": {"steps": [
+        {"op": "keras.Input(shape=(3,))", "shape": [null, 3]},
+        {"op": "Dense(64, relu)", "shape": [null, 64]},
+        {"op": "Dense(10, softmax)", "shape": [null, 10]}
+      ]}
+    },
+    {
+      "id": "v2",
+      "type": "widget",
+      "title": "my_functional_model",
+      "why": "The three summary rows: InputLayer (0 params), dense_8 (256), dense_9 (650).",
+      "widget": "nn_architecture",
+      "params": {"layers": [
+        {"name": "my_input", "type": "input", "shape": "(None, 3)"},
+        {"name": "dense_8", "type": "dense", "units": 64, "activation": "relu"},
+        {"name": "dense_9", "type": "output", "units": 10, "activation": "softmax"}
+      ]}
+    }
+  ],
+  "misconceptions": [
+    {"claim": "A symbolic tensor contains a dummy batch of data.", "correction": "It contains no data at all; it only encodes shape and dtype specifications."},
+    {"claim": "Layers need special versions to be called on symbolic tensors.", "correction": "All Keras layers can be called on both real and symbolic tensors."},
+    {"claim": "The InputLayer in the summary adds parameters.", "correction": "It has 0 parameters; it only represents the input in the graph."}
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 219, "note": "Listing 7.8, which this page explains."},
+      {"page": 218, "note": "keras.Input in a Sequential model."},
+      {"page": 217, "note": "Layers are built when first called; None batch dimension."}
+    ],
+    "later": [
+      {"page": 221, "note": "Multi-input, multi-output Functional models (Listing 7.9)."},
+      {"page": 229, "note": "The Functional API gives direct access to layer connectivity."}
+    ],
+    "prerequisites": [
+      {"page": 219, "note": "Listing 7.8."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 219, "note": "Listing 7.8 in full."},
+      {"page": 218, "note": "Sequential summaries, for comparison of the InputLayer row."}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "keras.Input returns a symbolic tensor with shape (None, 3) and dtype float32.",
+    "A symbolic tensor holds no data; it stands for future tensors.",
+    "Layers called on symbolic tensors return new symbolic tensors with updated shape/dtype.",
+    "keras.Model(inputs=..., outputs=...) defines the model by its endpoints.",
+    "The Functional summary includes an InputLayer row with 0 parameters."
+  ],
+  "questions": [
+    {"id": "q1", "type": "mcq", "question": "What does the inputs object returned by keras.Input(shape=(3,)) contain?", "options": ["A batch of zeros of shape (1, 3)", "The shape and dtype specification of future data, but no data", "The weights of the first layer", "A NumPy array of shape (3,)"], "answer": "The shape and dtype specification of future data, but no data", "explanation": "The page defines it as a symbolic tensor that doesn't contain actual data. It is not a zero batch or array, and weights belong to layers.", "page_refs": [220]},
+    {"id": "q2", "type": "short", "question": "What is features.shape after features = layers.Dense(64, activation=\"relu\")(inputs)?", "options": [], "answer": "(None, 64)", "explanation": "The layer returns a new symbolic tensor with updated shape: last axis 64, batch axis unchanged.", "page_refs": [220]},
+    {"id": "q3", "type": "short", "question": "What does the None in inputs.shape signify?", "options": [], "answer": "The number of samples per batch is variable.", "explanation": "From the callout next to inputs.shape.", "page_refs": [220]},
+    {"id": "q4", "type": "conceptual", "question": "Why does the Functional summary list my_input (InputLayer) with 0 parameters when the Sequential summaries did not list the input?", "options": [], "answer": "In the Functional model the input is an explicit node of the layer graph (an InputLayer), so it appears in the summary; it has no weights, hence 0 parameters.", "explanation": "Compare p.220's table with p.219's. The 'why' is an AI explanation of what the tables show.", "page_refs": [219, 220]},
+    {"id": "q5", "type": "math", "question": "Using the three rows of the summary, what is the total parameter count of my_functional_model?", "options": [], "answer": "906", "explanation": "0 + 256 + 650 = 906.", "page_refs": [220]},
+    {"id": "q6", "type": "mcq", "question": "Which statement about calling Keras layers is correct according to the page?", "options": ["Layers can only be called on symbolic tensors inside a Functional model", "Layers can be called on real tensors or symbolic tensors", "Layers called on symbolic tensors return real tensors", "Layers called on symbolic tensors return None"], "answer": "Layers can be called on real tensors or symbolic tensors", "explanation": "The page says all Keras layers can be called on both; on symbolic tensors they return a new symbolic tensor, not a real one or None.", "page_refs": [220]},
+    {"id": "q7", "type": "self", "question": "Can you explain to someone, without code, why a Functional model can be summarized immediately after construction while the Sequential model of Listing 7.2 could not?", "options": [], "answer": "The Functional model starts from an Input with known shape, so every layer is built during the symbolic calls; Listing 7.2 had no input shape, so its layers had no weights yet.", "explanation": "Connects p.217 with p.220.", "page_refs": [217, 220]}
+  ]
+}

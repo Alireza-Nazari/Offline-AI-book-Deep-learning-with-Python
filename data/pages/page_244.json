@@ -1,0 +1,406 @@
+{
+  "page_id": "page_244",
+  "pdf_page": 244,
+  "printed_page": "220",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:29:31Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean. All four code blocks match the image. The last block is the first part of the end-to-end JAX train_step; it continues on p.245 (stateless_apply and the return statement)."
+  },
+  "overview": {
+    "title": "Optimizer state, stateless_apply and assembling the JAX step",
+    "chapter": "7 A deep dive on Keras",
+    "section": "7.4 Writing your own training and evaluation loops",
+    "subsection": "7.4.2 Writing custom training step functions",
+    "main_topic": "Using grad_fn, why optimizers carry their own state, Keras's optimizer.stateless_apply(), and the start of the end-to-end JAX train_step that threads all state through its arguments",
+    "central_idea": "Plain SGD needs no state, but Adam and other momentum-based optimizers keep auxiliary variables that change every step. In JAX those must be passed in and returned too, which optimizer.stateless_apply() does. The full JAX train_step therefore takes a state tuple of (trainable, non-trainable, optimizer variables) and computes gradients with grad_fn.",
+    "importance": "This completes the stateless picture: model weights, layer state and optimizer state are all explicit. The same state-threading pattern is used when fit() is customized on JAX (p.249).",
+    "learning_objectives": [
+      "Unpack the output of a has_aux value_and_grad call correctly",
+      "Relate the chapter 2 update_weights() function to keras.optimizers.SGD",
+      "Explain why momentum-based optimizers need auxiliary variables and why that matters in JAX",
+      "Use optimizer.stateless_apply() and explain its inputs and outputs",
+      "Explain the state tuple and why optimizer.build() is called first"
+    ],
+    "prerequisites": [
+      "compute_loss_and_updates() and grad_fn with has_aux (p.243)",
+      "The chapter 2 low-level TensorFlow training step and momentum",
+      "JAX statelessness (p.242)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page first shows how to call the `grad_fn` built on p.243 with `has_aux=True`: `(loss, non_trainable_weights), gradients = grad_fn(trainable_variables, non_trainable_variables, inputs, targets)`. The value and the auxiliary output come back nested together, followed by the gradients.\n\n\"Okay, that was a lot of JAXiness.\" One piece is still missing: the JAX equivalent of **`optimizer.apply()`**. The authors recall chapter 2's hand-written TensorFlow update:\n\n```\nfor g, w in zip(gradients, weights):\n    w.assign(w - g * learning_rate)\n```\n\nwith `learning_rate = 1e-3`. This **corresponds to `keras.optimizers.SGD`**. Every other Keras optimizer is more complex: it **tracks auxiliary variables that speed up training**, and most use some form of **momentum** (chapter 2). These variables change at every step. In JAX that means you need a **stateless function that takes them as arguments and returns their new values**.\n\nKeras provides that as **`optimizer.stateless_apply()`** on every optimizer: `trainable_variables, optimizer_variables = optimizer.stateless_apply(optimizer_variables, grads, trainable_variables)`. It takes the optimizer state, the gradients and the current trainable values, and returns new trainable values and new optimizer state.\n\nWith that, the **end-to-end JAX training step** can be put together. Create `keras.optimizers.Adam()` and call `optimizer.build(model.trainable_variables)` so its variables exist. `train_step(state, inputs, targets)` takes the whole **state as a function argument**, unpacks it into `(trainable_variables, non_trainable_variables, optimizer_variables)`, and calls `grad_fn` to get the loss, the updated non-trainable variables and the gradients. The rest of the function (applying the update and returning the new state) is on p.245.",
+  "paragraphs": [
+    {
+      "ref": "p244_e03",
+      "excerpt": "You would use it like this:",
+      "what_it_says": "This shows how to call the has_aux grad_fn: `(loss, non_trainable_weights), gradients = grad_fn(trainable_variables, non_trainable_variables, inputs, targets)`.",
+      "what_it_means": "With has_aux=True, value_and_grad returns a pair whose first element is the function's full return value (loss, aux) and whose second is the gradient. Hence the nested unpacking. The gradients form a list with the same structure as trainable_variables.",
+      "why_it_matters": "Getting the nesting wrong is a common mistake. Note also that the snippet names the auxiliary output `non_trainable_weights` while the argument is `non_trainable_variables`; the train_step below uses `non_trainable_variables` for both.",
+      "connections": ["p.243: grad_fn = jax.value_and_grad(compute_loss_and_updates, has_aux=True)"]
+    },
+    {
+      "ref": "p244_e05",
+      "excerpt": "Okay, that was a lot of JAXiness. But now we’ve got almost",
+      "what_it_says": "Almost everything is ready for the JAX training step. The last missing piece is the equivalent of `optimizer.apply()`.",
+      "what_it_means": "In TF and PyTorch, `optimizer.apply` mutates the weights and the optimizer's internal variables in place. JAX does not allow that, so a stateless counterpart is needed.",
+      "why_it_matters": "It shows that statelessness affects the optimizer as well as the model.",
+      "connections": ["p.240: optimizer.apply in the pseudocode"]
+    },
+    {
+      "ref": "p244_e06",
+      "excerpt": "When you wrote your first basic training step in TensorFlow at the",
+      "what_it_says": "This recalls chapter 2's first TensorFlow update function: for each gradient–weight pair, `w.assign(w - g * learning_rate)` with `learning_rate = 1e-3`.",
+      "what_it_means": "That is the plain gradient-descent update $w \\leftarrow w - \\eta g$. It needs nothing beyond the gradient and the learning rate: no memory of past steps.",
+      "why_it_matters": "It is the baseline for showing what extra state real optimizers carry.",
+      "connections": ["p.96: chapter 3's TF training step also used assign-based updates"]
+    },
+    {
+      "ref": "p244_e08",
+      "excerpt": "This corresponds to what the optimizer keras.optimizers.SGD would do. However, every other",
+      "what_it_says": "The hand-written update is what `keras.optimizers.SGD` does. Other Keras optimizers keep auxiliary variables that speed up training, most often for momentum. These are updated every step, so in JAX you need a stateless function that takes them as arguments and returns their new values.",
+      "what_it_means": "Momentum keeps a velocity $v$ (a running blend of past gradients). Adam keeps first- and second-moment estimates $m$, $v$ and a step counter. These variables exist for every weight, so Adam's state is about twice the size of the model. They are another kind of state that the functional JAX style must make explicit.",
+      "why_it_matters": "If optimizer state were dropped in JAX, Adam would start from scratch every step and behave nothing like Adam.",
+      "technical_idea": "Beyond the book, the Adam update: $m \\leftarrow \\beta_1 m + (1-\\beta_1) g$, $v \\leftarrow \\beta_2 v + (1-\\beta_2) g^2$, $w \\leftarrow w - \\eta\\,\\hat m/(\\sqrt{\\hat v}+\\epsilon)$ with bias-corrected $\\hat m, \\hat v$.",
+      "terminology": [
+        {"term": "momentum", "meaning": "Using a running accumulation of past gradients to smooth and speed up updates (chapter 2)."},
+        {"term": "optimizer variables", "meaning": "The optimizer's internal state, such as momentum buffers, moment estimates and the iteration count."}
+      ],
+      "connections": ["p.242: JAX functions must take all state as arguments and return updated state"]
+    },
+    {
+      "ref": "p244_e09",
+      "excerpt": "To make this easy, Keras makes available the stateless_apply() method on all",
+      "what_it_says": "Every Keras optimizer has a `stateless_apply()` method: `trainable_variables, optimizer_variables = optimizer.stateless_apply(optimizer_variables, grads, trainable_variables)`.",
+      "what_it_means": "It is a pure version of `apply`: the old optimizer state, the gradients and the current weights go in; new weights and new optimizer state come out. Nothing is mutated. Note the argument order: optimizer variables first, then gradients, then trainable variables.",
+      "why_it_matters": "It is the optimizer-side counterpart of the model's stateless_call(). Together they make the whole step pure.",
+      "terminology": [
+        {"term": "stateless_apply()", "meaning": "Pure optimizer update returning (new trainable variables, new optimizer variables)."}
+      ],
+      "connections": ["p.243: stateless_call, the model-side counterpart", "p.249: used inside a custom train_step for fit() on JAX"]
+    },
+    {
+      "ref": "p244_e11",
+      "excerpt": "Now, we have enough to assemble an end-to-end training step:",
+      "what_it_says": "This introduces the full JAX step: build Adam, call `optimizer.build(model.trainable_variables)`, then define `train_step(state, inputs, targets)`. It unpacks the state and calls grad_fn. The remaining lines are on p.245.",
+      "what_it_means": "`optimizer.build` creates the optimizer's variables (one set of slots per trainable variable) so that their initial values exist and can be extracted as part of the state. The state is a single tuple of three lists, passed in and (on p.245) returned.",
+      "why_it_matters": "This is the general shape of any JAX training step: new_state = f(old_state, batch). That shape is what lets it be jit-compiled.",
+      "connections": ["p.245: the rest of the function and the single-step run", "p.113: chapter 3's JAX step that returned updated W and b"]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "sgd",
+      "name": "Plain SGD update",
+      "definition": "w ← w − learning_rate × g, applied to each weight.",
+      "intuition": "Step downhill by an amount proportional to the slope.",
+      "technical": "The chapter 2 `update_weights` with `w.assign(w - g * learning_rate)` and learning_rate = 1e-3; the book says this is what keras.optimizers.SGD does.",
+      "significance": "Needs no state beyond the weights. The baseline against which optimizer state is introduced.",
+      "example": "w = 0.5, g = 2, η = 1e-3 → w = 0.498.",
+      "misconception": "Beyond the book: keras.optimizers.SGD can also use momentum if configured. The book's equivalence refers to the plain default.",
+      "related": ["optimizer", "learning_rate", "gradient_descent"],
+      "source": "book"
+    },
+    {
+      "id": "optimizer_state",
+      "name": "Optimizer state (auxiliary variables)",
+      "definition": "Variables an optimizer keeps across steps to speed up training, for example momentum buffers.",
+      "intuition": "The optimizer's memory of recent gradients.",
+      "technical": "Updated at every step. In JAX they must be inputs and outputs of a stateless update function.",
+      "significance": "Why stateless_apply exists and why the JAX state tuple has three parts.",
+      "example": "Adam's first- and second-moment estimates (beyond the book).",
+      "misconception": "Optimizer variables are not model weights, but they are just as essential to training correctly.",
+      "related": ["adam", "momentum", "stateless_apply"],
+      "source": "book"
+    },
+    {
+      "id": "stateless_apply",
+      "name": "optimizer.stateless_apply()",
+      "definition": "A pure optimizer update: (optimizer_variables, grads, trainable_variables) → (new trainable_variables, new optimizer_variables).",
+      "intuition": "Like optimizer.apply, but instead of editing things in place it returns the new values.",
+      "technical": "Available on all Keras optimizers. The optimizer must be built first (`optimizer.build(model.trainable_variables)`).",
+      "significance": "The last piece of the JAX training step.",
+      "example": "The snippet on this page and its use on p.245.",
+      "misconception": "It does not update the optimizer object's own variables; you carry the returned values forward.",
+      "related": ["stateless_call", "optimizer_state", "jax_statelessness"],
+      "source": "book"
+    },
+    {
+      "id": "training_state_tuple",
+      "name": "Training state as a function argument",
+      "definition": "Bundling trainable, non-trainable and optimizer variables into one `state` tuple that train_step takes and returns.",
+      "intuition": "Everything that changes during training travels as a single package.",
+      "technical": "`train_step(state, inputs, targets)`; the first line unpacks `(trainable_variables, non_trainable_variables, optimizer_variables) = state`.",
+      "significance": "Makes the step a pure function, new_state = f(state, batch), which JAX can compile.",
+      "example": "Built from `[v.value for v in ...]` lists on p.245.",
+      "misconception": "The Keras model object is not updated automatically; the values live in the state until you write them back.",
+      "related": ["jax_statelessness", "stateless_apply"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "The chapter 2 SGD update",
+      "latex": "w \\leftarrow w - \\eta\\, g, \\qquad \\eta = 10^{-3}",
+      "source_text": "w.assign(w - g * learning_rate), learning_rate = 1e-3",
+      "variables": [
+        {"symbol": "w", "meaning": "a weight tensor"},
+        {"symbol": "g", "meaning": "the gradient of the loss with respect to w"},
+        {"symbol": "\\eta", "meaning": "learning rate, 1e-3 in the snippet"}
+      ],
+      "operations": "Elementwise scale-and-subtract, applied to each (gradient, weight) pair.",
+      "purpose": "The stateless baseline update that keras.optimizers.SGD performs.",
+      "interpretation": "Moves each weight a small step against its gradient.",
+      "intuition": "Steeper slope, bigger step. No memory of previous steps.",
+      "numerical_example": "w = 0.5, g = 2.0: w ← 0.5 − 0.001·2.0 = 0.498.",
+      "source": "book",
+      "book_ref": "p.244"
+    },
+    {
+      "id": "m2",
+      "title": "Momentum: why optimizers need auxiliary variables",
+      "latex": "\\begin{aligned} v &\\leftarrow \\mu\\, v - \\eta\\, g \\\\ w &\\leftarrow w + v \\end{aligned}",
+      "source_text": "most optimizers use some form of momentum ... These extra variables get updated at each step of training",
+      "variables": [
+        {"symbol": "v", "meaning": "velocity, an auxiliary optimizer variable kept across steps"},
+        {"symbol": "\\mu", "meaning": "momentum coefficient (for example 0.9)"},
+        {"symbol": "\\eta", "meaning": "learning rate"},
+        {"symbol": "g", "meaning": "current gradient"}
+      ],
+      "operations": "Blend the previous velocity with the new gradient, then move the weight by the velocity.",
+      "purpose": "Shows concretely which extra variable must be carried through a stateless update. The book names momentum without giving this formula here.",
+      "interpretation": "v is exactly the kind of state stateless_apply takes in and returns.",
+      "intuition": "A ball rolling downhill keeps some of its previous speed.",
+      "numerical_example": "μ = 0.9, η = 0.1, starting v = 0. Step 1, g = 1: v = −0.1, w moves −0.1. Step 2, g = 1: v = 0.9·(−0.1) − 0.1 = −0.19, w moves −0.19. The step grows because of the remembered velocity.",
+      "source": "ai_explanation",
+      "book_ref": "p.244"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Calling grad_fn with has_aux",
+      "original_code": "(loss, non_trainable_weights), gradients = grad_fn(\n    trainable_variables, non_trainable_variables, inputs, targets\n)",
+      "language": "python",
+      "what_it_does": "Calls the gradient function from p.243 and unpacks the loss, the updated non-trainable weights and the gradients.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "With has_aux=True the result is ((value, aux), grads), hence the nested tuple on the left."},
+        {"lines": "2", "explanation": "Same arguments as compute_loss_and_updates."}
+      ],
+      "inputs_outputs": "In: trainable and non-trainable values, batch inputs and targets. Out: scalar loss, new non-trainable values, gradient list.",
+      "algorithm": "Forward pass plus reverse-mode autodiff in one call.",
+      "theory_link": "Replaces get_gradients_of() for JAX.",
+      "parameters": [
+        {"name": "trainable_variables", "role": "Differentiated argument"}
+      ],
+      "pitfalls": [
+        "Unpacking as `loss, gradients = ...` would put the (loss, aux) tuple into `loss`."
+      ]
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Chapter 2's manual SGD update",
+      "original_code": "learning_rate = 1e-3\n\ndef update_weights(gradients, weights):\n    for g, w in zip(gradients, weights):\n        w.assign(w - g * learning_rate)",
+      "language": "python",
+      "what_it_does": "Applies a plain gradient-descent step to each TensorFlow variable in place.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Fixed learning rate of 0.001."},
+        {"lines": "3-5", "explanation": "Pairs each gradient with its weight and assigns w − g·lr. `assign` mutates the TF variable, a stateful operation."}
+      ],
+      "inputs_outputs": "In: lists of gradients and variables. Out: none; the variables are updated in place.",
+      "algorithm": "Vanilla SGD.",
+      "theory_link": "What keras.optimizers.SGD does (book).",
+      "parameters": [
+        {"name": "learning_rate", "role": "Step size, 1e-3"}
+      ],
+      "pitfalls": [
+        "`assign` mutates in place, which is not possible on immutable JAX arrays. That is why a stateless variant is needed."
+      ]
+    },
+    {
+      "id": "c3",
+      "listing": null,
+      "title": "optimizer.stateless_apply()",
+      "original_code": "trainable_variables, optimizer_variables = optimizer.stateless_apply(\n    optimizer_variables, grads, trainable_variables\n)",
+      "language": "python",
+      "what_it_does": "Computes one optimizer update functionally and returns new trainable and optimizer variable values.",
+      "line_explanations": [
+        {"lines": "1-3", "explanation": "Arguments: optimizer state, gradients, current trainable values. Returns: updated trainable values, updated optimizer state."}
+      ],
+      "inputs_outputs": "Three lists in, two lists out.",
+      "algorithm": "Whatever the optimizer implements (for example the Adam update), without side effects.",
+      "theory_link": "The optimizer-side counterpart of stateless_call (p.243).",
+      "parameters": [
+        {"name": "optimizer_variables", "role": "Momentum/moment buffers, iteration count, etc."},
+        {"name": "grads", "role": "Gradients from grad_fn"},
+        {"name": "trainable_variables", "role": "Current weight values"}
+      ],
+      "pitfalls": [
+        "The argument order differs from optimizer.apply(gradients, variables): optimizer state comes first here."
+      ]
+    },
+    {
+      "id": "c4",
+      "listing": null,
+      "title": "End-to-end JAX train_step (first part)",
+      "original_code": "optimizer = keras.optimizers.Adam()\noptimizer.build(model.trainable_variables)\n\ndef train_step(state, inputs, targets):\n    (trainable_variables, non_trainable_variables, optimizer_variables) = state\n    (loss, non_trainable_variables), grads = grad_fn(\n        trainable_variables, non_trainable_variables, inputs, targets\n    )",
+      "language": "python",
+      "what_it_does": "Sets up a built Adam optimizer and starts the stateless train_step: unpack the state and compute gradients plus non-trainable updates. The update with stateless_apply and the return of the new state are on p.245.",
+      "line_explanations": [
+        {"lines": "1-2", "explanation": "Creates Adam and builds its variables for the model's trainable variables so their initial values can be put into the state."},
+        {"lines": "4", "explanation": "The state is part of the function arguments (book callout)."},
+        {"lines": "5", "explanation": "Unpacks the state (book callout) into its three lists."},
+        {"lines": "6-8", "explanation": "Computes gradients and updates to non-trainable variables (book callout) using grad_fn from p.243."}
+      ],
+      "inputs_outputs": "In: state tuple, inputs, targets. Out (completed on p.245): loss and new state.",
+      "algorithm": "Functional training step: new_state = f(state, batch).",
+      "theory_link": "The JAX version of the p.240 pseudocode, with all state explicit.",
+      "parameters": [
+        {"name": "state", "role": "(trainable_variables, non_trainable_variables, optimizer_variables)"}
+      ],
+      "pitfalls": [
+        "Forgetting optimizer.build() means optimizer.variables don't exist yet, so the initial state can't be built.",
+        "This page shows only part of the function. The update and return are on p.245."
+      ]
+    }
+  ],
+  "deeper": [
+    {
+      "title": "The three kinds of state in a JAX training step",
+      "kind": "breakdown",
+      "body": "| State | Changed by | Stateless tool |\n|---|---|---|\n| trainable variables | optimizer, using gradients | `optimizer.stateless_apply` |\n| non-trainable variables | forward pass (for example BatchNorm statistics) | `model.stateless_call` |\n| optimizer variables | optimizer (momentum, moments) | `optimizer.stateless_apply` |\n\nAll three go into `train_step` as `state` and come back out (p.245). The table summarizes pp.242–245.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Analogy: a hiker's notebook",
+      "kind": "analogy",
+      "body": "Plain SGD is a hiker who looks only at the slope under their feet. A momentum optimizer is a hiker who keeps notes on how they have been moving lately and lets that inform the next step. In JAX the hiker can't keep the notebook in a pocket: at every step they hand it in and get an updated copy back. `stateless_apply` is that exchange.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "State threading in the JAX train_step",
+      "why": "Shows how the state tuple introduced on this page flows through grad_fn and stateless_apply (whose use completes on p.245).",
+      "mermaid": "flowchart LR\n  S[\"state = (trainable, non_trainable, optimizer_vars)\"] --> U[unpack]\n  U --> G[\"grad_fn(trainable, non_trainable, inputs, targets)\"]\n  G --> L[loss]\n  G --> NT[new non_trainable]\n  G --> GR[grads]\n  U -->|optimizer_vars, trainable| SA[\"optimizer.stateless_apply(optimizer_vars, grads, trainable)\"]\n  GR --> SA\n  SA --> T2[new trainable]\n  SA --> O2[new optimizer_vars]\n  T2 --> S2[\"new state (p.245)\"]\n  NT --> S2\n  O2 --> S2"
+    }
+  ],
+  "misconceptions": [
+    {"claim": "All Keras optimizers just compute w − lr·g.", "correction": "Only SGD does (as the book's chapter 2 function shows). Others keep auxiliary variables such as momentum that are updated every step."},
+    {"claim": "In JAX you can reuse optimizer.apply() as in TensorFlow.", "correction": "The JAX step uses stateless_apply(), which takes and returns optimizer and trainable variables instead of mutating them."},
+    {"claim": "optimizer.build() trains the optimizer.", "correction": "It only creates the optimizer's variables for the given trainable variables."}
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 243, "note": "compute_loss_and_updates and grad_fn with has_aux"},
+      {"page": 242, "note": "Why JAX requires all state to be passed in and returned"},
+      {"page": 96, "note": "Chapter 3's TF training step with manual updates"},
+      {"page": 113, "note": "Chapter 3's JAX step returning updated W and b"}
+    ],
+    "later": [
+      {"page": 245, "note": "End of the JAX train_step (stateless_apply and returning the state) and the single-step run"},
+      {"page": 249, "note": "Customizing fit() with JAX, reusing the same stateless pieces"},
+      {"page": 246, "note": "Using fit() with a custom training step"}
+    ],
+    "prerequisites": [
+      {"page": 243, "note": "grad_fn and has_aux"}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 245, "note": "Continuation of this train_step listing"},
+      {"page": 241, "note": "The TensorFlow train_step, for contrast"}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "With has_aux, unpack as (loss, non_trainable), grads = grad_fn(...).",
+    "The chapter 2 update w ← w − g·lr is what keras.optimizers.SGD does.",
+    "Other optimizers keep auxiliary variables (mostly momentum-related) that change each step, and in JAX these must be passed in and returned.",
+    "optimizer.stateless_apply(optimizer_variables, grads, trainable_variables) returns new trainable and optimizer variables.",
+    "The JAX train_step takes state = (trainable, non-trainable, optimizer variables) as an argument; build the optimizer first."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "Which Keras optimizer does the chapter 2 update_weights() function correspond to?",
+      "options": [
+        "keras.optimizers.Adam",
+        "keras.optimizers.SGD",
+        "keras.optimizers.RMSprop",
+        "None of them"
+      ],
+      "answer": "keras.optimizers.SGD",
+      "explanation": "The book says so directly. Adam and RMSprop keep auxiliary variables and are more complex.",
+      "page_refs": [244]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "What does optimizer.stateless_apply() take and return?",
+      "options": [],
+      "answer": "It takes (optimizer_variables, grads, trainable_variables) and returns (trainable_variables, optimizer_variables) with updated values.",
+      "explanation": "See the snippet on the page.",
+      "page_refs": [244]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "Why is a stateless optimizer function needed in JAX but not in TensorFlow or PyTorch?",
+      "options": [],
+      "answer": "Most optimizers keep auxiliary variables (such as momentum) that change every step. TF and PyTorch can mutate them in place, but JAX is stateless, so they must be passed as arguments and their new values returned.",
+      "explanation": "That is the reasoning the book gives in the paragraph about momentum.",
+      "page_refs": [244, 242]
+    },
+    {
+      "id": "q4",
+      "type": "math",
+      "question": "Using the chapter 2 update with learning_rate = 1e-3, what is a weight of 0.2 after one step with gradient −5?",
+      "options": [],
+      "answer": "0.2 − (−5)(0.001) = 0.205.",
+      "explanation": "w ← w − g·lr; a negative gradient increases the weight.",
+      "page_refs": [244]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "What does the left-hand side `(loss, non_trainable_weights), gradients` reflect?",
+      "options": [
+        "That grad_fn returns three separate values",
+        "That with has_aux=True, value_and_grad returns ((value, aux), grads)",
+        "That gradients are computed for non-trainable weights",
+        "That the loss is a tuple of per-sample losses"
+      ],
+      "answer": "That with has_aux=True, value_and_grad returns ((value, aux), grads)",
+      "explanation": "The nesting matches has_aux's return structure. It is two values, not three; there are no gradients for non-trainable weights; the loss is a scalar.",
+      "page_refs": [243, 244]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "What are the three components of the state tuple, and why is optimizer.build() called before defining train_step?",
+      "options": [],
+      "answer": "trainable_variables, non_trainable_variables and optimizer_variables. build() creates the optimizer's variables for the model's trainable variables so their initial values exist and can be put into the state.",
+      "explanation": "See the end-to-end code and p.245, where optimizer.variables are read.",
+      "page_refs": [244, 245]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you list every piece of state the JAX train_step must carry and name the Keras method that updates each one?",
+      "options": [],
+      "answer": "Trainable variables: stateless_apply. Optimizer variables: stateless_apply. Non-trainable variables: stateless_call (via grad_fn).",
+      "explanation": "Check against pp.243–245.",
+      "page_refs": [243, 244, 245]
+    }
+  ]
+}

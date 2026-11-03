@@ -1,0 +1,263 @@
+{
+ "page_id": "page_430",
+ "pdf_page": 430,
+ "printed_page": "406",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:07:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Minor book inconsistency: the inspected batch is drawn from sequence_test_ds (`next(sequence_test_ds.as_numpy_iterator())`), but the following sentence says \"almost all training samples have a number of 0s for padding at the end\". The observation holds for any split, but the batch shown is test data.",
+   "Minor imprecision: the text says token IDs must be mapped to \"floating-point data ingestible by a `Dense` layer\", but the next layer in the model (listing 14.21, p.431) is a Bidirectional LSTM. The point (layers need float vectors, not integer IDs) is still valid."
+  ],
+  "extraction_quality": "Clean. Code and the three callouts (\"Learns a word-level vocabulary\" at split, \"Outputs a integer sequence of token IDs\" at output_mode, \"Pads and truncates to 600 tokens\" at output_sequence_length) were checked against the image. The one-hot layer announced at the end is listing 14.20 on p.431."
+ },
+ "overview": {
+  "title": "Padded integer sequences for IMDb, and starting the LSTM model",
+  "chapter": "14 Text classification",
+  "section": "14.5 Sequence models",
+  "subsection": "14.5.1 Training a recurrent model",
+  "main_topic": "Listing 14.19 turns reviews into padded/truncated integer sequences of length 600, the resulting (32, 600) batch is inspected, and section 14.5.1 starts by motivating one-hot encoding of token IDs as input to an LSTM",
+  "central_idea": "TextVectorization with output_mode=\"int\" and output_sequence_length=600 produces rectangular batches of token IDs, padded at the end with 0s. Before an LSTM can use them, the integer IDs must become float vectors; the simplest option is one-hot encoding each token.",
+  "importance": "This is the data pipeline for all sequence models in the chapter. One-hot encoding is the naive baseline that the word embeddings of 14.5.2 (p.433) replace.",
+  "learning_objectives": [
+   "Explain each argument of the TextVectorization layer in listing 14.19 and how it differs from the multi-hot versions",
+   "Read the printed batch: shape (32, 600), leading token IDs, trailing zeros for padding",
+   "Explain why integer token IDs can't be fed directly to neural layers",
+   "Describe one-hot encoding of a token and compare it to multi-hot encoding of a whole review"
+  ],
+  "prerequisites": [
+   "Padding and truncation to 600 tokens (p.429)",
+   "TextVectorization and adapt() (p.423, p.427)",
+   "LSTMs from the previous chapter"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Listing 14.19** implements the plan from p.429. With `max_length = 600` and `max_tokens = 30_000`, a new `TextVectorization` layer splits on whitespace (callout: \"Learns a word-level vocabulary\"), uses `output_mode=\"int\"` (\"Outputs a integer sequence of token IDs\") and `output_sequence_length=max_length` (\"Pads and truncates to 600 tokens\"). It is adapted on `train_ds_no_labels`, then mapped over the train, validation and test datasets with `num_parallel_calls=8`, producing `sequence_train_ds`, `sequence_val_ds` and `sequence_test_ds`. Unlike listings 14.12 and 14.16, there is no multi-hot output and no `ngrams` argument: the order of tokens is kept.\n\nInspecting one batch (drawn from `sequence_test_ds`) gives `x.shape == (32, 600)`. Each row starts with token IDs (e.g. `11, 29, 7, ...`, `1825, 3, 25819, ...`) and ends with `0, 0, 0`. The batch has shape `(batch_size, sequence_length)`, and almost all samples end with a run of 0s for padding, as expected since the average review is 233 words (p.429). *Note (not in the book):* the `1` in the last row is the `[UNK]` index, an out-of-vocabulary word.\n\nSection **14.5.1** starts with an LSTM, which the previous chapter showed works efficiently on sequence data. Token IDs are integers, though, and must first be mapped to floating-point data that neural layers can use. The most straightforward approach is **one-hot encoding**, analogous to the multi-hot encoding of a whole review: each token becomes a long vector of 0s with a single 1 at the token's vocabulary index. The page ends by announcing a layer that does this (listing 14.20, p.431).",
+ "paragraphs": [
+  {
+   "ref": "p430_e07",
+   "excerpt": "Each batch has the shape (batch_size, sequence_length) after preprocessing, and almost all",
+   "what_it_says": "After preprocessing, each batch has shape (batch_size, sequence_length), and almost all samples have some 0s for padding at the end.",
+   "what_it_means": "Here batch_size = 32 and sequence_length = 600. Index 0 is the padding value, so trailing zeros mark empty positions after the review ends. Only reviews longer than 600 words (5%, p.429) have no zeros; they were truncated instead.",
+   "why_it_matters": "It confirms that the batches are rectangular and shows how much of each input is padding, which matters for how the LSTM behaves.",
+   "technical_idea": "TextVectorization pads at the end (post-padding). For an RNN reading left to right, this means the final state is computed after many pad steps unless masking is used.",
+   "terminology": [
+    {"term": "sequence_length", "meaning": "The fixed number of token positions per sample (600 here)."}
+   ],
+   "connections": [
+    "p.429: index zero of the vocabulary is reserved for padding; only 5% of reviews exceed 600 words"
+   ]
+  },
+  {
+   "ref": "p430_e09",
+   "excerpt": "Let’s try training an LSTM. As we saw in the previous chapter, LSTMs",
+   "what_it_says": "The first sequence model is an LSTM, which the previous chapter showed works efficiently on sequence data. The integer token IDs must first be mapped into floating-point data that a Dense layer can ingest.",
+   "what_it_means": "Integer IDs are category labels, not quantities: token 25819 isn't \"bigger\" than token 3 in any meaningful way. Feeding raw IDs as numbers would impose a false ordering and scale. They must become vectors first.",
+   "why_it_matters": "This is the problem that both one-hot encoding (this page and p.431) and word embeddings (p.433) solve.",
+   "technical_idea": "Beyond the book: an LSTM computes its gates as affine maps $W x_t + U h_{t-1} + b$, so $x_t$ must be a real-valued vector. That's the same requirement as for a Dense layer, which is what the authors refer to.",
+   "terminology": [
+    {"term": "LSTM", "meaning": "Long Short-Term Memory, a recurrent layer with gated memory that handles longer dependencies than a simple RNN."}
+   ],
+   "connections": [
+    "p.431: listing 14.21 feeds the one-hot vectors into a Bidirectional(LSTM(64))"
+   ]
+  },
+  {
+   "ref": "p430_e10",
+   "excerpt": "The most straightforward approach is to one-hot our input IDs, similar to the",
+   "what_it_says": "The most straightforward approach is to one-hot the input IDs, similar to the earlier multi-hot encoding of a whole sequence. Each token becomes a long vector of all 0s with a single 1 at the token's vocabulary index. A layer that does this is built next.",
+   "what_it_means": "Multi-hot gives one vector per review (the OR of the one-hot vectors of its tokens). One-hot gives one vector per token *position*, so order is preserved. With max_tokens = 30,000 each token becomes a 30,000-dimensional vector, so a batch becomes (32, 600, 30000) (p.431).",
+   "why_it_matters": "It is simple and lossless, but very large and sparse, which shows the cost that embeddings later remove.",
+   "technical_idea": "One-hot of index $i$: $e_i \\in \\{0,1\\}^{V}$ with $(e_i)_j = 1$ iff $j = i$. Multi-hot of a review: $\\max_t e_{s_t}$ taken elementwise over positions $t$.",
+   "terminology": [
+    {"term": "one-hot encoding", "meaning": "Representing a category (token ID) as a vector of zeros with a single 1 at its index."},
+    {"term": "multi-hot encoding", "meaning": "One vector per set of tokens, with 1s at every present token's index (p.423)."}
+   ],
+   "connections": [
+    "p.423: multi-hot encoding of an entire review",
+    "p.431: listing 14.20 implements OneHotEncoding with ops.eye and ops.take"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "padding",
+   "name": "Padding to a fixed sequence length",
+   "definition": "Extending every sequence with the padding index 0 (or truncating it) so all have length 600.",
+   "intuition": "Fill short reviews with blanks, cut long ones.",
+   "technical": "TextVectorization(output_mode=\"int\", output_sequence_length=600) pads and truncates at the end.",
+   "significance": "Gives rectangular (32, 600) batches.",
+   "example": "Row [11, 29, 7, ..., 0, 0, 0] in the printed batch.",
+   "misconception": "That 0 is a real word; it is reserved for padding.",
+   "related": ["tokenization", "masking"],
+   "source": "book"
+  },
+  {
+   "id": "one_hot_encoding",
+   "name": "One-hot encoding of tokens",
+   "definition": "Mapping each token ID to a vector with a single 1 at that index and 0s elsewhere.",
+   "intuition": "A 30,000-switch panel where exactly one switch is on per word.",
+   "technical": "Vector length = vocabulary size (30,000); a (32, 600) batch becomes (32, 600, 30000) floats.",
+   "significance": "The most straightforward way to turn IDs into float inputs for an LSTM.",
+   "example": "ID 3 -> [0, 0, 0, 1, 0, ..., 0].",
+   "misconception": "That one-hot vectors encode similarity; every pair of distinct words is equally far apart.",
+   "related": ["multi_hot_encoding", "embedding"],
+   "source": "book"
+  },
+  {
+   "id": "lstm",
+   "name": "LSTM",
+   "definition": "A gated recurrent layer that processes a sequence step by step, keeping a memory cell.",
+   "intuition": "Reading a review word by word while keeping notes.",
+   "technical": "Needs float inputs of shape (batch, timesteps, features).",
+   "significance": "The first sequence model for IMDb in this chapter.",
+   "example": "Bidirectional(LSTM(64)) in listing 14.21 (p.431).",
+   "misconception": "That LSTMs can consume integer token IDs directly.",
+   "related": ["rnn", "sequence_model"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "One-hot vector of a token",
+   "latex": "\\operatorname{onehot}(i) = e_i \\in \\{0,1\\}^{V}, \\quad (e_i)_j = \\begin{cases}1 & j = i\\\\ 0 & j \\ne i\\end{cases}",
+   "source_text": "Each token will become a long vector with all 0s and a single 1 at the index of the token in our vocabulary.",
+   "variables": [
+    {"symbol": "i", "meaning": "token ID (vocabulary index)"},
+    {"symbol": "V", "meaning": "vocabulary size, max_tokens = 30,000"},
+    {"symbol": "e_i", "meaning": "standard basis vector i"}
+   ],
+   "operations": "Place a 1 at position i of a zero vector of length V.",
+   "purpose": "Turns categorical IDs into float vectors suitable for neural layers.",
+   "interpretation": "All words are orthogonal and equally distant; no notion of similarity.",
+   "intuition": "Each word gets its own private axis.",
+   "numerical_example": "With V = 5, ID 3 -> [0, 0, 0, 1, 0]. A 600-token review becomes a 600 x 30,000 matrix with exactly 600 ones (including pad positions, which become one-hot of index 0).",
+   "source": "book",
+   "book_ref": "p.430"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "14.19",
+   "title": "Padding IMDb reviews to a fixed sequence length",
+   "original_code": "max_length = 600\nmax_tokens = 30_000\ntext_vectorization = layers.TextVectorization(\n    max_tokens=max_tokens,\n    split=\"whitespace\",\n    output_mode=\"int\",\n    output_sequence_length=max_length,\n)\ntext_vectorization.adapt(train_ds_no_labels)\nsequence_train_ds = train_ds.map(\n    lambda x, y: (text_vectorization(x), y), num_parallel_calls=8\n)\nsequence_val_ds = val_ds.map(\n    lambda x, y: (text_vectorization(x), y), num_parallel_calls=8\n)\nsequence_test_ds = test_ds.map(\n    lambda x, y: (text_vectorization(x), y), num_parallel_calls=8\n)",
+   "language": "python",
+   "what_it_does": "Learns a 30,000-word vocabulary and converts every review into a sequence of exactly 600 integer token IDs (padded with 0 or truncated), for train, validation and test.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Sequence length 600 (justified on p.429) and vocabulary size 30,000."},
+    {"lines": "3-8", "explanation": "split=\"whitespace\": word-level vocabulary. output_mode=\"int\": output a sequence of token IDs instead of a multi-hot vector. output_sequence_length=max_length: pad and truncate to 600 tokens. No ngrams argument: plain words only."},
+    {"lines": "9", "explanation": "Learn the vocabulary from the training texts only."},
+    {"lines": "10-18", "explanation": "Map the layer over each split in parallel (8 CPU calls), keeping labels."}
+   ],
+   "inputs_outputs": "Input: string reviews. Output: int tensors of shape (batch, 600) plus labels.",
+   "algorithm": "Standardize -> split on whitespace -> look up IDs (unknown -> 1) -> pad with 0 / truncate to 600.",
+   "theory_link": "Produces the ordered, rectangular sequences that sequence models need (p.429).",
+   "parameters": [
+    {"name": "output_mode", "role": "\"int\" returns token-ID sequences (order preserved)"},
+    {"name": "output_sequence_length", "role": "fixed length; pads or truncates"},
+    {"name": "max_tokens", "role": "vocabulary size; IDs range over 0..29,999"}
+   ],
+   "pitfalls": [
+    "max_tokens is reused as the one-hot depth on p.431, so changing it changes the model input size.",
+    "Without masking, downstream layers see the trailing 0s as real time steps."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Inspecting a padded integer batch",
+   "original_code": ">>> x, y = next(sequence_test_ds.as_numpy_iterator())\n>>> x.shape\n(32, 600)\n>>> x\narray([[   11,    29,     7, ...,     0,     0,     0],\n       [  132,   115,    35, ...,     0,     0,     0],\n       [ 1825,     3, 25819, ...,     0,     0,     0],\n       ...,\n       [    4,   576,    56, ...,     0,     0,     0],\n       [   30,   203,     4, ...,     0,     0,     0],\n       [ 5104,     1,    14, ...,     0,     0,     0]])",
+   "language": "python",
+   "what_it_does": "Pulls one batch from the test sequence dataset and prints its shape and (abbreviated) contents.",
+   "line_explanations": [
+    {"lines": "1-3", "explanation": "32 reviews x 600 token positions."},
+    {"lines": "4-11", "explanation": "Each row starts with real token IDs (small IDs = frequent words, e.g. 3 or 4; large IDs like 25819 = rare words) and ends with 0s, the padding. NumPy elides the middle columns with \"...\"."}
+   ],
+   "inputs_outputs": "Output: an int array of shape (32, 600).",
+   "algorithm": "One pass through the tf.data pipeline.",
+   "theory_link": "Shows the end padding described on p.429.",
+   "parameters": [],
+   "pitfalls": [
+    "The 1 in the last row is the [UNK] index (an out-of-vocabulary word), not padding (this is an inference from Keras's vocabulary layout).",
+    "The batch is from the test split, although the text refers to training samples."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Comparing the three TextVectorization configurations",
+   "kind": "breakdown",
+   "body": "| Listing | output_mode | ngrams | extra | batch shape |\n|---|---|---|---|---|\n| 14.12 (p.423) | multi_hot | none | max_tokens 20,000 | (32, 20000) |\n| 14.16 (p.427) | multi_hot | 2 | max_tokens 30,000 | (32, 30000) |\n| 14.19 (this page) | int | none | output_sequence_length 600 | (32, 600) |\n\nThe first two throw order away (sets); the third keeps it (sequences).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why not feed IDs as numbers?",
+   "kind": "step_by_step",
+   "body": "1. IDs are assigned by frequency rank: ID 3 is a very common word, ID 25819 a rare one.\n2. As raw numbers, the model would treat 25819 as about 8,600 times \"more\" than 3, which is meaningless.\n3. Nearby IDs (e.g. 576 and 577) are not similar words.\n4. One-hot encoding removes this false geometry: each word gets an independent dimension, and the model learns what each one means through its weights.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "From strings to padded IDs to one-hot vectors",
+   "why": "Listing 14.19 produces (32, 600) integer batches; the one-hot encoding introduced at the bottom of the page turns them into (32, 600, 30000) (shape confirmed on p.431).",
+   "widget": "tensor_shapes",
+   "params": {"steps": [{"op": "review strings", "shape": [32]}, {"op": "TextVectorization(int, len 600)", "shape": [32, 600]}, {"op": "one-hot (depth 30000)", "shape": [32, 600, 30000]}]}
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Tokens to IDs to one-hot",
+   "why": "The page explains that each token ID becomes a vector of 0s with a single 1 at its vocabulary index; try it on a short review.",
+   "widget": "token_sequence",
+   "params": {"text": "the slow brown badger", "mode": "word"}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "output_mode=\"int\" still produces a bag of words.", "correction": "It outputs the ordered sequence of token IDs, padded/truncated to 600; order is preserved."},
+  {"claim": "The trailing zeros are unknown words.", "correction": "0 is the padding index; unknown words map to 1 ([UNK])."},
+  {"claim": "Token IDs can be fed directly to an LSTM.", "correction": "They must first become floating-point vectors, here via one-hot encoding."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 429, "note": "Why pad/truncate, and why 600 tokens."},
+   {"page": 427, "note": "Listing 14.16: the multi-hot bigram configuration of TextVectorization."},
+   {"page": 423, "note": "Listing 14.12 and multi-hot encoding of an entire review."}
+  ],
+  "later": [
+   {"page": 431, "note": "Listing 14.20 OneHotEncoding layer (batch becomes (32, 600, 30000)) and listing 14.21 Bidirectional LSTM model."},
+   {"page": 433, "note": "14.5.2 Understanding word embeddings: the alternative to one-hot vectors."}
+  ],
+  "prerequisites": [
+   {"page": 410, "note": "Index lookup and the [UNK] token."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 423, "note": "Listing 14.12, the same pipeline structure in multi-hot mode."},
+   {"page": 431, "note": "Listings 14.20-14.21 consume sequence_train_ds."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "Listing 14.19 uses output_mode=\"int\" and output_sequence_length=600 to produce ordered, fixed-length token-ID sequences.",
+  "Batches have shape (batch_size, sequence_length) = (32, 600); most rows end with 0s for padding.",
+  "Integer IDs are categorical and must be converted to float vectors before neural layers can use them.",
+  "One-hot encoding, a single 1 at the token's index, is the most straightforward conversion; it is the per-token analogue of multi-hot."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "Which TextVectorization argument in listing 14.19 pads and truncates sequences to 600 tokens?", "options": ["max_tokens", "split", "output_mode=\"int\"", "output_sequence_length"], "answer": "output_sequence_length", "explanation": "The callout \"Pads and truncates to 600 tokens\" points to output_sequence_length=max_length. max_tokens sets vocabulary size, split sets tokenization, and output_mode=\"int\" sets the output type.", "page_refs": [430]},
+  {"id": "q2", "type": "short", "question": "What do the zeros at the end of each row of the printed batch represent?", "options": [], "answer": "Padding: index 0 is reserved for [PAD], filling positions after a review shorter than 600 tokens ends.", "explanation": "The text: \"almost all training samples have a number of 0s for padding at the end\"; p.429 says the padding token is at index zero.", "page_refs": [429, 430]},
+  {"id": "q3", "type": "conceptual", "question": "How does listing 14.19 differ from listing 14.16, and why does that difference matter for sequence models?", "options": [], "answer": "It outputs integer token sequences (output_mode=\"int\", fixed length 600) instead of a multi-hot vector with bigrams. The order of tokens is preserved, which is what a sequence model needs.", "explanation": "Multi-hot discards order (set model); int sequences keep it.", "page_refs": [427, 430]},
+  {"id": "q4", "type": "math", "question": "After one-hot encoding with max_tokens = 30,000, how many float values does one batch of shape (32, 600) contain?", "options": [], "answer": "32 x 600 x 30,000 = 576,000,000 values.", "explanation": "Each of the 19,200 token positions becomes a 30,000-dimensional vector, so the shape is (32, 600, 30000), confirmed on p.431.", "page_refs": [430, 431]},
+  {"id": "q5", "type": "mcq", "question": "Why can't integer token IDs be fed directly as numeric inputs?", "options": ["They are too small", "They are categorical labels whose numeric values carry no meaningful order or magnitude", "LSTMs only accept strings", "Integers can't be stored on GPUs"], "answer": "They are categorical labels whose numeric values carry no meaningful order or magnitude", "explanation": "The page says IDs must be mapped to floating-point data. IDs are indices, so treating them as magnitudes would be meaningless. The other options are false.", "page_refs": [430]},
+  {"id": "q6", "type": "short", "question": "How is one-hot encoding related to the multi-hot encoding used for the set models?", "options": [], "answer": "One-hot gives one vector per token, with a single 1; multi-hot gives one vector per whole review, with 1s for every token present (the combination of its tokens' one-hot vectors).", "explanation": "The page calls one-hot \"similar to the multi-hot encoding we did for an entire sequence\".", "page_refs": [423, 430]},
+  {"id": "q7", "type": "self", "question": "Looking at the printed batch, can you explain why the first IDs of each row differ widely in magnitude (e.g. 3 vs. 25819)?", "options": [], "answer": "The vocabulary is ordered by frequency, so small IDs are common words and large IDs rare ones. The magnitude says nothing about meaning, which is why one-hot (or embeddings) is needed.", "explanation": "This connects vocabulary construction (adapt) to the need for categorical encoding.", "page_refs": [430]}
+ ]
+}

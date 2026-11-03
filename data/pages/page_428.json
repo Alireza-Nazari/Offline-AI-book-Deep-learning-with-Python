@@ -1,0 +1,339 @@
+{
+ "page_id": "page_428",
+ "pdf_page": 428,
+ "printed_page": "404",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:57:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Minor typo in the book: \"bag-of words models\" (missing hyphen; elsewhere written \"bag-of-words\")."
+  ],
+  "extraction_quality": "Clean; all four code blocks and their outputs match the page image. The first code block continues the batch inspection announced at the bottom of p.427."
+ },
+ "overview": {
+  "title": "Training and evaluating the bigram model, and the limits of n-grams",
+  "chapter": "14 Text classification",
+  "section": "14.4 Set models",
+  "subsection": "14.4.2 Training a bigram model",
+  "main_topic": "Inspecting the bigram multi-hot encoding, training the unchanged linear classifier on it (30,001 parameters), reaching 90% test accuracy, and why n-grams beyond trigrams become intractable",
+  "central_idea": "With a shared unigram + bigram vocabulary of 30,000 terms, the same linear classifier improves from about 88% to 90% test accuracy at almost no extra cost. Going much beyond bigrams or trigrams fails: the space of word n-grams grows exponentially, so coverage needs immense vocabularies and the model starts memorizing snippets instead of generalizing.",
+  "importance": "It completes the set-model part of the chapter with its best result (90%) and gives the motivation for sequence models in section 14.5 (p.429).",
+  "learning_objectives": [
+   "Interpret the batch shape (32, 30000) and the mixed unigram/bigram vocabulary slice",
+   "Explain why build_linear_classifier can be reused unchanged and why it now has 30,001 parameters",
+   "Compare the 0.88388 and 0.90116 test accuracies",
+   "Explain why n-gram models beyond trigrams become intractable and overfit"
+  ],
+  "prerequisites": [
+   "Listing 14.16 (p.427): bigram TextVectorization",
+   "build_linear_classifier and early_stopping (p.424)",
+   "Bag-of-words test accuracy of 0.88388 (p.426)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page continues from listing 14.16 (p.427). Pulling one batch from `bigram_train_ds` gives `x.shape == (32, 30000)`: each of 32 reviews is now a 30,000-dimensional multi-hot vector. Slicing the learned vocabulary, `text_vectorization.get_vocabulary()[100:108]` returns `[\"in a\", \"most\", \"him\", \"dont\", \"it was\", \"one of\", \"for the\", \"made\"]`. Unigrams and bigrams sit side by side, ranked by frequency, which confirms that they compete for the same vocabulary slots. (\"dont\" also shows the default standardization stripping the apostrophe.)\n\nBecause only the encoding changed, the model needs no changes. **Listing 14.17** calls `build_linear_classifier(max_tokens, \"bigram_classifier\")` with `max_tokens = 30_000` and fits it for up to 10 epochs with the same `early_stopping` callback. The model has **30,001 parameters** instead of 20,001 but trains in about the same time.\n\n**Listing 14.18** evaluates on `bigram_test_ds`: **0.90116**. That is 90% test accuracy, \"a noticeable improvement\" over the bag-of-words model's 0.88388 (p.426). The error rate drops from about 11.6% to 9.9%.\n\nThe last paragraph sets the limits. **Trigrams** (triplets of words) could help further, but beyond trigrams the problem quickly becomes **intractable**. The space of possible English 4-grams is immense and grows exponentially with n. Decent coverage would need an immense vocabulary, and the model would lose its ability to generalize, *memorizing entire snippets of sentences with weights attached*. Robustly modelling longer-range order needs more advanced techniques, which is the transition to the sequence models of section 14.5.",
+ "paragraphs": [
+  {
+   "ref": "p428_e04",
+   "excerpt": "If we look at a small subsection of our vocabulary, we can see both",
+   "what_it_says": "A slice of the vocabulary shows both unigram and bigram terms.",
+   "what_it_means": "Indices 100-107 hold very frequent terms: function-word bigrams (\"in a\", \"it was\", \"one of\", \"for the\") mixed with unigrams (\"most\", \"him\", \"dont\", \"made\"). Since the vocabulary is sorted by frequency, these bigrams are as common as mid-frequency words.",
+   "why_it_matters": "It confirms empirically the \"compete for space\" scheme described on p.427.",
+   "technical_idea": "Note (not in the book): \"dont\" comes from default standardization (lowercase + strip punctuation) applied to \"don't\", so the apostrophe is gone.",
+   "terminology": [
+    {"term": "get_vocabulary()", "meaning": "Returns the learned vocabulary list of a TextVectorization layer; index i corresponds to position i of the multi-hot vector."}
+   ],
+   "connections": [
+    "p.427: unigrams and bigrams compete for space in the same vocabulary"
+   ]
+  },
+  {
+   "ref": "p428_e06",
+   "excerpt": "With our new encoding for our input data, we can train a linear model",
+   "what_it_says": "With the new encoding, the linear model can be trained unaltered from before.",
+   "what_it_means": "All the bigram knowledge lives in the preprocessing. The model-building function from listing 14.13 just receives a different input size.",
+   "why_it_matters": "It shows the benefit of wrapping model construction in a function (p.424) and of keeping feature engineering separate from the model.",
+   "terminology": [],
+   "connections": [
+    "p.424: build_linear_classifier was saved as a function to be reused later"
+   ]
+  },
+  {
+   "ref": "p428_e09",
+   "excerpt": "This model will be slightly larger than our bag-of words models (30,001 parameters",
+   "what_it_says": "The model has 30,001 parameters instead of 20,001, but trains in about the same time.",
+   "what_it_means": "One weight per vocabulary term (now 30,000) plus a bias. Training time barely changes because, as p.425 noted, tokenization and encoding are more expensive than the parameter updates. A 50% bigger dot product is still tiny.",
+   "why_it_matters": "The accuracy gain comes almost for free in compute.",
+   "technical_idea": "Parameters of Dense(1) on an input of size d: $d \\times 1 + 1$. For d = 30,000: 30,001.",
+   "terminology": [],
+   "connections": [
+    "p.425: encoding the input costs more than updating the model parameters"
+   ]
+  },
+  {
+   "ref": "p428_e12",
+   "excerpt": "We’re now getting 90% test accuracy, a noticeable improvement!",
+   "what_it_says": "Test accuracy is now 90%, a noticeable improvement.",
+   "what_it_means": "Up from 88.4% (p.426) to 90.1%: about 1.7 points in absolute terms, or roughly 15% fewer errors (11.6% -> 9.9%).",
+   "why_it_matters": "It quantifies the value of local word order for sentiment.",
+   "terminology": [],
+   "connections": [
+    "p.426: bag-of-words test accuracy 0.88388"
+   ]
+  },
+  {
+   "ref": "p428_e13",
+   "excerpt": "We could improve this number even further by considering trigrams (triplets of words)",
+   "what_it_says": "Trigrams could improve accuracy further, but beyond trigrams the problem quickly becomes intractable. The space of possible English 4-grams is immense and grows exponentially as sequences get longer. Decent coverage of 4-grams would need an immense vocabulary, and the model would lose its ability to generalize, memorizing whole snippets of sentences with weights attached. Robustly using longer-range order needs more advanced modelling techniques.",
+   "what_it_means": "With a word vocabulary of size V, there are up to $V^n$ possible n-grams. Each specific long n-gram is rare, so most appear only a few times in training. A weight learned for a rare 4-gram mostly memorizes the label of the few reviews that contained it, which is overfitting. Meanwhile most 4-grams in the test set were never seen and fall outside the vocabulary.",
+   "why_it_matters": "It explains why set models plateau and motivates sequence models, which learn order-aware representations instead of listing phrases one by one.",
+   "technical_idea": "Beyond the book: this is the sparsity / curse-of-dimensionality problem of n-gram models. Learned representations (embeddings, recurrent and attention layers) share statistical strength across similar contexts instead of treating every phrase as an unrelated feature.",
+   "terminology": [
+    {"term": "trigram", "meaning": "A sequence of three consecutive tokens."},
+    {"term": "intractable", "meaning": "Growing so fast in size or cost that it cannot be handled in practice."}
+   ],
+   "connections": [
+    "p.429: 14.5 Sequence models introduces models that consider the full order of tokens"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "ngram",
+   "name": "n-gram features and their limits",
+   "definition": "Using sequences of n consecutive tokens as vocabulary terms in a set model.",
+   "intuition": "Short phrases help, but long phrases are so varied that almost every one is new.",
+   "technical": "Possible n-grams grow as $V^n$. Fixed-size vocabularies cover a shrinking fraction, and weights on rare n-grams memorize training snippets.",
+   "significance": "Bigrams lift IMDb accuracy to 90%; 4-grams and beyond become intractable.",
+   "example": "\"in a\", \"it was\", \"one of\" are frequent bigrams; a 4-gram like \"one of the worst\" is far rarer.",
+   "misconception": "That larger n always helps. It eventually hurts generalization.",
+   "related": ["bag_of_words", "overfitting", "multi_hot_encoding"],
+   "source": "book"
+  },
+  {
+   "id": "overfitting",
+   "name": "Overfitting via memorization",
+   "definition": "Fitting training-specific details that don't generalize to new data.",
+   "intuition": "Learning \"this exact sentence fragment means positive\" instead of a general pattern.",
+   "technical": "Rare high-order n-gram features let a linear model assign a weight to the label of a few training reviews.",
+   "significance": "The book's reason why n-gram models can't simply be extended to long sequences.",
+   "example": "A 4-gram seen once in a positive review gets a positive weight that has nothing to do with sentiment.",
+   "misconception": "That a linear model can't overfit. With enough sparse features it can memorize.",
+   "related": ["ngram", "regularization"],
+   "source": "book"
+  },
+  {
+   "id": "linear_classifier_reuse",
+   "name": "Reusing the model, changing the features",
+   "definition": "Keeping build_linear_classifier fixed and changing only the input encoding.",
+   "intuition": "A fair experiment that changes one variable at a time.",
+   "technical": "Dense(1, sigmoid) on (None, 30000): 30,001 parameters; same optimizer, loss, epochs and early stopping.",
+   "significance": "Attributes the 88% -> 90% gain to bigram features alone.",
+   "example": "build_linear_classifier(max_tokens, \"bigram_classifier\") with max_tokens = 30_000.",
+   "misconception": "That the model had to be redesigned for bigrams.",
+   "related": ["dense_layer", "bag_of_words"],
+   "source": "inference"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Parameter count of the bigram classifier",
+   "latex": "\\#\\text{params} = d \\cdot 1 + 1 = 30{,}000 + 1 = 30{,}001",
+   "source_text": "30,001 parameters instead of 20,001 parameters",
+   "variables": [
+    {"symbol": "d", "meaning": "input dimension = max_tokens = 30,000"}
+   ],
+   "operations": "One weight per input feature plus one bias for a single-unit Dense layer.",
+   "purpose": "Explains the parameter numbers quoted in the text.",
+   "interpretation": "Each vocabulary term (unigram or bigram) has exactly one weight.",
+   "intuition": "10,000 more terms means 10,000 more weights.",
+   "numerical_example": "Unigram model: 20,000 + 1 = 20,001; bigram model: 30,000 + 1 = 30,001.",
+   "source": "book",
+   "book_ref": "p.428"
+  },
+  {
+   "id": "m2",
+   "title": "Growth of the n-gram space",
+   "latex": "|\\mathcal{N}_n| \\le V^n",
+   "source_text": "the problem grows exponentially as sequences get longer and longer",
+   "variables": [
+    {"symbol": "V", "meaning": "number of distinct words"},
+    {"symbol": "n", "meaning": "n-gram length"},
+    {"symbol": "\\mathcal{N}_n", "meaning": "set of possible n-grams"}
+   ],
+   "operations": "Each of the n positions can hold any of V words.",
+   "purpose": "Makes the book's \"exponential\" claim precise.",
+   "interpretation": "Only a small fraction of these occur in real text, but the number that do still grows very quickly with n, so a fixed vocabulary covers less and less.",
+   "intuition": "Each extra word in the phrase multiplies the possibilities.",
+   "numerical_example": "With V = 20,000: bigrams up to $4\\times10^8$, trigrams up to $8\\times10^{12}$, 4-grams up to $1.6\\times10^{17}$.",
+   "source": "ai_explanation",
+   "book_ref": "p.428"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Inspecting a batch of bigram-encoded input",
+   "original_code": ">>> x, y = next(bigram_train_ds.as_numpy_iterator())\n>>> x.shape\n(32, 30000)",
+   "language": "python",
+   "what_it_does": "Takes the first batch from the bigram training dataset as NumPy arrays and shows its shape.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "as_numpy_iterator() yields NumPy versions of each (inputs, labels) batch; next() takes the first one."},
+    {"lines": "2-3", "explanation": "32 reviews (the batch size) by 30,000 vocabulary terms (max_tokens)."}
+   ],
+   "inputs_outputs": "Input: bigram_train_ds. Output: x with shape (32, 30000), y with labels.",
+   "algorithm": "Single pass of the tf.data pipeline for one batch.",
+   "theory_link": "Confirms that the multi-hot width equals the vocabulary size.",
+   "parameters": [],
+   "pitfalls": ["Compare with the (32, 20000) of the unigram pipeline on p.423."]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Viewing a slice of the learned vocabulary",
+   "original_code": ">>> text_vectorization.get_vocabulary()[100:108]\n[\"in a\", \"most\", \"him\", \"dont\", \"it was\", \"one of\", \"for the\", \"made\"]",
+   "language": "python",
+   "what_it_does": "Prints vocabulary entries 100 through 107, showing unigrams and bigrams interleaved by frequency.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "get_vocabulary() returns the list of terms ordered by index (index 0 is reserved for out-of-vocabulary tokens; the most frequent terms follow)."},
+    {"lines": "2", "explanation": "Four bigrams (\"in a\", \"it was\", \"one of\", \"for the\") and four unigrams (\"most\", \"him\", \"dont\", \"made\")."}
+   ],
+   "inputs_outputs": "Output: a list of 8 strings.",
+   "algorithm": "List slicing.",
+   "theory_link": "Shows the shared, frequency-ranked vocabulary of p.427.",
+   "parameters": [],
+   "pitfalls": ["\"dont\" reflects punctuation stripping during standardization; raw \"don't\" would not match it unless standardized."]
+  },
+  {
+   "id": "c3",
+   "listing": "14.17",
+   "title": "Training the bigram regression model",
+   "original_code": "model = build_linear_classifier(max_tokens, \"bigram_classifier\")\nmodel.fit(\n    bigram_train_ds,\n    validation_data=bigram_val_ds,\n    epochs=10,\n    callbacks=[early_stopping],\n)",
+   "language": "python",
+   "what_it_does": "Builds a fresh linear classifier with 30,000 inputs and trains it on the bigram-encoded data with early stopping.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "max_tokens is now 30_000 (listing 14.16), so Input(shape=(30000,)) -> Dense(1, sigmoid): 30,001 parameters; compiled with adam and binary crossentropy (p.424)."},
+    {"lines": "2-7", "explanation": "Up to 10 epochs; the early_stopping callback from listing 14.14 (monitor=\"val_loss\", patience=2, restore_best_weights=True) stops training when validation loss stops improving and restores the best weights."}
+   ],
+   "inputs_outputs": "Input: bigram_train_ds / bigram_val_ds. Output: a trained model (the history isn't stored this time).",
+   "algorithm": "Mini-batch Adam on binary crossentropy.",
+   "theory_link": "Same model, richer features: a controlled comparison with the unigram model.",
+   "parameters": [
+    {"name": "epochs", "role": "maximum number of passes; early stopping may end sooner"},
+    {"name": "callbacks", "role": "early stopping on validation loss"}
+   ],
+   "pitfalls": ["Reusing the same EarlyStopping instance is fine because Keras resets its state at the start of each fit() call."]
+  },
+  {
+   "id": "c4",
+   "listing": "14.18",
+   "title": "Evaluating the bigram regression model",
+   "original_code": ">>> test_loss, test_acc = model.evaluate(bigram_test_ds)\n>>> test_acc\n0.90116",
+   "language": "python",
+   "what_it_does": "Evaluates the bigram classifier on the test set: 0.90116 accuracy.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Returns [loss, accuracy] over the bigram-encoded test reviews."},
+    {"lines": "2-3", "explanation": "0.90116, about 90%, versus 0.88388 for the bag-of-words model (p.426)."}
+   ],
+   "inputs_outputs": "Input: bigram_test_ds. Output: test loss and accuracy.",
+   "algorithm": "Forward pass over the test set.",
+   "theory_link": "Measures the generalization gain from local word-order features.",
+   "parameters": [],
+   "pitfalls": ["The exact value depends on seed and backend; the improvement of about 1.7 points is the important part."]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "How big is the improvement, really?",
+   "kind": "numerical",
+   "body": "Errors: unigram $1 - 0.88388 = 0.11612$, bigram $1 - 0.90116 = 0.09884$. Relative error reduction: $(0.11612 - 0.09884)/0.11612 \\approx 14.9\\%$. On the 25,000-review IMDb test set, that is roughly $0.01728 \\times 25{,}000 \\approx 430$ more reviews classified correctly. (The test set size is from the dataset loaded on p.420; this calculation is not in the book.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why longer n-grams memorize instead of generalize",
+   "kind": "step_by_step",
+   "body": "1. Longer n-grams are rarer: most specific 4-grams appear in only one or two training reviews.\n2. A linear model gives each n-gram feature its own weight, and nothing ties the weight of \"one of the worst\" to that of \"among the very worst\".\n3. A feature seen once can be given a weight that simply reproduces that review's label: memorization.\n4. At test time most 4-grams were never seen and are out of vocabulary, so these weights rarely apply.\n\nThis is why the book says more advanced techniques are needed for longer-range order.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Phrasebook vs. grammar",
+   "kind": "analogy",
+   "body": "An n-gram model is like a tourist phrasebook: great for common two-word phrases, but you can't print every possible sentence. Sequence models are more like learning the grammar, so you can understand combinations you've never seen.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Test accuracy: unigram vs. bigram model",
+   "why": "The page compares 0.90116 (listing 14.18) with the bag-of-words model's 0.88388 (p.426).",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": ["Bag-of-words (unigram), 20,001 params", "Bigram, 30,001 params"],
+     "datasets": [{"label": "Test accuracy", "data": [0.88388, 0.90116]}]
+    },
+    "options": {"scales": {"y": {"min": 0.85, "max": 0.92, "title": {"display": true, "text": "accuracy"}}}, "plugins": {"legend": {"display": false}}}
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "The bigram classifier",
+   "why": "Listing 14.17 reuses build_linear_classifier with 30,000 inputs; click the Dense layer to see the 30,001 parameters quoted in the text.",
+   "widget": "nn_architecture",
+   "params": {"layers": [{"name": "input (multi-hot unigrams+bigrams)", "type": "input", "shape": "(None, 30000)"}, {"name": "dense", "type": "output", "units": 1, "activation": "sigmoid"}]}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "The bigram model needed a new architecture.", "correction": "The linear model is unaltered; only the input encoding and its size changed."},
+  {"claim": "The extra parameters make training noticeably slower.", "correction": "The book says it trains in about the same time; preprocessing dominates cost (p.425)."},
+  {"claim": "Using 4-grams or 5-grams would keep improving accuracy.", "correction": "Beyond trigrams the problem becomes intractable: immense vocabularies are needed and the model memorizes snippets instead of generalizing."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 427, "note": "Listing 14.16 builds the 30,000-term unigram + bigram multi-hot encoding."},
+   {"page": 426, "note": "Bag-of-words test accuracy 0.88388."},
+   {"page": 424, "note": "build_linear_classifier and the early_stopping callback."},
+   {"page": 423, "note": "The unigram batch shape (32, 20000) for comparison."}
+  ],
+  "later": [
+   {"page": 429, "note": "14.5 Sequence models: handling order with more advanced models."},
+   {"page": 432, "note": "Results of the first recurrent model, to compare with this 90% baseline."},
+   {"page": 437, "note": "Embedding-based sequence models revisit this comparison."}
+  ],
+  "prerequisites": [
+   {"page": 427, "note": "Definitions of unigram, bigram and n-gram."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 424, "note": "Listings 14.13-14.14."},
+   {"page": 426, "note": "Listing 14.15, the unigram evaluation."}
+  ],
+  "related_figures": [
+   {"page": 425, "note": "Figure 14.2, training curves of the unigram model."}
+  ]
+ },
+ "takeaways": [
+  "The bigram encoding produces batches of shape (32, 30000), with unigrams and bigrams interleaved in a frequency-ranked vocabulary.",
+  "The linear classifier is reused unchanged and has 30,001 parameters; training time is about the same.",
+  "Test accuracy rises from 0.88388 to 0.90116 (90%).",
+  "Trigrams might help a bit more, but beyond that the n-gram space explodes and models memorize instead of generalizing.",
+  "Longer-range word order needs sequence models (section 14.5)."
+ ],
+ "questions": [
+  {"id": "q1", "type": "short", "question": "Why does x.shape equal (32, 30000) for a batch of bigram_train_ds?", "options": [], "answer": "32 is the batch size, and 30,000 is max_tokens: the multi-hot vector has one position per vocabulary term (unigram or bigram).", "explanation": "Listing 14.16 sets max_tokens = 30_000 with output_mode=\"multi_hot\".", "page_refs": [427, 428]},
+  {"id": "q2", "type": "mcq", "question": "Which entry in the vocabulary slice is a unigram?", "options": ["\"in a\"", "\"it was\"", "\"dont\"", "\"for the\""], "answer": "\"dont\"", "explanation": "\"dont\" is one token (\"don't\" with the apostrophe stripped); the other three are two-word bigrams.", "page_refs": [428]},
+  {"id": "q3", "type": "math", "question": "How many parameters does build_linear_classifier produce for max_tokens = 30,000, and how many more than the bag-of-words model?", "options": [], "answer": "30,001 parameters; 10,000 more than the 20,001 of the unigram model.", "explanation": "Dense(1) has one weight per input plus one bias: 30,000 + 1.", "page_refs": [424, 428]},
+  {"id": "q4", "type": "mcq", "question": "What test accuracy does the bigram model reach?", "options": ["0.88388", "0.90116", "0.93", "0.85"], "answer": "0.90116", "explanation": "Listing 14.18 prints 0.90116. 0.88388 is the unigram model (p.426); the others are not on the page.", "page_refs": [428]},
+  {"id": "q5", "type": "conceptual", "question": "Give the two reasons the book offers for why n-gram models beyond trigrams become impractical.", "options": [], "answer": "(1) The space of possible 4-grams is immense and grows exponentially with length, so decent coverage needs an immense vocabulary. (2) The model would lose its ability to generalize, memorizing entire snippets of sentences with weights attached.", "explanation": "Both are stated in the last paragraph; together they motivate the more advanced sequence models.", "page_refs": [428]},
+  {"id": "q6", "type": "short", "question": "Why does the bigram model train in about the same time despite having 50% more parameters?", "options": [], "answer": "The model is tiny either way; training cost is dominated by tokenizing and encoding text on the CPU rather than by the parameter updates.", "explanation": "p.425 noted that encoding is more expensive than updating the parameters, and the page says it trains in about the same amount of time.", "page_refs": [425, 428]},
+  {"id": "q7", "type": "self", "question": "Can you explain why reusing build_linear_classifier unchanged makes the 88% -> 90% comparison meaningful?", "options": [], "answer": "Only the features changed (unigrams -> unigrams + bigrams); architecture, optimizer, loss, epochs and early stopping stayed the same, so the gain can be attributed to the bigram features.", "explanation": "This is a controlled experiment that changes one variable at a time.", "page_refs": [424, 428]}
+ ]
+}

@@ -1,0 +1,169 @@
+{
+ "page_id": "page_271", "pdf_page": 271, "printed_page": "247", "book_id": "dlwp3",
+ "generation": {"status": "complete", "model": "claude-opus-5-5", "generated_at": "2026-11-03T07:36:00Z",
+   "confidence": "high",
+   "review_flags": ["Book inconsistency: the numbered list says 'we'll use batches of 32 images', but listing 8.9 on the same page sets batch_size = 64. Notes describe both and point out the mismatch."],
+   "extraction_quality": "Good. The extractor merged the five-item numbered list and the two following printed paragraphs into one element (p271_e10); notes are split per printed paragraph. Listing 8.9 starts at the bottom of the page and continues on p.272."},
+ "overview": {
+   "title": "Compiling the model and starting the image pipeline",
+   "chapter": "8 Image classification",
+   "section": "8.2 Training a convnet from scratch on a small dataset",
+   "subsection": "8.2.4 Data preprocessing",
+   "main_topic": "Parameter totals of the dogs-vs-cats ConvNet, compiling it with adam and binary crossentropy, and turning JPEG files into batched tensors with image_dataset_from_directory",
+   "central_idea": "A single-sigmoid-unit model is compiled with binary crossentropy, adam and accuracy; then the raw JPEGs on disk must be read, decoded, converted to floats, resized to 180x180 and batched — all of which Keras's image_dataset_from_directory does automatically by treating each subdirectory as a class.",
+   "importance": "This page connects model definition to actual training: the compile step fixes the loss and optimizer, and the data pipeline determines what the model actually sees. image_dataset_from_directory is the standard Keras entry point for folder-organized image datasets and is used for the rest of chapter 8.",
+   "learning_objectives": [
+     "Read the Total / Trainable / Non-trainable parameter lines of a summary",
+     "Justify binary_crossentropy as the loss for a single sigmoid output",
+     "List the five preprocessing steps from JPEG files to batched float tensors",
+     "Explain how image_dataset_from_directory infers labels from subdirectory names and what it returns"
+   ],
+   "prerequisites": [
+     "The model defined in listing 8.7 (p.269-270)",
+     "Choosing a loss for the last-layer activation (table 6.1 in chapter 6)",
+     "The directory layout created in section 8.2.2 (train/validation/test, with one subfolder per class)"
+   ],
+   "page_kind": "content"
+ },
+ "summary": "The page opens with the end of the `model.summary()` output from p.270: **1,569,089 total parameters (5.99 MB)**, all of them trainable, none non-trainable. (5.99 MB is simply 1,569,089 float32 values × 4 bytes.)\n\n**Listing 8.8** compiles the model. As usual, the optimizer is `adam`; because the model ends in a single sigmoid unit, the loss is `binary_crossentropy`; accuracy is tracked as the metric (appropriate because the splits are balanced, p.269). The authors refer back to table 6.1 in chapter 6 as a cheat sheet for choosing a loss.\n\n**Section 8.2.4, Data preprocessing**, recalls that models consume preprocessed floating-point tensors, whereas our data are JPEG files on a drive. Five steps are needed: (1) read the picture files, (2) decode the JPEG content to RGB grids of pixels, (3) convert them into floating-point tensors, (4) resize them to a shared size — 180x180 — and (5) pack them into batches (the text says batches of 32 images). Keras automates this with `image_dataset_from_directory`, which lists the subdirectories of a directory, assumes each contains the images of one class, indexes the files, and returns a `tf.data.Dataset` that reads, shuffles, decodes, resizes and batches them.\n\n**Listing 8.9** begins at the bottom of the page with the import `from keras.utils import image_dataset_from_directory` and `batch_size = 64` — note that this differs from the 32 mentioned in the numbered list; the actual calls that build the train, validation and test datasets follow on p.272. Note that pixel scaling to [0, 1] is not part of this pipeline: it is handled inside the model by the `Rescaling` layer (p.269).",
+ "paragraphs": [
+   {"ref": "p271_e04", "excerpt": "For the compilation step, you’ll go with the adam optimizer, as usual.",
+    "what_it_says": "The model is compiled with the adam optimizer; since it ends with a single sigmoid unit, binary crossentropy is the loss. Readers are reminded of table 6.1 in chapter 6, a cheat sheet mapping problem types to losses.",
+    "what_it_means": "The loss must match the output layer: a sigmoid produces one probability p for the positive class, and binary crossentropy −[y log p + (1−y) log(1−p)] is the negative log-likelihood of a Bernoulli label under that probability. Adam is the authors' default optimizer — it adapts per-parameter step sizes and generally works without tuning.",
+    "why_it_matters": "Mismatching loss and activation (e.g. categorical crossentropy with one sigmoid unit) is a classic bug that silently prevents learning.",
+    "technical_idea": "sigmoid + binary_crossentropy for binary (and multilabel) classification; softmax + categorical_crossentropy for single-label multiclass.",
+    "terminology": [
+      {"term": "binary crossentropy", "meaning": "Log loss for a 0/1 target given a predicted probability."},
+      {"term": "adam", "meaning": "Adaptive-moment optimizer combining momentum with per-parameter learning-rate scaling."}
+    ],
+    "connections": ["p.270: the Dense(1, activation=\"sigmoid\") output layer", "p.269: balanced splits make accuracy a suitable metric"]},
+   {"ref": "p271_e09", "excerpt": "As you know by now, data should be formatted into appropriately preprocessed",
+    "what_it_says": "Models need preprocessed floating-point tensors, but the data currently sit on disk as JPEG files, so a sequence of conversion steps is required.",
+    "what_it_means": "A JPEG file is a compressed byte stream, not a pixel array. Before training, each file must be decoded and converted; the model's Input expects tensors of shape (batch, 180, 180, 3).",
+    "why_it_matters": "Introduces the data-pipeline problem that the rest of the section (and tf.data on p.272) solves.",
+    "terminology": [{"term": "JPEG", "meaning": "Lossy compressed image format; must be decoded to an RGB pixel grid before use."}],
+    "connections": ["p.266: the data were downloaded and copied into train/validation/test folders in section 8.2.2"]},
+   {"ref": "p271_e10", "excerpt": "1 Read the picture files. 2 Decode the JPEG content",
+    "what_it_says": "The five steps: read the files; decode the JPEG to RGB grids of pixels; convert to floating-point tensors; resize to a shared size (180 x 180); pack into batches (the list says 32 images).",
+    "what_it_means": "Resizing is needed because the Kaggle photos have various sizes, while a batch must be a single rectangular tensor and the model's input shape is fixed at 180x180x3. Batching groups samples into one tensor of shape (batch_size, 180, 180, 3) for mini-batch gradient descent.",
+    "why_it_matters": "Each step is a potential source of bugs (wrong channel order, integer dtype, distorted aspect ratio), which is why a ready-made utility is valuable.",
+    "technical_idea": "Note (not in the book): the default resize in image_dataset_from_directory is bilinear and does not preserve aspect ratio unless crop_to_aspect_ratio or pad_to_aspect_ratio is set.",
+    "terminology": [{"term": "batch", "meaning": "A group of samples stacked into one tensor and processed together in one training step."}],
+    "connections": ["p.271 (listing 8.9): batch_size is actually set to 64 in the code"]},
+   {"ref": "p271_e10", "excerpt": "This may seem a bit daunting, but fortunately Keras has utilities",
+    "what_it_says": "Keras's image_dataset_from_directory automates these steps and turns image files on disk into batches of preprocessed tensors; it is what the chapter uses.",
+    "what_it_means": "Instead of hand-writing file reading, decoding and resizing, one function call builds the whole input pipeline.",
+    "why_it_matters": "Lets you focus on modeling; the same utility scales to large datasets because it streams from disk instead of loading everything in memory.",
+    "terminology": [{"term": "data pipeline", "meaning": "The chain of operations that delivers ready-to-train batches to the model."}],
+    "connections": []},
+   {"ref": "p271_e10", "excerpt": "Calling image_dataset_from_directory(directory) will first list the subdirectories",
+    "what_it_says": "The function lists the subdirectories of the directory, treating each as one class; indexes the image files in each; and returns a tf.data.Dataset configured to read, shuffle, decode, resize and batch them.",
+    "what_it_means": "The folder structure is the labeling scheme: with train/cat and train/dog, the labels are inferred from folder names (in alphanumeric order, so cat → 0, dog → 1). The returned Dataset is lazy — files are read as batches are requested.",
+    "why_it_matters": "Organizing images as one folder per class is enough to get labeled data; no CSV of labels is needed.",
+    "technical_idea": "Beyond the book: with the default label_mode=\"int\" and two classes, labels are integer 0/1 — compatible with binary_crossentropy when label_mode=\"binary\" or with a single sigmoid output.",
+    "terminology": [{"term": "tf.data.Dataset", "meaning": "TensorFlow's iterable, composable input-pipeline object, usable with any Keras backend (explained on p.272)."}],
+    "connections": ["p.272: the sidebar on understanding TensorFlow Dataset objects"]}
+ ],
+ "concepts": [
+   {"id": "cross_entropy", "name": "Binary crossentropy", "definition": "The loss −[y log p + (1−y) log(1−p)] for a binary target y and predicted probability p.", "intuition": "Penalizes confident wrong predictions heavily; zero loss when p equals the true label.", "technical": "Negative log-likelihood of a Bernoulli distribution parameterized by the sigmoid output.", "significance": "The matching loss for the single sigmoid unit of the dogs-vs-cats model.", "example": "y=1, p=0.9 → loss 0.105; y=1, p=0.1 → loss 2.30.", "misconception": "It is not the same as categorical crossentropy with one unit, which would always give zero loss.", "related": ["sigmoid", "loss_function"], "source": "book"},
+   {"id": "adam", "name": "Adam optimizer", "definition": "An adaptive gradient optimizer, the authors' default choice ('as usual').", "intuition": "Gradient descent with momentum and a per-weight automatic step size.", "technical": "Keeps exponential moving averages of gradients and squared gradients, bias-corrected, and scales updates by their ratio.", "significance": "Requires little tuning for a baseline model like this one.", "example": "optimizer=\"adam\" uses Keras's default learning rate of 0.001.", "misconception": "Adam is not guaranteed to generalize better than SGD; it is a convenient default.", "related": ["optimizer", "learning_rate"], "source": "book"},
+   {"id": "image_dataset_from_directory", "name": "image_dataset_from_directory", "definition": "A Keras utility that builds a labeled, batched tf.data.Dataset from a folder of class subfolders of images.", "intuition": "Point it at a folder; it figures out the classes and serves ready batches.", "technical": "Lists subdirectories as classes, indexes files, then reads, shuffles, decodes, resizes (image_size) and batches (batch_size) on the fly.", "significance": "Implements all five preprocessing steps listed on the page in one call.", "example": "image_dataset_from_directory(new_base_dir / \"train\", image_size=(180, 180), batch_size=64) (the full call is on p.272).", "misconception": "It does not rescale pixels to [0,1]; here that is the model's Rescaling layer.", "related": ["tf_data_dataset", "data_pipeline"], "source": "book"},
+   {"id": "data_pipeline", "name": "Image preprocessing pipeline", "definition": "Read → decode → float tensor → resize → batch.", "intuition": "Turning photo files into the uniform numeric blocks the network expects.", "technical": "Output batches have shape (batch_size, 180, 180, 3) and float32 dtype.", "significance": "Every vision model needs this conversion before training.", "example": "A 500x374 JPEG becomes a 180x180x3 float tensor.", "misconception": "Resizing is not optional when images have different sizes; batches must be rectangular.", "related": ["image_dataset_from_directory", "tensor"], "source": "book"}
+ ],
+ "math": [
+   {"id": "m1", "title": "Binary crossentropy", "latex": "\\mathcal{L}(y, p) = -\\left[\\, y \\log p + (1 - y) \\log (1 - p) \\,\\right], \\quad p = \\sigma(z) = \\frac{1}{1 + e^{-z}}", "source_text": "loss=\"binary_crossentropy\" (formula not printed on this page)",
+    "variables": [{"symbol": "y", "meaning": "true label, 0 or 1 (e.g. cat = 0, dog = 1)"}, {"symbol": "p", "meaning": "model output, probability of class 1"}, {"symbol": "z", "meaning": "the Dense layer's pre-activation (logit)"}],
+    "operations": "Take the log-probability the model assigned to the true class and negate it; averaged over the batch.", "purpose": "Defines what listing 8.8 minimizes.", "interpretation": "Minimizing it is maximum-likelihood estimation of the label distribution.", "intuition": "Small loss when confident and right, large when confident and wrong.",
+    "numerical_example": "y = 1: p = 0.9 → 0.105; p = 0.5 → 0.693; p = 0.1 → 2.303.", "source": "ai_explanation", "book_ref": "p.271"},
+   {"id": "m2", "title": "Model size in memory", "latex": "1{,}569{,}089 \\times 4\\ \\text{bytes} = 6{,}276{,}356\\ \\text{bytes} \\approx 5.99\\ \\text{MiB}", "source_text": "Total params: 1,569,089 (5.99 MB)",
+    "variables": [{"symbol": "4 bytes", "meaning": "size of one float32 parameter"}],
+    "operations": "Multiply parameter count by bytes per parameter; divide by 1024² = 1,048,576.", "purpose": "Explains the MB figure in the summary.", "interpretation": "Keras reports binary megabytes; the weights of this model take about 6 MB.", "intuition": "Parameters × 4 bytes for float32.", "source": "ai_explanation", "book_ref": "p.271"}
+ ],
+ "code": [
+   {"id": "c1", "listing": null, "title": "End of model.summary() output",
+    "original_code": " Total params: 1,569,089 (5.99 MB)\n Trainable params: 1,569,089 (5.99 MB)\n Non-trainable params: 0 (0.00 B)",
+    "language": "text",
+    "what_it_does": "Final lines of the summary table started on p.270.",
+    "line_explanations": [
+      {"lines": "1", "explanation": "Sum of the Param # column: 896 + 18,496 + 73,856 + 295,168 + 1,180,160 + 513 = 1,569,089."},
+      {"lines": "2", "explanation": "All parameters are updated by training."},
+      {"lines": "3", "explanation": "No frozen weights (no BatchNormalization statistics or frozen pretrained layers yet)."}
+    ],
+    "inputs_outputs": "Text output only.",
+    "algorithm": "Summation of per-layer weight counts.",
+    "theory_link": "Non-trainable params become non-zero later, when a pretrained convolutional base is frozen (section 8.3).",
+    "parameters": [],
+    "pitfalls": ["'MB' here is computed with 1024² bytes and float32 weights; mixed precision would halve it."]},
+   {"id": "c2", "listing": "8.8", "title": "Configuring the model for training",
+    "original_code": "model.compile(\n    loss=\"binary_crossentropy\",\n    optimizer=\"adam\",\n    metrics=[\"accuracy\"],\n)",
+    "language": "python",
+    "what_it_does": "Attaches loss, optimizer and metric to the model so it can be trained with fit().",
+    "line_explanations": [
+      {"lines": "2", "explanation": "Binary crossentropy, matching the single sigmoid output."},
+      {"lines": "3", "explanation": "Adam with default settings (learning rate 0.001)."},
+      {"lines": "4", "explanation": "Track accuracy; suitable because the classes are balanced."}
+    ],
+    "inputs_outputs": "Mutates the model in place; returns None.",
+    "algorithm": "Configuration only; no computation happens until fit().",
+    "theory_link": "Loss/activation pairing from table 6.1 (chapter 6).",
+    "parameters": [
+      {"name": "loss", "role": "Objective minimized during training."},
+      {"name": "optimizer", "role": "Update rule for the weights."},
+      {"name": "metrics", "role": "Values reported each epoch, not used for gradients."}
+    ],
+    "pitfalls": ["Using \"categorical_crossentropy\" with a Dense(1) sigmoid output would be wrong.", "Strings select default hyperparameters; pass keras.optimizers.Adam(learning_rate=...) to change them."]},
+   {"id": "c3", "listing": "8.9", "title": "Using image_dataset_from_directory to read images from directories (start)",
+    "original_code": "from keras.utils import image_dataset_from_directory\nbatch_size = 64",
+    "language": "python",
+    "what_it_does": "Imports the utility and fixes the batch size. Only these first lines are on this page; the calls building train_dataset, validation_dataset and test_dataset continue on p.272.",
+    "line_explanations": [
+      {"lines": "1", "explanation": "Import from keras.utils."},
+      {"lines": "2", "explanation": "64 images per batch — note the prose list above says 32."}
+    ],
+    "inputs_outputs": "No output on its own.",
+    "algorithm": "Setup for the dataset constructor calls on the next page.",
+    "theory_link": "Mini-batch size controls gradient-noise and memory use.",
+    "parameters": [{"name": "batch_size", "role": "Number of images per batch yielded by the dataset."}],
+    "pitfalls": ["The text and code disagree on the batch size (32 vs 64); follow the code if reproducing the results."],
+    "illustrative_code": "# AI-written sketch of how the call (shown on p.272) typically looks\ntrain_dataset = image_dataset_from_directory(\n    \"cats_vs_dogs_small/train\",   # contains cat/ and dog/ subfolders\n    image_size=(180, 180),\n    batch_size=batch_size,\n)\nfor images, labels in train_dataset.take(1):\n    print(images.shape, labels.shape)  # (64, 180, 180, 3) (64,)"}
+ ],
+ "deeper": [
+   {"title": "Why rescaling lives in the model, not the pipeline", "kind": "alternative", "body": "Note (not in the book's text on this page): image_dataset_from_directory yields float32 pixels in [0, 255]. The model built on p.269 starts with Rescaling(1./255), so the preprocessing that matters numerically travels with the saved model. At inference time you can feed raw decoded images without having to remember the scaling constant.", "source": "inference"},
+   {"title": "Directory layout as labels", "kind": "step_by_step", "body": "Beyond the book: given `train/cat/*.jpg` and `train/dog/*.jpg`, the utility (1) sorts the subdirectory names → class_names = ['cat', 'dog'], (2) assigns indices 0 and 1, (3) builds the list of (path, label) pairs, (4) shuffles them (shuffle=True by default), and (5) maps a decode+resize function over paths lazily, then batches. Nothing is loaded until you iterate.", "source": "ai_explanation"}
+ ],
+ "visualizations": [
+   {"id": "v1", "type": "mermaid", "title": "From JPEG files to training batches", "why": "The five numbered preprocessing steps on this page and where image_dataset_from_directory and the Rescaling layer fit.",
+    "mermaid": "flowchart LR\n  D[\"directory/\\ncat/ dog/\"] --> A[\"1 Read files\"]\n  A --> B[\"2 Decode JPEG\\nto RGB grid\"]\n  B --> C[\"3 Convert to\\nfloat tensors\"]\n  C --> E[\"4 Resize\\n180x180\"]\n  E --> F[\"5 Batch\\n(batch_size)\"]\n  F --> M[\"Model: Rescaling 1/255\\n-> ConvNet -> sigmoid\"]\n  subgraph IDFD [image_dataset_from_directory]\n    A\n    B\n    C\n    E\n    F\n  end"},
+   {"id": "v2", "type": "widget", "title": "Binary crossentropy vs. prediction", "why": "Listing 8.8 compiles the model with binary_crossentropy; see how the loss reacts to the sigmoid output for a true label of 1.", "widget": "loss_functions", "params": {"losses": ["bce"], "y_true": 1}}
+ ],
+ "misconceptions": [
+   {"claim": "image_dataset_from_directory needs a separate labels file.", "correction": "Labels come from the subdirectory names; each subdirectory is one class."},
+   {"claim": "The dataset already normalizes pixels to [0, 1].", "correction": "It yields float values in [0, 255]; normalization is done by the Rescaling layer at the start of the model."},
+   {"claim": "The chapter uses batches of 32.", "correction": "The prose list says 32, but listing 8.9 sets batch_size = 64."}
+ ],
+ "connections": {
+   "earlier": [{"page": 270, "note": "The first part of the model.summary() table and listing 8.7."},
+               {"page": 269, "note": "Rescaling layer and sigmoid output design; balanced splits."},
+               {"page": 266, "note": "Downloading the data and creating the train/validation/test directories."}],
+   "later": [{"page": 272, "note": "Rest of listing 8.9 and the sidebar on tf.data.Dataset objects."},
+             {"page": 274, "note": "Further use of the datasets (inspecting and fitting)."}],
+   "prerequisites": [],
+   "related_math": [], "related_code": [{"page": 272, "note": "Continuation of listing 8.9."}], "related_figures": []
+ },
+ "takeaways": [
+   "The model has 1,569,089 parameters (about 6 MB in float32), all trainable.",
+   "Single sigmoid output → binary_crossentropy; adam as the default optimizer; accuracy as metric.",
+   "JPEGs must be read, decoded, converted to floats, resized to 180x180 and batched.",
+   "image_dataset_from_directory does all of this and infers labels from subfolder names, returning a tf.data.Dataset.",
+   "The text mentions batches of 32 but the code uses batch_size = 64."
+ ],
+ "questions": [
+   {"id": "q1", "type": "mcq", "question": "Why is binary_crossentropy chosen in listing 8.8?", "options": ["The model ends with a single sigmoid unit for a two-class problem", "Adam only works with binary crossentropy", "The images are binary (black and white)", "The dataset has 2,000 training images"], "answer": "The model ends with a single sigmoid unit for a two-class problem", "explanation": "The text ties the loss to the sigmoid output. Adam works with any differentiable loss, the images are RGB, and dataset size doesn't determine the loss.", "page_refs": [271]},
+   {"id": "q2", "type": "short", "question": "List the five preprocessing steps from JPEG files to model input.", "options": [], "answer": "Read the files; decode JPEG to RGB pixel grids; convert to floating-point tensors; resize to a shared size (180x180); pack into batches.", "explanation": "These are the numbered steps of section 8.2.4.", "page_refs": [271]},
+   {"id": "q3", "type": "conceptual", "question": "How does image_dataset_from_directory know the label of each image?", "options": [], "answer": "It treats each subdirectory of the given directory as a class and labels each image by the subdirectory it is in.", "explanation": "The page: it lists the subdirectories and assumes each one contains images from one class.", "page_refs": [271]},
+   {"id": "q4", "type": "math", "question": "Show that 1,569,089 parameters correspond to the 5.99 MB in the summary.", "options": [], "answer": "1,569,089 × 4 bytes = 6,276,356 bytes; ÷ 1,048,576 ≈ 5.99 MB.", "explanation": "Each float32 weight occupies 4 bytes; Keras reports binary megabytes.", "page_refs": [271]},
+   {"id": "q5", "type": "mcq", "question": "Which batch size does listing 8.9 actually use?", "options": ["16", "32", "64", "180"], "answer": "64", "explanation": "The code sets batch_size = 64, although the numbered list mentions 32; 180 is the image size and 16 does not appear.", "page_refs": [271]},
+   {"id": "q6", "type": "conceptual", "question": "Why must images be resized to a shared size before batching?", "options": [], "answer": "A batch is a single rectangular tensor (batch, 180, 180, 3) and the model's input shape is fixed, so images of different sizes cannot be stacked or fed as-is.", "explanation": "Follows from step 4 and the model's Input shape (p.269).", "page_refs": [271, 269]},
+   {"id": "q7", "type": "self", "question": "Could you explain to someone what 'Non-trainable params: 0' means and when it would become non-zero?", "options": [], "answer": "No weights are frozen now; it becomes non-zero e.g. when a pretrained base is frozen (section 8.3) or with BatchNormalization statistics.", "explanation": "Self-check of summary reading.", "page_refs": [271]}
+ ]
+}

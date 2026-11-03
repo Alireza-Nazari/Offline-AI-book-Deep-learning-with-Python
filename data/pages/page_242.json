@@ -1,0 +1,362 @@
+{
+  "page_id": "page_242",
+  "pdf_page": 242,
+  "printed_page": "218",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:29:31Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean. The PyTorch code and the single-step snippet match the image. Element e10 merges two printed paragraphs ('Since the gradient function…' and 'To make it easier…'), which are given separate notes below. The bullet list about stateless_call() continues on p.243."
+  },
+  "overview": {
+    "title": "The PyTorch train_step and the start of the JAX version",
+    "chapter": "7 A deep dive on Keras",
+    "section": "7.4 Writing your own training and evaluation loops",
+    "subsection": "7.4.2 Writing custom training step functions",
+    "main_topic": "A complete PyTorch training step for a Keras model, and why JAX's statelessness calls for a stateless loss function and Keras's stateless_call()",
+    "central_idea": "The PyTorch step chains forward pass → loss.backward() → collect weight.value.grad → optimizer.apply inside torch.no_grad() → model.zero_grad(). JAX works differently: gradients come from transforming a pure loss function, so that function must take every variable as an argument and return any variable it changes, which Keras makes possible with model.stateless_call().",
+    "importance": "This page finishes the second of three backend versions and sets up the hardest one. The stateless pattern it introduces is reused when fit() is customized with JAX (p.249).",
+    "learning_objectives": [
+      "Write the PyTorch train_step for a Keras model and explain each line",
+      "Explain why optimizer.apply must run inside torch.no_grad()",
+      "Explain what 'stateless' means for JAX and why it helps compilation and scaling",
+      "State the two requirements a JAX loss function must meet (take all variables as arguments, return updated ones)",
+      "Describe what model.stateless_call() takes as input"
+    ],
+    "prerequisites": [
+      "The PyTorch autograd mental model (p.241)",
+      "JAX metaprogramming for gradients (p.110) and stateless training steps (p.113)",
+      "Non-trainable weights (pp.239–240)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "\"Let's chain these steps\": the page gives the full **PyTorch training step**. Setup matches the TensorFlow version (`import torch`, `get_mnist_model()`, `SparseCategoricalCrossentropy`, `Adam`). Inside `train_step`:\n\n1. forward pass with `training=True`, and the loss;\n2. `loss.backward()` runs the backward pass and fills in gradient values;\n3. `gradients = [weight.value.grad for weight in model.trainable_weights]` collects each trainable variable's gradient. The callout explains that `weight.value` is the PyTorch tensor holding the variable's value;\n4. `optimizer.apply(...)` updates the weights, and the callout says this *must be done in a* `no_grad()` *scope*;\n5. `model.zero_grad()`, with the warning \"Don't forget to clear the gradients!\";\n6. `return loss`.\n\nThe same 32-sample single-step run follows. \"That wasn't too difficult!\"\n\nThe **JAX training step** subsection begins. JAX is the most complex of the three backends for low-level training code because it is **fully stateless**. That statelessness is also what makes JAX \"highly performant and scalable\" and \"amenable to compilation and automatic performance optimizations\", but it means jumping through some hoops.\n\nJAX gets its gradient function by **metaprogramming** (transforming a function into its gradient function), so you first write a function that returns the loss. That function must be stateless: it must *take as arguments all the variables it uses* and *return the value of any variable it updates*. Here that means the **non-trainable weights** the forward pass can change.\n\nTo help, Keras models provide a stateless forward pass, **`stateless_call()`**. It behaves like `call`, except that it takes the model's trainable and non-trainable weights as inputs in addition to `inputs` and `training`. The second difference, that it returns updated non-trainable weights, and its use are on p.243.",
+  "paragraphs": [
+    {
+      "ref": "p242_e03",
+      "excerpt": "Let’s chain these steps:",
+      "what_it_says": "This introduces the full PyTorch code, which chains backward(), reading .grad, and zero_grad() from p.241.",
+      "what_it_means": "The three mechanisms described in the previous bullets are now put in order inside a train_step.",
+      "why_it_matters": "Each of the three mechanisms has a fixed place in the step.",
+      "connections": ["p.241: the three-bullet PyTorch mental model being chained here"]
+    },
+    {
+      "ref": "p242_e05",
+      "excerpt": "Let’s run it for a single step:",
+      "what_it_says": "The same one-batch test as for TensorFlow, followed by \"That wasn't too difficult! Now, let's move on to JAX.\"",
+      "what_it_means": "The calling code is identical across backends. Only the inside of train_step changed, which shows that the Keras-level interface (model, loss_fn, optimizer, data) is backend agnostic.",
+      "why_it_matters": "Because the call site never changes, a custom train_step can later be plugged into fit() (p.246).",
+      "connections": ["p.241: the identical TensorFlow single-step run"]
+    },
+    {
+      "ref": "p242_e09",
+      "excerpt": "When it comes to low-level training code, JAX tends to be the",
+      "what_it_says": "JAX is the most complex backend for low-level training because it is fully stateless. Statelessness makes it performant, scalable and well suited to compilation and automatic optimization, but stateless code requires some hoop-jumping.",
+      "what_it_means": "In JAX, functions are pure: same inputs give the same outputs, with no hidden mutation. Arrays are immutable. Pure functions can be traced and compiled (`jax.jit`), vectorized and sharded across devices, because the compiler can see all data dependencies. The cost is that state such as weights, optimizer moments and BatchNorm statistics must be passed in and out explicitly.",
+      "why_it_matters": "This explains the extra code that follows. It is the price of JAX's speed, not complexity for its own sake.",
+      "terminology": [
+        {"term": "stateless (pure) function", "meaning": "A function whose output depends only on its inputs and that changes no external state."},
+        {"term": "compilation", "meaning": "Tracing a function into an optimized program (XLA in JAX's case)."}
+      ],
+      "connections": ["p.106: JAX's stateless approach and its scalability advantages", "p.112: only stateless functions can be decorated with @jax.jit", "p.114: JAX's functional philosophy unlocks speed and scale"]
+    },
+    {
+      "ref": "p242_e10",
+      "excerpt": "Since the gradient function is obtained via metaprogramming, you first need to",
+      "what_it_says": "Because JAX obtains the gradient function by metaprogramming, you must first define a function that returns the loss. It must be stateless: it takes as arguments all the variables it uses and returns any variable it updated, which here means the non-trainable weights changed during the forward pass.",
+      "what_it_means": "`jax.grad(f)` or `jax.value_and_grad(f)` returns a *new function* that computes derivatives of `f` with respect to its first argument. So the loss has to be written as `f(trainable, non_trainable, x, y)`. If the forward pass changes BatchNorm statistics, `f` cannot change them in place; it has to return the new values.",
+      "why_it_matters": "This is the link between p.239's non-trainable weights and JAX. Forgetting to return and reassign them would freeze BatchNorm statistics silently.",
+      "technical_idea": "Beyond the book: JAX differentiates with respect to the first positional argument by default (`argnums=0`), so the trainable variables go first.",
+      "terminology": [
+        {"term": "metaprogramming", "meaning": "Here: functions that return functions. jax.grad turns a loss function into a gradient function (p.110)."}
+      ],
+      "connections": ["p.110: the three-step JAX gradient recipe", "p.113: chapter 3's JAX training step had to return updated W and b", "p.243: compute_loss_and_updates() and has_aux"]
+    },
+    {
+      "ref": "p242_e10",
+      "excerpt": "To make it easier to work with the stateless programming paradigm of",
+      "what_it_says": "Keras models provide a stateless forward-pass method, `stateless_call()`, which behaves like `call` with some differences, listed next.",
+      "what_it_means": "A normal `model(x)` reads the weights stored in the model's variables. `stateless_call` reads the weights you pass in instead. That makes the forward pass a pure function of the weights, which is what `jax.grad` needs.",
+      "why_it_matters": "Without it you would have to re-implement the model's forward pass as a pure function by hand.",
+      "terminology": [
+        {"term": "stateless_call()", "meaning": "Keras Model method that runs the forward pass with explicitly supplied weight values and returns outputs plus updated non-trainable weights."}
+      ],
+      "connections": ["p.243: what stateless_call returns and how it is used", "p.249: the same pattern in a custom train_step with fit() on JAX"]
+    },
+    {
+      "ref": "p242_e11",
+      "excerpt": "It takes as input the model’s trainable weights and non-trainable weights, in",
+      "what_it_says": "The first difference from `call`: `stateless_call` takes the trainable and non-trainable weights as inputs, in addition to `inputs` and `training`.",
+      "what_it_means": "The signature is roughly `model.stateless_call(trainable_variables, non_trainable_variables, inputs, training=...)`. The weights are lists of arrays, not Keras variable objects.",
+      "why_it_matters": "Passing the trainable weights explicitly is what lets JAX differentiate with respect to them.",
+      "connections": ["p.243: the second bullet, which says it returns updated non-trainable weights"]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "pytorch_train_step",
+      "name": "PyTorch training step for a Keras model",
+      "definition": "forward → loss → loss.backward() → gather weight.value.grad → optimizer.apply under torch.no_grad() → model.zero_grad().",
+      "intuition": "Autograd leaves gradients on the parameters; you collect them, apply them without recording, then clear them.",
+      "technical": "Gradients are stored on the underlying torch tensors (`weight.value`). The update is wrapped in `no_grad()` so autograd does not record it.",
+      "significance": "The second concrete version of the pseudocode on p.240.",
+      "example": "The code on this page.",
+      "misconception": "Calling `zero_grad()` before `backward()` in the same step would also work. What matters is that gradients from the previous step are not still there.",
+      "related": ["pytorch_autograd", "train_step"],
+      "source": "book"
+    },
+    {
+      "id": "torch_no_grad",
+      "name": "torch.no_grad() scope",
+      "definition": "A context in which PyTorch does not record operations for autograd.",
+      "intuition": "Turns off the recorder so the weight update itself is not treated as part of the model's computation.",
+      "technical": "Inside it, in-place updates to leaf tensors with requires_grad=True are allowed and do not build graph nodes.",
+      "significance": "The book's callout: the update \"must be done in a no_grad() scope.\" Chapter 3 gives the reason: updates are not meant to be part of the backward pass (p.103).",
+      "example": "`with torch.no_grad(): optimizer.apply(gradients, model.trainable_weights)`.",
+      "misconception": "no_grad does not delete existing gradients; zero_grad does that.",
+      "related": ["pytorch_autograd"],
+      "source": "book"
+    },
+    {
+      "id": "jax_statelessness",
+      "name": "JAX statelessness",
+      "definition": "JAX functions keep no persistent state; any state they use must be passed in, and any state they change must be returned.",
+      "intuition": "A JAX function is like a mathematical function: it cannot quietly change anything in the background.",
+      "technical": "Enables jit compilation and automatic parallelization. For training, the weights and non-trainable variables are function arguments and return values.",
+      "significance": "Why JAX training code is more complex but faster and more scalable (book).",
+      "example": "Chapter 3's JAX training step returned new W and b (p.113).",
+      "misconception": "Stateless does not mean the model has no weights; the weights are passed around explicitly.",
+      "related": ["stateless_call", "autodiff"],
+      "source": "book"
+    },
+    {
+      "id": "stateless_call",
+      "name": "Model.stateless_call()",
+      "definition": "Keras's stateless forward pass: like call, but it takes trainable and non-trainable weights as inputs (and, per p.243, returns updated non-trainable weights).",
+      "intuition": "A version of the model with no variables of its own; you supply the weights each time.",
+      "technical": "Roughly `outputs, non_trainable_variables = model.stateless_call(trainable_variables, non_trainable_variables, inputs, training=True)`. The return value is described on p.243.",
+      "significance": "Makes the Keras model usable inside a pure JAX loss function.",
+      "example": "Used in compute_loss_and_updates() on p.243.",
+      "misconception": "It does not update the model's variables; you have to assign the returned values yourself.",
+      "related": ["jax_statelessness", "non_trainable_weights"],
+      "source": "book"
+    },
+    {
+      "id": "metaprogramming_gradients",
+      "name": "Gradients via metaprogramming (JAX)",
+      "definition": "Obtaining a gradient function by transforming a loss function, for example `jax.grad(loss_fn)`.",
+      "intuition": "Instead of recording a computation (TF) or attaching gradients to tensors (PyTorch), JAX hands you a new function that computes derivatives.",
+      "technical": "`jax.value_and_grad(f)` returns a function that gives (f(x), ∇f(x)), differentiating with respect to the first argument.",
+      "significance": "Why the JAX version needs an explicit loss function before anything else.",
+      "example": "p.110: grad of a squaring function.",
+      "misconception": "jax.grad does not compute gradients immediately; it returns a function you then call.",
+      "related": ["autodiff", "jax_statelessness"],
+      "source": "book"
+    }
+  ],
+  "math": [],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "PyTorch train_step for a Keras model",
+      "original_code": "import torch\n\nmodel = get_mnist_model()\nloss_fn = keras.losses.SparseCategoricalCrossentropy()\noptimizer = keras.optimizers.Adam()\n\ndef train_step(inputs, targets):\n    predictions = model(inputs, training=True)\n    loss = loss_fn(targets, predictions)\n    loss.backward()\n    gradients = [weight.value.grad for weight in model.trainable_weights]\n    with torch.no_grad():\n        optimizer.apply(gradients, model.trainable_weights)\n    model.zero_grad()\n    return loss",
+      "language": "python",
+      "what_it_does": "Runs one gradient update for a Keras model on the PyTorch backend and returns the loss.",
+      "line_explanations": [
+        {"lines": "1-5", "explanation": "Imports torch and creates a new model, loss and optimizer, the same setup as the TF version."},
+        {"lines": "8", "explanation": "Runs the forward pass (book callout). PyTorch builds a one-time graph."},
+        {"lines": "9", "explanation": "Computes the scalar loss."},
+        {"lines": "10", "explanation": "Runs the backward pass, populating gradient values (book callout)."},
+        {"lines": "11", "explanation": "Recovers the gradient for each trainable variable. `weight.value` is the PyTorch tensor that holds the variable's value (book callout)."},
+        {"lines": "12-13", "explanation": "Updates the trainable weights from the gradients. This must be done in a no_grad() scope (book callout)."},
+        {"lines": "14", "explanation": "Don't forget to clear the gradients! (book callout) Otherwise backward() accumulates."},
+        {"lines": "15", "explanation": "Returns the loss."}
+      ],
+      "inputs_outputs": "Inputs: a batch of images and labels. Output: the loss tensor. Side effects: weights updated and gradients cleared.",
+      "algorithm": "Define-by-run backprop followed by an Adam update.",
+      "theory_link": "The p.240 pseudocode with get_gradients_of() replaced by backward() plus reading .grad.",
+      "parameters": [
+        {"name": "model.trainable_weights", "role": "Keras variables whose .value tensors carry .grad"},
+        {"name": "torch.no_grad()", "role": "Keeps the update out of the autograd graph"}
+      ],
+      "pitfalls": [
+        "Leaving out model.zero_grad(): gradients accumulate and training stops working.",
+        "Using `weight.grad` instead of `weight.value.grad`: a Keras variable is not itself the torch tensor.",
+        "Running the update outside no_grad(), which autograd will record or reject."
+      ]
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Running the PyTorch train_step on one batch",
+      "original_code": "batch_size = 32\ninputs = train_images[:batch_size]\ntargets = train_labels[:batch_size]\nloss = train_step(inputs, targets)",
+      "language": "python",
+      "what_it_does": "Same single-step test as for TensorFlow: one update on the first 32 MNIST samples.",
+      "line_explanations": [
+        {"lines": "1-3", "explanation": "Slices the first 32 samples. Keras converts the NumPy arrays to torch tensors when the model is called."},
+        {"lines": "4", "explanation": "One update; returns the loss."}
+      ],
+      "inputs_outputs": "32 images and labels in, scalar loss out.",
+      "algorithm": "A single mini-batch update.",
+      "theory_link": "Identical call site across backends.",
+      "parameters": [
+        {"name": "batch_size", "role": "32 samples"}
+      ],
+      "pitfalls": [
+        "The returned loss is a torch tensor attached to the graph. Use `loss.item()` or `float(loss)` to log it (not in the book)."
+      ]
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why the optimizer update goes inside torch.no_grad()",
+      "kind": "step_by_step",
+      "body": "1. The trainable parameters have `requires_grad=True`, so autograd tracks every operation on them.\n2. An update like `w -= lr * g` is itself an operation on `w`. Without `no_grad()`, PyTorch would either record it in the graph (wrong: the update is not part of the model) or reject the in-place change to a leaf tensor that requires grad.\n3. Inside `no_grad()` the update is plain arithmetic.\n\nChapter 3 gives the same reasoning (p.103): updates \"are not intended to be part of the backward pass.\"",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Three backends, three ideas of where gradients come from",
+      "kind": "alternative",
+      "body": "| Backend | How you get gradients | State handling |\n|---|---|---|\n| TensorFlow | `tape.gradient(loss, weights)` returns them | variables are mutable |\n| PyTorch | `loss.backward()` writes them to `.grad` | variables are mutable; clear `.grad` every step |\n| JAX | `jax.value_and_grad(fn)` returns a function | everything immutable; pass in and return all state |\n\nThe rows summarize pp.240–243.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Analogy: borrowing a model's weights",
+      "kind": "analogy",
+      "body": "`model(x)` is like cooking in your own kitchen with the ingredients already in your cupboard. `stateless_call(weights, ...)` is like a caterer who arrives with an empty van: you hand over every ingredient (the weights), they cook, and they give back the dish (the outputs) plus any leftovers they changed (the updated non-trainable weights). JAX only works with caterers.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "The PyTorch train_step, in order",
+      "why": "Lays out the order of the PyTorch code on this page, including the no_grad scope and the zero_grad warning.",
+      "mermaid": "flowchart TD\n  A[\"model(inputs, training=True)\"] --> B[\"loss_fn(targets, predictions)\"]\n  B --> C[\"loss.backward()\\npopulates .grad\"]\n  C --> D[\"[weight.value.grad for weight in trainable_weights]\"]\n  D --> E[\"with torch.no_grad():\\noptimizer.apply(...)\"]\n  E --> F[\"model.zero_grad()\\nDon't forget!\"]\n  F --> G[return loss]"
+    },
+    {
+      "id": "v2",
+      "type": "mermaid",
+      "title": "Stateful call vs stateless_call",
+      "why": "Shows the difference this page introduces between model.call (reads its own variables) and stateless_call (weights passed in, updated non-trainable weights returned on p.243).",
+      "mermaid": "flowchart LR\n  subgraph S[\"model(inputs) - stateful\"]\n    V[(model variables)] --> M1[call]\n    I1[inputs] --> M1 --> O1[outputs]\n    M1 -.mutates.-> V\n  end\n  subgraph SL[\"model.stateless_call - pure\"]\n    TW[trainable weights] --> M2[stateless_call]\n    NTW[non-trainable weights] --> M2\n    I2[inputs, training] --> M2\n    M2 --> O2[outputs]\n    M2 --> NTW2[updated non-trainable weights]\n  end"
+    }
+  ],
+  "misconceptions": [
+    {"claim": "In the PyTorch version, the optimizer reads gradients directly from the parameters.", "correction": "The book's code collects them explicitly into a list (`weight.value.grad`) and passes them to the Keras optimizer's apply()."},
+    {"claim": "JAX is complex because its API is poorly designed.", "correction": "The complexity comes from statelessness, which is also the source of JAX's performance, scalability and compilability (book)."},
+    {"claim": "A JAX loss function only needs to return the loss.", "correction": "It must also return any variables it updated, such as non-trainable weights changed during the forward pass."}
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 241, "note": "The PyTorch mental model: one-time graph, backward() populating .grad, additive gradients"},
+      {"page": 103, "note": "Chapter 3 PyTorch step using no_grad() and resetting .grad"},
+      {"page": 110, "note": "JAX's metaprogramming approach to gradients"},
+      {"page": 112, "note": "Stateless JAX functions and @jax.jit"},
+      {"page": 106, "note": "JAX's stateless philosophy and scalability"}
+    ],
+    "later": [
+      {"page": 243, "note": "stateless_call returns updated non-trainable weights; compute_loss_and_updates and has_aux"},
+      {"page": 244, "note": "Completing the JAX training step"},
+      {"page": 249, "note": "Customizing fit() with JAX using compute_loss_and_updates()"},
+      {"page": 251, "note": "PyTorch metrics handling inside a custom train_step()"}
+    ],
+    "prerequisites": [
+      {"page": 241, "note": "PyTorch autograd mental model"},
+      {"page": 239, "note": "Non-trainable weights modified during the forward pass"}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 241, "note": "The TensorFlow train_step, for comparison"},
+      {"page": 113, "note": "Chapter 3's stateless JAX training step"}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "PyTorch step: forward, loss, loss.backward(), gather weight.value.grad, optimizer.apply under torch.no_grad(), model.zero_grad().",
+    "weight.value is the PyTorch tensor inside a Keras variable, and that is where .grad lives.",
+    "JAX is the most complex backend for custom steps because it is fully stateless, which is also why it is fast and scalable.",
+    "A JAX loss function must take all the variables it uses as arguments and return the ones it updates (non-trainable weights).",
+    "Keras's model.stateless_call() is a forward pass that takes trainable and non-trainable weights explicitly."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "Why is optimizer.apply wrapped in torch.no_grad() in the PyTorch train_step?",
+      "options": [
+        "To clear the gradients after the update",
+        "So the weight update is not tracked by autograd as part of the computation graph",
+        "Because Adam only works without gradients",
+        "To run the update on the GPU"
+      ],
+      "answer": "So the weight update is not tracked by autograd as part of the computation graph",
+      "explanation": "The update is not part of the backward pass (p.103), and the callout says it must be in no_grad(). Clearing is zero_grad()'s job; Adam does use the gradients; device placement has nothing to do with no_grad.",
+      "page_refs": [242, 103]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "What is weight.value in the expression weight.value.grad?",
+      "options": [],
+      "answer": "The PyTorch tensor that holds the Keras variable's value. Its .grad attribute holds the gradient after backward().",
+      "explanation": "Stated in the code callout.",
+      "page_refs": [242]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "According to the book, what does JAX gain from being fully stateless, and what does it cost?",
+      "options": [],
+      "answer": "It gains performance, scalability and suitability for compilation and automatic optimization. It costs extra effort: functions must take all the variables they use as arguments and return any they update.",
+      "explanation": "From the opening JAX paragraphs on this page.",
+      "page_refs": [242]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "Which variables does the book say the JAX loss function needs to return, in addition to the loss?",
+      "options": [
+        "The trainable weights after the optimizer update",
+        "The non-trainable weights modified during the forward pass",
+        "The gradients",
+        "The optimizer's learning rate"
+      ],
+      "answer": "The non-trainable weights modified during the forward pass",
+      "explanation": "The book says exactly this. Trainable weights are updated later by the optimizer, not by the loss function; gradients come from value_and_grad; the learning rate is not involved.",
+      "page_refs": [242]
+    },
+    {
+      "id": "q5",
+      "type": "short",
+      "question": "What does stateless_call() take as input that call() does not?",
+      "options": [],
+      "answer": "The model's trainable weights and non-trainable weights, in addition to inputs and training.",
+      "explanation": "The first bullet at the bottom of the page.",
+      "page_refs": [242]
+    },
+    {
+      "id": "q6",
+      "type": "conceptual",
+      "question": "Put the PyTorch train_step's operations in order and say which line is the PyTorch replacement for get_gradients_of().",
+      "options": [],
+      "answer": "forward pass → loss → loss.backward() → gradients = [w.value.grad ...] → no_grad optimizer.apply → zero_grad → return loss. loss.backward() together with reading weight.value.grad replaces get_gradients_of().",
+      "explanation": "Compare with the pseudocode on p.240.",
+      "page_refs": [240, 242]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you explain in your own words why JAX gradients are 'obtained via metaprogramming'?",
+      "options": [],
+      "answer": "Yes if you can say that jax.grad / value_and_grad takes your loss function and returns a new function that computes gradients, rather than recording operations or storing .grad on tensors.",
+      "explanation": "See p.110 and this page.",
+      "page_refs": [110, 242]
+    }
+  ]
+}

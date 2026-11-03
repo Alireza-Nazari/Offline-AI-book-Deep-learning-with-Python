@@ -1,0 +1,422 @@
+{
+ "pdf_page": 539,
+ "printed_page": "515",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:30:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. The page holds Listing 17.3 and the decoder.summary() output, with one short line of prose. The callouts (fragmented in the extraction) are: 'Input where we'll feed z'; 'Produces the same number of coefficients we had at the level of the Flatten layer in the encoder'; 'Reverts the Flatten layer of the encoder'; 'Reverts the Conv2D layers of the encoder'; 'The output ends up with shape (28, 28, 1).'"
+ },
+ "overview": {
+  "title": "The VAE decoder network",
+  "chapter": "17 Image generation",
+  "section": "17.1 Deep learning for image generation",
+  "subsection": "17.1.3 Implementing a VAE with Keras",
+  "main_topic": "A decoder that mirrors the encoder: Dense to 7*7*64, Reshape, two stride-2 Conv2DTranspose layers and a sigmoid Conv2D producing a 28x28x1 image",
+  "central_idea": "The decoder reverses each encoder stage. A Dense layer recreates the 3,136 coefficients of the encoder's Flatten output, Reshape restores the 7x7x64 feature map, transposed convolutions upsample 7 to 14 to 28, and a final 1-filter sigmoid convolution gives pixel values in [0, 1].",
+  "importance": "The decoder is the generator. After training it alone turns any 2-D latent point into a digit image. Its sigmoid output also matches the binary crossentropy reconstruction loss used on p.541.",
+  "learning_objectives": [
+   "Trace the decoder's shapes from (None, 2) to (None, 28, 28, 1)",
+   "Explain how each decoder layer reverts an encoder layer",
+   "Explain what Conv2DTranspose with strides=2 does to spatial size",
+   "Compute the decoder's parameter counts",
+   "Explain why the final activation is sigmoid"
+  ],
+  "prerequisites": [
+   "Encoder architecture (p.537-538)",
+   "Conv2D and Conv2DTranspose (chapter 11 segmentation)",
+   "Functional API"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Listing 17.3** defines the **decoder**, which maps latent points back to images. Its structure mirrors the encoder of Listing 17.1:\n\n- `latent_inputs = keras.Input(shape=(latent_dim,))`: the input \"where we'll feed `z`\", shape (None, 2).\n- `layers.Dense(7 * 7 * 64, activation=\"relu\")` produces **the same number of coefficients we had at the level of the Flatten layer in the encoder**: 3,136.\n- `layers.Reshape((7, 7, 64))` turns that vector back into a 7x7x64 feature map. Together, the Dense and Reshape layers **revert the Flatten layer** of the encoder.\n- Two `Conv2DTranspose` layers with `strides=2, padding=\"same\"` (64 then 32 filters, ReLU) **revert the Conv2D layers** of the encoder. They upsample 7x7 to 14x14 to 28x28.\n- `layers.Conv2D(1, 3, activation=\"sigmoid\", padding=\"same\")` collapses to one channel. **The output ends up with shape (28, 28, 1)**, with values in (0, 1) like the normalized MNIST pixels.\n- `keras.Model(latent_inputs, decoder_outputs, name=\"decoder\")` packages it.\n\nThe **summary** confirms this: `dense_1` (None, 3136) with 9,408 parameters, `reshape` (None, 7, 7, 64), `conv2d_transpose` (None, 14, 14, 64) with 36,928, `conv2d_transpose_1` (None, 28, 28, 32) with 18,464, and `conv2d_2` (None, 28, 28, 1) with 289. Total: **65,089 parameters** (254.25 KB), about the same size as the 69,076-parameter encoder. The layers are numbered `_1`, `_2` because they were created after the encoder's layers in the same session. There is no \"Connected to\" column this time, because the decoder is a simple linear stack with no branches.",
+ "paragraphs": [
+  {
+   "ref": "p539_e05",
+   "excerpt": "Its summary looks like this:",
+   "what_it_says": "Introduces the decoder.summary() printout.",
+   "what_it_means": "The summary checks that the decoder's output shape (None, 28, 28, 1) matches the encoder's input shape, which the reconstruction loss requires.",
+   "why_it_matters": "A shape mismatch here would break binary_crossentropy(x, reconstruction) in compute_loss (p.541).",
+   "connections": [
+    "p.538: the encoder summary for comparison",
+    "p.541: reconstruction loss compares x and reconstruction"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "transposed_convolution",
+   "name": "Transposed convolution (Conv2DTranspose)",
+   "definition": "A learnable upsampling layer that, with strides=2, doubles spatial resolution; it is the transpose of the linear map computed by a strided convolution.",
+   "intuition": "Each input pixel 'stamps' a learned kernel onto a larger output grid, and overlapping stamps are summed.",
+   "technical": "With padding='same' and stride s, output size = input size * s. Parameters = k*k*C_in*C_out + C_out, e.g. 3*3*64*64 + 64 = 36,928.",
+   "significance": "Reverts the encoder's strided Conv2D layers (callout).",
+   "example": "(7, 7, 64) -> (14, 14, 64) -> (28, 28, 32).",
+   "misconception": "It is not the mathematical inverse of a convolution; it only has the transposed shape mapping and must be learned.",
+   "related": [
+    "convolution",
+    "strided_convolution"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "decoder_generator",
+   "name": "Decoder / generator",
+   "definition": "The network that maps latent points to images.",
+   "intuition": "The 'painter' that turns 2 numbers into a picture of a digit.",
+   "technical": "Here a 65,089-parameter ConvNet from R^2 to [0,1]^{28x28x1}.",
+   "significance": "After training it is the only part needed to generate new images (p.541).",
+   "example": "decoder.predict(np.array([[0.0, 0.0]]))",
+   "misconception": "The decoder does not need the encoder at generation time.",
+   "related": [
+    "vae",
+    "latent_space"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "sigmoid",
+   "name": "Sigmoid output for pixel intensities",
+   "definition": "Activation that squashes values into (0, 1).",
+   "intuition": "Each pixel is like a probability of being 'ink'.",
+   "technical": "sigmoid(t) = 1/(1+e^{-t}); paired with binary crossentropy on pixels in [0, 1].",
+   "significance": "Matches the input scaling (divide by 255, p.541) and the reconstruction loss.",
+   "example": "Final Conv2D(1, 3, activation='sigmoid').",
+   "misconception": "Binary crossentropy works with non-binary targets in [0, 1], too; it is minimized when the prediction equals the target.",
+   "related": [
+    "cross_entropy"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "17.3",
+   "title": "VAE decoder network, mapping latent space points to images",
+   "original_code": "latent_inputs = keras.Input(shape=(latent_dim,))\nx = layers.Dense(7 * 7 * 64, activation=\"relu\")(latent_inputs)\nx = layers.Reshape((7, 7, 64))(x)\nx = layers.Conv2DTranspose(64, 3, activation=\"relu\", strides=2, padding=\"same\")(\n    x\n)\nx = layers.Conv2DTranspose(32, 3, activation=\"relu\", strides=2, padding=\"same\")(\n    x\n)\ndecoder_outputs = layers.Conv2D(1, 3, activation=\"sigmoid\", padding=\"same\")(x)\ndecoder = keras.Model(latent_inputs, decoder_outputs, name=\"decoder\")",
+   "language": "python",
+   "what_it_does": "Builds a functional model that maps a 2-D latent vector to a 28x28x1 image with values in (0, 1).",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Input where we'll feed z: shape (latent_dim,) = (2,)."
+    },
+    {
+     "lines": "2",
+     "explanation": "Dense to 7*7*64 = 3136 units with ReLU: produces the same number of coefficients as the encoder's Flatten layer."
+    },
+    {
+     "lines": "3",
+     "explanation": "Reshape to (7, 7, 64). Together with line 2 it reverts the encoder's Flatten layer."
+    },
+    {
+     "lines": "4-6",
+     "explanation": "Conv2DTranspose with 64 filters of 3x3, stride 2: (7, 7, 64) -> (14, 14, 64)."
+    },
+    {
+     "lines": "7-9",
+     "explanation": "Conv2DTranspose with 32 filters, stride 2: -> (28, 28, 32). Lines 4-9 revert the encoder's Conv2D layers."
+    },
+    {
+     "lines": "10",
+     "explanation": "Conv2D with 1 filter, sigmoid, same padding: the output ends up with shape (28, 28, 1)."
+    },
+    {
+     "lines": "11",
+     "explanation": "Creates the decoder model."
+    }
+   ],
+   "inputs_outputs": "Input: (N, 2) latent points. Output: (N, 28, 28, 1) images in (0, 1).",
+   "algorithm": "Linear expansion -> reshape -> two learned 2x upsamplings -> per-pixel sigmoid.",
+   "theory_link": "Implements `reconstructed_img = decoder(z)` from p.536.",
+   "parameters": [
+    {
+     "name": "7 * 7 * 64",
+     "role": "Matches the encoder's flattened size so the shapes mirror each other."
+    },
+    {
+     "name": "strides=2",
+     "role": "Doubles height and width in each transposed convolution."
+    },
+    {
+     "name": "activation=\"sigmoid\"",
+     "role": "Keeps outputs in (0, 1) to match normalized pixels."
+    }
+   ],
+   "pitfalls": [
+    "Mirroring is a convention, not a requirement; the decoder just has to output the right shape.",
+    "The channel counts (64, 32) differ from an exact mirror of the encoder (which went 32 then 64); it is a structural mirror, not a weight-tied one.",
+    "Removing the sigmoid would allow outputs outside [0, 1], which breaks binary crossentropy."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "decoder.summary() output",
+   "original_code": ">>> decoder.summary()\nModel: \"decoder\"\n┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓\n┃ Layer (type)                      ┃ Output Shape             ┃       Param # ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩\n│ input_layer_1 (InputLayer)        │ (None, 2)                │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ dense_1 (Dense)                   │ (None, 3136)             │         9,408 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ reshape (Reshape)                 │ (None, 7, 7, 64)         │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ conv2d_transpose                  │ (None, 14, 14, 64)       │        36,928 │\n│ (Conv2DTranspose)                 │                          │               │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ conv2d_transpose_1                │ (None, 28, 28, 32)       │        18,464 │\n│ (Conv2DTranspose)                 │                          │               │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ conv2d_2 (Conv2D)                 │ (None, 28, 28, 1)        │           289 │\n└───────────────────────────────────┴──────────────────────────┴───────────────┘\n Total params: 65,089 (254.25 KB)\n Trainable params: 65,089 (254.25 KB)\n Non-trainable params: 0 (0.00 B)",
+   "language": "text",
+   "what_it_does": "Prints the decoder's layers, output shapes and parameter counts.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "Call and model name."
+    },
+    {
+     "lines": "6",
+     "explanation": "input_layer_1: (None, 2)."
+    },
+    {
+     "lines": "8",
+     "explanation": "dense_1: (None, 3136); 2*3136 + 3136 = 9,408 params."
+    },
+    {
+     "lines": "10",
+     "explanation": "reshape: (None, 7, 7, 64), no params."
+    },
+    {
+     "lines": "12-13",
+     "explanation": "conv2d_transpose: (None, 14, 14, 64); 3*3*64*64 + 64 = 36,928."
+    },
+    {
+     "lines": "15-16",
+     "explanation": "conv2d_transpose_1: (None, 28, 28, 32); 3*3*64*32 + 32 = 18,464."
+    },
+    {
+     "lines": "18",
+     "explanation": "conv2d_2: (None, 28, 28, 1); 3*3*32*1 + 1 = 289."
+    },
+    {
+     "lines": "20-22",
+     "explanation": "65,089 parameters in total, all trainable (254.25 KB as float32)."
+    }
+   ],
+   "inputs_outputs": "Printed text only.",
+   "algorithm": "N/A",
+   "theory_link": "Verifies the output shape matches the encoder's input.",
+   "parameters": [],
+   "pitfalls": [
+    "Layer-name suffixes depend on how many layers of each type were created earlier in the session."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Encoder vs. decoder side by side",
+   "kind": "breakdown",
+   "source": "ai_explanation",
+   "body": "| Encoder (p.537) | Decoder (p.539) |\n|---|---|\n| Input (28,28,1) | Conv2D 1, sigmoid -> (28,28,1) |\n| Conv2D 32 s2 -> (14,14,32) | Conv2DTranspose 32 s2 -> (28,28,32) |\n| Conv2D 64 s2 -> (7,7,64) | Conv2DTranspose 64 s2 -> (14,14,64) |\n| Flatten -> 3136 | Reshape (7,7,64) |\n| Dense 16 | Dense 3136 |\n| z_mean, z_log_var (2) | Input z (2) |\n\nThe decoder has no Dense(16) bottleneck. It goes straight from 2 to 3,136 units."
+  },
+  {
+   "title": "How a stride-2 transposed convolution upsamples",
+   "kind": "numerical",
+   "source": "ai_explanation",
+   "body": "Conceptually, insert one row and column of zeros between input pixels (7x7 becomes about 13x13), pad, and run an ordinary 3x3 convolution. With 'same' padding Keras gives exactly 2x the size: 14x14. Each output pixel is a learned mix of up to four neighboring input pixels."
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Decoder shape flow (Listing 17.3)",
+   "why": "Traces the decoder summary shapes from a 2-D latent point to a 28x28x1 image.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "input z",
+      "shape": [
+       null,
+       2
+      ]
+     },
+     {
+      "op": "Dense 3136",
+      "shape": [
+       null,
+       3136
+      ]
+     },
+     {
+      "op": "Reshape",
+      "shape": [
+       null,
+       7,
+       7,
+       64
+      ]
+     },
+     {
+      "op": "Conv2DTranspose 64, s2",
+      "shape": [
+       null,
+       14,
+       14,
+       64
+      ]
+     },
+     {
+      "op": "Conv2DTranspose 32, s2",
+      "shape": [
+       null,
+       28,
+       28,
+       32
+      ]
+     },
+     {
+      "op": "Conv2D 1, sigmoid",
+      "shape": [
+       null,
+       28,
+       28,
+       1
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The decoder must use the encoder's weights in reverse.",
+   "correction": "Its weights are independent and learned jointly; only the layer structure mirrors the encoder."
+  },
+  {
+   "claim": "Conv2DTranspose is 'deconvolution', the inverse of convolution.",
+   "correction": "It only reverses the shape mapping; it does not undo a convolution's computation."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 537,
+    "note": "Encoder Listing 17.1"
+   },
+   {
+    "page": 538,
+    "note": "Encoder summary and introduction of the decoder"
+   }
+  ],
+  "later": [
+   {
+    "page": 540,
+    "note": "VAE model holding encoder, decoder and Sampler"
+   },
+   {
+    "page": 541,
+    "note": "Reconstruction loss and use of the decoder for generation"
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 537,
+    "note": "Encoder architecture"
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 537,
+    "note": "Listing 17.1 mirrored here"
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 536,
+    "note": "Figure 17.4 decoder box"
+   }
+  ]
+ },
+ "takeaways": [
+  "The decoder maps (None, 2) to (None, 28, 28, 1) and has 65,089 parameters.",
+  "Dense(7*7*64) + Reshape reverts the encoder's Flatten layer.",
+  "Two stride-2 Conv2DTranspose layers revert the encoder's two stride-2 Conv2D layers: 7 to 14 to 28.",
+  "A final sigmoid Conv2D(1) gives pixel values in (0, 1), matching normalized MNIST and binary crossentropy.",
+  "After training, the decoder alone is the image generator."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why does the decoder's first Dense layer have 7 * 7 * 64 units?",
+   "options": [
+    "To match the number of MNIST classes",
+    "To produce the same number of coefficients as the encoder's Flatten layer",
+    "Because Conv2DTranspose requires 3136 inputs",
+    "To match the batch size"
+   ],
+   "answer": "To produce the same number of coefficients as the encoder's Flatten layer",
+   "explanation": "That is the callout's wording; 7*7*64 = 3136, which can be reshaped to (7, 7, 64). The others are unrelated to the architecture.",
+   "page_refs": [
+    539
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Verify the 36,928 parameters of conv2d_transpose.",
+   "options": [],
+   "answer": "3 * 3 * 64 (input channels) * 64 (filters) + 64 biases = 36,864 + 64 = 36,928.",
+   "explanation": "Same formula as a regular convolution: kernel area times input channels times filters, plus one bias per filter.",
+   "page_refs": [
+    539
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What spatial sizes does the feature map pass through in the decoder?",
+   "options": [],
+   "answer": "7x7 -> 14x14 -> 28x28 (and stays 28x28 in the final Conv2D).",
+   "explanation": "Each stride-2 transposed convolution with same padding doubles height and width.",
+   "page_refs": [
+    539
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why is sigmoid the right final activation here?",
+   "options": [],
+   "answer": "The inputs are scaled to [0, 1] (divided by 255) and the reconstruction loss is binary crossentropy per pixel, which needs predictions in (0, 1).",
+   "explanation": "See Listing 17.5 and compute_loss on p.541.",
+   "page_refs": [
+    539,
+    541
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Which encoder layers do the two Conv2DTranspose layers revert?",
+   "options": [
+    "The Dense(16) layer",
+    "The Flatten layer",
+    "The two stride-2 Conv2D layers",
+    "The z_mean and z_log_var heads"
+   ],
+   "answer": "The two stride-2 Conv2D layers",
+   "explanation": "Callout: 'Reverts the Conv2D layers of the encoder.' The Flatten is reverted by Dense + Reshape; Dense(16) and the heads have no direct counterpart.",
+   "page_refs": [
+    539
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "self",
+   "question": "Without looking, can you write the decoder's summary table shapes from top to bottom?",
+   "options": [],
+   "answer": "(None, 2), (None, 3136), (None, 7, 7, 64), (None, 14, 14, 64), (None, 28, 28, 32), (None, 28, 28, 1).",
+   "explanation": "If you can, you understand the upsampling path.",
+   "page_refs": [
+    539
+   ]
+  }
+ ],
+ "page_id": "page_539",
+ "book_id": "dlwp3"
+}

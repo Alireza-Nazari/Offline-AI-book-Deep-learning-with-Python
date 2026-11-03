@@ -1,0 +1,359 @@
+{
+ "page_id": "page_324",
+ "pdf_page": 324,
+ "printed_page": "300",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:37:40Z",
+  "confidence": "high",
+  "review_flags": [
+   "Possible inconsistency in the book: p.324 says Xception was trained on ImageNet 'with ~1 million labeled images belonging to 1,000 different classes', while p.280 describes the ImageNet dataset used for the pretrained ConvNet as having '1.4 million labeled images and 1,000 different classes'. (The commonly used ILSVRC-2012 training split has about 1.28 million images, so both are rough approximations, but the two pages disagree.)"
+  ],
+  "extraction_quality": "Clean. Figure 10.7 is a photograph (an adult African elephant and a calf in grassland) with no internal labels. The code element p324_e06 is the first part of an interactive session that continues on p.325 (the last two predictions and the closing brackets). Callout text was recovered from the page image."
+ },
+ "overview": {
+  "title": "Loading the full Xception classifier with the KerasHub task API",
+  "chapter": "10 Interpreting what ConvNets learn",
+  "section": "10.3 Visualizing heatmaps of class activation",
+  "subsection": "",
+  "main_topic": "Why Grad-CAM needs the complete Xception model (including its ImageNet classification head), and how the KerasHub ImageClassifier task bundles preprocessing, backbone and head so that a single predict() call returns a 1,000-way probability vector for the elephant test image.",
+  "central_idea": "Grad-CAM explains a class decision, so it needs the network's class scores, not just its convolutional features. KerasHub's high-level task API (here keras_hub.models.ImageClassifier) wraps preprocessing, the feature-extraction backbone and the classification head into one object; with a softmax activation its output for one image is a (1, 1000) probability vector, which the decoding utility turns into readable ImageNet labels.",
+  "importance": "Everything else in section 10.3 depends on this model object: the last convolutional layer is pulled out of model.backbone (p.325), the classification head layers are reused to build classifier_model (p.326), and the gradient of the top class (African_elephant) is what weights the feature-map channels (p.328). This page also introduces the 'task' concept that the book reuses for segmentation (ImageSegmenter, p.343), object detection (ObjectDetector, p.372) and text generation (CausalLM, p.513).",
+  "learning_objectives": [
+   "Explain why Grad-CAM requires the classification head while the filter visualizations of section 10.2 only needed the backbone.",
+   "Describe what a KerasHub task is: preprocessing + feature-extraction network + task-specific head in one class.",
+   "Instantiate an ImageClassifier from the xception_41_imagenet preset and choose its final activation.",
+   "Interpret the shape (1, 1000) of the prediction array and read the output of decode_imagenet_predictions.",
+   "Connect the elephant test image (Figure 10.7) to the predictions it receives."
+  ],
+  "prerequisites": [
+   "The idea of a class activation map and Grad-CAM, introduced on p.323",
+   "Listing 10.17 (p.323), which downloads the elephant image and builds img_array with a batch dimension",
+   "KerasHub backbones and from_preset() (p.282) and the Xception convolutional base used on p.316-p.317",
+   "Softmax outputs and multiclass classification (chapter 4, e.g. p.143)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page continues the Grad-CAM setup begun on p.323.\n\n**Figure 10.7** shows the test picture: two African elephants (an adult with raised trunk and tusks, and a calf) walking through tall grass. This is the image whose classification we want to explain.\n\n**Why a different model is needed.** Up to now in the chapter, KerasHub was only used to build a *feature extractor* through the **backbone** class (the convolutional base, as on p.316). Grad-CAM, however, measures how important each location is *for a specific class*, so it needs the **entire Xception model, including the classification head**. The book reminds us that Xception was trained on ImageNet, about 1 million labeled images in 1,000 classes (p.280 gives 1.4 million; see review flag).\n\n**The task API.** KerasHub offers high-level *tasks* for end-to-end workflows such as image classification, text classification and image generation. A task wraps three things in one class:\n\n1. preprocessing,\n2. a feature-extraction network (the backbone),\n3. a task-specific head.\n\n**The code.** `keras_hub.models.ImageClassifier.from_preset(\"xception_41_imagenet\", activation=\"softmax\")` downloads the full classifier; the callout explains that `activation` configures the classifier's final activation, and softmax makes the outputs probabilities. `model.predict(img_array)` returns an array of shape `(1, 1000)`: one image in the batch, one entry per ImageNet class. `keras_hub.utils.decode_imagenet_predictions(preds)` maps the largest entries to human-readable labels: `African_elephant` 0.90331, `tusker` 0.05487, `Indian_elephant` 0.01637, ... (the listing continues on p.325 with `triceratops` and `Mexican_hairless`).\n\nNote that `img_array` was not preprocessed by hand: the task's built-in preprocessor handles that inside `predict()`, a point the book makes explicitly on p.325.",
+ "paragraphs": [
+  {
+   "ref": "p324_e03",
+   "excerpt": "Figure 10.7 Test picture of African elephants",
+   "what_it_says": "The caption labels the photograph used as the running example for Grad-CAM: African elephants, an adult and a calf, in a grassy savanna (p.323 describes them as 'possibly a mother and her calf, strolling in the savanna').",
+   "what_it_means": "This is the input whose classification will be explained. It contains two instances of the same class at different sizes and positions, which makes it a good test of whether the heatmap localizes the object(s) and which parts of them drive the decision.",
+   "why_it_matters": "The final superimposed heatmap (Figure 10.9, p.329) is drawn over exactly this picture, so it helps to note now where the two animals, their ears, trunks and the background sit in the frame.",
+   "technical_idea": "Beyond the book: African and Indian elephants differ visibly in ear size and shape. That makes this image a natural probe for whether a classifier relies on such discriminative parts; the book returns to the ears of the calf on p.330.",
+   "terminology": [
+    {"term": "test picture", "meaning": "An image not used in training, fed to the pretrained model only to inspect its decision."}
+   ],
+   "connections": [
+    "p.323: Listing 10.17 downloads this image (elephant.jpg) and converts it to img_array with a batch axis.",
+    "p.329: Figure 10.9 overlays the African elephant class activation heatmap on this picture.",
+    "p.330: the book notes the calf's ears are strongly activated."
+   ]
+  },
+  {
+   "ref": "p324_e04",
+   "excerpt": "So far, we have only used KerasHub to instantiate a pretrained feature extractor",
+   "what_it_says": "Earlier uses of KerasHub created only a pretrained feature extractor via the backbone class. Grad-CAM needs the whole Xception model including the classification head. Xception was trained on ImageNet, with about 1 million labeled images in 1,000 classes.",
+   "what_it_means": "A backbone ends with convolutional feature maps; it has no notion of 'African elephant'. Grad-CAM asks 'which locations raise the score of class c?', so it must be able to compute that class score, which only the head (global pooling + a 1,000-unit dense layer) produces.",
+   "why_it_matters": "This is the conceptual difference between section 10.2 (maximize a filter's activation inside the backbone) and section 10.3 (explain a class decision at the model's output). It also determines how the model is cut in two on p.325-p.326: backbone up to the last conv layer, then the head layers 'pooler' and 'predictions'.",
+   "technical_idea": "The classification head converts a (rows, cols, channels) feature map into class scores. Because the gradient of a class score with respect to the last feature map has to pass through this head, the head's weights are what encode 'how important each channel is for the class'.",
+   "terminology": [
+    {"term": "backbone", "meaning": "KerasHub's name for the feature-extraction network without its classification head (the convolutional base), see p.282."},
+    {"term": "classification head", "meaning": "The final layers that map extracted features to per-class scores; for Xception, a pooling layer followed by a dense 'predictions' layer."},
+    {"term": "Grad-CAM", "meaning": "Gradient-weighted Class Activation Mapping (Selvaraju et al., cited on p.323): weights each channel of a conv feature map by the gradient of a class score."}
+   ],
+   "connections": [
+    "p.282: KerasHub's backbone term and from_preset() were introduced in chapter 8.",
+    "p.316: Listing 10.7 instantiated only the Xception convolutional base for filter visualization.",
+    "p.280: the ImageNet dataset is described there as 1.4 million images and 1,000 classes."
+   ]
+  },
+  {
+   "ref": "p324_e05",
+   "excerpt": "KerasHub provides a high-level task API for common end-to-end workflows like image",
+   "what_it_says": "KerasHub has a high-level 'task' API for common end-to-end workflows (image classification, text classification, image generation, and others). A task wraps preprocessing, a feature-extraction network and a task-specific head into a single, easy-to-use class.",
+   "what_it_means": "Instead of assembling a resizing/rescaling layer, a backbone and a classifier by hand, you ask for one object that already knows how to turn raw input into the final answer. The parts remain accessible as attributes (the book later uses model.preprocessor on p.325 and model.backbone on p.325).",
+   "why_it_matters": "Tasks make pretrained models usable in one line, but Grad-CAM needs to reach inside them. Knowing that a task is a composition of preprocessor, backbone and head is what allows the surgery done on the next pages.",
+   "technical_idea": "A task is itself a Keras model, so it supports predict(), and its submodels and layers can be retrieved with get_layer(). Preprocessing being part of the task means predict() accepts raw pixel arrays.",
+   "terminology": [
+    {"term": "task (KerasHub)", "meaning": "A high-level model class for an end-to-end workflow, combining preprocessing, a backbone and a task-specific head (e.g. ImageClassifier, ImageSegmenter, ObjectDetector, CausalLM)."},
+    {"term": "task-specific head", "meaning": "The layers on top of the backbone that produce the output for the particular task, e.g. class probabilities for classification."}
+   ],
+   "connections": [
+    "p.343: the same task idea is reused as ImageSegmenter for the Segment Anything Model.",
+    "p.372: ObjectDetector is another KerasHub task with preprocessing included.",
+    "p.513: CausalLM wraps a preprocessor layer and a backbone model in the same way."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "grad_cam",
+   "name": "Grad-CAM (gradient-weighted class activation map)",
+   "definition": "A class activation map technique that weights each channel of a convolutional feature map by the gradient of a chosen class score with respect to that channel, then averages the weighted channels into a 2D heatmap.",
+   "intuition": "It combines 'how strongly each location activates each channel' with 'how much each channel matters for the class', giving 'how strongly each location activates the class' (p.323).",
+   "technical": "Requires a differentiable path from the conv feature map to the class score, which is why the full model with its classification head is needed.",
+   "significance": "A standard tool for debugging classifier decisions and roughly localizing objects.",
+   "example": "For the elephant image, the heatmap for the class African_elephant highlights the elephants (Figure 10.9, p.329).",
+   "misconception": "Grad-CAM is not computed on the backbone alone; without the head there is no class score to differentiate.",
+   "related": ["class_activation_map", "convolution", "gradient_tape", "model_interpretability"],
+   "source": "book"
+  },
+  {
+   "id": "keras_hub_task",
+   "name": "KerasHub task API",
+   "definition": "High-level KerasHub classes for end-to-end workflows that wrap preprocessing, a feature-extraction network and a task-specific head into one model.",
+   "intuition": "A ready-to-use appliance: raw input in, final answer out, with the internal parts still reachable.",
+   "technical": "Created with from_preset(); the image classifier exposes .preprocessor and .backbone and accepts raw images in predict().",
+   "significance": "Lets the book reuse large pretrained models in one line across chapters 10-17.",
+   "example": "keras_hub.models.ImageClassifier.from_preset(\"xception_41_imagenet\", activation=\"softmax\")",
+   "misconception": "A task is not a separate framework object outside Keras: it behaves like a Keras model.",
+   "related": ["transfer_learning", "keras_model", "pretrained_model"],
+   "source": "book"
+  },
+  {
+   "id": "pretrained_model",
+   "name": "Backbone vs full pretrained classifier",
+   "definition": "A backbone is the pretrained feature extractor without the classification head; the full classifier adds the head that outputs scores for the original training classes (here the 1,000 ImageNet classes).",
+   "intuition": "The backbone sees patterns; the head names them.",
+   "technical": "Xception's backbone outputs a spatial feature map; the head pools it and applies a 1,000-way dense layer with (optionally) softmax.",
+   "significance": "Feature extraction and filter visualization only need the backbone; explaining an ImageNet class decision needs the head.",
+   "example": "Section 10.2 used the backbone; section 10.3 uses ImageClassifier.",
+   "misconception": "Reusing the head is not always useless: p.282 notes it can help when the new task overlaps ImageNet classes.",
+   "related": ["transfer_learning", "keras_hub_task", "softmax"],
+   "source": "book"
+  },
+  {
+   "id": "softmax",
+   "name": "Softmax final activation",
+   "definition": "The activation that converts a vector of scores into probabilities that are positive and sum to 1.",
+   "intuition": "Turns 'how much evidence for each class' into 'what share of belief each class gets'.",
+   "technical": "Setting activation=\"softmax\" on the ImageClassifier makes predict() return a probability distribution over 1,000 classes for each image.",
+   "significance": "Makes values such as 0.90331 for African_elephant directly interpretable as probabilities.",
+   "example": "The top three probabilities on this page are 0.90331, 0.05487 and 0.01637.",
+   "misconception": "Softmax probabilities are the model's confidence, not calibrated real-world probabilities.",
+   "related": ["cross_entropy", "logits"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Softmax over the 1,000 ImageNet classes",
+   "latex": "p_c = \\frac{e^{z_c}}{\\sum_{j=1}^{1000} e^{z_j}}, \\qquad c = 1,\\dots,1000",
+   "source_text": "Not printed as a formula; the callout says: \"Here, we use a softmax activation so our outputs are probabilities.\"",
+   "variables": [
+    {"symbol": "z_c", "meaning": "The head's raw score (logit) for class c."},
+    {"symbol": "p_c", "meaning": "The probability for class c, one of the 1,000 entries of preds[0]."}
+   ],
+   "operations": "Exponentiate each score, then divide by the sum of all exponentiated scores.",
+   "purpose": "Explains why the (1, 1000) prediction vector can be read as probabilities that sum to 1.",
+   "interpretation": "African_elephant receives about 90% of the probability mass, tusker 5.5%, Indian_elephant 1.6%.",
+   "intuition": "Classes compete for a fixed budget of probability.",
+   "numerical_example": "Beyond the book: the ratio of two probabilities depends only on the difference of logits, $p_a/p_b = e^{z_a - z_b}$. From the printed values, $\\ln(0.90331/0.05487) \\approx 2.80$, so the African_elephant logit is about 2.8 higher than the tusker logit.",
+   "source": "ai_explanation",
+   "book_ref": "p.324"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Instantiating the Xception ImageClassifier task and predicting on the elephant image",
+   "original_code": ">>> model = keras_hub.models.ImageClassifier.from_preset(\n...    \"xception_41_imagenet\",\n...    activation=\"softmax\",\n... )\n>>> preds = model.predict(img_array)\n>>> preds.shape\n(1, 1000)\n>>> keras_hub.utils.decode_imagenet_predictions(preds)\n[[(\"African_elephant\", 0.90331),\n  (\"tusker\", 0.05487),\n  (\"Indian_elephant\", 0.01637),",
+   "language": "python",
+   "what_it_does": "Downloads the complete pretrained Xception ImageNet classifier as a KerasHub task with a softmax output, runs it on the elephant image, checks the output shape, and decodes the top predictions into ImageNet label names with their probabilities. The decoded list continues on p.325.",
+   "line_explanations": [
+    {"lines": "1-4", "explanation": "ImageClassifier.from_preset downloads configuration and weights for the 'xception_41_imagenet' preset (Xception with 41 trainable layers, see p.282, trained on ImageNet). activation=\"softmax\" configures the final activation so outputs are probabilities (callout)."},
+    {"lines": "5", "explanation": "model.predict(img_array) runs preprocessing, the backbone and the head. img_array comes from Listing 10.17 (p.323): the raw image as a NumPy array with a batch dimension added."},
+    {"lines": "6-7", "explanation": "The output shape is (1, 1000): one image, and one entry per ImageNet class (callout: 'ImageNet has 1,000 classes, so each prediction from our classifier has 1,000 entries')."},
+    {"lines": "8-11", "explanation": "decode_imagenet_predictions maps the highest-probability indices to (label, probability) pairs, one inner list per image in the batch: African_elephant 0.90331, tusker 0.05487, Indian_elephant 0.01637; the list continues on p.325."}
+   ],
+   "inputs_outputs": "Input: img_array, a batch of one raw RGB image (shape (1, height, width, 3)). Output: preds of shape (1, 1000), and a list of lists of (class_name, probability) tuples.",
+   "algorithm": "Load task from preset -> forward pass (preprocess, backbone, pooling, dense softmax) -> top-k lookup in the ImageNet label table.",
+   "theory_link": "The class probability (more precisely the top class's output entry) is the quantity whose gradient Grad-CAM will compute with respect to the last conv feature map (p.326-p.327).",
+   "parameters": [
+    {"name": "\"xception_41_imagenet\"", "role": "Preset name: architecture (Xception, 41 layers) plus ImageNet-trained weights including the classification head."},
+    {"name": "activation", "role": "Final activation of the classifier head; \"softmax\" gives probabilities."},
+    {"name": "img_array", "role": "Raw image batch; the task preprocesses it internally during predict()."}
+   ],
+   "pitfalls": [
+    "Forgetting the batch dimension: predict() expects a batch, which is why Listing 10.17 used np.expand_dims.",
+    "Calling decode_imagenet_predictions on outputs of a model with a different class set gives meaningless labels.",
+    "Preprocessing the image yourself and then passing it to predict() would apply preprocessing twice; the book applies model.preprocessor manually only for the Grad-CAM submodels (p.325)."
+   ],
+   "illustrative_code": "# AI-written sketch (not from the book): inspecting the parts of the task\nprint(type(model.preprocessor).__name__)   # the built-in image preprocessor\nprint(model.backbone.name)                  # the Xception feature extractor\nprint(float(preds[0].sum()))                # ~1.0 because of softmax"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why the head is essential for a class heatmap",
+   "kind": "step_by_step",
+   "body": "1. The backbone maps the image to a feature map $A$ of shape (rows, cols, channels).\n2. The head pools $A$ spatially and multiplies by a weight matrix to get 1,000 class scores.\n3. Grad-CAM needs $\\partial y^c / \\partial A$ for the chosen class $c$. This derivative is determined by the head's weights for class $c$: channels that the head connects strongly to 'African elephant' get large gradients.\n4. Without the head, there is no $y^c$, and nothing tells you which channels relate to elephants rather than grass.\n\nThis is an explanation beyond the book's text, consistent with the Grad-CAM description on p.323.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Reading the decoded predictions",
+   "kind": "numerical",
+   "body": "The three probabilities visible on this page sum to $0.90331 + 0.05487 + 0.01637 = 0.97455$. With the two further entries on p.325 (0.00029 and 0.00018) the top five cover about 97.5% of the probability mass; the remaining ~2.5% is spread over the other 995 classes. All top predictions are semantically close (elephant types), which already suggests the network has recognized the animals rather than, say, the grass.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "A task as a kit with the parts labelled",
+   "kind": "analogy",
+   "body": "Think of a KerasHub task as a pre-assembled camera: lens cap removal and exposure (preprocessing), the sensor (backbone) and the image processor that labels the scene (head). You can just press the shutter (`predict()`), but because the parts are labelled (`model.preprocessor`, `model.backbone`), you can also open it up, which Grad-CAM does on the next page.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "What the ImageClassifier task wraps",
+   "why": "The page says a task wraps preprocessing, a feature extraction network and a task-specific head into one class; this shows how img_array flows to the (1, 1000) output.",
+   "mermaid": "flowchart LR\n  A[\"img_array<br/>raw image, batch of 1\"] --> B[\"preprocessor<br/>resize + rescale\"]\n  B --> C[\"backbone<br/>Xception conv base\"]\n  C --> D[\"head<br/>pooling + dense 1000\"]\n  D --> E[\"softmax<br/>preds (1, 1000)\"]\n  E --> F[\"decode_imagenet_predictions<br/>African_elephant 0.90331 ...\"]\n  subgraph task[\"keras_hub.models.ImageClassifier\"]\n    B\n    C\n    D\n    E\n  end"
+  },
+  {
+   "id": "v2",
+   "type": "chart",
+   "title": "Top predictions visible on this page",
+   "why": "The decoded predictions printed on the page, as probabilities.",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": ["African_elephant", "tusker", "Indian_elephant"],
+     "datasets": [{"label": "softmax probability", "data": [0.90331, 0.05487, 0.01637]}]
+    },
+    "options": {"indexAxis": "y", "scales": {"x": {"min": 0, "max": 1, "title": {"display": true, "text": "probability"}}}}
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The backbone used in section 10.2 is enough for Grad-CAM.",
+   "correction": "The page states that Grad-CAM needs the entire Xception model including the classification head, because the heatmap is defined with respect to a class score."
+  },
+  {
+   "claim": "You must preprocess the image before calling model.predict() on the task.",
+   "correction": "The task includes preprocessing; predict() receives the raw img_array. The book points this out on p.325."
+  },
+  {
+   "claim": "The (1, 1000) output means the model found 1,000 objects.",
+   "correction": "The first axis is the batch (one image); the second has one probability per ImageNet class."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 323, "note": "Introduces class activation maps, Grad-CAM, and Listing 10.17 that loads the elephant image into img_array."},
+   {"page": 316, "note": "Listing 10.7 instantiated only the Xception convolutional base (backbone) for filter visualization."},
+   {"page": 282, "note": "Chapter 8 introduced KerasHub backbones, from_preset(), and the meaning of '41' in xception_41_imagenet."},
+   {"page": 280, "note": "Pretrained models and the ImageNet dataset (1.4 million images, 1,000 classes)."}
+  ],
+  "later": [
+   {"page": 325, "note": "The decoded list continues; the top class index 386 is found; the backbone's last conv layer is extracted."},
+   {"page": 326, "note": "The head layers 'pooler' and 'predictions' are reused to build classifier_model; TensorFlow gradient code."},
+   {"page": 343, "note": "The ImageSegmenter task wraps the Segment Anything Model in the same way."},
+   {"page": 372, "note": "The ObjectDetector task, preprocessing included."},
+   {"page": 513, "note": "CausalLM: a task with a preprocessor and a backbone for text generation."}
+  ],
+  "prerequisites": [
+   {"page": 143, "note": "Multiclass classification with a softmax output layer."},
+   {"page": 323, "note": "Definition of Grad-CAM."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 323, "note": "Listing 10.17 defines img_path and img_array used here."},
+   {"page": 325, "note": "Listings 10.18-10.19 split this model into a conv part and a classifier part."}
+  ],
+  "related_figures": [
+   {"page": 329, "note": "Figure 10.9 overlays the African elephant heatmap on this test picture."},
+   {"page": 328, "note": "Figure 10.8 shows the standalone heatmap."}
+  ]
+ },
+ "takeaways": [
+  "Grad-CAM explains a class decision, so it needs the full classifier with its head, not only the backbone.",
+  "A KerasHub task bundles preprocessing, a backbone and a task-specific head; ImageClassifier.from_preset(\"xception_41_imagenet\", activation=\"softmax\") gives a ready ImageNet classifier.",
+  "predict() on one image returns shape (1, 1000): one probability per ImageNet class.",
+  "decode_imagenet_predictions turns the vector into labels: African_elephant 0.90331, tusker 0.05487, Indian_elephant 0.01637, and so on.",
+  "The task preprocesses raw input inside predict(), so img_array was passed in unprocessed."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "conceptual",
+   "question": "Why does Grad-CAM need the entire Xception model including the classification head, while the filter visualizations of section 10.2 only needed the backbone?",
+   "options": [],
+   "answer": "Grad-CAM computes the gradient of a specific class score with respect to the last convolutional feature map. Class scores exist only at the head's output. Filter visualization only maximized activations of filters inside the convolutional base, so no head was needed.",
+   "explanation": "The page states the requirement directly (p.324); p.323 defines Grad-CAM as weighting channels by the gradient of the class.",
+   "page_refs": [323, 324]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "According to the page, what does a KerasHub task wrap into a single class?",
+   "options": [
+    "Preprocessing, a feature extraction network, and a task-specific head",
+    "A backbone and an optimizer",
+    "Only the pretrained weights of the convolutional base",
+    "A training loop, a loss function and a metric"
+   ],
+   "answer": "Preprocessing, a feature extraction network, and a task-specific head",
+   "explanation": "This is the book's definition. The backbone alone (third option) is what was used before; optimizers, losses and training loops are not what the page describes.",
+   "page_refs": [324]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What is the shape of preds, and what does each axis mean?",
+   "options": [],
+   "answer": "(1, 1000): the first axis is the batch (one image), the second has one entry per ImageNet class.",
+   "explanation": "The callout says ImageNet has 1,000 classes, so each prediction has 1,000 entries; the batch of one comes from np.expand_dims in Listing 10.17 (p.323).",
+   "page_refs": [323, 324]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "What is the effect of passing activation=\"softmax\" to ImageClassifier.from_preset?",
+   "options": [
+    "It normalizes the input pixels to [0, 1]",
+    "It makes the model's outputs probabilities",
+    "It freezes the backbone weights",
+    "It selects the top-5 classes"
+   ],
+   "answer": "It makes the model's outputs probabilities",
+   "explanation": "The callout: 'We can configure the final activation of the classifier. Here, we use a softmax activation so our outputs are probabilities.' Input scaling is done by the preprocessor; freezing and top-k selection are unrelated.",
+   "page_refs": [324]
+  },
+  {
+   "id": "q5",
+   "type": "math",
+   "question": "Using softmax, estimate how much larger the African_elephant logit is than the tusker logit, given probabilities 0.90331 and 0.05487.",
+   "options": [],
+   "answer": "About 2.8, since z_a - z_b = ln(0.90331 / 0.05487) ≈ ln(16.46) ≈ 2.80.",
+   "explanation": "For softmax, p_a / p_b = exp(z_a - z_b); the normalizing sum cancels. This is an added calculation using the page's numbers.",
+   "page_refs": [324]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "The second and third predictions are 'tusker' and 'Indian_elephant'. What does this suggest about what the network has recognized?",
+   "options": [],
+   "answer": "That it is confident the image shows elephants; the remaining mass goes to closely related elephant classes, so the uncertainty is about the kind of elephant, not about the object.",
+   "explanation": "Semantically neighbouring classes sharing probability is typical of a well-trained classifier; p.330 later suggests ear shape helps tell African from Indian elephants.",
+   "page_refs": [324, 330]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you name the three parts of a KerasHub ImageClassifier and say which of them the next pages extract for Grad-CAM?",
+   "options": [],
+   "answer": "Preprocessor, backbone (Xception conv base) and head (pooling + predictions). The next pages use model.preprocessor to preprocess the image, extract the last conv layer from model.backbone, and reuse the head layers to build classifier_model.",
+   "explanation": "See p.324 for the definition of a task and p.325-p.326 for how it is split.",
+   "page_refs": [324, 325, 326]
+  }
+ ]
+}

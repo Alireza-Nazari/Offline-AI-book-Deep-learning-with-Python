@@ -1,0 +1,162 @@
+{
+ "page_id": "page_270", "pdf_page": 270, "printed_page": "246", "book_id": "dlwp3",
+ "generation": {"status": "complete", "model": "claude-opus-5-5", "generated_at": "2026-11-03T07:30:24Z",
+   "confidence": "high", "review_flags": [],
+   "extraction_quality": "Clean: the second half of listing 8.7, one sentence of body text and the full model.summary() table were extracted correctly and match the page image. The listing starts on p.269 (inputs and Rescaling lines are there)."},
+ "overview": {
+   "title": "The dogs-vs-cats ConvNet and its summary",
+   "chapter": "8 Image classification",
+   "section": "8.2 Training a convnet from scratch on a small dataset",
+   "subsection": "8.2.3 Building your model",
+   "main_topic": "The convolutional body of the dogs-vs-cats model (listing 8.7, continued) and the shape/parameter table printed by model.summary()",
+   "central_idea": "Five Conv2D stages (32 to 512 filters) interleaved with four 2x2 max-pooling layers shrink a 180x180x3 image to a 7x7x512 feature map, which GlobalAveragePooling2D collapses to a 512-vector feeding a single sigmoid unit; the summary table makes every shape change and parameter count explicit.",
+   "importance": "This is the baseline model that the rest of chapter 8 trains, regularizes with data augmentation and later compares against pretrained models. Being able to read the summary table — and recompute each shape and parameter count by hand — is a core skill for designing ConvNets.",
+   "learning_objectives": [
+     "Read the remaining lines of listing 8.7 and know what each layer does",
+     "Explain why each 3x3 'valid' convolution removes 2 pixels from height and width, and why each 2x2 max pool halves them (rounding down)",
+     "Recompute every Param # entry in the summary from kernel size, input channels and filter count",
+     "Explain what GlobalAveragePooling2D does to a (7, 7, 512) feature map and why it has no parameters",
+     "Recognize the 'depth goes up, spatial size goes down' pattern of ConvNets"
+   ],
+   "prerequisites": [
+     "The convolution operation and its border effects (section 8.1.1)",
+     "Max pooling (section 8.1.2)",
+     "The Keras Functional API (keras.Input, calling layers on tensors, keras.Model)",
+     "Sigmoid output for binary classification"
+   ],
+   "page_kind": "content"
+ },
+ "summary": "This page completes **listing 8.7**, the small ConvNet for dogs-vs-cats classification that was introduced on p.269. The previous page set up `inputs = keras.Input(shape=(180, 180, 3))` and a `Rescaling(1./255)` layer; here we see the rest of the stack: five `Conv2D` layers with 3x3 kernels and ReLU, whose filter counts double at each stage (32, 64, 128, 256, 512), separated by four `MaxPooling2D(pool_size=2)` layers. After the last convolution a `GlobalAveragePooling2D` layer — the callout explains — turns the 3D activations of shape `(height, width, 512)` into a 1D vector of shape `(512,)` by averaging over the spatial dimensions. A `Dense(1, activation=\"sigmoid\")` layer outputs the probability of one of the two classes, and `keras.Model(inputs=inputs, outputs=outputs)` ties it together.\n\nThe authors then print `model.summary()` to show \"how the dimensions of the feature maps change with every successive layer.\" The table reads as a story of shrinking space and growing depth:\n\n- 180x180x3 → (conv) 178x178x32 → (pool) 89x89x32\n- → 87x87x64 → 43x43x64\n- → 41x41x128 → 20x20x128\n- → 18x18x256 → 9x9x256\n- → 7x7x512 → (global average pool) 512 → (dense) 1\n\nEach 3x3 convolution without padding loses one pixel on every border (−2 per dimension); each pooling halves the size, rounding down (87 → 43, 41 → 20). The parameter column shows that almost all weights live in the convolution kernels, with the last `Conv2D` alone holding 1,180,160 of them, while pooling, rescaling and global averaging have none. The final `Dense` layer needs only 513 parameters, because global average pooling reduced the features to just 512 numbers — a much smaller head than flattening 7x7x512 = 25,088 values would require. This matches the NOTE on p.269: depth increases from 32 to 512 while feature-map size decreases from 180x180 to 7x7, a pattern found in almost all ConvNets.",
+ "paragraphs": [
+   {"ref": "p270_e04", "excerpt": "Let’s look at how the dimensions of the feature maps change",
+    "what_it_says": "A one-sentence transition introducing the model.summary() output that follows: the point of printing it is to watch the feature-map dimensions evolve layer by layer.",
+    "what_it_means": "The summary is not just bookkeeping; it is the quickest way to verify that the architecture behaves as intended — that the spatial size really reaches 7x7 before global pooling (as promised on p.269) and that the channel depth grows to 512. The table has three columns: the layer name and type, the output shape (with `None` as the unknown batch dimension), and the number of trainable/non-trainable parameters.",
+    "why_it_matters": "Reading a summary table fluently lets you spot design mistakes (e.g. feature maps that are still huge before the classifier, or a layer that unexpectedly dominates the parameter count) before spending time training.",
+    "technical_idea": "For an unpadded ('valid') k x k convolution with stride 1, output size = input size − k + 1; for 2x2 max pooling with stride 2, output size = floor(input/2).",
+    "terminology": [
+      {"term": "feature map", "meaning": "A 3D tensor (height, width, channels) output by a convolution or pooling layer; each channel is a response map for one learned filter."},
+      {"term": "None in Output Shape", "meaning": "The batch dimension, left unspecified so the model accepts batches of any size."}
+    ],
+    "connections": ["p.269: the text promised that 180x180 inputs end up as 7x7 feature maps before GlobalAveragePooling2D", "p.264: the earlier MNIST discussion of why downsampling is needed"]}
+ ],
+ "concepts": [
+   {"id": "convolution", "name": "Conv2D stage", "definition": "A layer that slides learned 3x3 filters across the input feature map, producing one output channel per filter.", "intuition": "Each filter is a small pattern detector; the output channel is a map of where that pattern appears.", "technical": "With kernel_size=3, no padding and stride 1, output height/width = input − 2. Parameters = 3·3·C_in·C_out + C_out.", "significance": "Here five Conv2D layers with 32, 64, 128, 256, 512 filters learn an increasingly abstract hierarchy of visual features.", "example": "conv2d_6 maps (180,180,3) to (178,178,32) with 3·3·3·32+32 = 896 parameters.", "misconception": "The parameter count does not depend on the image size; it depends only on kernel size and channel counts.", "related": ["max_pooling", "feature_map"], "source": "book"},
+   {"id": "max_pooling", "name": "Max pooling (2x2)", "definition": "Downsampling that keeps the maximum of each non-overlapping 2x2 window, halving height and width.", "intuition": "Keep the strongest response in each neighbourhood and throw away exact position.", "technical": "MaxPooling2D(pool_size=2) uses stride 2 by default; output = floor(input/2), so odd sizes lose a row/column (87→43, 41→20). It has no parameters.", "significance": "Reduces feature-map size so later layers see larger windows of the original image and the final map is small (7x7).", "example": "max_pooling2d_3: (87,87,64) → (43,43,64).", "misconception": "Pooling does not change the number of channels.", "related": ["convolution", "global_average_pooling"], "source": "book"},
+   {"id": "global_average_pooling", "name": "Global average pooling", "definition": "A layer that averages each channel of a feature map over all spatial positions, turning (H, W, C) into (C,).", "intuition": "For each of the 512 detectors, ask 'how strongly did you fire on average across the whole image?'", "technical": "y_c = (1/(H·W)) Σ_i Σ_j x_{i,j,c}; no trainable weights. Here (7,7,512) → (512,).", "significance": "Bridges the convolutional base and the dense classifier while keeping the head tiny (513 parameters).", "example": "A channel whose 49 values average to 0.8 contributes 0.8 to the 512-vector.", "misconception": "It is not the same as Flatten: Flatten would keep all 25,088 values and their positions.", "related": ["max_pooling", "dense_layer"], "source": "book"},
+   {"id": "feature_map", "name": "Feature-map depth vs. size", "definition": "The pattern where channel depth increases while spatial size decreases through the network.", "intuition": "Information moves from 'where' (spatial grid) into 'what' (channels).", "technical": "Depth 32→512, size 180x180→7x7 in this model.", "significance": "The NOTE on p.269 calls this a pattern you will see in almost all ConvNets.", "example": "Elements per sample: 178·178·32 ≈ 1.01M after the first conv vs 7·7·512 = 25,088 after the last.", "misconception": "Growing depth does not mean the tensor grows in total size; it usually shrinks.", "related": ["convolution", "max_pooling"], "source": "book"},
+   {"id": "sigmoid", "name": "Single sigmoid output unit", "definition": "A Dense(1) layer with sigmoid activation that outputs a number in (0, 1).", "intuition": "The probability the image belongs to the positive class (e.g. dog).", "technical": "p = σ(w·h + b), w ∈ R^512; 513 parameters.", "significance": "Standard head for binary classification, paired with binary crossentropy on p.271.", "example": "logit 2.0 → σ(2) ≈ 0.88.", "misconception": "You do not need two softmax units for a two-class problem.", "related": ["dense_layer", "cross_entropy"], "source": "book"}
+ ],
+ "math": [
+   {"id": "m1", "title": "Output size of a 3x3 valid convolution and a 2x2 pool", "latex": "H_{\\text{conv}} = H_{\\text{in}} - k + 1, \\qquad H_{\\text{pool}} = \\left\\lfloor \\frac{H_{\\text{in}}}{2} \\right\\rfloor", "source_text": "Implicit in the Output Shape column (180 → 178 → 89 → 87 → 43 …)",
+    "variables": [{"symbol": "H_{\\text{in}}", "meaning": "input height (width behaves identically)"}, {"symbol": "k", "meaning": "kernel size, 3 here"}],
+    "operations": "Subtract k−1 = 2 for each convolution; integer-halve for each pooling.", "purpose": "Predict every row of the Output Shape column.", "interpretation": "Without padding, a 3x3 window can only be centred on positions at least 1 pixel from the border.", "intuition": "Convolutions nibble 1 pixel off each side; pooling cuts the map in half.",
+    "numerical_example": "180 → 178 → 89 → 87 → 43 → 41 → 20 → 18 → 9 → 7. Note 87/2 = 43.5 → 43 and 41/2 = 20.5 → 20.", "source": "ai_explanation", "book_ref": "p.270"},
+   {"id": "m2", "title": "Parameter count of a Conv2D layer", "latex": "P = k \\cdot k \\cdot C_{\\text{in}} \\cdot C_{\\text{out}} + C_{\\text{out}}", "source_text": "Param # column: 896, 18,496, 73,856, 295,168, 1,180,160",
+    "variables": [{"symbol": "k", "meaning": "kernel size (3)"}, {"symbol": "C_{\\text{in}}", "meaning": "number of input channels"}, {"symbol": "C_{\\text{out}}", "meaning": "number of filters (output channels), each with one bias"}],
+    "operations": "Each filter has k·k·C_in weights plus one bias.", "purpose": "Explain the Param # column.", "interpretation": "Parameters scale with the product of input and output channels, so the deepest layer dominates.", "intuition": "Doubling both input and output channels quadruples the weights.",
+    "numerical_example": "| layer | computation | params |\n|---|---|---|\n| conv2d_6 | 3·3·3·32 + 32 | 896 |\n| conv2d_7 | 3·3·32·64 + 64 | 18,496 |\n| conv2d_8 | 3·3·64·128 + 128 | 73,856 |\n| conv2d_9 | 3·3·128·256 + 256 | 295,168 |\n| conv2d_10 | 3·3·256·512 + 512 | 1,180,160 |\n| dense_2 | 512·1 + 1 | 513 |\n\nTotal: 1,569,089 parameters (our sum; the total is not printed on this page).", "source": "ai_explanation", "book_ref": "p.270"},
+   {"id": "m3", "title": "Global average pooling", "latex": "g_c = \\frac{1}{H W} \\sum_{i=1}^{H} \\sum_{j=1}^{W} x_{i,j,c}, \\quad c = 1,\\dots,512", "source_text": "averaging them over spatial dimensions (callout)",
+    "variables": [{"symbol": "x_{i,j,c}", "meaning": "activation of channel c at spatial position (i, j) of the 7x7x512 map"}, {"symbol": "H, W", "meaning": "spatial size, 7 and 7"}, {"symbol": "g_c", "meaning": "the c-th entry of the output vector of shape (512,)"}],
+    "operations": "Mean over the 49 spatial positions, separately for each channel.", "purpose": "Convert the 3D feature map into a 1D vector for the Dense classifier.", "interpretation": "Each output entry summarizes how much feature c is present anywhere in the image.", "intuition": "Position is discarded; presence is kept.", "source": "book", "book_ref": "p.270"}
+ ],
+ "code": [
+   {"id": "c1", "listing": "8.7", "title": "Instantiating a small ConvNet for dogs vs. cats classification (continued)",
+    "original_code": "x = layers.Conv2D(filters=32, kernel_size=3, activation=\"relu\")(x)\nx = layers.MaxPooling2D(pool_size=2)(x)\nx = layers.Conv2D(filters=64, kernel_size=3, activation=\"relu\")(x)\nx = layers.MaxPooling2D(pool_size=2)(x)\nx = layers.Conv2D(filters=128, kernel_size=3, activation=\"relu\")(x)\nx = layers.MaxPooling2D(pool_size=2)(x)\nx = layers.Conv2D(filters=256, kernel_size=3, activation=\"relu\")(x)\nx = layers.MaxPooling2D(pool_size=2)(x)\nx = layers.Conv2D(filters=512, kernel_size=3, activation=\"relu\")(x)\nx = layers.GlobalAveragePooling2D()(x)\noutputs = layers.Dense(1, activation=\"sigmoid\")(x)\nmodel = keras.Model(inputs=inputs, outputs=outputs)",
+    "language": "python",
+    "what_it_does": "Builds the convolutional base and classifier head of the dogs-vs-cats model with the Functional API. The first lines of the listing (imports, `inputs = keras.Input(shape=(180, 180, 3))` and the `Rescaling(1./255)` layer) are on p.269.",
+    "line_explanations": [
+      {"lines": "1-2", "explanation": "Stage 1: 32 filters of size 3x3 with ReLU, then 2x2 max pooling. 180x180x3 → 178x178x32 → 89x89x32."},
+      {"lines": "3-4", "explanation": "Stage 2: 64 filters → 87x87x64, pool → 43x43x64."},
+      {"lines": "5-6", "explanation": "Stage 3: 128 filters → 41x41x128, pool → 20x20x128."},
+      {"lines": "7-8", "explanation": "Stage 4: 256 filters → 18x18x256, pool → 9x9x256."},
+      {"lines": "9", "explanation": "Stage 5: 512 filters → 7x7x512; no pooling afterwards."},
+      {"lines": "10", "explanation": "GlobalAveragePooling2D: per the callout, flattens (height, width, 512) into (512,) by averaging over spatial dimensions."},
+      {"lines": "11", "explanation": "Single sigmoid unit: probability of one of the two classes."},
+      {"lines": "12", "explanation": "Creates the Model object linking the symbolic input to the output."}
+    ],
+    "inputs_outputs": "Input: batches of RGB images (None, 180, 180, 3) with values 0–255 (rescaled to [0,1] by the earlier layer). Output: (None, 1) probabilities.",
+    "algorithm": "Alternate feature extraction (conv+ReLU) and downsampling (pool), doubling the filters at every stage, then summarize spatially and classify linearly with a sigmoid.",
+    "theory_link": "Implements the hierarchy of local, translation-invariant pattern detectors described in section 8.1; pooling enlarges each later layer's effective window over the input (p.264-265).",
+    "parameters": [
+      {"name": "filters", "role": "Number of output channels / learned detectors per Conv2D: 32, 64, 128, 256, 512."},
+      {"name": "kernel_size=3", "role": "3x3 spatial window; with default padding=\"valid\" it shrinks each dimension by 2."},
+      {"name": "pool_size=2", "role": "2x2 windows with stride 2, halving height and width."},
+      {"name": "activation=\"sigmoid\"", "role": "Squashes the single output into (0, 1) for binary classification."}
+    ],
+    "pitfalls": [
+      "This snippet relies on `inputs` and the Rescaling step defined on p.269; run it on its own and `x`/`inputs` are undefined.",
+      "Replacing GlobalAveragePooling2D with Flatten would make the Dense layer 25,089 parameters instead of 513 — and the model more prone to overfitting.",
+      "With odd sizes the pooling silently drops the last row/column (87 → 43)."
+    ],
+    "illustrative_code": "# AI-written: recompute the summary's shapes and parameter counts by hand\nh, c_in = 180, 3\nfor i, f in enumerate([32, 64, 128, 256, 512]):\n    h -= 2                      # 3x3 valid conv\n    params = 3 * 3 * c_in * f + f\n    print(f\"conv {f:3d}: {h}x{h}x{f}, params={params:,}\")\n    c_in = f\n    if i < 4:\n        h //= 2                 # 2x2 max pool\n        print(f\"pool    : {h}x{h}x{f}\")\nprint(\"GAP     :\", c_in, \" dense params:\", c_in + 1)"},
+   {"id": "c2", "listing": null, "title": "model.summary() output",
+    "original_code": ">>> model.summary()\nModel: \"functional_2\"\n┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓\n┃ Layer (type)                      ┃ Output Shape             ┃       Param # ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩\n│ input_layer_2 (InputLayer)        │ (None, 180, 180, 3)      │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ rescaling (Rescaling)             │ (None, 180, 180, 3)      │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ conv2d_6 (Conv2D)                 │ (None, 178, 178, 32)     │           896 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ max_pooling2d_2 (MaxPooling2D)    │ (None, 89, 89, 32)       │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ conv2d_7 (Conv2D)                 │ (None, 87, 87, 64)       │        18,496 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ max_pooling2d_3 (MaxPooling2D)    │ (None, 43, 43, 64)       │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ conv2d_8 (Conv2D)                 │ (None, 41, 41, 128)      │        73,856 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ max_pooling2d_4 (MaxPooling2D)    │ (None, 20, 20, 128)      │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ conv2d_9 (Conv2D)                 │ (None, 18, 18, 256)      │       295,168 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ max_pooling2d_5 (MaxPooling2D)    │ (None, 9, 9, 256)        │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ conv2d_10 (Conv2D)                │ (None, 7, 7, 512)        │     1,180,160 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ global_average_pooling2d_2        │ (None, 512)              │             0 │\n│ (GlobalAveragePooling2D)          │                          │               │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ dense_2 (Dense)                   │ (None, 1)                │           513 │\n└───────────────────────────────────┴──────────────────────────┴───────────────┘",
+    "language": "text",
+    "what_it_does": "Prints the layer-by-layer architecture table. The table continues onto p.271, where the total/trainable parameter lines appear.",
+    "line_explanations": [
+      {"lines": "1-2", "explanation": "Calling summary() on the Functional model, auto-named \"functional_2\" (the suffix depends on how many models were created in the session)."},
+      {"lines": "6-8", "explanation": "Input and Rescaling keep the shape (None, 180, 180, 3) and have no weights."},
+      {"lines": "10-26", "explanation": "Alternating conv/pool rows: each conv subtracts 2 from height/width and adds channels; each pool halves height/width."},
+      {"lines": "28-31", "explanation": "Global average pooling collapses (7, 7, 512) to (512); the Dense layer maps it to (None, 1) with 512 weights + 1 bias."}
+    ],
+    "inputs_outputs": "Input: the model object. Output: text table of layer names, output shapes and parameter counts.",
+    "algorithm": "Keras walks the layer graph in topological order and reports each layer's output shape and weight count.",
+    "theory_link": "Concretely shows the depth-up / size-down pattern noted on p.269.",
+    "parameters": [],
+    "pitfalls": ["Layer-name suffixes (conv2d_6, dense_2…) vary with what you have run before; they are not meaningful.", "Output shapes count per-sample dimensions; the leading None is the batch size."]}
+ ],
+ "deeper": [
+   {"title": "Where do the parameters and the computation live?", "kind": "breakdown", "body": "Beyond the book: parameter count and compute are distributed very differently. The last convolution holds about 75% of the parameters (1,180,160 of ~1.57M), but it runs on only a 9x9 input. The first convolution has just 896 parameters yet is applied at 178x178 = 31,684 positions. Multiply-accumulate counts (output positions × k·k·C_in·C_out): conv1 ≈ 31,684·864 ≈ 27M, conv5 ≈ 49·1,179,648 ≈ 58M, conv2 ≈ 7,569·18,432 ≈ 140M. So the middle, large-resolution layers cost the most compute, while the deep layers cost the most memory for weights.", "source": "ai_explanation"},
+   {"title": "Why global average pooling instead of Flatten", "kind": "alternative", "body": "Note (not in the book): a Flatten + Dense(1) head would take 7·7·512 = 25,088 inputs (25,089 parameters) and would learn position-specific weights, i.e. 'a dog ear in the top-left corner'. Global average pooling forces the classifier to rely on *whether* a feature occurs, which is a strong prior for object recognition and helps with a training set of only 2,000 images. The MNIST discussion on p.265 shows why the feature maps must first be shrunk: averaging a huge 22x22 map would destroy too much information.", "source": "ai_explanation"},
+   {"title": "Receptive field growth", "kind": "step_by_step", "body": "Beyond the book: each 3x3 conv adds (k−1)·jump to the receptive field, and each 2x2 pool doubles the jump. Starting at 1 pixel: conv1 → 3, pool → 4, conv2 → 8, pool → 10, conv3 → 18, pool → 22, conv4 → 38, pool → 46, conv5 → 78 pixels. So each of the 7x7 positions in the last feature map 'sees' a 78x78 patch — a large fraction of the 180x180 image, which is what p.265 means by later layers looking at increasingly large windows.", "source": "ai_explanation"}
+ ],
+ "visualizations": [
+   {"id": "v1", "type": "widget", "title": "Shape flow through the dogs-vs-cats ConvNet", "why": "Reproduces the Output Shape column of the summary on this page so you can follow the shrinking spatial size and growing depth.", "widget": "tensor_shapes",
+    "params": {"steps": [
+      {"op": "input", "shape": [null, 180, 180, 3]},
+      {"op": "conv 32", "shape": [null, 178, 178, 32]},
+      {"op": "pool", "shape": [null, 89, 89, 32]},
+      {"op": "conv 64", "shape": [null, 87, 87, 64]},
+      {"op": "pool", "shape": [null, 43, 43, 64]},
+      {"op": "conv 128", "shape": [null, 41, 41, 128]},
+      {"op": "pool", "shape": [null, 20, 20, 128]},
+      {"op": "conv 256", "shape": [null, 18, 18, 256]},
+      {"op": "pool", "shape": [null, 9, 9, 256]},
+      {"op": "conv 512", "shape": [null, 7, 7, 512]},
+      {"op": "global avg pool", "shape": [null, 512]},
+      {"op": "dense sigmoid", "shape": [null, 1]}]}},
+   {"id": "v2", "type": "chart", "title": "Parameters per layer (from the summary)", "why": "Plots the Param # column to show that the last convolution dominates the parameter budget.",
+    "chart": {"type": "bar", "data": {"labels": ["conv 32", "conv 64", "conv 128", "conv 256", "conv 512", "dense 1"], "datasets": [{"label": "Parameters", "data": [896, 18496, 73856, 295168, 1180160, 513]}]}, "options": {"plugins": {"legend": {"display": false}}, "scales": {"y": {"title": {"display": true, "text": "parameters"}}}}}}
+ ],
+ "misconceptions": [
+   {"claim": "Max pooling layers contain learned weights.", "correction": "The summary lists 0 parameters for every MaxPooling2D (and for Rescaling and GlobalAveragePooling2D); they are fixed operations."},
+   {"claim": "GlobalAveragePooling2D is just another name for Flatten.", "correction": "Flatten keeps all 7·7·512 values; global average pooling averages each channel over space, yielding 512 values."},
+   {"claim": "A bigger image means more convolution parameters.", "correction": "Conv parameters depend only on kernel size and channel counts; image size affects output shapes and compute, not weight count."}
+ ],
+ "connections": {
+   "earlier": [{"page": 269, "note": "Start of listing 8.7 (Input and Rescaling) and the design rationale: two extra conv/pool stages, 7x7 maps before global pooling, sigmoid output."},
+               {"page": 264, "note": "Why downsampling is needed before global pooling (MNIST example)."},
+               {"page": 256, "note": "The first small ConvNet with the same alternating Conv2D/MaxPooling2D structure."}],
+   "later": [{"page": 271, "note": "Compilation with adam and binary crossentropy, then data preprocessing with image_dataset_from_directory."},
+             {"page": 278, "note": "The same architecture retrained with data augmentation and dropout."},
+             {"page": 309, "note": "Chapter 10 visualizes the intermediate activations of this trained model."}],
+   "prerequisites": [{"page": 220, "note": "Functional API model construction used by keras.Model(inputs, outputs)."}],
+   "related_math": [], "related_code": [{"page": 256, "note": "MNIST ConvNet listing with the same layer pattern."}], "related_figures": []
+ },
+ "takeaways": [
+   "The model is five 3x3 Conv2D layers (32→512 filters) with four 2x2 max pools, global average pooling and a single sigmoid unit.",
+   "Each valid 3x3 conv removes 2 pixels per dimension; each 2x2 pool halves (rounding down): 180 → … → 7.",
+   "Conv params = 3·3·C_in·C_out + C_out; the last conv alone has 1,180,160 parameters.",
+   "GlobalAveragePooling2D turns (7, 7, 512) into (512,) by averaging over space, keeping the classifier head at 513 parameters.",
+   "Depth grows while spatial size shrinks — the standard ConvNet pattern."
+ ],
+ "questions": [
+   {"id": "q1", "type": "math", "question": "Verify the parameter count 73,856 of conv2d_8.", "options": [], "answer": "3·3·64·128 + 128 = 73,728 + 128 = 73,856.", "explanation": "The layer receives 64 channels and has 128 filters of size 3x3, each with one bias.", "page_refs": [270]},
+   {"id": "q2", "type": "mcq", "question": "Why does max_pooling2d_3 output 43x43 rather than 43.5x43.5 or 44x44?", "options": ["Pooling with stride 2 floors odd sizes, dropping the last row/column", "The convolution added padding", "Keras rounds up to the nearest odd number", "The Rescaling layer cropped the image"], "answer": "Pooling with stride 2 floors odd sizes, dropping the last row/column", "explanation": "87/2 = 43.5 and only complete 2x2 windows are used, giving 43. No padding is used anywhere, Keras doesn't round to odd numbers, and Rescaling only changes pixel values, not shape.", "page_refs": [270]},
+   {"id": "q3", "type": "short", "question": "What does GlobalAveragePooling2D do to the (7, 7, 512) feature map, and how many parameters does it have?", "options": [], "answer": "It averages each of the 512 channels over the 7x7 spatial positions, producing a (512,) vector; it has 0 parameters.", "explanation": "As the callout says, it flattens 3D activations into 1D by averaging over spatial dimensions; the summary shows Param # 0.", "page_refs": [270]},
+   {"id": "q4", "type": "conceptual", "question": "How many parameters would the Dense(1) layer have if Flatten replaced GlobalAveragePooling2D, and why might that be worse for this small dataset?", "options": [], "answer": "7·7·512 + 1 = 25,089 parameters; it would learn position-specific weights and be more prone to overfitting 2,000 training images.", "explanation": "Flatten keeps all spatial positions as separate features. This comparison goes beyond the page but follows from the shapes it prints.", "page_refs": [270, 269]},
+   {"id": "q5", "type": "mcq", "question": "Which layer has the most parameters?", "options": ["conv2d_6 (32 filters)", "conv2d_10 (512 filters)", "dense_2", "global_average_pooling2d_2"], "answer": "conv2d_10 (512 filters)", "explanation": "1,180,160 parameters, because it connects 256 input channels to 512 filters. conv2d_6 has 896, dense_2 has 513, and global pooling has none.", "page_refs": [270]},
+   {"id": "q6", "type": "math", "question": "Starting from 180x180, compute the spatial size after conv2d_9 and after max_pooling2d_5.", "options": [], "answer": "18x18 after conv2d_9 and 9x9 after max_pooling2d_5.", "explanation": "180→178→89→87→43→41→20→18 (conv: −2), then 18/2 = 9.", "page_refs": [270]},
+   {"id": "q7", "type": "self", "question": "Without looking, can you reproduce the Output Shape column from the listing alone?", "options": [], "answer": "Self-check: apply −2 per conv and ÷2 (floor) per pool, channels = filter count.", "explanation": "If you can, you understand how kernel size, padding and pooling govern shapes.", "page_refs": [270]}
+ ]
+}

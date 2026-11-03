@@ -1,0 +1,434 @@
+{
+  "page_id": "page_451",
+  "pdf_page": 451,
+  "printed_page": "427",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:58:00Z",
+    "confidence": "high",
+    "review_flags": [
+      "Typo in the book: the paragraph before Listing 15.8 ends 'we can predict an entire sequence, a token at time' (missing 'a': 'a token at a time').",
+      "Minor wording issue in the book: the last paragraph says 'To detokenize our input', but what is detokenized is the generated output sequence (generated_ids)."
+    ],
+    "extraction_quality": "Clean extraction of all three code blocks and the body text; verified against the page image. The unnumbered code block at the top continues the setup announced at the end of p.450."
+  },
+  "overview": {
+    "title": "Priming the GRU with a prompt and generating greedily",
+    "chapter": "15 Language models and the Transformer",
+    "section": "15.1 The language model",
+    "subsection": "15.1.2 Generating Shakespeare",
+    "main_topic": "Character/ID lookup tables, the prompt, priming the recurrent state (Listing 15.7) and the greedy token-by-token generation loop (Listing 15.8).",
+    "central_idea": "Generation happens in two phases. First the prompt is fed through the one-step model character by character, building the exact state the model would have reached on that text. Then, starting from that state and the last prediction, the most likely next character is repeatedly chosen, fed back in, and the new state kept.",
+    "importance": "This page is the working core of autoregressive decoding: priming (the prefill phase in modern LLM serving) and step-wise greedy decoding. The same loop structure returns in seq2seq translation and in the chapter 16 mini-GPT.",
+    "learning_objectives": [
+      "Build forward and inverse vocabulary lookup tables from `tokenizer.get_vocabulary()`.",
+      "Explain what it means to prime an RNN state with a prompt and why the result equals the training-time state.",
+      "Trace the shapes in Listings 15.7 and 15.8 (inputs (1, 1), state (1, 1024), predictions (1, 67)).",
+      "Explain greedy decoding via `np.argmax` and why the last prompt prediction is used for the first generated character.",
+      "Explain what detokenization means for a character-level model."
+    ],
+    "prerequisites": [
+      "The `generation_model` with explicit state from Listing 15.6 (p.450).",
+      "The character-level `TextVectorization` tokenizer with vocabulary size 67 (p.448).",
+      "Softmax outputs and argmax."
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page begins with the setup promised at the end of p.450. `tokenizer.get_vocabulary()` returns the 67 vocabulary entries, and zipping them with `range(vocabulary_size)` builds two dictionaries: `char_to_id` (character to integer) and `id_to_char` (integer to character). The prompt is the triple-quoted string `\"\"\"\\nKING RICHARD III:\\n\"\"\"`, a speaker heading in the style of the play scripts in the training text.\n\n**Priming.** Before generating, the GRU's internal state must be primed with the prompt. The prompt is fed to the model one token at a time, which computes exactly the RNN state the model would have reached if it had read this prompt during training. After the last prompt character, the state summarizes the whole prompt, and the final output prediction is kept so the first character of the response can be chosen from it. **Listing 15.7** converts the prompt to IDs, starts with a zero state `keras.ops.zeros(shape=(1, hidden_dim))`, and for each ID calls `generation_model.predict((inputs, state), verbose=0)`, overwriting `predictions` and `state` each time.\n\n**Generating.** **Listing 15.8** loops `max_length = 250` times. At each step it:\n\n1. takes the most likely next character, `int(np.argmax(predictions, axis=-1)[0])` (greedy selection);\n2. appends it to `generated_ids`;\n3. feeds it back as the next input along with the current state, obtaining new `predictions` and a new `state`.\n\nThis way the model writes a whole sequence one token at a time.\n\nThe page ends by announcing detokenization: map every generated token ID back to its string and join them. That code and the resulting Shakespeare-like sample are on p.452.",
+  "paragraphs": [
+    {
+      "ref": "p451_e04",
+      "excerpt": "To begin generation, we first need to “prime” the internal state",
+      "what_it_says": "Generation starts by priming the GRU's internal state with the prompt, feeding it to the model one token at a time. This computes exactly the RNN state the model would see if it had encountered the prompt during training.",
+      "what_it_means": "The GRU's computation is a recurrence $h_t = \\mathrm{GRU}(E[x_t], h_{t-1})$ starting from $h_0 = 0$. During training the layer ran this recurrence internally across 100 characters. Running the one-step model with the state carried over reproduces that recurrence exactly, so the model is \"put in the mood\" of having just read a speaker heading.",
+      "why_it_matters": "The prompt is how we condition what the model writes. Because priming exactly reproduces the training-time computation, the model is working on inputs it has learned to handle.",
+      "technical_idea": "Beyond the book: in large-model serving this phase is called prefill, and it can be parallelized over the prompt (as the training model was over 100 positions). Here it is done sequentially for simplicity.",
+      "terminology": [
+        {"term": "prime (a state)", "meaning": "Run the prompt through the recurrent model so its hidden state encodes the prompt before generation starts."}
+      ],
+      "connections": [
+        "p.450: the generation model takes and returns the state explicitly, which makes priming possible.",
+        "p.453: seq2seq decoding similarly starts from a seed token \"[start]\" and the encoder's representation."
+      ]
+    },
+    {
+      "ref": "p451_e05",
+      "excerpt": "When we feed the very last character of the prompt into the",
+      "what_it_says": "After the last prompt character, the state output captures information about the whole prompt. The final output prediction is saved and later used to select the first character of the generated response.",
+      "what_it_means": "Every call returns two things. The state carries the context forward. The prediction is the distribution over what character comes after everything seen so far. The prediction from the last prompt character is the model's guess for the first new character, so no extra call is needed before the loop starts.",
+      "why_it_matters": "This explains why Listing 15.8 begins with an argmax over `predictions`, which still holds the value left by the end of Listing 15.7.",
+      "terminology": [
+        {"term": "state output", "meaning": "The new GRU hidden state (shape (1, 1024)) returned by the generation model."}
+      ],
+      "connections": [
+        "p.450: Listing 15.6 defines `outputs=(outputs, output_state)`."
+      ]
+    },
+    {
+      "ref": "p451_e08",
+      "excerpt": "Now we are ready to let the model predict a new output",
+      "what_it_says": "In a loop, up to a desired length, the most likely next character is repeatedly selected, fed back to the model, and the new RNN state is kept. This predicts a whole sequence one token at a time.",
+      "what_it_means": "This is greedy decoding. At each step, take the argmax of the 67-way softmax. The loop has a fixed length (250 here) rather than stopping at an end token, because this language model has no notion of an end of text.",
+      "why_it_matters": "Greedy decoding is the simplest decoding strategy. It is deterministic, so the same prompt always gives the same output. Chapter 16 (p.505) shows that always picking the most likely token can trap a model in repetitive loops, which motivates sampling.",
+      "technical_idea": "Each iteration costs one embedding lookup, one GRU step and one Dense softmax, a constant amount of work thanks to the persisted state.",
+      "terminology": [
+        {"term": "greedy search / greedy decoding", "meaning": "Always choosing the highest-probability next token (p.505 names it greedy search)."},
+        {"term": "persist the state", "meaning": "Keep the newly returned state and pass it in on the next call."}
+      ],
+      "connections": [
+        "p.505: greedy search defined and contrasted with adding randomness.",
+        "p.502: the mini-GPT generation function also picks the most likely next token."
+      ]
+    },
+    {
+      "ref": "p451_e11",
+      "excerpt": "Let’s convert our output integer sequence to a string to see what",
+      "what_it_says": "To see what the model predicted, the integer sequence is converted back into a string. Detokenizing means mapping all token IDs to strings and joining them together.",
+      "what_it_means": "For a character-level tokenizer, detokenization is trivial: each ID maps to one character, and concatenating them with `\"\".join` gives the text. The book says \"detokenize our input\", but what is converted is the generated output, `generated_ids`.",
+      "why_it_matters": "It completes the text-to-IDs-to-text round trip described on p.446.",
+      "terminology": [
+        {"term": "detokenize", "meaning": "Reverse tokenization: map token IDs back to string pieces and join them."}
+      ],
+      "connections": [
+        "p.446: detokenization introduced as the reverse of tokenization.",
+        "p.452: the code `\"\".join([id_to_char[token_id] for token_id in generated_ids])` and the sample output."
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "prompt_priming",
+      "name": "Priming the state with a prompt",
+      "definition": "Running the prompt tokens through a recurrent model one at a time, carrying the state, so the model's state encodes the prompt before generation.",
+      "intuition": "Reading the first line of a script aloud before improvising the next one.",
+      "technical": "$h_0 = 0$; for each prompt token $x_i$: $(\\hat y_i, h_i) = f(x_i, h_{i-1})$. Keep $h_n$ and $\\hat y_n$.",
+      "significance": "It makes generation conditional on the prompt and reproduces the training-time computation exactly.",
+      "example": "Feeding '\\n', 'K', 'I', 'N', 'G', ' ', 'R', ... ':' , '\\n' of the prompt into `generation_model`.",
+      "misconception": "That priming trains the model on the prompt. No weights change; only the state is computed.",
+      "related": ["autoregressive_generation", "rnn_state", "prompt"],
+      "source": "book"
+    },
+    {
+      "id": "greedy_decoding",
+      "name": "Greedy decoding",
+      "definition": "At each generation step, select the token with the highest predicted probability.",
+      "intuition": "Always take the locally best move.",
+      "technical": "$x_{t+1} = \\arg\\max_k \\hat y_t[k]$, implemented as `int(np.argmax(predictions, axis=-1)[0])`.",
+      "significance": "Simple and deterministic, but it can get stuck in repetitive loops and does not maximize the probability of the whole sequence.",
+      "example": "If the model gives 'S' a probability of 0.31 and every other character less, 'S' is chosen (as in 'Stay, men!' on p.452).",
+      "misconception": "That greedy decoding finds the most probable sentence. It maximizes each step separately, not the product of all steps.",
+      "related": ["autoregressive_generation", "softmax", "sampling_strategies"],
+      "source": "book"
+    },
+    {
+      "id": "vocabulary_lookup",
+      "name": "Vocabulary lookup tables",
+      "definition": "Dictionaries mapping each vocabulary string to its integer index and back.",
+      "intuition": "A two-way phrasebook between characters and numbers.",
+      "technical": "`get_vocabulary()` returns the list in index order. Index 0 is the padding token `\"\"` and index 1 is `\"[UNK]\"` for a TextVectorization layer, so `dict(zip(tokens, range(vocabulary_size)))` lines up exactly with the tokenizer's integer IDs.",
+      "significance": "It lets you convert the prompt to IDs and generated IDs back to text, without calling the TextVectorization layer, whose `output_sequence_length=100` would pad to 100.",
+      "example": "`char_to_id['K']` gives the ID used for 'K'; `id_to_char[that_id]` gives 'K' back.",
+      "misconception": "That the mapping is alphabetical. TextVectorization orders tokens by frequency after the reserved entries.",
+      "related": ["tokenization"],
+      "source": "ai_explanation"
+    },
+    {
+      "id": "tokenization",
+      "name": "Tokenization and detokenization",
+      "definition": "Mapping text to integer token IDs, and the reverse mapping from IDs to text.",
+      "intuition": "Encode and decode.",
+      "technical": "Character level: one character per ID; detokenization is `\"\".join(id_to_char[i] for i in ids)`.",
+      "significance": "Models work on integers; people read strings.",
+      "example": "[ids of 'S','t','a','y'] -> \"Stay\".",
+      "misconception": "That detokenization is always trivial. With subword tokenizers you need to handle how pieces are joined, for example spaces.",
+      "related": ["vocabulary_lookup"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Priming recurrence",
+      "latex": "h_0=\\mathbf{0}\\in\\mathbb{R}^{1\\times 1024},\\qquad (\\hat{y}_i,\\ h_i)=f(x_i,\\ h_{i-1}),\\quad i=1,\\dots,n",
+      "source_text": "state = keras.ops.zeros(shape=(1, hidden_dim)); predictions, state = generation_model.predict((inputs, state), verbose=0)",
+      "variables": [
+        {"symbol": "h_i", "meaning": "GRU state after reading prompt token i"},
+        {"symbol": "x_i", "meaning": "the i-th prompt token ID"},
+        {"symbol": "n", "meaning": "number of prompt characters (len(prompt) = 19 for the given string, including two newlines)"},
+        {"symbol": "f", "meaning": "the generation model of Listing 15.6"},
+        {"symbol": "\\hat{y}_i", "meaning": "the 67-way next-character distribution after token i"}
+      ],
+      "operations": "Repeated application of the one-step model, carrying the state.",
+      "purpose": "It computes the conditioning state $h_n$ and the first prediction $\\hat y_n$.",
+      "interpretation": "$h_n$ equals the state the GRU would have after these characters in a training sequence that started with them.",
+      "intuition": "Reading the prompt to set the context.",
+      "numerical_example": "The prompt \"\\nKING RICHARD III:\\n\" has 1 + 17 + 1 = 19 characters, so Listing 15.7 makes 19 model calls.",
+      "source": "inference",
+      "book_ref": "p.451"
+    },
+    {
+      "id": "m2",
+      "title": "Greedy next-token selection",
+      "latex": "x_{t+1}=\\arg\\max_{k\\in\\{0,\\dots,66\\}} \\hat{y}_t[k],\\qquad (\\hat{y}_{t+1},\\ h_{t+1}) = f(x_{t+1},\\ h_t)",
+      "source_text": "next_char = int(np.argmax(predictions, axis=-1)[0])",
+      "variables": [
+        {"symbol": "\\hat{y}_t[k]", "meaning": "predicted probability of character k"},
+        {"symbol": "x_{t+1}", "meaning": "the chosen next character ID"},
+        {"symbol": "h_t", "meaning": "current GRU state"}
+      ],
+      "operations": "Argmax over the vocabulary axis, then one model step.",
+      "purpose": "It defines one iteration of Listing 15.8.",
+      "interpretation": "A deterministic map from state to next character.",
+      "intuition": "Take the safest bet every time.",
+      "numerical_example": "If predictions = [[0.01, ..., 0.62 (at index 9), ..., 0.20 (at index 3), ...]], argmax gives 9, so `next_char = 9` and `id_to_char[9]` is appended on output.",
+      "source": "book",
+      "book_ref": "p.451"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Lookup tables and the prompt",
+      "original_code": "tokens = tokenizer.get_vocabulary()\ntoken_ids = range(vocabulary_size)\nchar_to_id = dict(zip(tokens, token_ids))\nid_to_char = dict(zip(token_ids, tokens))\n\nprompt = \"\"\"\nKING RICHARD III:\n\"\"\"",
+      "language": "python",
+      "what_it_does": "Builds the forward and inverse vocabulary dictionaries and defines the prompt string.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Get the list of the 67 vocabulary entries in ID order from the TextVectorization tokenizer (p.448)."},
+        {"lines": "2", "explanation": "IDs 0 to 66."},
+        {"lines": "3", "explanation": "Character to ID."},
+        {"lines": "4", "explanation": "ID to character."},
+        {"lines": "6-8", "explanation": "Triple-quoted prompt. Because of the line breaks it is \"\\nKING RICHARD III:\\n\": a newline, the speaker heading, then another newline, matching how the training text formats speakers."}
+      ],
+      "inputs_outputs": "Input: the adapted tokenizer. Output: two dicts and a 19-character prompt string.",
+      "algorithm": "Zip-based dictionary construction.",
+      "theory_link": "Tokenization and detokenization (p.446).",
+      "parameters": [
+        {"name": "vocabulary_size", "role": "67, from `tokenizer.vocabulary_size()` (p.448)."}
+      ],
+      "pitfalls": [
+        "Every prompt character must be in the vocabulary, or `char_to_id[c]` raises KeyError.",
+        "The leading and trailing newlines are part of the prompt, which is intentional."
+      ]
+    },
+    {
+      "id": "c2",
+      "listing": "15.7",
+      "title": "Using a fixed prompt to compute a language model's starting state",
+      "original_code": "input_ids = [char_to_id[c] for c in prompt]\nstate = keras.ops.zeros(shape=(1, hidden_dim))\nfor token_id in input_ids:\n    inputs = keras.ops.expand_dims([token_id], axis=0)\n    predictions, state = generation_model.predict((inputs, state), verbose=0)",
+      "language": "python",
+      "what_it_does": "Converts the prompt to IDs and feeds them to the one-step generation model character by character, updating the state each time.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Prompt string to a list of 19 integer IDs."},
+        {"lines": "2", "explanation": "Initial state of zeros with shape (1, 1024): batch of one, hidden_dim units. This is the GRU's default starting state during training too."},
+        {"lines": "3-4", "explanation": "For each ID, build a (1, 1) input tensor: `[token_id]` has shape (1,), and `expand_dims(axis=0)` adds the batch axis."},
+        {"lines": "5", "explanation": "One model step: returns a (1, 67) probability array and a (1, 1024) new state, which overwrites `state`. `verbose=0` silences the progress bar printed by each predict call."}
+      ],
+      "inputs_outputs": "Input: the prompt. Output: `state` encoding the whole prompt and `predictions`, the distribution for the first generated character.",
+      "algorithm": "Sequential RNN unrolling with an explicit state.",
+      "theory_link": "This reproduces $h_t = \\mathrm{GRU}(x_t, h_{t-1})$ exactly as computed during training.",
+      "parameters": [
+        {"name": "hidden_dim", "role": "1024, the state size."},
+        {"name": "verbose", "role": "0 disables logging for each call."}
+      ],
+      "pitfalls": [
+        "`predict` is relatively slow per call; calling the model directly (`generation_model((inputs, state))`) avoids overhead. Beyond the book: this is a common speed-up.",
+        "Only the predictions from the last prompt character are used; earlier ones are overwritten."
+      ]
+    },
+    {
+      "id": "c3",
+      "listing": "15.8",
+      "title": "Predicting with the language model a token at a time",
+      "original_code": "import numpy as np\n\ngenerated_ids = []\nmax_length = 250\nfor i in range(max_length):\n    next_char = int(np.argmax(predictions, axis=-1)[0])\n    generated_ids.append(next_char)\n    inputs = keras.ops.expand_dims([next_char], axis=0)\n    predictions, state = generation_model.predict((inputs, state), verbose=0)",
+      "language": "python",
+      "what_it_does": "Greedily generates 250 characters, each time choosing the most probable character, recording it and feeding it back with the current state.",
+      "line_explanations": [
+        {"lines": "3-4", "explanation": "Output list and fixed generation length of 250 characters."},
+        {"lines": "6", "explanation": "`predictions` has shape (1, 67). argmax over the last axis gives shape (1,); `[0]` selects the single batch element; `int` converts it to a Python int. The first iteration uses the prediction left by the last prompt character."},
+        {"lines": "7", "explanation": "Record the chosen ID."},
+        {"lines": "8-9", "explanation": "Feed the chosen character back as a (1, 1) input with the current state; get the next distribution and state."}
+      ],
+      "inputs_outputs": "Input: `predictions` and `state` from Listing 15.7. Output: `generated_ids`, a list of 250 ints (detokenized on p.452).",
+      "algorithm": "Greedy autoregressive decoding with a recurrent state.",
+      "theory_link": "One factor $p(x_t\\mid x_{<t})$ per iteration, choosing the mode each time.",
+      "parameters": [
+        {"name": "max_length", "role": "Number of characters to generate (250)."}
+      ],
+      "pitfalls": [
+        "Greedy decoding is deterministic, so rerunning gives the same text, and it can fall into repetitive loops (p.505).",
+        "The last `predict` call's output is never used, which wastes one step (harmless)."
+      ],
+      "illustrative_code": "# AI-written variant (not from the book): sample instead of argmax\nprobs = np.asarray(predictions)[0].astype(\"float64\")\nprobs = probs / probs.sum()\nnext_char = int(np.random.choice(len(probs), p=probs))"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Step-by-step trace of the first few calls",
+      "kind": "step_by_step",
+      "body": "1. `state` = zeros(1, 1024).\n2. Feed '\\n' (shape (1,1)) and get state h1 and predictions p1.\n3. Feed 'K' and get h2, p2 ... up to the 19th character, the final '\\n', giving h19 and p19.\n4. Loop iteration 0: argmax(p19) might be 'S', the start of \"Stay\" in the p.452 sample. Append it, feed 'S' with h19, get h20 and p20.\n5. Iteration 1: argmax(p20), then 't', and so on, 250 times.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Why the loop has a fixed length",
+      "kind": "breakdown",
+      "body": "The training targets were 100-character windows of continuous text with no end-of-text marker, so the model never learned when to stop. The loop therefore just runs for `max_length` steps. Seq2seq decoders (p.453) are trained with an explicit \"[end]\" token, so their loop can stop when it is produced.",
+      "source": "inference"
+    },
+    {
+      "title": "Analogy: improv with a cue line",
+      "kind": "analogy",
+      "body": "An improv actor is handed a cue card (the prompt) and reads it aloud. That reading sets their mental state. Then they say the most obvious next word, hear themselves, say the next most obvious word, and so on. They never revise earlier words. That is greedy autoregressive decoding.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "Priming then greedy generation",
+      "why": "Shows the two phases on this page: Listing 15.7 (prime the state with the prompt) and Listing 15.8 (argmax, append, feed back).",
+      "mermaid": "flowchart TD\n  A[\"prompt = '\\\\nKING RICHARD III:\\\\n'\"] --> B[\"input_ids = [char_to_id[c] ...]\"]\n  B --> C[\"state = zeros(1, 1024)\"]\n  C --> D{\"for each prompt id\"}\n  D -->|\"predict((id, state))\"| D\n  D --> E[\"predictions, state after last prompt char\"]\n  E --> F[\"next_char = argmax(predictions)\"]\n  F --> G[\"generated_ids.append(next_char)\"]\n  G --> H[\"predictions, state = predict((next_char, state))\"]\n  H -->|\"repeat 250 times\"| F\n  H --> I[\"detokenize with id_to_char (p.452)\"]"
+    },
+    {
+      "id": "v2",
+      "type": "widget",
+      "title": "Recurrence carried across calls",
+      "why": "Listings 15.7 and 15.8 unroll the GRU one step per call, carrying the state; click a step to see the GRU state update.",
+      "widget": "rnn_unroll",
+      "params": {"timesteps": 4, "cell": "gru"}
+    },
+    {
+      "id": "v3",
+      "type": "widget",
+      "title": "From the softmax output to a choice",
+      "why": "Listing 15.8 takes the argmax of the softmax output; adjust the logits to see which character greedy decoding would pick (at temperature 1 the argmax is the top bar).",
+      "widget": "softmax_temperature",
+      "params": {"logits": [2.0, 1.2, 0.3, -0.5], "labels": ["S", "T", "W", "\\n"], "temperature": 1}
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "Feeding the whole prompt at once to `generation_model` would work just as well.",
+      "correction": "The generation model's input has shape (1,), one token per call. The whole-prompt alternative would be the training model, which does not return its state."
+    },
+    {
+      "claim": "The first generated character requires an extra model call after priming.",
+      "correction": "The predictions returned for the last prompt character already give the distribution for the first new character."
+    },
+    {
+      "claim": "Greedy decoding produces the most probable 250-character continuation.",
+      "correction": "It maximizes each step locally. The most probable sequence overall can start with a less probable character."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 446, "note": "Detokenization introduced as mapping integers back to strings."},
+      {"page": 448, "note": "Character-level TextVectorization with vocabulary size 67."},
+      {"page": 450, "note": "Listing 15.6: the one-step generation model with explicit state."}
+    ],
+    "later": [
+      {"page": 452, "note": "Detokenization code, generated sample, and why a bidirectional GRU breaks generation."},
+      {"page": 453, "note": "Seq2seq inference: generate one token at a time from a seed token until \"[end]\"."},
+      {"page": 502, "note": "Mini-GPT generation loop in chapter 16."},
+      {"page": 505, "note": "Greedy search named, and its tendency to fall into repetitive loops."}
+    ],
+    "prerequisites": [
+      {"page": 450, "note": "generation_model and set_weights."}
+    ],
+    "related_math": [
+      {"page": 488, "note": "p(token|past tokens) as the language model's distribution."}
+    ],
+    "related_code": [
+      {"page": 450, "note": "Listing 15.6."},
+      {"page": 452, "note": "Detokenizing generated_ids."},
+      {"page": 502, "note": "Listing 16.9."}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "`char_to_id` and `id_to_char`, built from `tokenizer.get_vocabulary()`, translate between characters and IDs.",
+    "The prompt \"\\nKING RICHARD III:\\n\" is fed one character at a time to prime the GRU state, starting from zeros.",
+    "Priming reproduces exactly the state the model would have after reading that text during training.",
+    "The prediction after the last prompt character supplies the first generated character.",
+    "Listing 15.8 runs greedy decoding for 250 steps: argmax, append, feed back, keep the new state.",
+    "Detokenizing joins `id_to_char` lookups of the generated IDs into a string (p.452)."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "In Listing 15.8, on the very first loop iteration, where does `predictions` come from?",
+      "options": [
+        "It is initialized to zeros before the loop",
+        "It is the model's output after the last character of the prompt in Listing 15.7",
+        "It is computed by calling the training model on the prompt",
+        "It is a uniform distribution over the vocabulary"
+      ],
+      "answer": "It is the model's output after the last character of the prompt in Listing 15.7",
+      "explanation": "The page says the final output prediction is saved to select the first generated character. Nothing initializes it to zeros or uniform values, and the training model is not used here.",
+      "page_refs": [451]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "What shape is `inputs` in Listing 15.7, and why is `expand_dims` needed?",
+      "options": [],
+      "answer": "(1, 1). `[token_id]` has shape (1,), the per-sample shape the model expects; `expand_dims(axis=0)` adds the batch axis.",
+      "explanation": "The generation model's Input is `shape=(1,)` per sample (p.450), so with batch size 1 the tensor must be (1, 1).",
+      "page_refs": [451, 450]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "Why does feeding the prompt one token at a time give \"the exact RNN state the model would see if this prompt had been encountered during training\"?",
+      "options": [],
+      "answer": "Because the GRU is a recurrence that depends only on the previous state and the current input. Starting from the same zero state and carrying the state between calls performs exactly the same sequence of computations the layer performs internally over a full sequence.",
+      "explanation": "The weights are identical (set_weights on p.450) and the default initial state is zeros in both cases.",
+      "page_refs": [451, 450]
+    },
+    {
+      "id": "q4",
+      "type": "math",
+      "question": "How many calls to `generation_model.predict` happen in total across Listings 15.7 and 15.8 for the given prompt?",
+      "options": [],
+      "answer": "19 + 250 = 269.",
+      "explanation": "The prompt \"\\nKING RICHARD III:\\n\" has 19 characters (a newline, the 17 characters of 'KING RICHARD III:' and a newline), one call each; the generation loop calls predict once per iteration for 250 iterations.",
+      "page_refs": [451]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "Which decoding strategy does Listing 15.8 use?",
+      "options": [
+        "Beam search",
+        "Random sampling with temperature",
+        "Greedy selection of the most likely character",
+        "Top-k sampling"
+      ],
+      "answer": "Greedy selection of the most likely character",
+      "explanation": "`np.argmax(predictions, ...)` picks the highest-probability character. No beams, randomness or top-k truncation are involved; sampling strategies come up in chapter 16 (p.505).",
+      "page_refs": [451, 505]
+    },
+    {
+      "id": "q6",
+      "type": "conceptual",
+      "question": "Why does the generation loop run for a fixed `max_length` instead of stopping when the model outputs a special token?",
+      "options": [],
+      "answer": "The model was trained on continuous 100-character chunks with no end-of-text token, so it never learned to signal the end. A fixed length is the simplest stopping rule.",
+      "explanation": "Contrast this with seq2seq decoding (p.453), which stops when \"[end]\" is generated.",
+      "page_refs": [451, 447, 453]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Could you rewrite Listing 15.8 to sample from `predictions` instead of taking the argmax? What would change about running it twice?",
+      "options": [],
+      "answer": "Replace the argmax with `np.random.choice(67, p=predictions[0])`. Two runs would then usually produce different text, whereas greedy decoding is deterministic.",
+      "explanation": "This previews the sampling discussion in chapter 16 (p.505).",
+      "page_refs": [451, 505]
+    }
+  ]
+}

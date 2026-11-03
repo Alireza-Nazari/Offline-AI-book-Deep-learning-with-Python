@@ -1,0 +1,394 @@
+{
+ "page_id": "page_446",
+ "pdf_page": 446,
+ "printed_page": "422",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:51:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. The extractor merged five printed paragraphs into one body element (p446_e03); each has its own note below. Italics (way in / way out, tokenizing, detokenize, language model, repeatedly) are lost in extraction but visible in the image."
+ },
+ "overview": {
+  "title": "From classifying text to generating it: the language model",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.1 The language model",
+  "subsection": "15.1.1 Training a Shakespeare language model",
+  "main_topic": "Why generating text cannot be treated as one giant classification problem, and how a language model, p(token | past tokens), makes generation tractable; the first listing downloads the Shakespeare dataset.",
+  "central_idea": "Output text can be represented as an integer token sequence, but there are far too many possible sequences to classify directly (20,000^4 = 160 quadrillion for four words). A language model instead predicts one token at a time, a distribution over only the vocabulary, and generates long text by repeating that prediction.",
+  "importance": "This is the core idea behind every generative text model in the book: the Shakespeare GRU, the seq2seq translators, the Transformer decoder and the mini-GPT of Chapter 16. Next-token prediction turns an intractable output space into a repeated V-way classification.",
+  "learning_objectives": [
+   "Explain tokenization and detokenization as inverse mappings between strings and integer sequences.",
+   "Compute the size of the space of possible output sequences, V^L, and see why direct classification over it is intractable.",
+   "Define a language model as learning p(token | past tokens) and explain how repeated next-token prediction generates long text.",
+   "Read Listing 15.1, which downloads the Shakespeare text with keras.utils.get_file."
+  ],
+  "prerequisites": [
+   "Tokenization and vocabulary indexing (section 14.2)",
+   "Softmax over N classes and N-way classification",
+   "Basic probability: conditional distributions"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens by moving beyond classification: for tasks such as question answering or translation we want a model that **generates text output**. Chapter 14 built tools for text \"on the *way in*\" (tokenizers, embeddings); now we need tools for the \"*way out*.\"\n\nThe representation does not change: text stays an **integer sequence**. Tokenizing maps tokens to ints; **detokenizing** reverses it, mapping ints back to string tokens and joining them. So the task becomes predicting an integer sequence of tokens.\n\nThe naive approach, a classifier with one class per possible output sequence, is shown to be **intractable**. With a 20,000-word vocabulary there are $20{,}000^4$, or **160 quadrillion**, possible 4-word sequences, and there are fewer atoms in the universe than possible 20-word sequences. No model could have an output for each.\n\nThe practical solution is to predict **one token at a time**. A **language model** learns the distribution $p(\\text{token} \\mid \\text{past tokens})$: given all tokens so far, it outputs a probability distribution over every possible next token. With a 20,000-word vocabulary that is just 20,000 outputs, and by *repeatedly* predicting the next token the model can generate arbitrarily long text.\n\nTo make this concrete, the authors will build a small **character-level** model that predicts the next character and produces Shakespeare-like text. Section **15.1.1** starts with **Listing 15.1**, which downloads an abbreviated collection of Shakespeare's plays and sonnets with `keras.utils.get_file` and reads it into the string `shakespeare`. The listing is complete on this page; the data is inspected and chunked on p.447.",
+ "paragraphs": [
+  {
+   "ref": "p446_e03",
+   "excerpt": "What about other text-based tasks like question answering or translation?",
+   "what_it_says": "Many real-world tasks need a model that generates text for a given input. Just as Chapter 14 needed tokenizers and embeddings to get text into a model, new techniques are needed to get text out.",
+   "what_it_means": "The output side of the model becomes the hard part. A classifier ends in a fixed, small Dense layer; a generator must produce a variable-length sequence of discrete symbols.",
+   "why_it_matters": "It names the two motivating applications, question answering and translation, that return as sequence-to-sequence problems in section 15.2 (p.452).",
+   "terminology": [
+    {"term": "text generation", "meaning": "Producing text as model output rather than a label."}
+   ],
+   "connections": [
+    "p.445: classification was described as a 'uniquely simple' output problem.",
+    "p.452: translation and question answering are framed as sequence-to-sequence problems."
+   ]
+  },
+  {
+   "ref": "p446_e03",
+   "excerpt": "We don’t need to start from scratch here; we can continue to use the idea of an integer sequence",
+   "what_it_says": "Text can keep being represented as an integer sequence. Tokenizing splits a string into tokens mapped to ints; detokenizing maps ints back to tokens and joins them. So the problem becomes predicting an integer sequence.",
+   "what_it_means": "The tokenizer is a reversible codec: if the model outputs token IDs, a lookup table turns them back into readable text. All of the model's work happens in integer and vector space.",
+   "why_it_matters": "This reduces 'generate text' to 'predict integers', a problem neural networks can handle with softmax outputs.",
+   "technical_idea": "Beyond the book: detokenization is exactly invertible for character-level tokenizers, but lossy for tokenizers whose standardization step lowercases or strips punctuation (section 14.2). That is one reason a raw character tokenizer is used for the Shakespeare example.",
+   "terminology": [
+    {"term": "tokenizing", "meaning": "Splitting a string into tokens and mapping each token to an integer ID."},
+    {"term": "detokenize", "meaning": "The reverse: mapping IDs back to string tokens and joining them."}
+   ],
+   "connections": [
+    "p.408: Chapter 14's tokenization pipeline (standardize, split, index).",
+    "p.451: the generated Shakespeare is detokenized by mapping IDs to characters and joining them."
+   ]
+  },
+  {
+   "ref": "p446_e03",
+   "excerpt": "The simplest option to consider might be to train a direct classifier over the space",
+   "what_it_says": "Classifying directly over all possible output sequences is intractable. With 20,000 words there are 20,000^4 = 160 quadrillion 4-word sequences, and more possible 20-word sequences than atoms in the universe. No model design could represent every sequence as a separate output.",
+   "what_it_means": "The number of sequences grows exponentially with length, $V^L$. A softmax output layer of that size cannot be stored or computed, and almost every class would never appear in the training data, so learning would be hopeless.",
+   "why_it_matters": "This back-of-the-envelope argument is the motivation for the language-model factorization; it shows why one-shot prediction of whole outputs is ruled out.",
+   "technical_idea": "$20{,}000^{20} = 2^{20}\\cdot10^{80}\\approx1.05\\times10^{86}$, versus the commonly cited estimate of about $10^{80}$ atoms in the observable universe (the estimate is not from the book), so the authors' claim holds with a large margin.",
+   "terminology": [
+    {"term": "intractable", "meaning": "Impossible to compute or represent with any realistic resources."},
+    {"term": "back-of-the-envelope math", "meaning": "A quick rough estimate used to check feasibility."}
+   ],
+   "connections": [
+    "p.445: classification needs only 1 or N outputs."
+   ]
+  },
+  {
+   "ref": "p446_e03",
+   "excerpt": "A practical approach for making such a prediction problem feasible is to build a model",
+   "what_it_says": "The feasible approach is to predict a single token at a time. A language model learns p(token|past tokens): given all tokens seen so far, it outputs a probability distribution over all possible next tokens. With 20,000 words it needs only 20,000 outputs, and repeated next-token prediction generates long text.",
+   "what_it_means": "Generation becomes a sequence of ordinary 20,000-way classifications. The authors call the distribution 'straightforward but deep': easy to state, but to predict the next token well a model must capture grammar, meaning and context.",
+   "why_it_matters": "This is the definition of a language model used throughout Chapters 15 and 16, and the 'calling it in a loop' idea is how text is generated (p.450, p.488).",
+   "technical_idea": "By the chain rule of probability (beyond the book), $p(t_1,\\dots,t_L)=\\prod_{i=1}^{L}p(t_i\\mid t_1,\\dots,t_{i-1})$. Modeling each conditional therefore models the full sequence distribution exactly, with a $V$-sized output instead of $V^L$.",
+   "terminology": [
+    {"term": "language model", "meaning": "A model of p(token | past tokens), the distribution of the next token given the preceding ones."},
+    {"term": "probability distribution over tokens", "meaning": "A vector of V non-negative numbers summing to 1, typically produced by a softmax."}
+   ],
+   "connections": [
+    "p.450: generation by calling the model in a loop (an autoregressive model).",
+    "p.479: masked language models learn p(token | surrounding tokens) instead.",
+    "p.488: the chapter summary restates this definition."
+   ]
+  },
+  {
+   "ref": "p446_e03",
+   "excerpt": "Let’s make this more concrete by building a simple language model that predicts the next character",
+   "what_it_says": "The authors will build a simple character-level language model that predicts the next character and train it to output Shakespeare-like text.",
+   "what_it_means": "Using characters keeps the vocabulary tiny (a few dozen symbols), so the output layer is small and training takes minutes, while still showing the full language-model recipe.",
+   "why_it_matters": "It is the first concrete generative model in the book's text chapters and the template for the word- and subword-level models that follow.",
+   "terminology": [
+    {"term": "character-level model", "meaning": "A model whose tokens are individual characters."}
+   ],
+   "connections": [
+    "p.411: character tokenization was introduced in section 14.2.1.",
+    "p.452: the result is described as 'not terrible for two minutes of training on a minimal dataset.'"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "language_model",
+   "name": "Language model",
+   "definition": "A model that learns p(token | past tokens): given all tokens observed up to a point, it outputs a probability distribution over all possible next tokens.",
+   "intuition": "A very good autocomplete. Predict the next word, append it, and predict again.",
+   "technical": "Output layer: softmax over a vocabulary of size V. Training target at each position is the next token (cross-entropy). Generation: sample or take the argmax of the distribution, append it to the input, and repeat. The chain rule makes the product of conditionals equal to the joint probability of the sequence.",
+   "significance": "It makes generation tractable (V outputs instead of V^L) and supplies an unsupervised pretraining objective that needs only raw text.",
+   "example": "Given 'To be or not to b', a character-level language model should put high probability on 'e'.",
+   "misconception": "That the model outputs a whole sentence at once. It outputs one next-token distribution per call; sentences come from looping.",
+   "related": ["tokenization", "softmax", "autoregressive_model", "pretraining", "transformer"],
+   "source": "book"
+  },
+  {
+   "id": "detokenization",
+   "name": "Detokenization",
+   "definition": "Mapping a sequence of integer token IDs back to string tokens and joining them into text.",
+   "intuition": "Running the tokenizer backwards.",
+   "technical": "Requires the inverse vocabulary (ID to token). For character tokens, join with the empty string; for word tokens, join with spaces; subword tokenizers have their own merge rules.",
+   "significance": "Without it, a generative model's integer outputs could not be read.",
+   "example": "[20, 8, 5] with the vocabulary {20:'t', 8:'h', 5:'e'} detokenizes to 'the'.",
+   "misconception": "That detokenization always recovers the original text exactly; standardization steps such as lowercasing can lose information.",
+   "related": ["tokenization", "language_model"],
+   "source": "book"
+  },
+  {
+   "id": "output_space_explosion",
+   "name": "Combinatorial explosion of output sequences",
+   "definition": "The number of possible length-L sequences over a vocabulary of size V is V^L, which grows exponentially with L.",
+   "intuition": "Each additional word multiplies the number of possibilities by 20,000.",
+   "technical": "20,000^4 = 1.6e17; 20,000^20 is about 1.05e86. A softmax over that many classes is impossible to store or compute.",
+   "significance": "This is why generation is factored into next-token predictions.",
+   "example": "Even 2-word outputs would need 400 million classes.",
+   "misconception": "That more compute could eventually make whole-sequence classification feasible. The authors say it 'would overwhelm compute resources no matter how we design our model.'",
+   "related": ["language_model"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Number of possible 4-word sequences",
+   "latex": "20{,}000^{4} = 1.6\\times10^{17} \\;(160 \\text{ quadrillion})",
+   "source_text": "20,000 ^ 4, or 160 quadrillion possible 4-word sequences",
+   "variables": [
+    {"symbol": "20{,}000", "meaning": "Vocabulary size V (number of distinct words)."},
+    {"symbol": "4", "meaning": "Sequence length L in tokens."}
+   ],
+   "operations": "Each of the L positions independently takes one of V values, so the count is V multiplied by itself L times.",
+   "purpose": "Shows that a direct classifier over output sequences would need an absurd number of output classes.",
+   "interpretation": "Even very short outputs have an astronomically large output space.",
+   "intuition": "Four dials with 20,000 positions each.",
+   "numerical_example": "$20{,}000^2 = 4\\times10^8$; $20{,}000^4 = (4\\times10^8)^2 = 1.6\\times10^{17}$. For 20 words: $20{,}000^{20} = 2^{20}\\times10^{80}\\approx1.05\\times10^{86}$, above the roughly $10^{80}$ atoms in the observable universe (a standard estimate, not from the book).",
+   "source": "book",
+   "book_ref": "p.446"
+  },
+  {
+   "id": "m2",
+   "title": "The language model distribution",
+   "latex": "p(\\text{token}_t \\mid \\text{token}_1, \\ldots, \\text{token}_{t-1})",
+   "source_text": "p(token|past tokens)",
+   "variables": [
+    {"symbol": "\\text{token}_t", "meaning": "The next token to predict, one of V vocabulary entries."},
+    {"symbol": "\\text{token}_1,\\ldots,\\text{token}_{t-1}", "meaning": "All tokens observed so far (the 'past tokens')."}
+   ],
+   "operations": "A conditional probability distribution: for each possible next token, the probability that it comes next given the context. In practice, a softmax over V outputs.",
+   "purpose": "Defines what a language model learns, a single-token prediction with only V outputs.",
+   "interpretation": "Applying it repeatedly, sampling a token, appending it and conditioning on the longer context, generates sequences of any length.",
+   "intuition": "Guess the next word from everything so far.",
+   "numerical_example": "With context 'the cat sat on the', a good model might output p('mat') = 0.3, p('floor') = 0.2, p('sofa') = 0.1, and the remaining 0.4 spread over the other 19,997 words.",
+   "source": "book",
+   "book_ref": "p.446"
+  },
+  {
+   "id": "m3",
+   "title": "Chain-rule factorization (why next-token prediction suffices)",
+   "latex": "p(t_1, t_2, \\ldots, t_L) = \\prod_{i=1}^{L} p(t_i \\mid t_1, \\ldots, t_{i-1})",
+   "source_text": "Not printed in the book; implied by 'by repeatedly predicting the next token'.",
+   "variables": [
+    {"symbol": "t_i", "meaning": "Token at position i."},
+    {"symbol": "L", "meaning": "Sequence length."}
+   ],
+   "operations": "The chain rule of probability writes a joint distribution as a product of conditionals.",
+   "purpose": "Shows that a model of the conditional (V outputs) fully determines the distribution over whole sequences (V^L outcomes).",
+   "interpretation": "Nothing is lost by predicting one token at a time; the factorization is exact.",
+   "intuition": "The probability of a sentence is the probability of its first word, times that of the second given the first, and so on.",
+   "numerical_example": "p('the cat') = p('the') x p('cat' | 'the') = 0.05 x 0.01 = 0.0005.",
+   "source": "ai_explanation",
+   "book_ref": ""
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "15.1",
+   "title": "Downloading an abbreviated collection of Shakespeare's work",
+   "original_code": "import keras\n\nfilename = keras.utils.get_file(\n    origin=(\n        \"https://storage.googleapis.com/download.tensorflow.org/\"\n        \"data/shakespeare.txt\"\n    ),\n)\nshakespeare = open(filename, \"r\").read()",
+   "language": "python",
+   "what_it_does": "Downloads a text file of Shakespeare's plays and sonnets (if not already cached) and reads its full contents into one Python string, `shakespeare`.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Imports Keras, which provides the download utility."},
+    {"lines": "3-8", "explanation": "`keras.utils.get_file` downloads the file at `origin` into the Keras cache directory (by default `~/.keras/datasets/`) and returns the local path. If the file is already cached, it is not downloaded again. The URL is split over two string literals that Python concatenates."},
+    {"lines": "9", "explanation": "Opens the local file in text-read mode and reads it entirely into memory as a single string."}
+   ],
+   "inputs_outputs": "Input: a URL. Output: `filename`, the local path, and `shakespeare`, one long string containing the whole corpus.",
+   "algorithm": "Download with caching, then a full file read.",
+   "theory_link": "This raw, unlabeled text is all a language model needs: the labels (next characters) come from the text itself, as Listing 15.2 shows on p.447.",
+   "parameters": [
+    {"name": "origin", "role": "URL to download from."}
+   ],
+   "pitfalls": [
+    "Without an explicit `fname`, `get_file` derives the cached file name from the URL; with some Keras versions it is better to pass `fname=\"shakespeare.txt\"` explicitly.",
+    "`open(...)` without `encoding=` uses the platform's default encoding; on some systems non-ASCII characters may fail to decode. `encoding=\"utf-8\"` is safer.",
+    "The file is never closed explicitly; this is harmless in a script but a `with` block is cleaner."
+   ],
+   "illustrative_code": "# AI-written variant (not from the book)\nwith open(filename, \"r\", encoding=\"utf-8\") as f:\n    shakespeare = f.read()\nprint(len(shakespeare), \"characters;\", len(set(shakespeare)), \"distinct\")"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "From V^L outputs to V outputs, step by step",
+   "kind": "step_by_step",
+   "body": "1. Represent the output text as integer IDs (tokenization).\n2. A whole-sequence classifier would need $V^L$ outputs, which is impossible.\n3. Factor instead: $p(t_1..t_L)=\\prod_i p(t_i\\mid t_{<i})$.\n4. Train one network to output $p(t_i\\mid t_{<i})$, a $V$-way softmax, at every position. Training targets are the input shifted by one (p.447).\n5. At generation time, feed a prompt, pick a next token, append it, and repeat (p.450).\n6. Detokenize the resulting IDs into text (p.451).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why characters for the first model?",
+   "kind": "breakdown",
+   "body": "A character vocabulary for English Shakespeare text has only a few dozen symbols (letters, punctuation, newline), so the softmax is tiny and the corpus yields many training targets. The cost is that the model must learn spelling as well as grammar, and sequences become longer. The book's word and subword models later trade the other way. (Inference from the book's choice; the exact vocabulary size is computed in the next listings.)",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Possible output sequences vs. sequence length (V = 20,000)",
+   "why": "The page's back-of-the-envelope argument: 20,000^4 = 160 quadrillion, and 20-word sequences outnumber the atoms in the universe. The log-scale plot shows the exponential growth against the 20,000 outputs a language model needs.",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": ["1 token (language model output)", "2 tokens", "4 tokens", "10 tokens", "20 tokens", "atoms in universe (~1e80)"],
+     "datasets": [{"label": "log10(count)", "data": [4.3, 8.6, 17.2, 43.0, 86.0, 80.0]}]
+    },
+    "options": {
+     "plugins": {"title": {"display": true, "text": "log10 of the number of possible sequences, 20,000^L"}},
+     "scales": {"y": {"title": {"display": true, "text": "log10(count)"}, "beginAtZero": true}}
+    }
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "Repeated next-token prediction",
+   "why": "The page says that 'by repeatedly predicting the next token' a language model generates long text; this shows the loop.",
+   "mermaid": "flowchart LR\n  P[Tokens so far] --> M[Language model]\n  M --> D[\"p(token | past tokens)<br/>V probabilities\"]\n  D --> S[Pick next token]\n  S -- append --> P\n  S --> T[Detokenize to text]"
+  },
+  {
+   "id": "v3",
+   "type": "widget",
+   "title": "A next-token distribution",
+   "why": "A language model outputs a probability distribution over possible next tokens; try adjusting the scores for a few candidate next characters after 'To be or not to b'.",
+   "widget": "softmax_temperature",
+   "params": {"logits": [4.0, 1.5, 1.0, 0.2], "labels": ["e", "y", "a", "u"], "temperature": 1}
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "A text generator is just a classifier whose classes are all possible sentences.",
+   "correction": "That space is intractable (20,000^4 = 160 quadrillion for four words). A language model classifies only the next token, over V classes, and loops."
+  },
+  {
+   "claim": "Predicting one token at a time loses information about the whole sequence.",
+   "correction": "By the chain rule, the product of next-token conditionals equals the joint distribution exactly. Beyond the book: practical models approximate each conditional, but the factorization itself is lossless."
+  },
+  {
+   "claim": "Generating text requires a different numeric representation from the one used for classification.",
+   "correction": "The page says we keep the integer sequence representation; detokenization maps IDs back to strings."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 445, "note": "Classification needs only 1 or N outputs, which sets up this contrast."},
+   {"page": 408, "note": "Tokenization pipeline from Chapter 14."},
+   {"page": 411, "note": "Character tokenization."}
+  ],
+  "later": [
+   {"page": 447, "note": "Inspecting the Shakespeare text and building (input, next-character) training pairs (Listing 15.2)."},
+   {"page": 450, "note": "Generating Shakespeare by calling the model in a loop (autoregressive)."},
+   {"page": 452, "note": "Why a bidirectional GRU would cheat; extension to seq2seq."},
+   {"page": 488, "note": "Chapter summary restating p(token|past tokens)."},
+   {"page": 502, "note": "The mini-GPT uses the same next-token generation loop."}
+  ],
+  "prerequisites": [
+   {"page": 408, "note": "Preparing text data."}
+  ],
+  "related_math": [
+   {"page": 479, "note": "Masked LM distribution p(token | surrounding tokens) vs. causal p(token | past tokens)."}
+  ],
+  "related_code": [
+   {"page": 447, "note": "Listing 15.2 chunks this string into features and shifted labels."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "Generation keeps the integer-sequence representation of text; detokenizing maps IDs back to text.",
+  "Classifying whole output sequences is intractable: 20,000^4 = 160 quadrillion 4-word sequences.",
+  "A language model learns p(token | past tokens), a V-way distribution, and generates by repeated next-token prediction.",
+  "The first example is a character-level Shakespeare model; Listing 15.1 downloads the corpus into one string."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "math",
+   "question": "With a vocabulary of 20,000 words, how many possible 3-word sequences are there, and how many outputs does a language model need per prediction step?",
+   "options": [],
+   "answer": "20,000^3 = 8 x 10^12 (8 trillion) sequences; a language model needs only 20,000 outputs per step.",
+   "explanation": "Each position has 20,000 choices, so the count is V^L. The language model predicts one token, so its output size is V.",
+   "page_refs": [446]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "What distribution does a language model learn in its simplest form, according to the page?",
+   "options": [
+    "p(past tokens | token)",
+    "p(token | past tokens)",
+    "p(token | surrounding tokens)",
+    "p(label | entire sequence)"
+   ],
+   "answer": "p(token | past tokens)",
+   "explanation": "Stated on the page. p(token | surrounding tokens) is the masked language model (p.479). p(label | sequence) is classification. The first option reverses the conditioning.",
+   "page_refs": [446, 479]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why is a direct classifier over all output sequences intractable even with unlimited model design freedom?",
+   "options": [],
+   "answer": "The number of classes grows exponentially (V^L). For 20 words it exceeds the number of atoms in the universe, so no output layer could represent each sequence and there would never be training data for almost all classes.",
+   "explanation": "The page says this 'would overwhelm compute resources no matter how we design our model.'",
+   "page_refs": [446]
+  },
+  {
+   "id": "q4",
+   "type": "short",
+   "question": "What does it mean to detokenize a sequence?",
+   "options": [],
+   "answer": "Map each integer ID back to its string token and join the tokens together, the reverse of tokenization.",
+   "explanation": "Defined in the second paragraph of the page; used on p.451.",
+   "page_refs": [446, 451]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "In Listing 15.1, what does keras.utils.get_file return, and what is stored in the variable shakespeare?",
+   "options": [],
+   "answer": "get_file returns the local path of the downloaded (cached) file; shakespeare holds the entire file contents as a single string.",
+   "explanation": "open(filename, 'r').read() reads the whole text into memory.",
+   "page_refs": [446]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "How can a model that predicts only one token produce a long passage?",
+   "options": [],
+   "answer": "By repeatedly predicting the next token, appending it to the context, and predicting again. Each step's output becomes part of the next step's input.",
+   "explanation": "The page says 'by repeatedly predicting the next token, we will have built a model that can generate a long sequence of text'; implemented on p.450.",
+   "page_refs": [446, 450]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you verify the claim about 20-word sequences and atoms in the universe using powers of ten?",
+   "options": [],
+   "answer": "20,000^20 = 2^20 x 10^80, about 1.05 x 10^86, which exceeds the roughly 10^80 atoms usually estimated.",
+   "explanation": "Write 20,000 = 2 x 10^4 and raise it to the 20th power.",
+   "page_refs": [446]
+  }
+ ]
+}

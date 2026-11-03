@@ -1,0 +1,93 @@
+{
+ "page_id": "page_337", "pdf_page": 337, "printed_page": "313", "book_id": "dlwp3",
+ "generation": {"status": "complete", "model": "claude-opus-5-5", "generated_at": "2026-11-03T07:38:05Z",
+  "confidence": "high",
+  "review_flags": ["Figure 11.4 is printed in Matplotlib's default viridis colours (purple cat, teal background, yellow contour), whereas the display_target callout on p.336 describes the rescaled labels as 0 (black), 127 (gray), 254 (near-white). The code on p.336 does not pass cmap=\"gray\", so the figure, not the callout, reflects what the code produces."],
+  "extraction_quality": "Clean. Figure 11.4 (a three-colour trimap) plus one body paragraph and one code block whose callouts were matched to lines from the page image. The code block continues on p.338 with the array-filling loop."},
+ "overview": {
+  "title": "Target mask and loading the dataset into memory",
+  "chapter": "11 Image segmentation",
+  "section": "11.2 Training a segmentation model from scratch",
+  "subsection": "11.2.1 Downloading a segmentation dataset",
+  "main_topic": "Figure 11.4 (the trimap for the example cat) and helper functions that shuffle, resize and convert images and masks for in-memory loading",
+  "central_idea": "Because the Pets dataset is small, all images and masks can be held in NumPy arrays. The paths are shuffled with the same seed so pairs stay aligned, every file is resized to 200 × 200, and mask labels are shifted from 1–3 to 0–2.",
+  "importance": "These few lines decide the data contract of the whole model: input shape (200, 200, 3), target shape (200, 200, 1) with integer labels 0, 1, 2, and an image order that does not group samples by breed. Getting any of these wrong (mismatched shuffles, interpolated labels, labels starting at 1) silently ruins training.",
+  "learning_objectives": [
+   "Read figure 11.4 and identify the three trimap classes",
+   "Explain why both path lists are shuffled with random.Random(1337)",
+   "Describe what path_to_input_image and path_to_target return (shapes and dtypes)",
+   "Explain why the labels are shifted to 0, 1, 2 for training"
+  ],
+  "prerequisites": [
+   "p.335: dataset folders and trimap labels",
+   "p.336: load_img, img_to_array and display_target",
+   "Sparse integer labels for classification losses"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with **figure 11.4**, the target mask for the cat shown in figure 11.3 (p.336). It is drawn with Matplotlib's default colormap: the cat (foreground, label 1 → 0) is dark purple, the background (label 2 → 127) is teal, and a thick outline around the cat (contour, label 3 → 254) is yellow. You can see how coarse the contour band is: it is the region of uncertainty around the animal's silhouette.\n\nThe text then states that, **since the dataset is very small, everything can be loaded into memory** as two NumPy arrays. The code block does four things:\n\n- sets `img_size = (200, 200)`; callout: *\"We resize everything to 200 x 200 for this example.\"* The photos come in varying sizes, and a batch needs a fixed shape;\n- computes `num_imgs = len(input_img_paths)`, the total number of samples;\n- shuffles `input_img_paths` and `target_paths` with **two separate `random.Random(1337)` generators**. The callout explains that the paths were sorted by breed, and that using the same seed in both statements keeps the two lists in the same order. Since both generators start from the same state and the lists have the same length, they apply the identical permutation;\n- defines `path_to_input_image(path)`, which returns `img_to_array(load_img(path, target_size=img_size))`, a float32 array of shape (200, 200, 3), and `path_to_target(path)`, which loads the mask in grayscale at the same size, casts to `uint8` and **subtracts 1 so the labels become 0, 1 and 2**.\n\nThe label shift matters because the loss used later (`sparse_categorical_crossentropy`, p.339–340) expects class indices starting at 0 for a 3-way softmax. The actual loop that fills the arrays continues at the top of p.338.",
+ "paragraphs": [
+  {"ref": "p337_e04", "excerpt": "Next, let’s load our inputs and targets into two NumPy arrays.",
+   "what_it_says": "The authors will load all inputs and targets into two NumPy arrays, which is feasible because the dataset is very small.",
+   "what_it_means": "About 7,390 images (p.335) at 200 × 200 × 3 float32 values take roughly 7,390 × 120,000 × 4 bytes ≈ 3.5 GB, and the uint8 masks take about 0.3 GB. That fits in the RAM of a typical workstation or Colab instance, so no streaming pipeline (tf.data, generators) is needed. (The memory estimate is our own arithmetic, not stated in the book.)",
+   "why_it_matters": "In-memory arrays make the code simple: you can index, slice into train/validation (p.338) and pass arrays directly to model.fit. For larger datasets you would use a data pipeline instead, as in chapter 8's image_dataset_from_directory.",
+   "technical_idea": "Trade-off between simplicity (arrays in RAM) and scalability (streamed datasets).",
+   "terminology": [{"term": "target_size", "meaning": "Argument of load_img that resizes the image to (height, width) on load; by default with nearest-neighbour interpolation."}, {"term": "seeded shuffle", "meaning": "Shuffling with a random generator initialized from a fixed seed, so the permutation is reproducible."}],
+   "connections": ["p.335: dataset size (7,390 images) and folder layout.", "p.338: the loop that fills input_imgs and targets, then the train/validation split."]}
+ ],
+ "concepts": [
+  {"id": "segmentation_mask", "name": "Segmentation mask", "definition": "A single-channel image whose integer values give the class of each pixel of the input.", "intuition": "Figure 11.4 is a map of the photo with three colours: pet, background, outline.", "technical": "After path_to_target, each mask is a uint8 array of shape (200, 200, 1) with values in {0, 1, 2}.", "significance": "The per-pixel target for the model's 3-way softmax output.", "example": "A pixel on the cat's back: 0; on the carpet: 1; on the yellow outline band: 2.", "misconception": "The colours in figure 11.4 are not stored in the file; they come from the display colormap.", "related": ["semantic_segmentation"], "source": "book"},
+  {"id": "aligned_shuffling", "name": "Aligned shuffling of paired lists", "definition": "Applying the same random permutation to two lists that must stay in correspondence.", "intuition": "Shuffle two decks of cards in exactly the same way so card k of one deck still matches card k of the other.", "technical": "random.Random(1337) creates an independent generator; two generators with the same seed produce the same sequence, so shuffle() on equal-length lists yields the same permutation.", "significance": "Breaks the breed-sorted order (otherwise the last 1,000 validation samples on p.338 would all be a few breeds) without breaking image-mask pairing.", "example": "If input_img_paths[0] is Abyssinian_1.jpg and target_paths[0] is Abyssinian_1.png, after both shuffles they end up at the same new index.", "misconception": "Calling random.shuffle twice on the global generator would NOT work: the second call continues the random stream and gives a different permutation.", "related": ["validation_set"], "source": "book"},
+  {"id": "sparse_labels", "name": "Zero-based integer class labels", "definition": "Class ids encoded as integers 0..K-1, as expected by sparse categorical cross-entropy.", "intuition": "Labels are array indices into the model's output probability vector, so they must start at 0.", "technical": "img.astype(\"uint8\") - 1 maps {1, 2, 3} to {0, 1, 2}; with num_classes=3 the softmax has 3 entries indexed 0, 1, 2.", "significance": "A label 3 with only 3 output classes would be out of range and cause an error or wrong loss.", "example": "Contour pixels: 3 → 2, the index of the third softmax output.", "misconception": "Shifting the labels does not change their meaning, only their encoding.", "related": ["cross_entropy", "softmax"], "source": "book"}
+ ],
+ "math": [
+  {"id": "m1", "title": "Label shift for training targets", "latex": "y'_{ij} = y_{ij} - 1,\\qquad y_{ij}\\in\\{1,2,3\\}\\;\\Rightarrow\\; y'_{ij}\\in\\{0,1,2\\}", "source_text": "img = img.astype(\"uint8\") - 1", "variables": [{"symbol": "y_{ij}", "meaning": "Original trimap label at pixel (i, j): 1 foreground, 2 background, 3 contour"}, {"symbol": "y'_{ij}", "meaning": "Training label: 0 foreground, 1 background, 2 contour"}], "operations": "Elementwise subtraction on a uint8 array.", "purpose": "Make labels valid indices for a 3-class softmax / sparse cross-entropy.", "interpretation": "Same classes, zero-based encoding.", "intuition": "Shift the label scale so it starts at zero.", "numerical_example": "Mask row `[2, 2, 3, 1, 1]` → `[1, 1, 2, 0, 0]`.", "source": "book", "book_ref": "p.337"}
+ ],
+ "code": [
+  {"id": "c1", "listing": null, "title": "Shuffling paths and defining image/mask loaders", "original_code": "import numpy as np\nimport random\n\nimg_size = (200, 200)\nnum_imgs = len(input_img_paths)\n\nrandom.Random(1337).shuffle(input_img_paths)\nrandom.Random(1337).shuffle(target_paths)\n\ndef path_to_input_image(path):\n    return img_to_array(load_img(path, target_size=img_size))\n\ndef path_to_target(path):\n    img = img_to_array(\n        load_img(path, target_size=img_size, color_mode=\"grayscale\")\n    )\n    img = img.astype(\"uint8\") - 1\n    return img", "language": "python",
+   "what_it_does": "Fixes the working image size, counts samples, shuffles both path lists identically, and defines functions that turn a path into a (200, 200, 3) float32 image array or a (200, 200, 1) uint8 label array with labels 0–2. The block continues on p.338 with the loop that allocates and fills the arrays.",
+   "line_explanations": [{"lines": "1-2", "explanation": "NumPy for arrays; Python's random module for shuffling."}, {"lines": "4", "explanation": "Callout: 'We resize everything to 200 x 200 for this example.'"}, {"lines": "5", "explanation": "Callout: 'Total number of samples in the data.'"}, {"lines": "7-8", "explanation": "Callout: shuffles the file paths (originally sorted by breed); the same seed 1337 in both statements keeps input and target paths in the same order. shuffle works in place."}, {"lines": "10-11", "explanation": "Loads an RGB image resized to 200 × 200 and converts it to a float32 array (200, 200, 3) with values 0–255."}, {"lines": "13-16", "explanation": "Loads the mask resized to 200 × 200 with a single channel → float32 (200, 200, 1)."}, {"lines": "17", "explanation": "Callout: 'Subtracts 1 so that our labels become 0, 1, and 2.' The cast to uint8 also reduces memory 4×."}, {"lines": "18", "explanation": "Returns the label array."}],
+   "inputs_outputs": "Inputs: the path lists from p.335. Outputs: shuffled lists in place and two converter functions.",
+   "algorithm": "Fix shape → seeded aligned shuffle → per-file load/resize/convert.",
+   "theory_link": "Supervised learning needs aligned (input, target) pairs; a random split (p.338) needs a shuffled order.",
+   "parameters": [{"name": "img_size", "role": "Target spatial size (200, 200) for all inputs and masks; also the model's input size (p.338)."}, {"name": "1337", "role": "Shared seed guaranteeing identical permutations."}, {"name": "color_mode=\"grayscale\"", "role": "One channel for the mask."}],
+   "pitfalls": ["Shuffling with the global random.shuffle twice would misalign inputs and masks.", "Resizing masks with a smoothing interpolation (e.g. bilinear) would create non-integer, meaningless labels; load_img's default interpolation is nearest-neighbour, which keeps labels in {1, 2, 3}. (Beyond the book.)", "Resizing to a square 200 × 200 distorts aspect ratios; this is accepted for simplicity.", "num_imgs is computed before shuffling, which is fine because shuffling does not change the length."],
+   "illustrative_code": "# Not from the book: verify alignment after shuffling\nimport os\nfor a, b in zip(input_img_paths[:5], target_paths[:5]):\n    assert os.path.splitext(os.path.basename(a))[0] == os.path.splitext(os.path.basename(b))[0]"}
+ ],
+ "deeper": [
+  {"title": "Why shuffle before slicing off a validation set?", "kind": "step_by_step", "body": "Beyond the book's one-line callout:\n\n1. The path lists were built with `sorted(...)` on p.335, so files appear alphabetically: all Abyssinians, then all Bengals, and so on.\n2. On p.338 the last 1,000 samples become the validation set.\n3. Without shuffling, those 1,000 would be the last few breeds alphabetically (cats and dogs whose names start with late letters), so the validation set would not represent the training distribution.\n4. Shuffling with a fixed seed makes the split random yet reproducible from run to run.", "source": "ai_explanation"},
+  {"title": "Memory budget of in-memory loading", "kind": "numerical", "body": "Our own estimate (not in the book): inputs `7390 × 200 × 200 × 3 × 4 bytes ≈ 3.55 GB` (float32), targets `7390 × 200 × 200 × 1 × 1 byte ≈ 0.30 GB` (uint8). Storing the inputs as uint8 and rescaling in the model (the `Rescaling(1/255)` layer on p.338) could cut input memory 4×.", "source": "ai_explanation"}
+ ],
+ "visualizations": [
+  {"id": "v1", "type": "mermaid", "title": "From file paths to training arrays", "why": "Shows the processing applied by the code on this page to each image/mask pair.", "mermaid": "flowchart LR\n  A[input_img_paths sorted by breed] --> S1[\"random.Random(1337).shuffle\"]\n  B[target_paths sorted by breed] --> S2[\"random.Random(1337).shuffle\"]\n  S1 --> C[\"path_to_input_image: load_img 200x200 RGB -> float32 (200,200,3)\"]\n  S2 --> D[\"path_to_target: load_img 200x200 grayscale -> uint8 - 1 -> (200,200,1), labels 0,1,2\"]\n  C --> E[input_imgs array, p.338]\n  D --> F[targets array, p.338]"}
+ ],
+ "misconceptions": [
+  {"claim": "Using random.shuffle on both lists keeps them aligned.", "correction": "Only if both shuffles use generators in the same state; the book creates a fresh random.Random(1337) for each list for exactly this reason."},
+  {"claim": "The purple/teal/yellow colours are the mask's stored values.", "correction": "The mask stores 1, 2, 3; the colours come from rescaling for display (p.336) plus Matplotlib's default colormap."},
+  {"claim": "Labels must be shifted because uint8 cannot hold 3.", "correction": "uint8 holds 0–255; the shift is needed because class indices for a 3-class softmax must be 0, 1, 2."}
+ ],
+ "connections": {
+  "earlier": [{"page": 335, "note": "Path lists built with sorted file names; trimap labels 1/2/3."}, {"page": 336, "note": "load_img, img_to_array, display_target and figure 11.3."}],
+  "later": [{"page": 338, "note": "Filling input_imgs and targets, train/validation split, and the model definition with input shape img_size + (3,)."}, {"page": 339, "note": "Explanation of the encoder/decoder architecture and the 3-class softmax output."}],
+  "prerequisites": [{"page": 335, "note": "Dataset structure."}],
+  "related_math": [],
+  "related_code": [{"page": 338, "note": "The continuation of this code block (array allocation and loop)."}],
+  "related_figures": [{"page": 336, "note": "Figure 11.3, the input image whose mask is figure 11.4."}]
+ },
+ "takeaways": [
+  "Figure 11.4 shows the trimap: pet, background and a thick contour band.",
+  "The dataset is small enough to load fully into RAM as NumPy arrays.",
+  "Everything is resized to 200 × 200.",
+  "Two random.Random(1337) generators shuffle inputs and masks identically, breaking the breed order without breaking pairs.",
+  "Mask labels are shifted to 0, 1, 2 so they are valid class indices."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "Why does the code create a new random.Random(1337) for each shuffle?", "options": ["To make the shuffle faster", "So both lists receive the same permutation and stay aligned", "Because random.shuffle cannot shuffle strings", "To shuffle the masks differently from the images"], "answer": "So both lists receive the same permutation and stay aligned", "explanation": "The callout says the same seed keeps input and target paths in the same order. Speed is irrelevant, random.shuffle works on any list, and shuffling them differently would destroy the pairing.", "page_refs": [337]},
+  {"id": "q2", "type": "short", "question": "Why were the paths shuffled at all?", "options": [], "answer": "They were originally sorted by breed; shuffling ensures the later train/validation split is random rather than breed-based.", "explanation": "Callout plus the split on p.338, which takes the last 1,000 samples.", "page_refs": [337, 338]},
+  {"id": "q3", "type": "short", "question": "What shape and dtype does path_to_target return?", "options": [], "answer": "A uint8 array of shape (200, 200, 1) with values 0, 1, 2.", "explanation": "Grayscale load at img_size gives one channel; astype(\"uint8\") - 1 sets dtype and shifts labels.", "page_refs": [337]},
+  {"id": "q4", "type": "conceptual", "question": "Why must the labels start at 0 rather than 1?", "options": [], "answer": "Because they index the model's per-pixel softmax output with num_classes=3 entries (indices 0, 1, 2); sparse cross-entropy uses the label as an index.", "explanation": "With labels 1–3, label 3 would be out of range.", "page_refs": [337, 339]},
+  {"id": "q5", "type": "math", "question": "A mask row reads [3, 1, 1, 2]. What does path_to_target turn it into?", "options": [], "answer": "[2, 0, 0, 1]", "explanation": "Subtract 1 from each value.", "page_refs": [337]},
+  {"id": "q6", "type": "conceptual", "question": "In figure 11.4, which colour corresponds to the contour class, and why does it appear as a thick band?", "options": [], "answer": "Yellow (highest value, 254). The contour class marks the uncertain boundary region around the pet, which annotators drew as a band several pixels wide.", "explanation": "Viridis maps the largest value to yellow; the contour is label 3, the highest.", "page_refs": [336, 337]},
+  {"id": "q7", "type": "self", "question": "Could you rewrite the alignment-preserving shuffle using a single NumPy permutation applied to both lists?", "options": [], "answer": "Yes: perm = np.random.default_rng(1337).permutation(n); then index both lists with perm.", "explanation": "Any method that applies one permutation to both lists preserves pairing.", "page_refs": [337]}
+ ]
+}

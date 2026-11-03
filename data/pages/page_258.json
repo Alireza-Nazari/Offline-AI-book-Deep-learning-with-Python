@@ -1,0 +1,468 @@
+{
+  "page_id": "page_258",
+  "pdf_page": 258,
+  "printed_page": "234",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:29:50Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean extraction; both listings match the page image; the final paragraph is cut mid-sentence and continues on p.259."
+  },
+  "overview": {
+    "title": "Finishing, training and evaluating the first ConvNet",
+    "chapter": "8 Image classification",
+    "section": "8.1 Introduction to convnets",
+    "subsection": "8.1.1 The convolution operation",
+    "main_topic": "How the small MNIST ConvNet turns its (3, 3, 256) feature map into a 10-way prediction, how it is trained and evaluated, and the opening of the explanation of convolution.",
+    "central_idea": "A GlobalAveragePooling2D layer collapses the last spatial feature map into a 256-dimensional vector that a softmax Dense layer can classify; trained exactly like the chapter 2 dense network, the ConvNet reaches 99.1% test accuracy versus 97.8%, and the reason is that convolutions learn local rather than global patterns.",
+    "importance": "This page closes the practical demo that motivates the whole chapter: same data, same training recipe, but a ConvNet cuts the error rate by roughly 60%. It then poses the question (why?) that the rest of section 8.1 answers.",
+    "learning_objectives": [
+      "Explain why a rank-3 feature map must be reduced to a vector before Dense layers, and what GlobalAveragePooling2D computes.",
+      "Trace the shape (3, 3, 256) -> (256,) -> (10,) at the end of the model.",
+      "Prepare MNIST images as (samples, 28, 28, 1) float32 tensors in [0, 1] for a Conv2D input.",
+      "Choose sparse_categorical_crossentropy for integer labels with a softmax output.",
+      "Compute relative error reduction from two accuracies (97.8% vs 99.1%).",
+      "State the core difference between Dense (global patterns) and convolution (local patterns) layers."
+    ],
+    "prerequisites": [
+      "The ConvNet defined in listing 8.1 and its summary in listing 8.2 (p.256-257)",
+      "Softmax output and categorical crossentropy",
+      "compile / fit / evaluate workflow in Keras",
+      "The MNIST densely connected example from chapter 2"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page finishes the first ConvNet example of chapter 8.\n\n**From feature maps to a prediction.** After the third `Conv2D` layer the model holds a tensor of shape `(3, 3, 256)`: a 3 × 3 spatial grid with 256 channels. `Dense` classifiers expect 1D vectors, so the authors insert a `GlobalAveragePooling2D` layer, which averages each 3 × 3 channel map into a single number, producing a `(256,)` vector. A final `Dense(10, activation=\"softmax\")` gives the 10-way class probabilities.\n\n**Training (listing 8.3).** The MNIST arrays are reshaped from `(60000, 28, 28)` to `(60000, 28, 28, 1)` (adding an explicit channels axis, as required by `Conv2D`), cast to `float32` and divided by 255. The model is compiled with the `adam` optimizer, `sparse_categorical_crossentropy` loss (integer labels + softmax output) and accuracy as metric, then trained for 5 epochs with batches of 64.\n\n**Evaluation (listing 8.4).** `model.evaluate` on the 10,000 test images gives a test accuracy of **0.991**. The chapter 2 dense network reached 97.8%, so the error rate fell from 2.2% to 0.9%, about a 60% relative reduction.\n\n**Why does it work?** The authors announce that the answer lies in what `Conv2D` and `MaxPooling2D` do, and open section 8.1.1, *The convolution operation*, with the key contrast: `Dense` layers learn **global** patterns over the whole input feature space (for MNIST, patterns involving all pixels), while convolution layers learn local patterns (the sentence continues on p.259).",
+  "paragraphs": [
+    {
+      "ref": "p258_e03",
+      "excerpt": "After the last Conv2D layer, we end up with an output of shape",
+      "what_it_says": "The last Conv2D produces a (3, 3, 256) tensor. Dense layers need 1D vectors, so a GlobalAveragePooling2D layer averages each 3 × 3 feature map, giving a (256,) vector. The last Dense layer has 10 outputs and a softmax for 10-way classification.",
+      "what_it_means": "The convolutional part of the network produces a *grid* of feature detectors: for each of the 256 channels you get a 3 × 3 map saying how strongly that feature fired at each of 9 coarse locations. Averaging each map discards where the feature fired and keeps how much it fired overall. The result is a compact 256-number summary of the image that a classifier can consume. The authors call this 'flattening the 3D outputs to 1D', although technically it is a reduction (pooling), not a reshape: 2,304 numbers become 256.",
+      "why_it_matters": "This is the standard bridge between convolutional feature extraction and dense classification. Global average pooling is lightweight (no parameters) and keeps the Dense layer small: 256 × 10 + 10 = 2,570 parameters, as shown in the model summary on p.257.",
+      "technical_idea": "GAP: $v_c = \\frac{1}{H W}\\sum_{i,j} F_{i,j,c}$ for each channel $c$; here $H=W=3$, $c = 1..256$.",
+      "terminology": [
+        {"term": "feature map", "meaning": "The 2D grid of activations for one channel of a convolution output."},
+        {"term": "GlobalAveragePooling2D", "meaning": "Keras layer that averages each channel over all spatial positions, mapping (h, w, c) to (c,)."},
+        {"term": "rank-3 tensor", "meaning": "A tensor with three axes, here (height, width, channels)."}
+      ],
+      "connections": [
+        "p.257: the model summary shows the (None, 3, 3, 256) -> (None, 256) -> (None, 10) shapes and the 2,570 Dense parameters.",
+        "p.265: the authors later explain why averaging a large 22 × 22 map would destroy much more information than averaging a 3 × 3 map.",
+        "p.626: the conclusions note ConvNets typically end with a Flatten or global pooling layer followed by Dense layers."
+      ]
+    },
+    {
+      "ref": "p258_e04",
+      "excerpt": "Now, let’s train the ConvNet on the MNIST digits. We’ll reuse",
+      "what_it_says": "Training reuses most of the chapter 2 MNIST code. Because of 10-way softmax classification the loss is categorical crossentropy, and because the labels are integers it is the sparse variant, sparse_categorical_crossentropy.",
+      "what_it_means": "Switching from a dense network to a ConvNet changes only the model, not the problem: the targets are still digit labels 0-9 stored as integers, so the loss function is the same as in chapter 2. The 'sparse' variant just saves you from one-hot encoding the labels; mathematically it computes the same crossentropy.",
+      "why_it_matters": "It makes the comparison with chapter 2 fair: same data, same loss, similar training budget; only the architecture differs, so the accuracy gain can be attributed to convolution.",
+      "terminology": [
+        {"term": "sparse_categorical_crossentropy", "meaning": "Crossentropy loss that takes integer class indices as targets instead of one-hot vectors."},
+        {"term": "10-way classification", "meaning": "Single-label classification among 10 classes."}
+      ],
+      "connections": [
+        "p.256: the chapter 2 dense network on the same task reached 97.8% test accuracy."
+      ]
+    },
+    {
+      "ref": "p258_e07",
+      "excerpt": "Let’s evaluate the model on the test data.",
+      "what_it_says": "A transition to listing 8.4, which evaluates on the held-out test set.",
+      "what_it_means": "The number that matters is performance on 10,000 images never seen during training, not the training accuracy printed by fit.",
+      "why_it_matters": "Test accuracy is the basis for the comparison in the next paragraph.",
+      "terminology": [],
+      "connections": []
+    },
+    {
+      "ref": "p258_e10",
+      "excerpt": "Whereas the densely connected model from chapter 2 had a test",
+      "what_it_says": "The dense model of chapter 2 reached 97.8% test accuracy; the basic ConvNet reaches 99.1%, decreasing the error rate by about 60% relative.",
+      "what_it_means": "Error rates are what you should compare when accuracies are near 100%. Error goes from 2.2% to 0.9%; the drop is 1.3 points, which is 1.3 / 2.2 ≈ 59% of the original error. In terms of misclassified test digits: about 220 errors become about 90.",
+      "why_it_matters": "A 1.3-point accuracy gain sounds small, but it means the ConvNet makes less than half as many mistakes. This is the empirical motivation for the rest of the chapter.",
+      "technical_idea": "Relative error reduction = (e_old - e_new) / e_old.",
+      "terminology": [
+        {"term": "relative error reduction", "meaning": "The fraction of the original errors eliminated, as opposed to the absolute difference in percentage points."}
+      ],
+      "connections": [
+        "p.256: the authors promised the ConvNet would 'blow out of the water' the chapter 2 model."
+      ]
+    },
+    {
+      "ref": "p258_e11",
+      "excerpt": "But why does this simple ConvNet work so well, compared to",
+      "what_it_says": "The authors ask why the ConvNet beats the dense model and say the answer requires understanding Conv2D and MaxPooling2D.",
+      "what_it_means": "The page pivots from 'how to use' to 'how it works'. The two layer types will be treated in 8.1.1 (convolution) and 8.1.2 (max pooling).",
+      "why_it_matters": "Sets up the conceptual core of the chapter.",
+      "terminology": [],
+      "connections": [
+        "p.263: 8.1.2 explains the max-pooling operation."
+      ]
+    },
+    {
+      "ref": "p258_e14",
+      "excerpt": "The fundamental difference between a densely connected layer and a convolution",
+      "what_it_says": "The fundamental difference: Dense layers learn global patterns in their input feature space (for an MNIST digit, patterns involving all pixels). The sentence continues on p.259: convolution layers learn local patterns in small 2D windows.",
+      "what_it_means": "Each unit of a Dense layer has a weight for every input pixel, so whatever it detects is defined in terms of the whole image at fixed positions. A convolution kernel only looks at a small window (3 × 3 here) and the same kernel is applied at every position.",
+      "why_it_matters": "This single structural difference is the source of the two properties introduced on the next page: translation invariance and spatial hierarchies of patterns.",
+      "terminology": [
+        {"term": "global pattern", "meaning": "A pattern defined over the entire input, tied to absolute positions."},
+        {"term": "local pattern", "meaning": "A pattern defined over a small neighbourhood, such as a 3 × 3 window."}
+      ],
+      "connections": [
+        "p.259: continuation of the sentence and the two key properties of ConvNets.",
+        "p.625: Dense layers 'map relationships between any two input features', unlike 2D convolution which only looks at local relationships."
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "global_average_pooling",
+      "name": "Global average pooling",
+      "definition": "An operation that averages each channel of a (height, width, channels) feature map over all spatial positions, producing a vector of length channels.",
+      "intuition": "For each feature detector, ask 'on average, how much of this feature is in the image?' and forget where it was.",
+      "technical": "Output $v_c = \\frac{1}{HW}\\sum_{i=1}^{H}\\sum_{j=1}^{W} F_{i,j,c}$. It has no trainable parameters. For (3, 3, 256) it outputs (256,).",
+      "significance": "Bridges convolutional feature maps to Dense classifiers with far fewer numbers than Flatten would produce (256 instead of 2,304 here), which keeps the classifier small.",
+      "example": "A 3 × 3 map [[0,1,0],[2,4,2],[0,1,0]] averages to 10/9 ≈ 1.11.",
+      "misconception": "It is not equivalent to Flatten: Flatten keeps every value (and their positions), GAP keeps one average per channel.",
+      "related": ["convolution", "dense_layer", "max_pooling"],
+      "source": "book"
+    },
+    {
+      "id": "feature_map",
+      "name": "Feature map",
+      "definition": "The spatial grid of activations produced by one filter (channel) of a convolution layer.",
+      "intuition": "A heat map showing where in the image a particular pattern was detected.",
+      "technical": "A conv output of shape (h, w, c) contains c feature maps of size h × w; in this model the last one is 3 × 3 with 256 channels.",
+      "significance": "Feature maps are the representation ConvNets pass between layers; spatial size shrinks and channel count grows with depth.",
+      "example": "(26, 26, 64) after the first Conv2D means 64 maps of 26 × 26.",
+      "misconception": "Channels in deep layers are not colours; they are learned features.",
+      "related": ["convolution", "global_average_pooling"],
+      "source": "book"
+    },
+    {
+      "id": "cross_entropy",
+      "name": "Sparse categorical crossentropy",
+      "definition": "Categorical crossentropy loss computed directly from integer class labels.",
+      "intuition": "Penalizes the model by the negative log of the probability it assigned to the correct digit.",
+      "technical": "For label $y \\in \\{0..9\\}$ and softmax output $p$, loss $= -\\log p_y$. Identical to categorical crossentropy with one-hot targets.",
+      "significance": "Lets you keep MNIST labels as integers (0-9) without one-hot encoding.",
+      "example": "If the model assigns 0.9 to the true class, loss = -ln 0.9 ≈ 0.105; if 0.1, loss ≈ 2.30.",
+      "misconception": "'Sparse' does not refer to sparse tensors or a different objective; only the label format differs.",
+      "related": ["softmax", "loss_function"],
+      "source": "book"
+    },
+    {
+      "id": "convolution",
+      "name": "Convolution layer vs Dense layer",
+      "definition": "Dense layers learn global patterns over the whole input; convolution layers learn local patterns in small windows.",
+      "intuition": "A Dense unit looks at the entire digit at once with a fixed template; a conv filter is a small magnifying glass slid over the image.",
+      "technical": "Dense: every output connects to every input. Conv2D: each output connects to a k × k × c_in window, and weights are shared across positions.",
+      "significance": "Locality and weight sharing explain the ConvNet's data efficiency and accuracy (developed on p.259 onward).",
+      "example": "A 3 × 3 kernel in this model sees 9 pixels at a time.",
+      "misconception": "Convolutions are not a different kind of learning; they are a constrained (local, weight-shared) linear layer followed by a nonlinearity.",
+      "related": ["dense_layer", "feature_map", "translation_invariance"],
+      "source": "book"
+    },
+    {
+      "id": "relative_error_reduction",
+      "name": "Relative error reduction",
+      "definition": "The fraction by which the error rate shrinks: (e_old - e_new) / e_old.",
+      "intuition": "How many of the old mistakes did the new model eliminate?",
+      "technical": "From 97.8% to 99.1% accuracy: (2.2 - 0.9) / 2.2 ≈ 0.59.",
+      "significance": "Near-saturated accuracies hide large improvements; comparing error rates reveals them.",
+      "example": "On 10,000 test digits: ~220 errors vs ~90 errors.",
+      "misconception": "A '1.3% improvement' understates the change; the error rate is more than halved.",
+      "related": ["accuracy"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Global average pooling",
+      "latex": "v_c = \\frac{1}{3\\cdot 3}\\sum_{i=1}^{3}\\sum_{j=1}^{3} F_{i,j,c}, \\qquad c = 1,\\dots,256",
+      "source_text": "This layer will take the average of each 3 × 3 feature map in the tensor of shape (3, 3, 256), resulting in an output vector of shape (256,).",
+      "variables": [
+        {"symbol": "F", "meaning": "The (3, 3, 256) output of the last Conv2D layer"},
+        {"symbol": "F_{i,j,c}", "meaning": "Activation at row i, column j, channel c"},
+        {"symbol": "v_c", "meaning": "Component c of the pooled 256-dimensional vector"}
+      ],
+      "operations": "Sum over the two spatial axes, divide by the number of positions (9).",
+      "purpose": "Turn a rank-3 feature tensor into a vector for the Dense classifier.",
+      "interpretation": "Each component measures the average presence of one learned feature across the image.",
+      "intuition": "Spatial information is pooled away; channel information is kept.",
+      "numerical_example": "If channel 7's map is [[0, 0.5, 0], [1, 2, 1], [0, 0.5, 0]], then $v_7 = 5/9 \\approx 0.556$.",
+      "source": "book",
+      "book_ref": "p.258"
+    },
+    {
+      "id": "m2",
+      "title": "Relative error reduction",
+      "latex": "\\frac{e_{\\text{dense}} - e_{\\text{conv}}}{e_{\\text{dense}}} = \\frac{(1-0.978) - (1-0.991)}{1-0.978} = \\frac{0.022-0.009}{0.022} \\approx 0.59",
+      "source_text": "we decreased the error rate by about 60% (relative)",
+      "variables": [
+        {"symbol": "e_{\\text{dense}}", "meaning": "Test error of the chapter 2 dense model (2.2%)"},
+        {"symbol": "e_{\\text{conv}}", "meaning": "Test error of the ConvNet (0.9%)"}
+      ],
+      "operations": "Convert accuracies to error rates, take the difference, divide by the original error.",
+      "purpose": "Quantify the improvement in a way that is meaningful near 100% accuracy.",
+      "interpretation": "The ConvNet eliminates about 59% of the dense model's mistakes.",
+      "intuition": "Going from 220 to 90 wrong digits out of 10,000.",
+      "numerical_example": "Errors on 10,000 test images: $0.022\\times10000 = 220$ vs $0.009\\times10000 = 90$.",
+      "source": "book",
+      "book_ref": "p.258"
+    },
+    {
+      "id": "m3",
+      "title": "Sparse categorical crossentropy",
+      "latex": "\\mathcal{L}(y, p) = -\\log p_{y}, \\qquad p = \\operatorname{softmax}(z)",
+      "source_text": "loss=\"sparse_categorical_crossentropy\"",
+      "variables": [
+        {"symbol": "y", "meaning": "Integer label of the digit, 0-9"},
+        {"symbol": "z", "meaning": "The 10 pre-activation outputs of the last Dense layer"},
+        {"symbol": "p_y", "meaning": "Softmax probability assigned to the true class"}
+      ],
+      "operations": "Index the probability vector with the integer label and take the negative log; average over the batch.",
+      "purpose": "Training objective chosen on this page for integer labels with softmax output.",
+      "interpretation": "Low when the model is confident and right, very high when confident and wrong.",
+      "intuition": "Equivalent to crossentropy against a one-hot vector, without building the one-hot vector.",
+      "numerical_example": "$p_y = 0.9 \\Rightarrow \\mathcal{L} \\approx 0.105$; $p_y = 0.1 \\Rightarrow \\mathcal{L} \\approx 2.303$.",
+      "source": "ai_explanation",
+      "book_ref": "p.258"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": "8.3",
+      "title": "Training the ConvNet on MNIST images",
+      "original_code": "from keras.datasets import mnist\n\n(train_images, train_labels), (test_images, test_labels) = mnist.load_data()\ntrain_images = train_images.reshape((60000, 28, 28, 1))\ntrain_images = train_images.astype(\"float32\") / 255\ntest_images = test_images.reshape((10000, 28, 28, 1))\ntest_images = test_images.astype(\"float32\") / 255\nmodel.compile(\n    optimizer=\"adam\",\n    loss=\"sparse_categorical_crossentropy\",\n    metrics=[\"accuracy\"],\n)\nmodel.fit(train_images, train_labels, epochs=5, batch_size=64)",
+      "language": "python",
+      "what_it_does": "Loads MNIST, reshapes images to include a single channel axis, scales pixel values to [0, 1], compiles the ConvNet from listing 8.1 and trains it for 5 epochs.",
+      "line_explanations": [
+        {"lines": "1-3", "explanation": "Import and load MNIST: 60,000 training and 10,000 test images of shape (28, 28) as uint8, with integer labels."},
+        {"lines": "4", "explanation": "Add a channels axis: (60000, 28, 28) -> (60000, 28, 28, 1). Conv2D expects (height, width, channels) per sample, matching keras.Input(shape=(28, 28, 1)). Unlike chapter 2, the images are not flattened to 784-vectors; the 2D structure is kept."},
+        {"lines": "5", "explanation": "Cast to float32 and divide by 255 so pixel values lie in [0, 1]."},
+        {"lines": "6-7", "explanation": "Same preprocessing for the test set."},
+        {"lines": "8-12", "explanation": "Compile with the Adam optimizer, sparse categorical crossentropy (integer labels + softmax) and accuracy as metric."},
+        {"lines": "13", "explanation": "Train for 5 passes over the data in mini-batches of 64 samples (938 steps per epoch)."}
+      ],
+      "inputs_outputs": "Input: raw MNIST arrays. Output: a trained `model` (weights updated in place); fit returns a History object (not stored here).",
+      "algorithm": "Mini-batch gradient descent with Adam on crossentropy loss.",
+      "theory_link": "The input shape (28, 28, 1) preserves the spatial layout that the convolution layers exploit; the loss matches 10-way single-label classification.",
+      "parameters": [
+        {"name": "optimizer=\"adam\"", "role": "Adaptive-learning-rate optimizer with default settings."},
+        {"name": "loss", "role": "sparse_categorical_crossentropy for integer labels."},
+        {"name": "epochs=5", "role": "Number of passes over the 60,000 training images."},
+        {"name": "batch_size=64", "role": "Samples per gradient update."}
+      ],
+      "pitfalls": [
+        "Forgetting the channels axis: passing (60000, 28, 28) to a model expecting (28, 28, 1) raises a shape error.",
+        "Using categorical_crossentropy with integer labels fails or silently misbehaves; it expects one-hot targets.",
+        "Skipping the /255 scaling makes training slower and less stable."
+      ],
+      "illustrative_code": "# Not in the book: equivalent ways to add the channel axis\nimport numpy as np\nx = np.expand_dims(train_images, -1)   # (60000, 28, 28, 1)\nx = train_images[..., None]            # same result"
+    },
+    {
+      "id": "c2",
+      "listing": "8.4",
+      "title": "Evaluating the ConvNet",
+      "original_code": ">>> test_loss, test_acc = model.evaluate(test_images, test_labels)\n>>> print(f\"Test accuracy: {test_acc:.3f}\")\nTest accuracy: 0.991",
+      "language": "python",
+      "what_it_does": "Computes loss and accuracy on the 10,000 test images and prints accuracy with three decimals.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "evaluate returns the loss followed by each compiled metric, here [loss, accuracy]."},
+        {"lines": "2-3", "explanation": "Prints 0.991, i.e. 99.1% test accuracy."}
+      ],
+      "inputs_outputs": "Input: preprocessed test images and integer labels. Output: test_loss (float) and test_acc = 0.991.",
+      "algorithm": "Forward pass over the test set in batches (default 32), averaging loss and metric.",
+      "theory_link": "Test-set accuracy estimates generalization; it is the figure compared with the chapter 2 dense model.",
+      "parameters": [],
+      "pitfalls": [
+        "Your exact number may differ slightly (random initialization, hardware nondeterminism)."
+      ],
+      "illustrative_code": ""
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Flatten vs GlobalAveragePooling2D on this model",
+      "kind": "numerical",
+      "body": "Beyond the book: with `Flatten`, the (3, 3, 256) map would become a 2,304-vector, and `Dense(10)` would need 2,304 × 10 + 10 = **23,050** parameters. With GAP it is 256 × 10 + 10 = **2,570** (the number in the summary on p.257). Flatten keeps which of the 9 positions each feature fired in; GAP throws that away. For digit classification the coarse position of a 3 × 3 grid matters little, and the smaller head overfits less. The authors explain on p.265 why the map should be small before GAP: averaging a 22 × 22 map would wash out much more information.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Why the image tensor needs a fourth axis",
+      "kind": "step_by_step",
+      "body": "1. `mnist.load_data()` gives (60000, 28, 28): samples, height, width.\n2. Conv2D works on (height, width, channels) per sample (p.257), because images in general have colour channels.\n3. Grayscale MNIST has one channel, so we reshape to (60000, 28, 28, 1). No data changes; only the shape metadata.\n4. Chapter 2's dense model instead reshaped to (60000, 784), destroying the 2D neighbourhood structure that convolutions rely on.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Global vs local templates",
+      "kind": "analogy",
+      "body": "A Dense unit is like a stencil the size of the whole page: it only matches if the digit stroke sits exactly where the stencil expects it. A convolution filter is a small rubber stamp you press everywhere: it reports where a short stroke or corner appears, wherever that is.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "widget",
+      "title": "The MNIST ConvNet, end to end",
+      "why": "The page explains the last steps of this exact architecture (listing 8.1): (3, 3, 256) -> GlobalAveragePooling2D -> (256,) -> Dense(10, softmax). Click layers to see shapes and the 2,570-parameter Dense head.",
+      "widget": "nn_architecture",
+      "params": {
+        "layers": [
+          {"name": "input", "type": "input", "shape": "(None, 28, 28, 1)"},
+          {"name": "conv2d (64, 3x3)", "type": "conv", "units": 64, "activation": "relu", "shape": "(None, 26, 26, 64)"},
+          {"name": "max_pooling2d", "type": "pool", "shape": "(None, 13, 13, 64)"},
+          {"name": "conv2d_1 (128, 3x3)", "type": "conv", "units": 128, "activation": "relu", "shape": "(None, 11, 11, 128)"},
+          {"name": "max_pooling2d_1", "type": "pool", "shape": "(None, 5, 5, 128)"},
+          {"name": "conv2d_2 (256, 3x3)", "type": "conv", "units": 256, "activation": "relu", "shape": "(None, 3, 3, 256)"},
+          {"name": "global_average_pooling2d", "type": "pool", "shape": "(None, 256)"},
+          {"name": "dense", "type": "output", "units": 10, "activation": "softmax", "shape": "(None, 10)"}
+        ]
+      }
+    },
+    {
+      "id": "v2",
+      "type": "widget",
+      "title": "Data preparation and model shape flow",
+      "why": "Listing 8.3 reshapes MNIST to (60000, 28, 28, 1); the paragraph above it describes (3, 3, 256) -> (256,) -> (10,).",
+      "widget": "tensor_shapes",
+      "params": {
+        "steps": [
+          {"op": "load_data", "shape": [60000, 28, 28]},
+          {"op": "reshape (add channel)", "shape": [60000, 28, 28, 1]},
+          {"op": "batch", "shape": [64, 28, 28, 1]},
+          {"op": "conv/pool stack", "shape": [64, 3, 3, 256]},
+          {"op": "GlobalAveragePooling2D", "shape": [64, 256]},
+          {"op": "Dense(10, softmax)", "shape": [64, 10]}
+        ]
+      }
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "GlobalAveragePooling2D is just another name for Flatten.",
+      "correction": "The book says it 'flattens' 3D to 1D, but it does so by averaging: (3, 3, 256) has 2,304 values and becomes 256, while Flatten would keep all 2,304."
+    },
+    {
+      "claim": "99.1% vs 97.8% is a marginal 1.3% gain.",
+      "correction": "In error terms it is 2.2% -> 0.9%, a ~60% relative reduction, as the authors point out."
+    },
+    {
+      "claim": "Switching to a ConvNet requires a different loss function.",
+      "correction": "The task is unchanged, so the loss is still (sparse) categorical crossentropy as in chapter 2."
+    },
+    {
+      "claim": "The extra axis in reshape((60000, 28, 28, 1)) adds information.",
+      "correction": "It only makes the single grayscale channel explicit so the tensor matches Conv2D's (height, width, channels) convention."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 256, "note": "Listing 8.1 defines the ConvNet trained here and recalls the chapter 2 dense model's 97.8% accuracy."},
+      {"page": 257, "note": "Listing 8.2's summary shows the (3, 3, 256) output and the (channels-last) image tensor convention."}
+    ],
+    "later": [
+      {"page": 259, "note": "Continues the convolution discussion: local patterns, translation invariance, spatial hierarchies."},
+      {"page": 263, "note": "8.1.2 explains what MaxPooling2D does and why downsampling is needed."},
+      {"page": 265, "note": "Explains why feature maps should be small before global average pooling."},
+      {"page": 269, "note": "A larger ConvNet for cats vs dogs reuses the same Conv2D/MaxPooling2D + GlobalAveragePooling2D structure with a sigmoid output."}
+    ],
+    "prerequisites": [
+      {"page": 256, "note": "The model definition (Functional API) used in this listing."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 256, "note": "Listing 8.1, the model compiled and fit here."}
+    ],
+    "related_figures": [
+      {"page": 259, "note": "Figures 8.1 and 8.2 illustrate local patterns and spatial hierarchies."}
+    ]
+  },
+  "takeaways": [
+    "GlobalAveragePooling2D averages each channel's spatial map, turning (3, 3, 256) into a (256,) vector for the Dense classifier.",
+    "The head is Dense(10, softmax) for 10-way classification.",
+    "Conv2D input requires an explicit channel axis: MNIST becomes (60000, 28, 28, 1), scaled to [0, 1].",
+    "Integer labels + softmax output -> sparse_categorical_crossentropy.",
+    "The basic ConvNet reaches 99.1% test accuracy vs 97.8% for the dense model: about 60% fewer errors.",
+    "The key difference: Dense layers learn global patterns, convolution layers learn local ones."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "What does GlobalAveragePooling2D output when applied to a tensor of shape (3, 3, 256)?",
+      "options": ["(2304,)", "(256,)", "(9,)", "(3, 3)"],
+      "answer": "(256,)",
+      "explanation": "It averages each of the 256 channels over its 3 × 3 spatial positions, giving one number per channel. (2304,) is what Flatten would give; (9,) would be averaging over channels instead; (3, 3) drops the wrong axis.",
+      "page_refs": [258]
+    },
+    {
+      "id": "q2",
+      "type": "math",
+      "question": "A model improves from 97.8% to 99.1% test accuracy. Compute the relative reduction in error rate and the number of test errors on 10,000 images before and after.",
+      "options": [],
+      "answer": "(2.2 - 0.9) / 2.2 ≈ 59%; about 220 errors before and 90 after.",
+      "explanation": "Error rates are 1 - accuracy: 2.2% and 0.9%. The relative reduction is the drop divided by the original error. The book rounds it to about 60%.",
+      "page_refs": [258]
+    },
+    {
+      "id": "q3",
+      "type": "short",
+      "question": "Why is the loss sparse_categorical_crossentropy rather than categorical_crossentropy in listing 8.3?",
+      "options": [],
+      "answer": "Because the MNIST labels are integers (0-9), not one-hot vectors.",
+      "explanation": "The page states: 10-way softmax classification calls for categorical crossentropy, and integer labels call for its sparse version. Both compute the same quantity.",
+      "page_refs": [258]
+    },
+    {
+      "id": "q4",
+      "type": "conceptual",
+      "question": "Why does listing 8.3 reshape the training images to (60000, 28, 28, 1) instead of (60000, 784) as in the dense model?",
+      "options": [],
+      "answer": "Conv2D expects inputs of shape (height, width, channels); keeping the 28 × 28 grid preserves the spatial neighbourhoods that convolution windows exploit, and the trailing 1 is the single grayscale channel.",
+      "explanation": "The model's Input is (28, 28, 1) (p.256-257). Flattening would destroy the 2D structure that local 3 × 3 windows rely on.",
+      "page_refs": [257, 258]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "According to section 8.1.1, what is the fundamental difference between Dense and convolution layers?",
+      "options": [
+        "Dense layers use ReLU, convolution layers do not",
+        "Dense layers learn global patterns over the whole input; convolution layers learn local patterns in small windows",
+        "Convolution layers have no trainable weights",
+        "Dense layers only work on images"
+      ],
+      "answer": "Dense layers learn global patterns over the whole input; convolution layers learn local patterns in small windows",
+      "explanation": "This is the sentence that opens 8.1.1 (continued on p.259). Both layer types can use ReLU (the Conv2D layers here do), convolution layers have kernels with trainable weights, and Dense layers are not image-specific.",
+      "page_refs": [258, 259]
+    },
+    {
+      "id": "q6",
+      "type": "conceptual",
+      "question": "What information does GlobalAveragePooling2D discard, and why might that be acceptable at the end of this model?",
+      "options": [],
+      "answer": "It discards where in the 3 × 3 grid each feature fired, keeping only its average strength. At this point the map is tiny and each channel already encodes high-level features, so little useful information is lost.",
+      "explanation": "The authors later (p.265) note that averaging a 22 × 22 map would destroy much more information than averaging a 3 × 3 one, which is why downsampling precedes GAP.",
+      "page_refs": [258, 265]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Without looking, can you list the four preprocessing/compile choices in listing 8.3 (reshape, dtype/scaling, optimizer, loss) and justify each?",
+      "options": [],
+      "answer": "Reshape to (N, 28, 28, 1); cast to float32 and divide by 255; optimizer adam; loss sparse_categorical_crossentropy (plus accuracy metric, 5 epochs, batch 64).",
+      "explanation": "Check against listing 8.3; each choice is explained in the code notes above.",
+      "page_refs": [258]
+    }
+  ]
+}

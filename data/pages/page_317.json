@@ -1,0 +1,408 @@
+{
+  "page_id": "page_317",
+  "pdf_page": 317,
+  "printed_page": "293",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:36:32Z",
+    "confidence": "high",
+    "review_flags": [
+      "The schematic `predict` in the sidebar calls `model(x)` inside the loop where `model(x_batch)` is clearly intended; reproduced verbatim and pointed out as an apparent typo in the notes."
+    ],
+    "extraction_quality": "Clean. The sidebar element p317_e09 merges three printed paragraphs (one note each below). The sidebar continues on p.318, and the compute_loss snippet has no listing number."
+  },
+  "overview": {
+    "title": "The filter-activation loss; predict vs. model(x)",
+    "chapter": "10 Interpreting what ConvNets learn",
+    "section": "10.2 Visualizing ConvNet filters",
+    "subsection": "",
+    "main_topic": "Calling the feature extractor on preprocessed input, defining compute_loss as the mean activation of one filter away from the borders, and a sidebar contrasting model.predict(x) with model(x)",
+    "central_idea": "The quantity maximized by gradient ascent is a scalar: the mean activation of filter `filter_index` in the chosen layer, computed on the central region (2 border pixels dropped on each side) to avoid border artifacts. The model is called directly as `model(x)`, not with `predict()`, because `predict()` batches and converts outputs to NumPy and so cannot be backpropagated through.",
+    "importance": "compute_loss is the objective of the whole filter-visualization procedure, and the predict-vs-call distinction is a general rule for any custom gradient loop in Keras.",
+    "learning_objectives": [
+      "Apply the model-specific preprocessor before calling the feature extractor",
+      "Write the filter-activation loss and explain each indexing choice",
+      "Explain why border pixels are excluded",
+      "Contrast predict() (batched, NumPy, scalable, non-differentiable) with model(x) (in-memory, differentiable)",
+      "Know when to use each"
+    ],
+    "prerequisites": [
+      "feature_extractor and preprocessor from listings 10.7 and 10.9 (p.316)",
+      "Gradient ascent in input space (p.315)",
+      "keras.ops and backend-agnostic tensor operations",
+      "Batching and NumPy conversion"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "**Using the feature extractor.** You can simply call `feature_extractor` on input data, but you must first apply the model-specific preprocessing so that images are scaled to the same range as Xception's pretraining data. **Listing 10.10**: `activation = feature_extractor(preprocessor(img_tensor))`.\n\n**The loss.** The authors define a function returning a scalar that quantifies how much an input image *activates* a given filter of the layer. This is the loss that will be maximized by gradient ascent:\n\n```python\ndef compute_loss(image, filter_index):\n    activation = feature_extractor(image)\n    filter_activation = activation[:, 2:-2, 2:-2, filter_index]\n    return ops.mean(filter_activation)\n```\n\nThe callouts explain it: the function takes an image tensor and the integer index of the filter; it **avoids border artifacts** by involving only non-border pixels (it discards the first 2 pixels along the sides of the activation); and it returns the **mean** of the activation values for that filter. Using `keras.ops` keeps it backend-agnostic, so the same function works in TensorFlow, PyTorch and JAX.\n\n**Sidebar: `model.predict(x)` vs. `model(x)`.** The previous chapter used `predict(x)` for feature extraction, while here the model is called directly. Both mean \"run the model on `x` and retrieve `y`\", but they differ. `predict()` loops over the data in batches (configurable with `batch_size=64`, for example) and extracts the **NumPy** value of the outputs, schematically like a loop that calls the model on each batch, converts with `.numpy()` and concatenates. So `predict()` **scales to very large arrays**, while `model(x)` runs in memory and doesn't scale. However, **`predict()` is not differentiable**: TensorFlow, PyTorch and JAX cannot backpropagate through it. The sidebar continues on p.318 with the rule: use `model(x)` when you need gradients of the model call, and `predict()` otherwise.",
+  "paragraphs": [
+    {
+      "ref": "p317_e03",
+      "excerpt": "To use this model, we can simply call it on some input data,",
+      "what_it_says": "The feature extractor can be called directly on inputs, but images must first pass through the model-specific preprocessing so they are in the same range as Xception's pretraining data (listing 10.10).",
+      "what_it_means": "Pretrained filters were learned on images scaled in a particular way. If raw 0–255 pixels were fed in, the activations would be on a different scale and the filters would not behave as trained. `preprocessor` (the ImageConverter from listing 10.7) handles the scaling and resizing to 180 × 180.",
+      "why_it_matters": "Mismatched preprocessing is a classic silent bug with pretrained models: nothing crashes, but results are wrong.",
+      "technical_idea": "Note (not in the book): the cats-vs-dogs model of section 10.1 included its own Rescaling layer (p.309), whereas the KerasHub backbone expects its separate ImageConverter.",
+      "terminology": [
+        {"term": "pretraining data range", "meaning": "The value range of the images used to train Xception on ImageNet; inputs must be scaled to match it."}
+      ],
+      "connections": [
+        "p.316: listing 10.7 creates `preprocessor` with ImageConverter.from_preset",
+        "p.283: the same ImageConverter used in chapter 8"
+      ]
+    },
+    {
+      "ref": "p317_e06",
+      "excerpt": "Let’s use our feature extractor model to define a function that returns",
+      "what_it_says": "A function will return a scalar measuring how much an image activates a given filter. That scalar is the loss to be maximized during gradient ascent; the code `compute_loss` follows.",
+      "what_it_means": "Gradient-based optimization needs a single number to differentiate. The layer's output for one filter is a 2D map, so it is reduced to its mean over the batch and interior positions. Maximizing the mean pushes the image toward containing the filter's pattern everywhere, which is why the resulting filter visualizations look like repeating textures (p.322). The crop `2:-2` drops the outer 2 rows and columns of the activation, because positions near the border see padded or partial inputs and can produce artifacts.",
+      "why_it_matters": "This is the precise objective behind 'the pattern each filter responds to'. Changing it (e.g. maximizing only the center pixel) would produce a different kind of visualization.",
+      "technical_idea": "$\\mathcal{L}(x, f) = \\operatorname{mean}_{n,i,j} a_{n,i,j,f}(x)$ over interior positions; it is called a 'loss' even though it is maximized.",
+      "terminology": [
+        {"term": "loss (here)", "meaning": "The scalar objective of the optimization; maximized rather than minimized in gradient ascent."},
+        {"term": "border artifacts", "meaning": "Spurious patterns at image edges caused by padding or incomplete receptive fields."},
+        {"term": "keras.ops", "meaning": "Backend-agnostic tensor operations (e.g. `ops.mean`) that run on TensorFlow, PyTorch or JAX."}
+      ],
+      "connections": [
+        "p.315: maximize the response of a specific filter",
+        "p.318: the gradient ascent step uses this loss and normalizes the gradient"
+      ]
+    },
+    {
+      "ref": "p317_e09",
+      "excerpt": "In the previous chapter, we used `predict(x)` for feature extraction. Here, we’re using",
+      "what_it_says": "The sidebar asks why the code now uses `model(x)` when the previous chapter used `predict(x)` for feature extraction.",
+      "what_it_means": "It flags a change of habit: until now models were run with `predict`, and here they are called like functions.",
+      "why_it_matters": "Readers copying earlier patterns would otherwise use `predict` inside the loss and get no gradients.",
+      "technical_idea": null,
+      "terminology": [],
+      "connections": [
+        "p.282: feature extraction with a pretrained model in chapter 8"
+      ]
+    },
+    {
+      "ref": "p317_e09",
+      "excerpt": "Both `y = model.predict(x)` and `y = model(x)` (where `x` is an array of input data)",
+      "what_it_says": "Both forms mean 'run the model on x and retrieve the output y', but they are not exactly the same thing.",
+      "what_it_means": "They compute the same function value; the difference lies in how the computation is executed and what kind of object is returned.",
+      "why_it_matters": "It sets up the distinction explained in the next paragraph and on p.318.",
+      "technical_idea": null,
+      "terminology": [],
+      "connections": []
+    },
+    {
+      "ref": "p317_e09",
+      "excerpt": "`predict()` loops over the data in batches (in fact, you can specify the batch",
+      "what_it_says": "`predict()` iterates over the data in batches (batch size configurable, e.g. `predict(x, batch_size=64)`) and extracts the NumPy value of the outputs. Schematically it is a loop that collects per-batch outputs and concatenates them (the code shown next).",
+      "what_it_means": "Each batch's output is converted to a NumPy array, which leaves the backend's computation graph and autodiff tracking. Concatenating NumPy arrays produces a plain array with no link back to the inputs.",
+      "why_it_matters": "This conversion is exactly why gradients cannot flow through `predict()`.",
+      "technical_idea": "Note: in the printed schematic, `y_batch = model(x).numpy()` should almost certainly read `model(x_batch)`; as printed, the whole input would be processed on every iteration.",
+      "terminology": [
+        {"term": "batch", "meaning": "A subset of samples processed together."},
+        {"term": "NumPy value", "meaning": "A host-memory array detached from the framework's autodiff graph."}
+      ],
+      "connections": []
+    },
+    {
+      "ref": "p317_e11",
+      "excerpt": "This means that `predict()` calls can scale to very large arrays. Meanwhile,",
+      "what_it_says": "`predict()` scales to very large arrays, whereas `model(x)` runs in memory and doesn't scale. However, `predict()` is not differentiable: TensorFlow, PyTorch and JAX cannot backpropagate through it.",
+      "what_it_means": "It is a trade-off. Batching limits memory use, so `predict` can process millions of samples. Calling `model(x)` processes everything at once as backend tensors, which keeps the computation differentiable but limits it to what fits in memory. For gradient ascent on a single image, memory is not a concern but differentiability is essential.",
+      "why_it_matters": "This decides which call compute_loss must use. The rule stated on p.318 is to always use `predict()` unless you are in the middle of writing a low-level gradient descent loop.",
+      "technical_idea": "Differentiability requires that the output be a backend tensor tracked by GradientTape, PyTorch autograd or JAX tracing.",
+      "terminology": [
+        {"term": "differentiable", "meaning": "Supports computing gradients of outputs with respect to inputs via backpropagation."}
+      ],
+      "connections": [
+        "p.318: the sidebar's conclusion and the gradient normalization trick"
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "filter_activation_loss",
+      "name": "Filter-activation loss",
+      "definition": "The mean activation of one filter (channel) of a chosen layer, over the batch and non-border positions; the objective maximized by gradient ascent.",
+      "intuition": "A score for how strongly the image excites this one detector.",
+      "technical": "`ops.mean(feature_extractor(image)[:, 2:-2, 2:-2, filter_index])`.",
+      "significance": "Defines what 'the pattern a filter responds to' means operationally.",
+      "example": "`compute_loss(image, 0)` scores filter 0 of block3_sepconv1.",
+      "misconception": "Despite its name it is maximized, not minimized.",
+      "related": ["gradient_ascent_input_space", "filter_visualization", "loss_function"],
+      "source": "book"
+    },
+    {
+      "id": "border_artifacts",
+      "name": "Avoiding border artifacts",
+      "definition": "Excluding activations near the edges of a feature map from the loss.",
+      "intuition": "Edge positions see partly padded or incomplete inputs, so their values are less trustworthy.",
+      "technical": "Slice `2:-2` on both spatial axes drops the first and last 2 positions.",
+      "significance": "Callout: 'we discard the first 2 pixels along the sides of the activation'.",
+      "example": "A 10 × 10 activation map becomes 6 × 6 before averaging.",
+      "misconception": "The crop is applied to the activation, not to the input image.",
+      "related": ["filter_activation_loss", "convolution"],
+      "source": "book"
+    },
+    {
+      "id": "predict_vs_call",
+      "name": "model.predict(x) vs model(x)",
+      "definition": "predict batches the data and returns NumPy values (scalable, non-differentiable); calling the model returns backend tensors in memory (differentiable, not scalable).",
+      "intuition": "predict is for answers, and the call is for gradients.",
+      "technical": "predict ≈ loop over batches → model(batch).numpy() → np.concatenate.",
+      "significance": "Gradient-ascent code must use model(x).",
+      "example": "compute_loss calls `feature_extractor(image)` directly.",
+      "misconception": "They do not compute different values; they differ in execution and differentiability.",
+      "related": ["keras_model", "autodiff", "gradient_tape"],
+      "source": "book"
+    },
+    {
+      "id": "image_preprocessing_pretrained",
+      "name": "Model-specific preprocessing",
+      "definition": "Scaling input images exactly as during the model's pretraining.",
+      "intuition": "Speak to the model in the 'units' it learned in.",
+      "technical": "`feature_extractor(preprocessor(img_tensor))` with the ImageConverter preset.",
+      "significance": "Ensures images are in the same range as Xception's pretraining data.",
+      "example": "Listing 10.10.",
+      "misconception": "Skipping it does not raise an error; it silently yields wrong activations.",
+      "related": ["transfer_learning", "keras_hub_backbone"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Filter-activation loss with border cropping",
+      "latex": "\\mathcal{L}(x, f) = \\frac{1}{N\\,(H-4)(W-4)} \\sum_{n=1}^{N} \\sum_{i=2}^{H-3} \\sum_{j=2}^{W-3} a_{n,i,j,f}(x)",
+      "source_text": "filter_activation = activation[:, 2:-2, 2:-2, filter_index]; return ops.mean(filter_activation)",
+      "variables": [
+        {"symbol": "x", "meaning": "Input image tensor (batch)"},
+        {"symbol": "f", "meaning": "filter_index, the channel of the chosen layer"},
+        {"symbol": "a_{n,i,j,f}(x)", "meaning": "Output of `feature_extractor(x)` at batch n, row i, column j, channel f (0-based indices)"},
+        {"symbol": "N, H, W", "meaning": "Batch size and spatial height/width of the activation"}
+      ],
+      "operations": "Slice away 2 positions on each side of both spatial axes, then average all remaining values of channel f.",
+      "purpose": "Produce a single scalar to maximize by gradient ascent.",
+      "interpretation": "The average strength of the filter's response over the image interior.",
+      "intuition": "High when the filter's pattern appears all over the interior of the image.",
+      "numerical_example": "If one channel's activation (N = 1) were the 6 × 6 map with value 1 everywhere except a central 2 × 2 block of 5, the crop keeps the central 2 × 2 block, giving $\\mathcal{L} = 5$. Without the crop the mean would be $(32\\cdot1 + 4\\cdot5)/36 \\approx 1.44$. (Illustrative numbers.)",
+      "source": "book",
+      "book_ref": "p.317"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": "10.10",
+      "title": "Using the feature extractor",
+      "original_code": "activation = feature_extractor(preprocessor(img_tensor))",
+      "language": "python",
+      "what_it_does": "Preprocesses `img_tensor` with Xception's ImageConverter and computes the activation of block3_sepconv1.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "`preprocessor(...)` scales and resizes the image to match pretraining; `feature_extractor(...)` is a direct call (differentiable), returning a backend tensor."}
+      ],
+      "inputs_outputs": "Input: image batch (e.g. the cat image tensor from section 10.1). Output: activation tensor (batch, h, w, channels) of the chosen layer.",
+      "algorithm": "Preprocess → forward pass up to the target layer.",
+      "theory_link": "Inputs must be in the pretraining data range.",
+      "parameters": [],
+      "pitfalls": ["Feeding unpreprocessed images gives activations on the wrong scale."],
+      "illustrative_code": null
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "compute_loss: the filter activation to maximize",
+      "original_code": "from keras import ops\n\ndef compute_loss(image, filter_index):\n    activation = feature_extractor(image)\n    filter_activation = activation[:, 2:-2, 2:-2, filter_index]\n    return ops.mean(filter_activation)",
+      "language": "python",
+      "what_it_does": "Returns the mean value of one filter's activation over the interior of the feature map.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Imports backend-agnostic tensor ops."},
+        {"lines": "3", "explanation": "Callout: the loss function takes an image tensor and the index of the filter we consider (an integer)."},
+        {"lines": "4", "explanation": "Runs the feature extractor by direct call, so the result stays differentiable."},
+        {"lines": "5", "explanation": "Callout: avoids border artifacts by only involving non-border pixels; discards the first 2 pixels along the sides of the activation. Also selects one channel."},
+        {"lines": "6", "explanation": "Callout: returns the mean of the activation values for the filter, a scalar."}
+      ],
+      "inputs_outputs": "Inputs: `image` (already preprocessed batch tensor), `filter_index` (int). Output: scalar tensor.",
+      "algorithm": "Forward pass → crop → channel select → mean.",
+      "theory_link": "Objective of gradient ascent in input space (p.315).",
+      "parameters": [
+        {"name": "filter_index", "role": "Which channel of the layer to visualize."},
+        {"name": "2:-2", "role": "Border crop width (2 positions per side)."}
+      ],
+      "pitfalls": [
+        "Note (not in the book): compute_loss does not call preprocessor itself, so the image being optimized must already be in the model's input range.",
+        "Using `feature_extractor.predict(image)` here would break differentiability (sidebar)."
+      ],
+      "illustrative_code": null
+    },
+    {
+      "id": "c3",
+      "listing": null,
+      "title": "Schematic equivalent of predict() (sidebar)",
+      "original_code": "def predict(x):\n    y_batches = []\n    for x_batch in get_batches(x):\n        y_batch = model(x).numpy()\n        y_batches.append(y_batch)\n    return np.concatenate(y_batches)",
+      "language": "python",
+      "what_it_does": "Illustrates conceptually what model.predict does: batch the input, run the model per batch, convert to NumPy and concatenate.",
+      "line_explanations": [
+        {"lines": "1-2", "explanation": "Accumulator for per-batch outputs."},
+        {"lines": "3", "explanation": "`get_batches` is a schematic helper that splits x into batches."},
+        {"lines": "4", "explanation": "Runs the model and converts to NumPy, which detaches the output from autodiff. As printed it passes `x`; `x_batch` is clearly intended."},
+        {"lines": "5-6", "explanation": "Collects and concatenates into one NumPy array."}
+      ],
+      "inputs_outputs": "Input: full data array. Output: NumPy array of all predictions.",
+      "algorithm": "Batched inference with NumPy conversion.",
+      "theory_link": "Explains why predict scales but is not differentiable.",
+      "parameters": [],
+      "pitfalls": ["Schematic only; `get_batches` is not a real Keras function."],
+      "illustrative_code": "# AI-written: corrected schematic\ndef predict(x, batch_size=32):\n    y_batches = []\n    for start in range(0, len(x), batch_size):\n        x_batch = x[start:start + batch_size]\n        y_batches.append(np.asarray(model(x_batch)))\n    return np.concatenate(y_batches)"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why the mean, and why over the whole interior?",
+      "kind": "alternative",
+      "body": "Beyond the book: averaging over all interior positions rewards images where the filter fires *everywhere*, so the optimized image tends to tile the filter's preferred pattern across the canvas, giving the texture-like results shown on p.322. An alternative is to maximize only the central position's activation, which yields a single centered pattern limited to that unit's receptive field.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "When to use which call",
+      "kind": "breakdown",
+      "body": "| | `model.predict(x)` | `model(x)` |\n|---|---|---|\n| Execution | batched loop | one in-memory call |\n| Returns | NumPy array | backend tensor |\n| Scales to huge arrays | yes | no |\n| Differentiable | no | yes |\n| Use for | inference / feature extraction | gradient loops (like here) |\n\nEach row restates the sidebar; the rule in the last row is completed on p.318.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Photo vs. live video",
+      "kind": "analogy",
+      "body": "`predict` is like taking a printed photo of the result: easy to store in bulk, but you can no longer adjust the scene from it. `model(x)` is a live camera feed: the connection to the scene (the input) is kept, so you can work out how moving things would change the picture.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "svg",
+      "title": "The 2:-2 border crop in compute_loss",
+      "why": "The callout says the loss discards the first 2 pixels along the sides of the activation; this shows which positions remain on a small example map.",
+      "svg": "<svg viewBox=\"0 0 260 220\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"11\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.8\" opacity=\"0.5\"><rect x=\"20\" y=\"20\" width=\"160\" height=\"160\"/><path d=\"M40 20V180M60 20V180M80 20V180M100 20V180M120 20V180M140 20V180M160 20V180M20 40H180M20 60H180M20 80H180M20 100H180M20 120H180M20 140H180M20 160H180\"/></g><rect x=\"60\" y=\"60\" width=\"80\" height=\"80\" fill=\"currentColor\" fill-opacity=\"0.25\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"100\" y=\"104\" text-anchor=\"middle\" fill=\"currentColor\">kept</text><text x=\"100\" y=\"14\" text-anchor=\"middle\" fill=\"currentColor\">8 x 8 activation (one filter)</text><text x=\"100\" y=\"198\" text-anchor=\"middle\" fill=\"currentColor\">activation[:, 2:-2, 2:-2, f] keeps 4 x 4</text><text x=\"190\" y=\"40\" fill=\"currentColor\">2 rows</text><text x=\"190\" y=\"54\" fill=\"currentColor\">dropped</text><text x=\"190\" y=\"104\" fill=\"currentColor\">loss =</text><text x=\"190\" y=\"118\" fill=\"currentColor\">mean(kept)</text></svg>"
+    },
+    {
+      "id": "v2",
+      "type": "mermaid",
+      "title": "Where gradients can and cannot flow",
+      "why": "The sidebar explains that predict() converts outputs to NumPy and cannot be backpropagated through, while model(x) can.",
+      "mermaid": "flowchart LR\n X[\"image x (tensor)\"] --> C[\"feature_extractor(x)\"] --> S[\"crop 2:-2, channel f\"] --> M[\"ops.mean -> loss\"]\n M -. gradient flows back .-> X\n X2[\"x\"] --> P[\"predict(x): batches -> .numpy() -> concatenate\"] --> N[\"NumPy array\"]\n N -. no gradient .-x X2"
+    }
+  ],
+  "misconceptions": [
+    {"claim": "model.predict(x) and model(x) return different predictions.", "correction": "Both run the model on x; they differ in batching, return type (NumPy vs. tensor), scalability and differentiability."},
+    {"claim": "You can use predict inside a gradient loop if the batch is small.", "correction": "predict is not differentiable regardless of batch size; TensorFlow, PyTorch and JAX cannot backpropagate through it."},
+    {"claim": "The 2:-2 slice crops the input image.", "correction": "It crops the activation map of the chosen layer before averaging."},
+    {"claim": "Because it's called a loss, it will be minimized.", "correction": "The authors explicitly say this is the loss function we'll maximize during gradient ascent."}
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 316, "note": "Listings 10.7 and 10.9 create `preprocessor` and `feature_extractor`."},
+      {"page": 315, "note": "Gradient ascent in input space to maximize a filter's response."},
+      {"page": 312, "note": "predict() was used to compute activations in section 10.1 (listing 10.4)."},
+      {"page": 283, "note": "The ImageConverter preprocessing in chapter 8."}
+    ],
+    "later": [
+      {"page": 318, "note": "End of the sidebar, gradient L2 normalization, and the TensorFlow gradient ascent step."},
+      {"page": 319, "note": "PyTorch and JAX versions of the gradient ascent step."},
+      {"page": 320, "note": "The filter visualization loop that repeatedly applies the step."},
+      {"page": 324, "note": "Grad-CAM uses a KerasHub task model with preprocessing."}
+    ],
+    "prerequisites": [
+      {"page": 316, "note": "Feature extractor construction."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 312, "note": "activation_model.predict(img_tensor), a non-differentiable use."}
+    ],
+    "related_figures": [
+      {"page": 322, "note": "Filter patterns obtained by maximizing this loss."}
+    ]
+  },
+  "takeaways": [
+    "Always preprocess inputs with the model's ImageConverter before calling a pretrained backbone.",
+    "compute_loss = mean activation of one filter over interior positions, cropping 2 pixels per side to avoid border artifacts.",
+    "That scalar is maximized by gradient ascent on the input image.",
+    "predict() batches and returns NumPy, so it scales but is not differentiable.",
+    "model(x) runs in memory and is differentiable, so it is the right call inside a low-level gradient loop."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "Why does compute_loss call `feature_extractor(image)` rather than `feature_extractor.predict(image)`?",
+      "options": [
+        "predict() is slower for a single image",
+        "predict() returns NumPy values and is not differentiable, so no gradient could be computed",
+        "predict() does not apply preprocessing",
+        "predict() only works with TensorFlow"
+      ],
+      "answer": "predict() returns NumPy values and is not differentiable, so no gradient could be computed",
+      "explanation": "The sidebar says predict() extracts NumPy values and cannot be backpropagated through. Speed is not the reason given, neither call applies preprocessing, and predict works on all backends.",
+      "page_refs": [317]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "What does `activation[:, 2:-2, 2:-2, filter_index]` select, and why are the `2:-2` slices there?",
+      "options": [],
+      "answer": "All batch items, spatial positions excluding the first and last 2 rows and columns, and only channel filter_index. The crop avoids border artifacts by using only non-border pixels in the loss.",
+      "explanation": "Directly from the code and its callout.",
+      "page_refs": [317]
+    },
+    {
+      "id": "q3",
+      "type": "math",
+      "question": "For a single image whose chosen-filter activation map is 12 × 12, how many values are averaged by compute_loss? If those values all equal 0.5 except a 2 × 2 block of 4.5 inside the kept region, what is the loss?",
+      "options": [],
+      "answer": "(12 − 4)² = 64 values; loss = (60·0.5 + 4·4.5)/64 = (30 + 18)/64 = 0.75.",
+      "explanation": "The 2:-2 crop removes 2 positions on each side of each spatial axis, then ops.mean averages.",
+      "page_refs": [317]
+    },
+    {
+      "id": "q4",
+      "type": "conceptual",
+      "question": "Why must images be passed through `preprocessor` before the feature extractor?",
+      "options": [],
+      "answer": "So they are scaled to the same range as Xception's pretraining data; otherwise the pretrained filters would see inputs on the wrong scale and produce meaningless activations.",
+      "explanation": "Stated in the first paragraph of the page.",
+      "page_refs": [317, 316]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "Which statement about `model(x)` is correct according to the sidebar?",
+      "options": [
+        "It loops over the data in batches",
+        "It happens in-memory and doesn't scale, but is differentiable",
+        "It always returns a NumPy array",
+        "It is the recommended way to run inference on huge datasets"
+      ],
+      "answer": "It happens in-memory and doesn't scale, but is differentiable",
+      "explanation": "Batching and NumPy conversion describe predict(), which is the tool that scales to large arrays.",
+      "page_refs": [317, 318]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "Spot the apparent bug in the sidebar's schematic predict function.",
+      "options": [],
+      "answer": "Inside the loop it calls `model(x)` instead of `model(x_batch)`, so each iteration would process the whole input rather than the current batch.",
+      "explanation": "The loop variable x_batch is never used; the intent (batching) requires model(x_batch).",
+      "page_refs": [317]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you explain, in your own words, why compute_loss's value going up means the image looks more like what the filter 'wants to see'?",
+      "options": [],
+      "answer": "The loss is the filter's average response; a higher average means the filter's pattern is present more strongly and widely in the image.",
+      "explanation": "Connects the loss to the goal stated on p.315.",
+      "page_refs": [315, 317]
+    }
+  ]
+}

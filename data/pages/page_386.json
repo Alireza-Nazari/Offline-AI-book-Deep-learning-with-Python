@@ -1,0 +1,214 @@
+{
+ "page_id": "page_386",
+ "pdf_page": 386,
+ "printed_page": "362",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:50:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Possible text/figure mismatch: the first paragraph says 'Some of the validation losses are close to the no-learning baseline', but Figure 13.3 (p.385) shows validation MAE between about 2.55 and 2.73 °C, at least about 0.11 °C (≈ 4.5%) above the 2.44 °C baseline at every epoch. 'Close' is defensible only loosely; the curve never reaches the baseline. Results also vary across runs.",
+   "The sentence introducing the code says the window size will be reduced as the sequences are downsampled '(figure 13.4)', but Figure 13.4 (p.387) shows training/validation MAE curves, not the architecture or window sizes. The reference points to the results of this model, not to an illustration of the downsampling."
+  ],
+  "extraction_quality": "Good. The extractor merged printed paragraphs: p386_e04 contains two printed paragraphs ('You may wonder…' and 'That’s a pretty significant limitation…') and p386_e07 contains three ('You already know…', 'You can thus build…', 'Let’s try one…'); notes are split accordingly. Code fragment and footnote are clean."
+ },
+ "overview": {
+  "title": "Why the dense model fails, and introducing 1D convnets",
+  "chapter": "13 Timeseries forecasting",
+  "section": "13.2 A temperature forecasting example",
+  "subsection": "13.2.4 Let’s try a 1D convolutional model",
+  "main_topic": "The hypothesis-space explanation for why gradient descent misses the simple baseline solution, the importance of architecture priors, and the first lines of a Conv1D model with a 24-hour window",
+  "central_idea": "A good simple solution existing in the hypothesis space doesn't mean gradient descent will find it. You must encode what to look for through feature engineering and architecture priors. A 1D convnet, built on the translation-invariance prior, is the next attempt.",
+  "importance": "This page states one of the book's recurring lessons: learning is search, and search needs guidance. It also introduces the Conv1D layer family and sets up the convnet experiment whose failure (p.387) motivates RNNs.",
+  "learning_objectives": [
+   "Explain why the dense model doesn't reliably reach the commonsense baseline even though that solution is representable.",
+   "Define hypothesis space and architecture prior in the context of this problem.",
+   "Describe Conv1D, SeparableConv1D and Conv3D and what windows they slide over.",
+   "State the translation invariance assumption for sequences.",
+   "Compute the output shapes of Conv1D(8, 24) and MaxPooling1D(2) on a (120, 14) input."
+  ],
+  "prerequisites": [
+   "Figure 13.3 and the dense model's results (p.385)",
+   "The 2.44 °C baseline (p.384)",
+   "2D convolution, max pooling and depthwise separable convolution (chapters 8–9)",
+   "Hypothesis space as the set of functions a model can represent (chapter 1/5)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page first interprets the dense model's results from Figure 13.3. Some validation losses come close to the no-learning baseline, **but not reliably**. This shows why the baseline was worth having: it is not easy to beat, because your common sense contains valuable information the model has no access to.\n\nThe authors then ask why the model doesn't simply *find* the commonsense solution and improve on it. The **hypothesis space** is the set of all two-layer networks with the defined configuration. The commonsense heuristic (copy the last temperature) is just one model among millions in that space, a *needle in a haystack*. A good solution that technically exists isn't necessarily reachable via **gradient descent**. They call this a significant limitation of machine learning in general: unless the learning algorithm is hardcoded to look for a specific kind of simple model, it can fail to find a simple solution to a simple problem. Hence the importance of **feature engineering** and **relevant architecture priors**: you must tell the model precisely what to look for.\n\n**Section 13.2.4** applies this idea. The sequences have daily cycles, so a **temporal ConvNet** could reuse the same representations across different days, just as a 2D ConvNet reuses representations across image locations. Besides `Conv2D` and `SeparableConv2D`, Keras offers `Conv1D`, `SeparableConv1D` and `Conv3D`. A footnote adds that there is no `SeparableConv3D`, not for theoretical reasons but because it hasn't been implemented. `Conv1D` slides 1D windows over sequences and `Conv3D` slides cubic windows over volumes. 1D ConvNets suit sequence data that satisfies the **translation invariance assumption**: a window's content should have the same properties wherever the window is placed.\n\nThe model uses an initial window of **24** (one daily cycle of hourly data) and shrinks the window as `MaxPooling1D` downsamples the sequence. The page shows the first three lines: `Input(shape=(sequence_length, raw_data.shape[-1]))`, `Conv1D(8, 24, activation=\"relu\")` and `MaxPooling1D(2)`. The rest of the model and its training follow on p.387.",
+ "paragraphs": [
+  {
+   "ref": "p386_e03",
+   "excerpt": "Some of the validation losses are close to the no-learning baseline, but",
+   "what_it_says": "Some validation results of the dense model approach the baseline, but not reliably. This shows why it was worth setting up a baseline: it is hard to beat, because common sense carries information the model lacks.",
+   "what_it_means": "The dense model's best validation MAE (≈ 2.55 °C in Figure 13.3) is in the neighbourhood of 2.44 °C but does not beat it, and the curve wanders from epoch to epoch. Without the baseline you might have accepted 2.55 °C as a reasonable result. With it, you can tell that the model adds nothing beyond 'tomorrow ≈ today'.",
+   "why_it_matters": "Baselines turn a raw number into a judgement. The phrase 'not reliably' also hints that results vary across runs, so one lucky epoch isn't evidence.",
+   "terminology": [
+    {"term": "No-learning baseline", "meaning": "The persistence heuristic from p.383–384, which has no trainable parameters."}
+   ],
+   "connections": [
+    "p.385: Figure 13.3, the curves this paragraph interprets",
+    "p.383: the original motivation for commonsense baselines (e.g. 90% majority class)"
+   ]
+  },
+  {
+   "ref": "p386_e04",
+   "excerpt": "You may wonder, if a simple, well-performing model exists to go from",
+   "what_it_says": "If a simple, well-performing solution exists, why doesn't training find it? Because the hypothesis space (all two-layer networks of this configuration) contains millions of models, and the commonsense heuristic is just one of them, a needle in a haystack. Gradient descent isn't guaranteed to reach a good solution just because it exists in the space.",
+   "what_it_means": "The persistence model *is* representable. A Dense(16, relu) layer could pass through the last temperature feature (with a bias to keep it positive through ReLU), and the output layer could undo the shift and rescale to °C. But that configuration is a tiny, specific region in a ~27,000-dimensional weight space (26,913 parameters, p.384). Gradient descent starts from a random point and follows local slopes of a noisy MSE surface, so it lands wherever the data pulls it, often on solutions that fit training quirks.",
+   "why_it_matters": "It corrects the naive belief that expressiveness is enough. What matters is whether the optimizer can *find* the good solution, given the data, initialization and inductive biases.",
+   "technical_idea": "Representability ≠ learnability: the hypothesis space bounds what a model *can* express, while the optimizer plus data determine what it actually *does* express.",
+   "terminology": [
+    {"term": "Hypothesis space", "meaning": "The set of all functions the model architecture can represent for some setting of its weights."},
+    {"term": "Needle in a haystack", "meaning": "The authors' image for a good but tiny solution inside a vast search space."}
+   ],
+   "connections": [
+    "p.384: the two-layer dense network whose hypothesis space is discussed",
+    "p.626: chapter 20 reviews key concepts, including the hypothesis space idea"
+   ]
+  },
+  {
+   "ref": "p386_e04",
+   "excerpt": "That’s a pretty significant limitation of machine learning in general: unless the",
+   "what_it_says": "This is a significant general limitation of machine learning: unless the learning algorithm is hardcoded to look for a specific kind of simple model, it may fail to find a simple solution to a simple problem. So good feature engineering and relevant architecture priors are essential; you need to tell the model precisely what to look for.",
+   "what_it_means": "Priors shrink or reshape the haystack. Feature engineering hands the model useful quantities directly, such as the last temperature or a time-of-day feature. Architecture priors restrict the hypothesis space to functions with a plausible structure, for example weight sharing across time (convnets) or step-by-step state updates (RNNs). The search then concentrates on the region where good solutions live.",
+   "why_it_matters": "It frames the rest of the chapter. The convnet (13.2.4) and the RNNs (13.3) are presented as *different architecture priors*, and their success or failure is explained by how well each prior matches the data.",
+   "technical_idea": "Beyond the book: a residual-style design, where the model predicts a correction added to the last temperature, would hardcode the persistence solution as the starting point, so the network only has to learn improvements on it.",
+   "terminology": [
+    {"term": "Architecture prior", "meaning": "Assumptions built into the model's structure (e.g. locality, weight sharing, order) that restrict what it can easily learn."},
+    {"term": "Feature engineering", "meaning": "Hand-crafting input representations that make the target easier to learn."}
+   ],
+   "connections": [
+    "p.387: the 1D convnet's prior turns out to be wrong for weather data"
+   ]
+  },
+  {
+   "ref": "p386_e06",
+   "excerpt": "Speaking of using the right architecture priors: since our input sequences feature",
+   "what_it_says": "Since the input sequences contain daily cycles, a convolutional model might work. A temporal ConvNet could reuse the same representations across days, just as a spatial ConvNet reuses representations across image locations.",
+   "what_it_means": "The hypothesis: a pattern such as 'pressure falling over six hours' should mean the same thing on Monday as on Thursday. A convolution detects it with one shared filter at every position, so it needn't be learned separately for each of the 120 positions as the flattened dense model must.",
+   "why_it_matters": "It is a concrete attempt at the advice of the previous paragraph: pick a prior that matches the data's structure.",
+   "terminology": [
+    {"term": "Temporal ConvNet", "meaning": "A convolutional network whose filters slide along the time axis."}
+   ],
+   "connections": [
+    "p.387: the experiment's outcome (val MAE ≈ 2.9 °C) and the explanation of why the prior is wrong"
+   ]
+  },
+  {
+   "ref": "p386_e07",
+   "excerpt": "You already know about the `Conv2D` and `SeparableConv2D` layers, which see their",
+   "what_it_says": "Conv2D and SeparableConv2D look at inputs through small windows sliding over 2D grids. Keras also has Conv1D, SeparableConv1D and Conv3D: Conv1D slides 1D windows across sequences, Conv3D slides cubic windows across volumes. Footnote 2 notes there is no SeparableConv3D, simply because it hasn't been implemented.",
+   "what_it_means": "Convolution generalizes to any number of spatial axes. For a sequence of shape (timesteps, features), a Conv1D kernel of size k has shape (k, features, filters) and moves only along time. Conv3D handles data like video (frames × height × width) or volumetric scans.",
+   "why_it_matters": "It shows that the convolution tools from the image chapters carry over to sequences.",
+   "terminology": [
+    {"term": "Conv1D", "meaning": "Convolution along one axis; input (batch, steps, channels) → output (batch, new_steps, filters)."},
+    {"term": "SeparableConv1D", "meaning": "Depthwise separable 1D convolution: per-channel spatial filtering followed by a pointwise (1×1) mix."},
+    {"term": "Conv3D", "meaning": "Convolution with cubic windows over 3D volumes."}
+   ],
+   "connections": [
+    "p.339: convolutional layers used for image segmentation in chapter 11"
+   ]
+  },
+  {
+   "ref": "p386_e07",
+   "excerpt": "You can thus build 1D ConvNets, strictly analogous to 2D ConvNets. They’re",
+   "what_it_says": "1D ConvNets are strictly analogous to 2D ConvNets. They suit sequence data that follows the translation invariance assumption: as a window slides over the sequence, its content should have the same properties regardless of the window's position.",
+   "what_it_means": "Translation invariance is the key condition. A convnet assumes the *meaning* of a local pattern doesn't depend on *where* it occurs. That is often true of text n-grams or audio, but here it is questionable: the 24-hour target depends on how recent a pattern is, and morning and evening dynamics differ. Page 387 makes exactly this argument.",
+   "why_it_matters": "Stating the assumption explicitly lets you predict when the model will fail.",
+   "technical_idea": "Strictly, convolution is translation *equivariant* (shifting the input shifts the feature map); global pooling then makes the final output approximately translation *invariant*. (Beyond the book.)",
+   "terminology": [
+    {"term": "Translation invariance assumption", "meaning": "The statistics of a window's content are independent of the window's location in the sequence."}
+   ],
+   "connections": [
+    "p.387: 'weather data doesn’t quite respect the translation invariance assumption'"
+   ]
+  },
+  {
+   "ref": "p386_e07",
+   "excerpt": "Let’s try one on our temperature forecasting problem. We’ll pick an initial",
+   "what_it_says": "The authors build a 1D convnet for temperature forecasting with an initial window length of 24, so each window covers 24 hours (one cycle). As MaxPooling1D layers downsample the sequence, the window size is reduced accordingly. The first three lines of the model follow.",
+   "what_it_means": "With sampling_rate = 6, each timestep is one hour, so a 24-step kernel sees a full day. After each pooling by 2 the time resolution halves, so the later kernels of size 12 and 6 (p.387) still cover roughly 24 hours of the original signal: 12 × 2 h and 6 × 4 h.",
+   "why_it_matters": "Kernel sizes are chosen from domain knowledge (the daily cycle), which is another example of building in a prior.",
+   "terminology": [
+    {"term": "MaxPooling1D", "meaning": "Downsamples a sequence by taking the max over non-overlapping windows (size 2 here)."},
+    {"term": "Window length / kernel size", "meaning": "Number of consecutive timesteps each convolution filter looks at."}
+   ],
+   "connections": [
+    "p.382: sampling_rate = 6 makes each timestep one hour",
+    "p.387: remaining layers Conv1D(8, 12), MaxPooling1D(2), Conv1D(8, 6), GlobalAveragePooling1D, Dense(1)"
+   ]
+  }
+ ],
+ "concepts": [
+  {"id": "hypothesis_space", "name": "Hypothesis space", "definition": "The set of all models that the chosen architecture can represent.", "intuition": "The haystack in which training searches for the needle.", "technical": "For Listing 13.10 it is all functions $x \\mapsto W_2\\,\\mathrm{relu}(W_1 x + b_1) + b_2$ with $W_1 \\in \\mathbb{R}^{16\\times1680}$.", "significance": "Explains why a representable good solution may not be learned.", "example": "Persistence is in the space but occupies a minuscule region of weight space.", "misconception": "That a bigger hypothesis space always helps; it can make the search harder.", "related": ["architecture_prior", "gradient_descent", "dense_layer"], "source": "book"},
+  {"id": "architecture_prior", "name": "Architecture prior", "definition": "Structural assumptions in a model that shape what it can learn easily.", "intuition": "Telling the search where to look.", "technical": "Examples: weight sharing over positions (convolution), local receptive fields, recurrence over ordered steps.", "significance": "The authors call priors and feature engineering essential.", "example": "Choosing a 24-step kernel to match the daily cycle.", "misconception": "That a prior helps whenever it sounds plausible; a wrong prior (p.387) can hurt.", "related": ["hypothesis_space", "convolution", "rnn"], "source": "book"},
+  {"id": "convolution", "name": "1D convolution (Conv1D)", "definition": "A layer that slides learned 1D filters along the time axis of a sequence.", "intuition": "The same pattern detector is applied at every time position.", "technical": "Input (batch, T, C) with kernel size k and F filters gives output (batch, T−k+1, F) with valid padding; parameters k·C·F + F.", "significance": "Brings the convnet's translation-invariance prior to sequences.", "example": "Conv1D(8, 24) on (120, 14) → (97, 8), with 24·14·8 + 8 = 2,696 parameters.", "misconception": "That Conv1D processes one feature at a time; each filter spans all 14 features.", "related": ["pooling", "translation_invariance", "keras_layer"], "source": "book"},
+  {"id": "translation_invariance", "name": "Translation invariance assumption", "definition": "A window's content follows the same properties regardless of its location in the sequence.", "intuition": "A pattern means the same thing wherever it appears.", "technical": "Justifies weight sharing across positions; combined with global pooling it discards absolute position.", "significance": "When the assumption is violated, as with weather (p.387), convnets underperform.", "example": "A falling-pressure pattern 1 hour ago is far more predictive than the same pattern 4 days ago, which violates the assumption.", "misconception": "That periodic data is automatically translation invariant.", "related": ["convolution", "architecture_prior"], "source": "book"},
+  {"id": "pooling", "name": "MaxPooling1D", "definition": "Downsampling of a sequence by taking the maximum over windows.", "intuition": "Halves time resolution, keeping the strongest activations.", "technical": "MaxPooling1D(2) maps (97, 8) → (48, 8) (floor of 97/2).", "significance": "Lets later, smaller kernels cover the same real time span.", "example": "After one pooling each step represents 2 hours, so a 12-step kernel covers 24 hours.", "misconception": "That pooling has trainable parameters; it has none.", "related": ["convolution"], "source": "book"}
+ ],
+ "math": [
+  {"id": "m1", "title": "Output length and parameters of the first Conv1D layer", "latex": "T_{\\text{out}} = T_{\\text{in}} - k + 1 = 120 - 24 + 1 = 97,\\qquad P = k\\,C_{\\text{in}}\\,F + F = 24\\cdot 14\\cdot 8 + 8 = 2696", "source_text": "x = layers.Conv1D(8, 24, activation=\"relu\")(inputs)", "variables": [{"symbol": "T_{\\text{in}}", "meaning": "Input timesteps (sequence_length = 120)"}, {"symbol": "k", "meaning": "Kernel (window) size, 24"}, {"symbol": "C_{\\text{in}}", "meaning": "Input features, raw_data.shape[-1] = 14"}, {"symbol": "F", "meaning": "Number of filters, 8"}, {"symbol": "P", "meaning": "Trainable parameters (weights + biases)"}], "operations": "Valid convolution length formula; parameter count of a 1D kernel bank.", "purpose": "Lets you trace shapes through the model being built.", "interpretation": "Each of the 97 outputs per filter summarizes one 24-hour window across all 14 features.", "intuition": "A 24-hour stencil slid over 120 hours fits in 97 positions.", "numerical_example": "After MaxPooling1D(2): ⌊97/2⌋ = 48 steps, each summarizing about 2 hours of resolution.", "source": "ai_explanation", "book_ref": "p.386"},
+  {"id": "m2", "title": "1D convolution operation", "latex": "y_{t,f} = \\operatorname{relu}\\Big(b_f + \\sum_{j=0}^{k-1}\\sum_{c=1}^{C} W_{j,c,f}\\, x_{t+j,\\,c}\\Big)", "source_text": "Conv1D layer relies on 1D windows that slide across input sequences", "variables": [{"symbol": "x_{t+j,c}", "meaning": "Input feature c at timestep t+j"}, {"symbol": "W_{j,c,f}", "meaning": "Kernel weight for offset j, input channel c, filter f"}, {"symbol": "b_f", "meaning": "Bias of filter f"}, {"symbol": "y_{t,f}", "meaning": "Output of filter f at position t"}], "operations": "Weighted sum over a window of k timesteps and all channels, then ReLU.", "purpose": "Formalizes 'windows that slide across input sequences' and the weight sharing across t.", "interpretation": "The same W is used for every t; this is the translation-invariance prior.", "intuition": "One stencil, slid along time.", "source": "ai_explanation", "book_ref": "p.386"}
+ ],
+ "code": [
+  {"id": "c1", "listing": null, "title": "Start of the 1D convnet for temperature forecasting", "original_code": "inputs = keras.Input(shape=(sequence_length, raw_data.shape[-1]))\nx = layers.Conv1D(8, 24, activation=\"relu\")(inputs)\nx = layers.MaxPooling1D(2)(x)", "language": "python", "what_it_does": "Declares the (120, 14) input, applies 8 Conv1D filters with a 24-step window and ReLU, then halves the time axis with max pooling. The code continues on p.387 with Conv1D(8, 12), MaxPooling1D(2), Conv1D(8, 6), GlobalAveragePooling1D, Dense(1), and the same compile/fit/evaluate routine as the dense model.", "line_explanations": [{"lines": "1", "explanation": "Same input as the dense model: 120 hourly steps × 14 features."}, {"lines": "2", "explanation": "8 filters, kernel size 24 (one day); output (None, 97, 8)."}, {"lines": "3", "explanation": "Pool size 2; output (None, 48, 8)."}], "inputs_outputs": "Input (batch, 120, 14) → after these lines (batch, 48, 8).", "algorithm": "Convolution + pooling feature extractor along time.", "theory_link": "Applies the translation-invariance prior; kernel size chosen to match the daily cycle.", "parameters": [{"name": "8 (filters)", "role": "Number of learned pattern detectors"}, {"name": "24 (kernel_size)", "role": "Window length in hours"}, {"name": "2 (pool_size)", "role": "Downsampling factor"}], "pitfalls": ["With default padding='valid' the sequence shrinks by k−1 at each conv, so stacking big kernels on short sequences can make the length negative and raise an error.", "Conv1D expects inputs shaped (batch, steps, channels): time must be axis 1."], "illustrative_code": "# AI-written: confirm shapes\nimport keras\nfrom keras import layers\ninputs = keras.Input(shape=(120, 14))\nx = layers.Conv1D(8, 24, activation=\"relu\")(inputs)\nprint(x.shape)  # (None, 97, 8)\nx = layers.MaxPooling1D(2)(x)\nprint(x.shape)  # (None, 48, 8)"}
+ ],
+ "deeper": [
+  {"title": "Why gradient descent misses the persistence solution", "kind": "step_by_step", "body": "1. Persistence needs the network to route *one* of 1,680 inputs (temperature at the last step) almost exactly to the output and ignore the rest.\n2. Random initialization spreads weight across all inputs.\n3. The training data contains many weak, noisy correlations (e.g. humidity 3 days ago). MSE gradients pull weights toward all of them at once.\n4. With 26,913 parameters and about 200k training windows, the model fits some of that noise, which shows up as the overfitting in Figure 13.3.\n5. Nothing in the architecture says 'recent matters more' or 'start from the last value', so the search never singles out the needle.\n\n(Inference/explanation beyond the book.)", "source": "inference"},
+  {"title": "Haystack analogy, extended", "kind": "analogy", "body": "Training is like searching a huge field with a metal detector that only beeps 'warmer/colder' from where you stand (the local gradient). The needle is there, but the field is full of bottle caps (spurious correlations) that also beep. An architecture prior is like fencing off most of the field before you start.", "source": "analogy"},
+  {"title": "Receptive-field arithmetic of the convnet", "kind": "numerical", "body": "Using the full model (lines on this page and on p.387):\n\n| layer | output shape | one step ≈ |\n|---|---|---|\n| Input | (120, 14) | 1 h |\n| Conv1D(8, 24) | (97, 8) | covers 24 h |\n| MaxPool(2) | (48, 8) | 2 h |\n| Conv1D(8, 12) | (37, 8) | 12×2 h = 24 h of pooled steps |\n| MaxPool(2) | (18, 8) | 4 h |\n| Conv1D(8, 6) | (13, 8) | 6×4 h = 24 h |\n| GlobalAvgPool | (8,) | — |\n| Dense(1) | (1,) | — |\n\nTotal parameters: 2,696 + 776 + 392 + 9 = **3,873**, about 7× fewer than the dense model.", "source": "ai_explanation"}
+ ],
+ "visualizations": [
+  {"id": "v1", "type": "widget", "title": "Shape flow of the 1D convnet", "why": "The page starts a Conv1D model with a 24-step window and MaxPooling1D(2), shrinking kernels as the sequence is downsampled; trace the shapes, including the layers that follow on p.387.", "widget": "tensor_shapes", "params": {"steps": [{"op": "input", "shape": [null, 120, 14]}, {"op": "Conv1D(8, 24)", "shape": [null, 97, 8]}, {"op": "MaxPooling1D(2)", "shape": [null, 48, 8]}, {"op": "Conv1D(8, 12)", "shape": [null, 37, 8]}, {"op": "MaxPooling1D(2)", "shape": [null, 18, 8]}, {"op": "Conv1D(8, 6)", "shape": [null, 13, 8]}, {"op": "GlobalAvgPool1D", "shape": [null, 8]}, {"op": "Dense(1)", "shape": [null, 1]}]}},
+  {"id": "v2", "type": "mermaid", "title": "From failure diagnosis to a new prior", "why": "Summarizes the page's argument: the dense model fails to find the simple solution, so you need priors, and the daily-cycle prior leads to a temporal ConvNet.", "mermaid": "flowchart LR\n A[Dense model: val MAE ~2.55 > baseline 2.44] --> B[Simple solution exists in hypothesis space]\n B --> C[Gradient descent does not find it: needle in a haystack]\n C --> D[Need feature engineering + architecture priors]\n D --> E[Prior: daily cycles, translation invariance]\n E --> F[1D ConvNet: Conv1D 24-step window + MaxPooling1D]"}
+ ],
+ "misconceptions": [
+  {"claim": "If a solution is representable by the network, training will find it.", "correction": "The page stresses that existence in the hypothesis space doesn't guarantee gradient descent finds it."},
+  {"claim": "SeparableConv3D is missing because it is mathematically impossible.", "correction": "Footnote 2: it simply hasn't been implemented, with no theoretical reason."},
+  {"claim": "Periodic data automatically satisfies the translation invariance assumption.", "correction": "Periodicity suggests reuse across days, but position within the window (recency) and time of day matter, so the assumption only partially holds (p.387)."},
+  {"claim": "A Conv1D filter of size 24 looks at 24 minutes.", "correction": "With sampling_rate = 6 on 10-minute data, each step is one hour, so 24 steps = 24 hours."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 385, "note": "Figure 13.3, the dense model's curves interpreted in the first paragraph."},
+   {"page": 384, "note": "Baseline MAE 2.44 °C and the two-layer dense network."},
+   {"page": 383, "note": "Why commonsense baselines matter."},
+   {"page": 382, "note": "sampling_rate = 6, so one timestep = one hour."}
+  ],
+  "later": [
+   {"page": 387, "note": "Rest of the convnet; it reaches only ≈ 2.9 °C val MAE; translation invariance is violated and order information is lost."},
+   {"page": 388, "note": "Recurrent networks introduced as a prior suited to ordered data."},
+   {"page": 403, "note": "Suggestions for going further, including feature engineering."}
+  ],
+  "prerequisites": [
+   {"page": 626, "note": "Key concepts in review, including hypothesis spaces and priors."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 387, "note": "Continuation of the Conv1D model code."}
+  ],
+  "related_figures": [
+   {"page": 387, "note": "Figure 13.4, the convnet's training and validation MAE."}
+  ]
+ },
+ "takeaways": [
+  "The dense model only sometimes gets close to the baseline: commonsense baselines are hard to beat.",
+  "A good solution existing in the hypothesis space doesn't mean gradient descent will find it.",
+  "Feature engineering and architecture priors tell the model what to look for.",
+  "Conv1D, SeparableConv1D and Conv3D generalize 2D convolution to sequences and volumes; there is no SeparableConv3D only because it isn't implemented.",
+  "1D convnets assume translation invariance along time.",
+  "The convnet starts with a 24-hour window (Conv1D(8, 24)) and shrinks kernels as MaxPooling1D halves the sequence."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "According to the page, why doesn't the dense model learn the commonsense solution?", "options": ["The commonsense solution cannot be represented by a two-layer network", "The solution is one of millions in the hypothesis space and gradient descent need not find it", "The learning rate was too high", "MSE loss forbids such solutions"], "answer": "The solution is one of millions in the hypothesis space and gradient descent need not find it", "explanation": "The page says the heuristic is 'just one model among millions' in the space (so it is representable), and existence doesn't guarantee gradient descent finds it. Learning rate and loss aren't blamed.", "page_refs": [386]},
+  {"id": "q2", "type": "short", "question": "What two remedies do the authors name for this limitation of machine learning?", "options": [], "answer": "Good feature engineering and relevant architecture priors.", "explanation": "Stated at the end of the 'pretty significant limitation' paragraph: you need to tell the model precisely what to look for.", "page_refs": [386]},
+  {"id": "q3", "type": "conceptual", "question": "State the translation invariance assumption for sequences and give one reason it might not hold for weather data.", "options": [], "answer": "A sliding window's content should have the same properties regardless of its location. For weather, recent data is more predictive than old data, and morning and evening patterns differ, so position matters.", "explanation": "The definition is on this page; p.387 develops why weather violates it.", "page_refs": [386, 387]},
+  {"id": "q4", "type": "math", "question": "Given input shape (120, 14), what is the output shape and parameter count of Conv1D(8, 24) with default valid padding, and what does MaxPooling1D(2) produce?", "options": [], "answer": "(97, 8) with 24·14·8 + 8 = 2,696 parameters; MaxPooling1D(2) gives (48, 8).", "explanation": "Valid conv length = 120 − 24 + 1 = 97; pooling floors 97/2 to 48.", "page_refs": [386]},
+  {"id": "q5", "type": "mcq", "question": "Why was a window length of 24 chosen for the first Conv1D?", "options": ["Because batch size is 256", "So that each window covers 24 hours, one daily cycle", "Because there are 24 features", "To match the 24-hour prediction delay exactly"], "answer": "So that each window covers 24 hours, one daily cycle", "explanation": "The page says 'we look at 24 hours of data at a time (one cycle)'. There are 14 features, not 24. The batch size has nothing to do with it. The delay isn't the stated reason.", "page_refs": [386]},
+  {"id": "q6", "type": "short", "question": "Why does Keras have no SeparableConv3D layer?", "options": [], "answer": "Not for any theoretical reason; it simply hasn't been implemented (footnote 2).", "explanation": "Directly from the footnote.", "page_refs": [386]},
+  {"id": "q7", "type": "self", "question": "Can you explain in your own words the difference between 'the model can represent a solution' and 'the model will learn that solution'?", "options": [], "answer": "Representation is about the hypothesis space; learning depends on the optimizer, the initialization, the data and the priors that guide the search.", "explanation": "Self-check on the page's central argument.", "page_refs": [386]}
+ ]
+}

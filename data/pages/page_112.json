@@ -1,0 +1,460 @@
+{
+  "page_id": "page_112",
+  "pdf_page": 112,
+  "printed_page": "88",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:46:00Z",
+    "confidence": "medium",
+    "review_flags": [
+      "Possible erratum in the book: the has_aux example unpacks `loss, (grads_of_loss_wrt_state, output) = grad_fn(state, x, y)`. In the JAX API, `jax.value_and_grad(f, has_aux=True)` returns `((value, aux), grad)`, so the working unpacking is `(loss, output), grads_of_loss_wrt_state = grad_fn(state, x, y)`. The notes reproduce the book's code verbatim and point out the discrepancy; a human should confirm against the book's errata / companion notebook."
+    ],
+    "extraction_quality": "Clean. The numbered has_aux recipe is split across p112_e03 and p112_e04; callouts ('Returns a tuple', 'Passes has_aux=True here', 'Gets back a nested tuple') read from the image. The page spans the end of 3.5.3 (and its jit subsection) and the start of 3.5.4."
+  },
+  "overview": {
+    "title": "has_aux, @jax.jit, and the start of the pure-JAX classifier",
+    "chapter": "3 Introduction to TensorFlow, PyTorch, JAX, and Keras",
+    "section": "3.5 Introduction to JAX",
+    "subsection": "3.5.4 An end-to-end example: A linear classifier in pure JAX",
+    "main_topic": "Returning auxiliary outputs from a loss with `has_aux=True`, compiling stateless functions with `@jax.jit`, and the two differences between the JAX linear classifier and its TensorFlow/PyTorch counterparts.",
+    "central_idea": "The JAX gradient toolkit is completed by `has_aux` (return by-products alongside the loss) and `@jax.jit` (XLA-compile any stateless function for speed). With these, the linear classifier can be rewritten as purely stateless functions that receive `W` and `b` as arguments, return new values, and get gradients from `value_and_grad()`.",
+    "importance": "The authors call this 'about as hard as JAX gets'. `@jax.jit` is used constantly in practice, and the stateless rule it requires is the defining constraint of JAX training code (p.113, p.242).",
+    "learning_objectives": [
+      "Apply the two-step has_aux recipe: return `(loss, output)` and pass `has_aux=True` to `value_and_grad()`.",
+      "Explain what `@jax.jit` does and its equivalence to `@tf.function(jit_compile=True)`.",
+      "State the restriction on jitted functions: they must be stateless, with updated tensors returned.",
+      "Name the two differences between the JAX classifier and the TensorFlow/PyTorch versions."
+    ],
+    "prerequisites": [
+      "jax.value_and_grad and state trees (p.111)",
+      "The JAX dense layer (p.110)",
+      "Linear classifier in TensorFlow (p.93) and PyTorch (p.102)",
+      "tf.function and XLA compilation (section 3.3)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page finishes the **Returning auxiliary outputs** recipe from p.111. To return an extra by-product from `compute_loss()`:\n\n1. Edit the loss function to return a tuple whose first entry is the loss and second entry is the extra output.\n2. Pass `has_aux=True` to `value_and_grad()`, so it returns not just the gradient but also the \"auxiliary\" output(s).\n\nThe code shows `return loss, output` (callout: \"Returns a tuple\"), `grad_fn = jax.value_and_grad(compute_loss, has_aux=True)`, and the call `loss, (grads_of_loss_wrt_state, output) = grad_fn(state, x, y)` (callout: \"Gets back a nested tuple\"). *Note (not in the book):* in the JAX API the nesting is the other way round, `((loss, output), grads)`; see the code pitfalls.\n\nThe authors concede things are getting convoluted but reassure readers this is \"about as hard as JAX gets\".\n\n**Making JAX functions fast with `@jax.jit`.** The `@jax.jit` decorator behaves identically to TensorFlow's `@tf.function(jit_compile=True)`: it turns any **stateless** JAX function into XLA-compiled code, typically with a considerable speedup. The example decorates the `dense` function from p.110. You can only decorate stateless functions; any tensors the function updates must be part of its return values.\n\n**3.5.4 An end-to-end example: A linear classifier in pure JAX.** The JAX version of the linear classifier from the TensorFlow (p.93) and PyTorch (p.102) sections differs in two ways: (1) all functions are stateless, so `W` and `b` are passed as arguments and new values are returned; (2) gradients come from `value_and_grad()`. The model and MSE functions follow on p.113.",
+  "paragraphs": [
+    {
+      "ref": "p112_e03",
+      "excerpt": "1 Edit the loss function to return a tuple where the first entry",
+      "what_it_says": "Step 1 of the has_aux recipe: make the loss function return a tuple, loss first, extra output second.",
+      "what_it_means": "The loss function now technically returns two things, which would violate the scalar-output rule (p.110) unless JAX is told which part is the loss.",
+      "why_it_matters": "Ordering matters: the differentiated scalar must be the first entry.",
+      "technical_idea": "The printed step 1 wraps into the next extracted element ('second entry is your extra output').",
+      "terminology": [
+        {
+          "term": "auxiliary output",
+          "meaning": "A by-product of the loss computation returned alongside the loss but not differentiated."
+        }
+      ],
+      "connections": [
+        "p.111: the motivation for returning a by-product such as `output`."
+      ]
+    },
+    {
+      "ref": "p112_e04",
+      "excerpt": "second entry is your extra output. 2 Pass the argument `has_aux=True` to",
+      "what_it_says": "Step 2: pass `has_aux=True` to `value_and_grad()`, which tells it to return the auxiliary output(s) of `compute_loss()` as well as the gradient.",
+      "what_it_means": "`has_aux=True` means: treat the first element of the returned tuple as the loss to differentiate, and pass the second element through untouched.",
+      "why_it_matters": "In training steps the auxiliary output is typically the model's predictions (for metrics) or updated non-trainable state, which you then return from the step (compare p.242).",
+      "technical_idea": "Beyond the book: the auxiliary data can itself be any tree, e.g. a dict of metrics.",
+      "terminology": [
+        {
+          "term": "has_aux",
+          "meaning": "Argument of `jax.grad`/`jax.value_and_grad` declaring that the function returns `(loss, aux)`."
+        }
+      ],
+      "connections": []
+    },
+    {
+      "ref": "p112_e06",
+      "excerpt": "Admittedly, things are starting to be pretty convoluted at this point. Don’t worry,",
+      "what_it_says": "The authors acknowledge the growing complexity but assure readers that this is about as hard as JAX gets; almost everything else is simpler.",
+      "what_it_means": "Gradient plumbing (first-argument state, trees, value_and_grad, has_aux) is the steepest part of the JAX learning curve.",
+      "why_it_matters": "It sets expectations, and the authors later list verbose low-level training loops as one of JAX's sources of friction (p.114).",
+      "technical_idea": null,
+      "terminology": [],
+      "connections": [
+        "p.114: JAX's developer friction, including verbose training loops."
+      ]
+    },
+    {
+      "ref": "p112_e08",
+      "excerpt": "One more thing. As a JAX user, you will frequently use the `@jax.jit`",
+      "what_it_says": "`@jax.jit` behaves identically to `@tf.function(jit_compile=True)`: it turns any stateless JAX function into XLA-compiled code, typically delivering a considerable speedup.",
+      "what_it_means": "On the first call, JAX traces the function to a computation graph and XLA compiles it into fused, optimized machine code for CPU/GPU/TPU; later calls with the same input shapes and dtypes reuse the compiled code.",
+      "why_it_matters": "Compilation is a big part of why the authors call JAX the fastest of the frameworks for most models (p.114).",
+      "technical_idea": "Beyond the book: retracing and recompilation happen when argument shapes or dtypes change, so jitting functions called with constantly varying shapes can be slow.",
+      "terminology": [
+        {
+          "term": "XLA",
+          "meaning": "Accelerated Linear Algebra, the compiler used by JAX (and by TensorFlow with jit_compile=True)."
+        },
+        {
+          "term": "JIT",
+          "meaning": "Just-in-time compilation: compiling code when it is first run."
+        }
+      ],
+      "connections": [
+        "Section 3.3: TensorFlow's @tf.function(jit_compile=True)."
+      ]
+    },
+    {
+      "ref": "p112_e10",
+      "excerpt": "Be mindful that you can only decorate a stateless function—any tensors that get",
+      "what_it_says": "Only stateless functions can be decorated with `@jax.jit`; any tensors the function updates must be returned.",
+      "what_it_means": "A jitted function must not rely on or modify Python-side state (global arrays, object attributes): during tracing such side effects either run once or are ignored, so the compiled code will not behave as you expect.",
+      "why_it_matters": "This is why the upcoming training step must return the new `W` and `b` (p.113).",
+      "technical_idea": "Beyond the book: a `print` inside a jitted function runs only during tracing; use `jax.debug.print` to print at run time.",
+      "terminology": [
+        {
+          "term": "stateless function",
+          "meaning": "A function whose outputs depend only on its inputs and which returns all values it changes."
+        }
+      ],
+      "connections": [
+        "p.113: the stateless training step returns updated W and b."
+      ]
+    },
+    {
+      "ref": "p112_e13",
+      "excerpt": "Now you know enough JAX to write the JAX version of our linear",
+      "what_it_says": "You can now write the JAX version of the linear classifier, which differs from the TensorFlow and PyTorch versions in two ways.",
+      "what_it_means": "Same task (classifying the 2-D toy data), same model and loss; only the framework mechanics change.",
+      "why_it_matters": "Comparing three implementations of one model is the chapter's way of showing each framework's character.",
+      "technical_idea": null,
+      "terminology": [],
+      "connections": [
+        "p.93: the pure-TensorFlow linear classifier.",
+        "p.102: the pure-PyTorch linear classifier."
+      ]
+    },
+    {
+      "ref": "p112_e14",
+      "excerpt": "All functions we will create will be stateless. That means the state (the",
+      "what_it_says": "Difference 1: all functions are stateless; the arrays `W` and `b` are passed as arguments and, if modified, their new values are returned. (Difference 2, in the next bullet: gradients come from `value_and_grad()`.)",
+      "what_it_means": "In TensorFlow `W` and `b` were `tf.Variable`s updated with `assign_sub`; in PyTorch they were parameters updated in place. In JAX the training step is a function `(W, b, data) -> (new W, new b, loss)`.",
+      "why_it_matters": "This makes the training step jittable and is exactly the 'return any updated tensors' rule from the previous paragraph.",
+      "technical_idea": null,
+      "terminology": [
+        {
+          "term": "state",
+          "meaning": "Here, the model parameters `W` and `b`."
+        }
+      ],
+      "connections": [
+        "p.113: the training step returning updated W and b."
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "auxiliary_outputs",
+      "name": "Auxiliary outputs (has_aux)",
+      "definition": "Extra values returned by a loss function alongside the loss, enabled by `has_aux=True`.",
+      "intuition": "Telling JAX: 'differentiate the first thing I return; just carry the rest along'.",
+      "technical": "Loss function returns `(loss, aux)`; `jax.value_and_grad(f, has_aux=True)` returns the loss, the aux and the gradients. In the JAX API the structure is `((loss, aux), grads)`.",
+      "significance": "Lets a training step get predictions or updated non-trainable state without a second forward pass.",
+      "example": "`return loss, output` with `has_aux=True`.",
+      "misconception": "That the auxiliary output is differentiated too; it is passed through only.",
+      "related": [
+        "value_and_grad",
+        "loss_function"
+      ],
+      "source": "book"
+    },
+    {
+      "id": "jit_compilation",
+      "name": "JIT compilation with @jax.jit",
+      "definition": "A decorator that compiles a stateless JAX function with XLA for faster execution.",
+      "intuition": "Instead of interpreting each operation one by one, JAX writes the whole function down once and has a compiler optimize it into a single fast program.",
+      "technical": "Equivalent to `@tf.function(jit_compile=True)`. Beyond the book: the function is traced with abstract shapes on first call; XLA fuses operations and the compiled kernel is cached per input shape/dtype.",
+      "significance": "Typically a considerable speedup (book); central to JAX's performance claims (p.114).",
+      "example": "`@jax.jit` on `def dense(inputs, W, b)`.",
+      "misconception": "That any Python function can be jitted; it must be stateless, returning updated tensors.",
+      "related": [
+        "stateless_computation",
+        "metaprogramming",
+        "xla"
+      ],
+      "source": "book"
+    },
+    {
+      "id": "stateless_computation",
+      "name": "Stateless computation",
+      "definition": "Functions take all state as input and return any updated state as output.",
+      "intuition": "A vending machine that never remembers previous customers.",
+      "technical": "Required for `@jax.jit`; the linear classifier passes `W` and `b` in and gets their new values out.",
+      "significance": "Enables compilation and parallelization (p.106).",
+      "example": "A training step returning `(new_W, new_b, loss)`.",
+      "misconception": "That stateless code cannot train models; it simply returns new parameters instead of mutating old ones.",
+      "related": [
+        "jit_compilation",
+        "immutable_arrays"
+      ],
+      "source": "book"
+    }
+  ],
+  "math": [],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Returning auxiliary outputs with has_aux",
+      "original_code": "def compute_loss(state, x, y):\n    ...\n    return loss, output\ngrad_fn = jax.value_and_grad(compute_loss, has_aux=True)\nloss, (grads_of_loss_wrt_state, output) = grad_fn(state, x, y)",
+      "language": "python",
+      "what_it_does": "Template for a loss function that returns the loss plus an auxiliary output, wrapped with `value_and_grad(..., has_aux=True)`.",
+      "line_explanations": [
+        {
+          "lines": "1-3",
+          "explanation": "`...` stands for the loss computation; the function returns a tuple (callout: 'Returns a tuple'), loss first."
+        },
+        {
+          "lines": "4",
+          "explanation": "`has_aux=True` (callout: 'Passes has_aux=True here') tells JAX the second returned entry is auxiliary."
+        },
+        {
+          "lines": "5",
+          "explanation": "The book unpacks a nested tuple (callout: 'Gets back a nested tuple') as `loss, (grads, output)`."
+        }
+      ],
+      "inputs_outputs": "Inputs: state, x, y. Outputs: loss, gradients with respect to state, and the auxiliary `output`.",
+      "algorithm": "Differentiate the first element of the returned tuple; pass the second through.",
+      "theory_link": "Extends the first-argument/scalar-loss rules of p.110-111.",
+      "parameters": [
+        {
+          "name": "has_aux",
+          "role": "Declares that the function returns `(loss, auxiliary_data)`."
+        }
+      ],
+      "pitfalls": [
+        "Note (not in the book): JAX's documented return value for `value_and_grad(f, has_aux=True)` is `((value, aux), grad)`. The working unpacking is therefore `(loss, output), grads_of_loss_wrt_state = grad_fn(state, x, y)`. With the book's line, `loss` would be bound to the `(loss, output)` tuple and the gradient tree would be unpacked into `(grads_of_loss_wrt_state, output)`, which either raises an error or, if the state happens to have exactly two entries, silently binds the wrong values (flagged for review).",
+        "Returning `(output, loss)` in the wrong order would make JAX try to differentiate `output`."
+      ],
+      "illustrative_code": "# AI-written: runnable version with the JAX API's nesting\nimport jax, jax.numpy as jnp\n\ndef compute_loss(state, x, y):\n    W, b = state\n    output = x @ W + b\n    loss = jnp.mean((output - y) ** 2)\n    return loss, output\n\ngrad_fn = jax.value_and_grad(compute_loss, has_aux=True)\n(loss, output), grads = grad_fn((jnp.ones((2, 1)), jnp.zeros(1)),\n                                jnp.ones((4, 2)), jnp.zeros((4, 1)))"
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "JIT-compiling the dense layer",
+      "original_code": "@jax.jit\ndef dense(inputs, W, b):\n    return jax.nn.relu(jnp.matmul(inputs, W) + b)",
+      "language": "python",
+      "what_it_does": "Decorates the stateless dense layer from p.110 so that it is compiled with XLA.",
+      "line_explanations": [
+        {
+          "lines": "1",
+          "explanation": "`@jax.jit` wraps the function; compilation happens on the first call for given input shapes."
+        },
+        {
+          "lines": "2-3",
+          "explanation": "Same pure dense layer as on p.110: no hidden state, so it is safe to compile."
+        }
+      ],
+      "inputs_outputs": "Same as the un-jitted version; only execution speed changes.",
+      "algorithm": "Trace, compile with XLA, cache, execute.",
+      "theory_link": "Requires statelessness; equivalent to TensorFlow's `@tf.function(jit_compile=True)`.",
+      "parameters": [],
+      "pitfalls": [
+        "The first call is slow (compilation); measure speed on subsequent calls.",
+        "Calling with new shapes triggers recompilation (beyond the book)."
+      ],
+      "illustrative_code": "# AI-written: timing jitted vs non-jitted\nimport time\nx = jnp.ones((1024, 512)); W = jnp.ones((512, 512)); b = jnp.zeros(512)\ndense(x, W, b).block_until_ready()          # compile once\nt = time.time(); dense(x, W, b).block_until_ready(); print(time.time() - t)"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "What jit sees: tracing",
+      "kind": "step_by_step",
+      "body": "Beyond the book:\n1. On the first call, `jax.jit` runs your Python function with *tracer* objects that record shapes and dtypes but not values.\n2. Every `jnp` operation is recorded into an intermediate program (a jaxpr).\n3. XLA compiles that program, fusing e.g. `matmul + add + relu` into fewer kernels.\n4. The compiled version is cached for that input signature and reused.\n\nSide effects in Python (modifying a global, appending to a list, printing) happen only during step 1, which is why the book insists that a jitted function be stateless and return everything it updates.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Three classifiers, one model",
+      "kind": "alternative",
+      "body": "- **TensorFlow (p.93)**: `W`, `b` are `tf.Variable`s; gradients from `GradientTape`; updates via `assign_sub`.\n- **PyTorch (p.102)**: `W`, `b` are tensors requiring grad; `loss.backward()`; in-place updates.\n- **JAX (p.112-113)**: `W`, `b` are plain arrays passed as arguments; gradients from `value_and_grad()`; the step returns new arrays.\n\nThe JAX bullet points on this page are the book's; the TensorFlow/PyTorch summaries recall those sections (inference from the chapter's structure, check against the cited pages).",
+      "source": "inference"
+    },
+    {
+      "title": "Analogy: jit as a translated speech",
+      "kind": "analogy",
+      "body": "Running eager JAX code is like having an interpreter translate a speech sentence by sentence. `@jax.jit` is like having the whole speech translated in advance: slower to start, much faster to deliver, but it only works if the speech does not change depending on who is in the room (hidden state).",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "Data flow with has_aux=True",
+      "why": "The page's has_aux code: compute_loss returns (loss, output); only loss is differentiated.",
+      "mermaid": "flowchart LR\n  S[\"state\"] --> CL[\"compute_loss(state, x, y)\"]\n  XY[\"x, y\"] --> CL\n  CL -->|\"returns a tuple\"| T[\"(loss, output)\"]\n  T -->|\"loss: differentiated\"| G[\"grads_of_loss_wrt_state\"]\n  T -->|\"output: passed through (aux)\"| O[\"output\"]\n  T --> L[\"loss value\"]"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "`@jax.jit` can speed up any Python function, including one that updates global arrays.",
+      "correction": "Only stateless functions can be jitted; updated tensors must be returned."
+    },
+    {
+      "claim": "With `has_aux=True`, JAX also computes gradients of the auxiliary output.",
+      "correction": "Only the first returned entry (the loss) is differentiated; the auxiliary output is returned as is."
+    },
+    {
+      "claim": "`@jax.jit` is a JAX-only concept with no analogue elsewhere.",
+      "correction": "The book says it behaves identically to TensorFlow's `@tf.function(jit_compile=True)`; both use XLA."
+    },
+    {
+      "claim": "In the JAX classifier, W and b are updated in place like in PyTorch.",
+      "correction": "They are passed as arguments and new values are returned by the function."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {
+        "page": 111,
+        "note": "value_and_grad, state trees and the motivation for has_aux."
+      },
+      {
+        "page": 110,
+        "note": "The dense function that is jitted here."
+      },
+      {
+        "page": 93,
+        "note": "The pure-TensorFlow linear classifier."
+      },
+      {
+        "page": 102,
+        "note": "The pure-PyTorch linear classifier."
+      }
+    ],
+    "later": [
+      {
+        "page": 113,
+        "note": "The JAX classifier's compute_loss, value_and_grad, stateless training step and training loop."
+      },
+      {
+        "page": 114,
+        "note": "What makes the JAX approach unique: speed, NumPy consistency, TPUs, and friction from metaprogramming/compilation."
+      },
+      {
+        "page": 242,
+        "note": "A JAX training step in Keras using stateless_call and returning updated non-trainable weights."
+      }
+    ],
+    "prerequisites": [
+      {
+        "page": 111,
+        "note": "jax.value_and_grad."
+      }
+    ],
+    "related_math": [],
+    "related_code": [
+      {
+        "page": 319,
+        "note": "A @jax.jit-decorated gradient ascent step using jax.grad."
+      }
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "To return extra outputs from a loss: return `(loss, output)` and pass `has_aux=True` to `value_and_grad()`.",
+    "Only the loss is differentiated; the auxiliary output is passed through. (Check the tuple nesting against the JAX API: `((loss, aux), grads)`.)",
+    "`@jax.jit` XLA-compiles stateless JAX functions, like `@tf.function(jit_compile=True)`, typically giving a big speedup.",
+    "Jitted functions must be stateless: return any tensors they update.",
+    "The JAX linear classifier passes `W` and `b` as arguments, returns new values, and uses `value_and_grad()` for gradients."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "Which two changes are needed to return an auxiliary output from a JAX loss function?",
+      "options": [
+        "Return a dict and call jax.grad twice",
+        "Return a tuple (loss, extra output) and pass has_aux=True to value_and_grad()",
+        "Decorate the loss with @jax.jit and return the output first",
+        "Store the output in a global variable before returning the loss"
+      ],
+      "answer": "Return a tuple (loss, extra output) and pass has_aux=True to value_and_grad()",
+      "explanation": "That is the two-step recipe on this page. jit is unrelated; returning the output first would make it the differentiated value; a global variable violates statelessness.",
+      "page_refs": [
+        112
+      ]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "Which TensorFlow decorator does the book say `@jax.jit` behaves identically to?",
+      "options": [],
+      "answer": "`@tf.function(jit_compile=True)`",
+      "explanation": "Stated directly; both compile the function with XLA.",
+      "page_refs": [
+        112
+      ]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "Why can only stateless functions be decorated with `@jax.jit`?",
+      "options": [],
+      "answer": "Because the compiled code only captures what flows in through arguments and out through return values; hidden state changes would not be reproduced, so any updated tensors must be returned.",
+      "explanation": "The book states the rule; the tracing explanation is beyond the book (see the 'What jit sees' note).",
+      "page_refs": [
+        112
+      ]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "In the pure-JAX linear classifier, how are `W` and `b` handled?",
+      "options": [
+        "As tf.Variable objects updated with assign_sub",
+        "As attributes of a Keras layer",
+        "As function arguments, with new values returned by the function",
+        "As global arrays modified in place"
+      ],
+      "answer": "As function arguments, with new values returned by the function",
+      "explanation": "The first bullet of 3.5.4. tf.Variable is TensorFlow's approach; Keras layers come later; in-place global modification is impossible in JAX.",
+      "page_refs": [
+        112
+      ]
+    },
+    {
+      "id": "q5",
+      "type": "short",
+      "question": "According to the JAX API, what is the structure returned by `jax.value_and_grad(f, has_aux=True)(...)`, and how does it compare with the book's unpacking?",
+      "options": [],
+      "answer": "`((loss, aux), grads)`; the book writes `loss, (grads, output)`, which nests the other way.",
+      "explanation": "This comes from the JAX documentation, not the book; it is flagged as a possible erratum. Use `(loss, output), grads = grad_fn(state, x, y)`.",
+      "page_refs": [
+        112
+      ]
+    },
+    {
+      "id": "q6",
+      "type": "conceptual",
+      "question": "Name the two major differences between the JAX classifier and the TensorFlow/PyTorch versions.",
+      "options": [],
+      "answer": "All functions are stateless (W and b passed in, new values returned), and gradients are computed with `value_and_grad()`.",
+      "explanation": "Listed as the two bullets at the start of section 3.5.4.",
+      "page_refs": [
+        112
+      ]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Could you explain to a colleague why the authors say this page is 'about as hard as JAX gets'?",
+      "options": [],
+      "answer": "Because it combines all the gradient plumbing: state as first argument, trees, value_and_grad, has_aux with nested tuples, plus the stateless requirement for jit.",
+      "explanation": "Revisit p.110-112 if any of these pieces is unclear.",
+      "page_refs": [
+        110,
+        111,
+        112
+      ]
+    }
+  ]
+}

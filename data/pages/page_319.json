@@ -1,0 +1,410 @@
+{
+ "page_id": "page_319",
+ "pdf_page": 319,
+ "printed_page": "295",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:45:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "The note that keras.ops.normalize defaults to axis=-1 (per-pixel channel normalization, not a whole-tensor L2 norm) comes from AI knowledge of the Keras 3 API, not from the book; please verify against the installed Keras version."
+  ],
+  "extraction_quality": "Clean. The code continuing Listing 10.11, Listings 10.12 and 10.13, three short body paragraphs and two subsection headings match the page image. The callouts were split into fragments by the extractor; they are reassembled here and matched to code lines using the arrows in the image."
+ },
+ "overview": {
+  "title": "The gradient-ascent step in TensorFlow, PyTorch and JAX",
+  "chapter": "10 Interpreting what ConvNets learn",
+  "section": "10.2 Visualizing ConvNet filters",
+  "subsection": "10.2.2 Gradient ascent in PyTorch; 10.2.3 Gradient ascent in JAX",
+  "main_topic": "The rest of the TensorFlow gradient-ascent step (Listing 10.11) and the equivalent PyTorch (Listing 10.12) and JAX (Listing 10.13) step functions, which differ only in how the gradient of the filter-activation loss with respect to the input image is obtained.",
+  "central_idea": "All three step functions do the same four things: compute the loss, get d(loss)/d(image), normalize the gradient, and add learning_rate × gradient to the image. Only the gradient retrieval is backend-specific: tape.gradient in TensorFlow, loss.backward() plus image.grad in PyTorch, and a jax.grad-generated function in JAX.",
+  "importance": "Seeing the three implementations side by side shows how the three autodiff styles map onto each other: tape recording, dynamic graph with .grad accumulation, and functional transformation. This is a compact reference for writing any custom gradient code in Keras 3 on any backend.",
+  "learning_objectives": [
+   "Explain each line of the completed TensorFlow step function, including tape.gradient and ops.normalize.",
+   "Explain why the PyTorch version clones and detaches the image and calls requires_grad_(True), and why it does not need to reset gradients.",
+   "Explain how jax.grad(compute_loss) produces a gradient function with respect to the first argument, and what @jax.jit does.",
+   "Identify the backend-agnostic and backend-specific parts of the three listings.",
+   "Recognize that the + sign in the update makes this gradient ascent, not descent."
+  ],
+  "prerequisites": [
+   "Listing 10.11's opening lines and compute_loss (p.318)",
+   "PyTorch autograd: requires_grad, backward(), .grad accumulation (p.101, p.103)",
+   "JAX jax.grad and functional purity (p.110)",
+   "The L2 gradient-normalization trick (p.318)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes **Listing 10.11** (TensorFlow) and presents the PyTorch and JAX versions of the same step function.\n\n**TensorFlow (end of 10.11).** Still inside the `GradientTape` scope, `loss = compute_loss(image, filter_index)` computes a scalar that says how much the current image activates the filter. After the scope, `grads = tape.gradient(loss, image)` gets the gradient of the loss with respect to the image. `grads = ops.normalize(grads)` applies the \"gradient normalization trick\" from p.318. `image += learning_rate * grads` moves the image a little in the direction that activates the target filter more strongly. `return image` hands back the updated image so the step function can be run in a loop.\n\n**PyTorch (10.2.2, Listing 10.12).** Gradients come from `loss.backward()` and `image.grad`. The first line, `image = image.clone().detach().requires_grad_(True)`, creates a copy of the image that gradients can be computed for. Then the loss is computed, `loss.backward()` backpropagates, `image.grad` is read, normalized, and the image is updated with the out-of-place `image = image + learning_rate * grads`. The authors note that there is **no need to reset the gradients**, because the image tensor is recreated at each iteration. Contrast this with the training loop on p.103, where `.grad` had to be reset to avoid accumulation.\n\n**JAX (10.2.3, Listing 10.13).** `grad_fn = jax.grad(compute_loss)` turns the loss function into a function that returns the gradient of the loss with respect to its first argument, the image. The step function is decorated with `@jax.jit` for compilation and calls `grads = grad_fn(image, filter_index)`; normalization, update and return are identical to the TensorFlow version.\n\nThe three listings share `compute_loss`, `ops.normalize`, and the update rule $x \\leftarrow x + \\eta\\,\\hat g$. Only the line or lines that produce `grads` differ, which is exactly the point made on p.318.",
+ "paragraphs": [
+  {
+   "ref": "p319_e05",
+   "excerpt": "In the case of PyTorch, we use `loss.backward()` and `image.grad` to obtain the gradients",
+   "what_it_says": "In PyTorch, the gradients of the loss with respect to the input image are obtained by calling loss.backward() and then reading image.grad.",
+   "what_it_means": "PyTorch builds the computation graph dynamically as operations run on tensors that have requires_grad=True. loss.backward() runs reverse-mode autodiff from the scalar loss and stores the result in the .grad attribute of each leaf tensor that requires gradients. The image is made such a leaf by clone().detach().requires_grad_(True). The model weights also receive .grad values as a side effect, but those are never used here.",
+   "why_it_matters": "It shows the imperative, side-effect-based PyTorch style: gradients are not returned, they are written onto tensors. That is why you must know which tensor is a leaf and whether .grad accumulates.",
+   "technical_idea": "image.grad is populated only for leaf tensors with requires_grad=True. Intermediate tensors do not keep .grad unless retain_grad() is called.",
+   "terminology": [
+    {"term": "loss.backward()", "meaning": "Runs backpropagation from a scalar tensor and fills the .grad of the leaf tensors involved."},
+    {"term": "Leaf tensor", "meaning": "A tensor created directly by the user (not the result of a tracked operation); .grad is stored on leaves."}
+   ],
+   "connections": [
+    "p.101: Listing 3.26 computes a gradient with .backward() on a scalar with requires_grad=True",
+    "p.103: in the chapter 3 training step, .grad had to be reset to None to prevent accumulation"
+   ]
+  },
+  {
+   "ref": "p319_e08",
+   "excerpt": "No need to reset the gradients since the image tensor is recreated at each",
+   "what_it_says": "There is no need to reset the gradients, because the image tensor is recreated at each iteration.",
+   "what_it_means": "PyTorch adds each new backward() result to the existing .grad (p.101). In the training loop of chapter 3 the same weight tensors are reused, so their .grad had to be cleared each step. Here, every call starts with image.clone().detach(), a brand-new leaf tensor whose .grad is None. Gradients from previous steps therefore cannot accumulate onto it. The update image = image + learning_rate * grads also creates a new tensor rather than modifying a leaf in place.",
+   "why_it_matters": "Forgetting to reset .grad in a loop that reuses a tensor silently produces gradients that keep growing, a classic PyTorch bug. The design here avoids the issue structurally.",
+   "technical_idea": "Beyond the book: the model's weights do accumulate .grad across iterations here, since backward() also reaches them. That wastes some memory and compute but does not affect the result, because only image.grad is used.",
+   "terminology": [
+    {"term": "Gradient accumulation", "meaning": "PyTorch's default behavior of summing new gradients into an existing .grad attribute."}
+   ],
+   "connections": [
+    "p.101: backward() called repeatedly accumulates into .grad",
+    "p.103: resetting .grad to None in a training step"
+   ]
+  },
+  {
+   "ref": "p319_e10",
+   "excerpt": "In the case of JAX, we use `jax.grad()` to obtain a function that returns",
+   "what_it_says": "In JAX, jax.grad() produces a function that returns the gradients of the loss with respect to the input image.",
+   "what_it_means": "JAX is functional. jax.grad takes compute_loss(image, filter_index) and returns grad_fn(image, filter_index), which computes d(loss)/d(image), the gradient with respect to the first argument by default. That is why compute_loss has the image as its first argument. Nothing is watched or accumulated; the gradient is simply the return value of a transformed function. The step function is compiled with @jax.jit.",
+   "why_it_matters": "This is the 'meta-function' style described on p.110. It explains why JAX code puts the differentiated state first and avoids side effects.",
+   "technical_idea": "jax.grad(f, argnums=0) differentiates with respect to argument 0. In JAX, image += ... is not an in-place mutation: JAX arrays are immutable, so it rebinds the name image to a new array.",
+   "terminology": [
+    {"term": "jax.grad", "meaning": "Function transformation that returns a new function computing the gradient of a scalar-valued function."},
+    {"term": "@jax.jit", "meaning": "Just-in-time compilation of a function with XLA for fast repeated execution."}
+   ],
+   "connections": [
+    "p.110: JAX's three-step gradient recipe: define compute_loss, call jax.grad, call grad_fn",
+    "p.111: jax.value_and_grad when the loss value is also needed (not used here)"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "gradient_ascent_input_space",
+   "name": "Gradient ascent in input space",
+   "definition": "Updating the input image in the direction of the gradient of a filter's activation so as to increase that activation, with the network weights frozen.",
+   "intuition": "Each step nudges the pixels toward 'more of what this filter likes'.",
+   "technical": "Update rule in all three listings: image <- image + learning_rate * normalize(d loss / d image). The plus sign makes it ascent.",
+   "significance": "This is the core operation of the filter visualization loop on p.320.",
+   "example": "One call of gradient_ascent_step slightly increases the mean activation of filter filter_index of block3_sepconv1.",
+   "misconception": "Using image -= ... would minimize the activation, producing an image the filter dislikes.",
+   "related": ["gradient_descent", "gradient_normalization"],
+   "source": "book"
+  },
+  {
+   "id": "gradient_tape",
+   "name": "GradientTape",
+   "definition": "TensorFlow context manager that records operations so tape.gradient(target, source) can compute gradients.",
+   "intuition": "Record the forward pass, then replay it backwards.",
+   "technical": "Here tape.gradient(loss, image) is called after the with block closes; one tape supports one gradient call unless persistent=True.",
+   "significance": "It is the TensorFlow implementation of the gradient step in Listing 10.11.",
+   "example": "grads = tape.gradient(loss, image) returns a tensor shaped like image.",
+   "misconception": "The gradient call does not have to be inside the with block; only the forward computation must be recorded there.",
+   "related": ["autodiff", "backpropagation"],
+   "source": "book"
+  },
+  {
+   "id": "pytorch_autograd",
+   "name": "PyTorch autograd (backward and .grad)",
+   "definition": "PyTorch's dynamic reverse-mode autodiff: operations on tensors with requires_grad=True are tracked, and loss.backward() writes gradients into the leaves' .grad attributes.",
+   "intuition": "Gradients are delivered by side effect onto the tensors, not returned as values.",
+   "technical": "clone() copies the data; detach() cuts it from any previous graph, making a fresh leaf; requires_grad_(True) enables tracking in place. Because the leaf is new at each step, .grad starts at None.",
+   "significance": "It explains the specific three-method chain at the start of Listing 10.12 and why no gradient reset is required.",
+   "example": "image = image.clone().detach().requires_grad_(True); loss.backward(); image.grad.",
+   "misconception": "detach() alone would share memory with the original; clone() ensures a separate copy so the caller's tensor is not affected.",
+   "related": ["autodiff", "backpropagation"],
+   "source": "book"
+  },
+  {
+   "id": "jax_grad",
+   "name": "jax.grad function transformation",
+   "definition": "A JAX transformation that maps a scalar-valued function f to a function computing the gradient of f with respect to its first argument.",
+   "intuition": "Instead of asking for a gradient, you ask for a gradient-computing function and then call it.",
+   "technical": "grad_fn = jax.grad(compute_loss); grad_fn(image, filter_index) returns d compute_loss / d image. It is combined with @jax.jit to compile the step.",
+   "significance": "It shows the functional design that JAX requires: pure functions, with the differentiated state as the first argument.",
+   "example": "Listing 10.13's grad_fn = jax.grad(compute_loss).",
+   "misconception": "jax.grad does not differentiate with respect to all arguments by default; only argnums=0 unless told otherwise.",
+   "related": ["autodiff"],
+   "source": "book"
+  },
+  {
+   "id": "gradient_normalization",
+   "name": "Gradient normalization trick",
+   "definition": "Rescaling the gradient to unit L2 norm before the update so step sizes stay in a consistent range.",
+   "intuition": "Keep the direction, fix the stride.",
+   "technical": "Implemented by grads = ops.normalize(grads) in all three listings. Beyond the book: Keras 3's ops.normalize(x, axis=-1, order=2) normalizes along the last axis by default, i.e. each pixel's 3-channel gradient vector is scaled to unit length. That is a per-pixel variant of the whole-tensor L2 normalization described on p.318.",
+   "significance": "It allows one learning rate (10.0 on p.320) to work for all filters.",
+   "example": "A pixel gradient (0.003, -0.004, 0) becomes (0.6, -0.8, 0).",
+   "misconception": "Normalization is not regularization; it does not limit the image values, only the step size.",
+   "related": ["learning_rate"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "The shared update rule of Listings 10.11-10.13",
+   "latex": "g = \\nabla_x \\mathcal{L}(x, f), \\qquad x \\leftarrow x + \\eta \\, \\frac{g}{\\lVert g \\rVert_2}",
+   "source_text": "grads = tape.gradient(loss, image)  /  grads = ops.normalize(grads)  /  image += learning_rate * grads",
+   "variables": [
+    {"symbol": "x", "meaning": "The image tensor being optimized."},
+    {"symbol": "f", "meaning": "filter_index."},
+    {"symbol": "\\mathcal{L}(x, f)", "meaning": "compute_loss(image, filter_index): mean activation of filter f, borders excluded (p.318)."},
+    {"symbol": "g", "meaning": "grads, the gradient of the loss with respect to the image."},
+    {"symbol": "\\eta", "meaning": "learning_rate."}
+   ],
+   "operations": "Differentiate, normalize, scale by the learning rate, and add.",
+   "purpose": "To move the image a little in a direction that activates the target filter more strongly (callout).",
+   "interpretation": "The positive sign means ascent: for a small enough eta, the filter's activation increases at each step. Beyond the book: ops.normalize with its default axis=-1 normalizes each pixel's channel vector, so in code the norm is taken per pixel rather than over the whole tensor.",
+   "intuition": "A first-order Taylor argument: L(x + eta*g_hat) ≈ L(x) + eta * g·g_hat = L(x) + eta*||g|| > L(x).",
+   "numerical_example": "With $\\eta = 10$ (the value used on p.320) and a pixel gradient $g = (0.02, 0.0, -0.01)$, we get $\\lVert g \\rVert_2 \\approx 0.0224$, $\\hat g \\approx (0.894, 0, -0.447)$, so that pixel changes by $(+8.94, 0, -4.47)$.",
+   "source": "book",
+   "book_ref": "p.318-319"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "10.11",
+   "title": "Loss maximization via stochastic gradient ascent: TensorFlow (continued from p.318)",
+   "original_code": "        loss = compute_loss(image, filter_index)\n    grads = tape.gradient(loss, image)\n    grads = ops.normalize(grads)\n    image += learning_rate * grads\n    return image",
+   "language": "python",
+   "what_it_does": "Completes the TensorFlow step function started on p.318 (import tensorflow, @tf.function, the def line, the GradientTape block and tape.watch(image) are on that page). It computes the loss inside the tape, takes the gradient with respect to the image, normalizes it, and performs one ascent step.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Callout: 'Computes the loss scalar, indicating how much the current image activates the filter.' Indented inside the with tf.GradientTape() block, so it is recorded."},
+    {"lines": "2", "explanation": "Callout: 'Computes the gradients of the loss with respect to the image.' Possible only because the image was watched on p.318."},
+    {"lines": "3", "explanation": "Callout: 'Applies the \"gradient normalization trick\".'"},
+    {"lines": "4", "explanation": "Callout: 'Moves the image a little bit in a direction that activates our target filter more strongly.'"},
+    {"lines": "5", "explanation": "Callout: 'Returns the updated image, so we can run the step function in a loop.'"}
+   ],
+   "inputs_outputs": "Input: image, filter_index, learning_rate. Output: the updated image tensor (same shape).",
+   "algorithm": "One iteration of normalized gradient ascent.",
+   "theory_link": "Reverse-mode autodiff through the frozen Xception layers down to the pixels.",
+   "parameters": [
+    {"name": "learning_rate", "role": "Step length after normalization."},
+    {"name": "filter_index", "role": "Selects the filter whose activation is maximized."}
+   ],
+   "pitfalls": [
+    "The loss line must stay inside the tape scope, or nothing is recorded and the gradient is None.",
+    "image += ... on a tf.Tensor creates a new tensor (tensors are immutable); that is why the function returns the image rather than relying on mutation."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "10.12",
+   "title": "Loss maximization via stochastic gradient ascent: PyTorch",
+   "original_code": "import torch\n\ndef gradient_ascent_step(image, filter_index, learning_rate):\n    image = image.clone().detach().requires_grad_(True)\n    loss = compute_loss(image, filter_index)\n    loss.backward()\n    grads = image.grad\n    grads = ops.normalize(grads)\n    image = image + learning_rate * grads\n    return image",
+   "language": "python",
+   "what_it_does": "The PyTorch version of the step: it makes a fresh gradient-tracking copy of the image, backpropagates the filter-activation loss to it, reads the gradient from image.grad, normalizes it and takes an ascent step.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Backend-specific import."},
+    {"lines": "3", "explanation": "Same signature as the TensorFlow and JAX versions. No compile decorator is used."},
+    {"lines": "4", "explanation": "Callout: 'Creates a copy of \"image\" that we can get gradients for.' clone copies the data, detach makes it a new leaf outside any previous graph, requires_grad_(True) enables tracking."},
+    {"lines": "5", "explanation": "Forward pass and loss, tracked by autograd."},
+    {"lines": "6", "explanation": "Backpropagates from the scalar loss and fills image.grad."},
+    {"lines": "7", "explanation": "Reads the gradient with respect to the image."},
+    {"lines": "8", "explanation": "Same normalization call as in the other backends (keras.ops works on torch tensors)."},
+    {"lines": "9", "explanation": "Out-of-place update. An in-place += on a leaf that requires grad would raise an error in PyTorch."},
+    {"lines": "10", "explanation": "Returns the new image for the next loop iteration."}
+   ],
+   "inputs_outputs": "Input: torch image tensor, filter index, learning rate. Output: updated image tensor (still attached to the autograd graph, but detached again at the start of the next call).",
+   "algorithm": "One normalized gradient-ascent step using dynamic autograd.",
+   "theory_link": "Shows PyTorch's side-effect model of gradients (.grad attributes) and why accumulation is avoided by recreating the leaf.",
+   "parameters": [
+    {"name": "learning_rate", "role": "Step length."},
+    {"name": "filter_index", "role": "Target filter."}
+   ],
+   "pitfalls": [
+    "Without requires_grad_(True), image.grad is None after backward().",
+    "Writing image += learning_rate * grads on the leaf tensor would fail ('a leaf Variable that requires grad is being used in an in-place operation').",
+    "Beyond the book: the model's weights also get .grad from backward(); wrapping the model parameters with requires_grad_(False) would save work."
+   ],
+   "illustrative_code": "# AI-written (not from the book): why the reset is unnecessary\nimport torch\nx0 = torch.tensor([1.0, 2.0])\nfor _ in range(3):\n    x = x0.clone().detach().requires_grad_(True)\n    (x ** 2).sum().backward()\n    print(x.grad)   # always tensor([2., 4.]) - fresh leaf, no accumulation"
+  },
+  {
+   "id": "c3",
+   "listing": "10.13",
+   "title": "Loss maximization via stochastic gradient ascent: JAX",
+   "original_code": "import jax\n\ngrad_fn = jax.grad(compute_loss)\n\n@jax.jit\ndef gradient_ascent_step(image, filter_index, learning_rate):\n    grads = grad_fn(image, filter_index)\n    grads = ops.normalize(grads)\n    image += learning_rate * grads\n    return image",
+   "language": "python",
+   "what_it_does": "The JAX version: it builds a gradient function from compute_loss once, then defines a JIT-compiled step that calls it, normalizes the result and takes an ascent step.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Backend-specific import."},
+    {"lines": "3", "explanation": "jax.grad turns compute_loss(image, filter_index) into a function returning the gradient with respect to its first argument, image."},
+    {"lines": "5", "explanation": "@jax.jit compiles the step with XLA."},
+    {"lines": "6-7", "explanation": "Calls the gradient function. There is no tape and no .grad attribute: the gradient is a return value."},
+    {"lines": "8-10", "explanation": "Normalization, update and return, identical to the TensorFlow version. Because JAX arrays are immutable, += rebinds image to a new array."}
+   ],
+   "inputs_outputs": "Input: JAX image array, filter index, learning rate. Output: new image array.",
+   "algorithm": "One normalized gradient-ascent step via function transformation.",
+   "theory_link": "Functional autodiff: gradients are obtained by transforming pure functions (p.110).",
+   "parameters": [
+    {"name": "grad_fn", "role": "The gradient-computing function derived from compute_loss."},
+    {"name": "learning_rate", "role": "Step length."}
+   ],
+   "pitfalls": [
+    "compute_loss must have the image as its first argument, because jax.grad differentiates argnums=0 by default.",
+    "Beyond the book: under jit, changing filter_index between calls is fine if it is passed as an array, but static Python control flow on it would trigger recompilation or errors.",
+    "If you also need the loss value, jax.value_and_grad (p.111) avoids computing the forward pass twice."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Line-by-line correspondence of the three backends",
+   "kind": "breakdown",
+   "body": "| Step | TensorFlow (10.11) | PyTorch (10.12) | JAX (10.13) |\n|---|---|---|---|\n| Make the image differentiable | `tape.watch(image)` | `image.clone().detach().requires_grad_(True)` | nothing (argument 0 of `grad_fn`) |\n| Compute loss | inside `GradientTape` | plain call | inside `grad_fn` |\n| Get gradient | `tape.gradient(loss, image)` | `loss.backward(); image.grad` | `grad_fn(image, filter_index)` |\n| Normalize | `ops.normalize(grads)` | same | same |\n| Update | `image += lr * grads` | `image = image + lr * grads` | `image += lr * grads` |\n| Compile | `@tf.function` | none | `@jax.jit` |\n\nThe last three rows are almost identical because `keras.ops` is backend-agnostic.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the ascent step increases the activation",
+   "kind": "step_by_step",
+   "body": "1. Near the current image $x$, the loss is approximately linear: $\\mathcal{L}(x+\\delta) \\approx \\mathcal{L}(x) + g^\\top\\delta$.\n2. Among all steps $\\delta$ of a fixed length $\\eta$, the one that maximizes $g^\\top\\delta$ is $\\delta = \\eta\\, g/\\lVert g\\rVert$ (Cauchy-Schwarz).\n3. The predicted gain is then $\\eta\\lVert g\\rVert > 0$.\n4. If $\\eta$ is too large the linear approximation breaks down. On p.320 the authors use $\\eta = 10$ for 30 iterations, although the starting pixels lie in $[0.4, 0.6]$. The image soon leaves the natural $[0, 1]$ range, which is acceptable there because `deprocess_image` re-standardizes it before display.\n\nThis is an AI-added justification; the book states only that the update moves the image toward stronger activation.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Analogy: three ways to get directions",
+   "kind": "analogy",
+   "body": "TensorFlow is like turning on a dashcam (the tape) before driving and replaying the footage. PyTorch is like a car that leaves chalk marks (.grad) on every signpost it passes; if you reuse the same signposts you must wipe the old marks first. Here the image is a fresh signpost each time, so no wiping is needed. JAX is like asking a cartographer for a function that, given any start point, returns the uphill direction.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Same step, three gradient mechanisms",
+   "why": "The page's three listings differ only in how grads is produced; this diagram shows the shared pipeline and the backend-specific branch.",
+   "mermaid": "flowchart LR\n  X[\"image\"] --> P{\"backend\"}\n  P -- TensorFlow --> T[\"GradientTape + tape.watch\\ntape.gradient(loss, image)\"]\n  P -- PyTorch --> Q[\"clone().detach().requires_grad_(True)\\nloss.backward(); image.grad\"]\n  P -- JAX --> J[\"grad_fn = jax.grad(compute_loss)\\ngrad_fn(image, filter_index)\"]\n  T --> N[\"ops.normalize(grads)\"]\n  Q --> N\n  J --> N\n  N --> U[\"image + learning_rate * grads\"]\n  U --> R[\"return image\"]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Computational graph and backward pass",
+   "why": "All three listings rely on reverse-mode autodiff from the scalar loss back to an input. This small graph lets you step through forward and backward passes; here the image plays the role of the input x and the weights stay fixed.",
+   "widget": "backprop_graph",
+   "params": {"example": "two_layer_relu", "x": 1.5, "y": 1.0, "w": 0.8, "b": 0.1, "lr": 0.1}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "The PyTorch version must call image.grad.zero_() or set image.grad = None each step.", "correction": "Not here: the image is recreated with clone().detach() at the start of each step, so its .grad always starts empty (stated on the page)."},
+  {"claim": "jax.grad(compute_loss) returns the gradient values.", "correction": "It returns a function. Gradients are obtained by calling grad_fn(image, filter_index)."},
+  {"claim": "The three backends produce different visualizations because their algorithms differ.", "correction": "The algorithm is identical. Only the mechanism used to compute the same gradient differs, so results should match up to numerical noise."},
+  {"claim": "image += learning_rate * grads mutates the caller's image in place.", "correction": "TensorFlow and JAX tensors are immutable, so += creates a new tensor, and PyTorch uses an explicit out-of-place addition. That is why each function returns the image."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 318, "note": "The first lines of Listing 10.11, compute_loss, and the gradient normalization trick."},
+   {"page": 101, "note": "PyTorch .backward() and gradient accumulation."},
+   {"page": 103, "note": "Resetting .grad in a PyTorch training step, the step this page says is unnecessary here."},
+   {"page": 110, "note": "jax.grad turning a loss function into a gradient function."}
+  ],
+  "later": [
+   {"page": 320, "note": "Listing 10.14 calls gradient_ascent_step in a loop of 30 iterations with learning_rate 10."},
+   {"page": 326, "note": "Grad-CAM gradient computation in TensorFlow."},
+   {"page": 327, "note": "Grad-CAM gradient computation in PyTorch and JAX, following the same three-backend pattern."}
+  ],
+  "prerequisites": [
+   {"page": 91, "note": "GradientTape and tape.watch."},
+   {"page": 110, "note": "JAX gradient recipe."}
+  ],
+  "related_math": [
+   {"page": 318, "note": "Definition of the L2 norm used by the normalization trick."}
+  ],
+  "related_code": [
+   {"page": 111, "note": "jax.value_and_grad, an alternative when the loss value is also needed."},
+   {"page": 240, "note": "Backend-specific training step functions in chapter 7."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "All three step functions compute loss, gradient, normalized gradient and update; only the gradient retrieval is backend-specific.",
+  "TensorFlow: compute the loss inside GradientTape, then tape.gradient(loss, image).",
+  "PyTorch: make a fresh leaf with clone().detach().requires_grad_(True), call loss.backward(), read image.grad. No reset is needed because the leaf is new each time.",
+  "JAX: grad_fn = jax.grad(compute_loss) differentiates with respect to the first argument; @jax.jit compiles the step.",
+  "The + in image += learning_rate * grads is what makes this gradient ascent."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why does Listing 10.12 not need to reset image.grad between iterations?",
+   "options": [
+    "PyTorch never accumulates gradients",
+    "The image tensor is recreated (cloned and detached) at each iteration, so its .grad starts empty",
+    "ops.normalize clears the gradient",
+    "loss.backward() overwrites .grad instead of adding to it"
+   ],
+   "answer": "The image tensor is recreated (cloned and detached) at each iteration, so its .grad starts empty",
+   "explanation": "The page says so explicitly. PyTorch does accumulate gradients by default (p.101), so the first and fourth options are wrong. ops.normalize only rescales values and has nothing to do with .grad.",
+   "page_refs": [319, 101]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "What does grad_fn = jax.grad(compute_loss) return, and with respect to which argument does it differentiate?",
+   "options": [],
+   "answer": "A new function with the same arguments as compute_loss that returns the gradient of the loss with respect to its first argument, the image.",
+   "explanation": "p.319 says jax.grad() yields a function returning gradients with respect to the input image. p.110 explains that the gradient is taken with respect to the first argument.",
+   "page_refs": [319, 110]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Which lines of the three listings are identical, and why can they be shared?",
+   "options": [],
+   "answer": "grads = ops.normalize(grads), the update image + learning_rate * grads, and return image (plus the compute_loss call). They use keras.ops and plain arithmetic, which work on any backend's tensors. Only gradient retrieval needs backend-specific APIs.",
+   "explanation": "p.318 says anything involving gradients requires backend-level APIs; everything else is backend-agnostic.",
+   "page_refs": [318, 319]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "In Listing 10.12, what is the purpose of image.clone().detach().requires_grad_(True)?",
+   "options": [
+    "To move the image to the GPU",
+    "To create a copy of the image that gradients can be computed for",
+    "To normalize the image values",
+    "To freeze the model's weights"
+   ],
+   "answer": "To create a copy of the image that gradients can be computed for",
+   "explanation": "That is the printed callout. It neither changes the device nor normalizes values, and it does not affect the weights.",
+   "page_refs": [319]
+  },
+  {
+   "id": "q5",
+   "type": "math",
+   "question": "A pixel's gradient is (0, 0.03, 0.04) and learning_rate = 10. After normalization (unit L2 norm), what change is added to that pixel?",
+   "options": [],
+   "answer": "Norm = 0.05, so the normalized gradient is (0, 0.6, 0.8) and the change is (0, 6, 8).",
+   "explanation": "Divide by sqrt(0.03² + 0.04²) = 0.05, then multiply by the learning rate, following image += learning_rate * grads.",
+   "page_refs": [318, 319]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "What would happen if the update were written image -= learning_rate * grads?",
+   "options": [],
+   "answer": "It would become gradient descent on the activation, producing an image that minimizes the filter's response instead of the pattern the filter is most responsive to.",
+   "explanation": "The callout says the update moves the image in a direction that activates the filter more strongly, and that requires adding the gradient.",
+   "page_refs": [319]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you rewrite the step function for your preferred backend from memory and say exactly which line(s) would change if you switched backend?",
+   "options": [],
+   "answer": "Only the lines that make the image differentiable and obtain grads change (plus the compile decorator); the normalization, update and return stay identical.",
+   "explanation": "Compare your version with Listings 10.11-10.13.",
+   "page_refs": [318, 319]
+  }
+ ]
+}

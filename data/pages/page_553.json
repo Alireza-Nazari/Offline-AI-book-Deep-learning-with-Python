@@ -1,0 +1,431 @@
+{
+ "page_id": "page_553",
+ "pdf_page": 553,
+ "printed_page": "529",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:50:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. Three code elements extracted verbatim; the model.fit( call is cut at the page end and continues on p.554 with the callbacks list (VisualizationCallback and ModelCheckpoint). Minor terminology looseness in the book: classical Polyak averaging is a uniform average of iterates, while use_ema computes an exponential moving average; the book equates the two, as is common in practice."
+ },
+ "overview": {
+  "title": "Instantiating, compiling and fitting the diffusion model",
+  "chapter": "17 Image generation",
+  "section": "17.2 Diffusion models",
+  "subsection": "17.2.7 It’s go time!",
+  "main_topic": "Creating the DiffusionModel, adapting its normalizer, compiling with AdamW plus an InverseTimeDecay learning-rate schedule and exponential moving average (EMA) of weights, and starting fit() for 100 epochs.",
+  "central_idea": "The model is built with widths [32, 64, 96, 128] and block depth 2; the normalizer must be adapted to the dataset. Training uses AdamW with a learning rate that decays as 1e-3 / (1 + 0.1 * step / 1000) and keeps an EMA of the weights, written into the model every 100 batches, to stabilize training on a noisy loss landscape.",
+  "importance": "These are the practical knobs that make diffusion training stable and the generated images better; the adapt() call is easy to forget and silently breaks normalization.",
+  "learning_objectives": [
+   "Instantiate DiffusionModel and explain why normalizer.adapt(dataset) is required.",
+   "Compute the learning rate given by InverseTimeDecay at any step.",
+   "Explain what EMA of weights (Polyak averaging) does and what ema_overwrite_frequency controls.",
+   "Explain why compile() has no loss argument here.",
+   "Describe what the fit() call will do with the callbacks."
+  ],
+  "prerequisites": [
+   "The complete DiffusionModel class (pp.550-552)",
+   "The Oxford Flowers dataset pipeline (p.545)",
+   "The U-Net get_model() parameters (p.547)",
+   "Optimizers, learning rate and weight decay"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "Section **17.2.7 It's go time!** trains the diffusion model on the Oxford Flowers dataset.\n\n**Instantiation.** `model = DiffusionModel(image_size, widths=[32, 64, 96, 128], block_depth=2)` (image_size = 128 from p.545), followed by `model.normalizer.adapt(dataset)`. The callout insists: it \"computes the mean and variance necessary to perform normalization, don't forget it!\". Those statistics are used to normalize inputs in `call()` (p.551) and to denormalize outputs in `generate()` (p.552).\n\n**Optimizer.** `AdamW` with two options that stabilize training and improve image quality:\n\n- **Learning-rate decay** via `InverseTimeDecay(initial_learning_rate=1e-3, decay_steps=1000, decay_rate=0.1)`, which gradually lowers the learning rate. In Keras this computes $\\text{lr} = 10^{-3}/(1 + 0.1\\cdot\\text{step}/1000)$: about 9.1e-4 after 1,000 steps and 5e-4 after 10,000.\n- **Exponential moving average of model weights**, also called Polyak averaging (`use_ema=True`): the optimizer keeps a running average of the weights during training, and every 100 batches (`ema_overwrite_frequency=100`) overwrites the model's weights with it. This stabilizes the model's representations when the loss landscape is noisy, which is the case here since every batch uses fresh random noise and diffusion times.\n\n`model.compile()` receives only the optimizer: the loss is computed by the custom `compute_loss()` (p.551).\n\n**Fitting.** `model.fit(dataset, epochs=100, ...)` begins here; the callbacks list continues on p.554: `VisualizationCallback()` (p.552) plots generated samples after each epoch and `ModelCheckpoint` saves the weights.",
+ "paragraphs": [
+  {
+   "ref": "p553_e04",
+   "excerpt": "It’s finally time to train our diffusion model on the Oxford Flowers",
+   "what_it_says": "Time to train on Oxford Flowers: instantiate the model (widths [32, 64, 96, 128], block_depth 2) and adapt its normalizer to the dataset.",
+   "what_it_means": "These are the U-Net settings suggested on p.547. adapt() iterates over the whole dataset once and stores the per-channel mean and variance of pixel values in the Normalization layer. Without it, the layer would not know the dataset statistics, so the images would not be standardized as intended, and generate() would denormalize with the wrong values.",
+   "why_it_matters": "Forgetting adapt() is a silent bug: the code would not report the mistake, but the scale of images and noise would no longer match (p.549).",
+   "terminology": [
+    {"term": "adapt()", "meaning": "Method of Keras preprocessing layers that computes their state (here mean and variance) from data before training."}
+   ],
+   "connections": [
+    "p.547: get_model() and the suggested widths.",
+    "p.549: why images are normalized."
+   ]
+  },
+  {
+   "ref": "p553_e06",
+   "excerpt": "We’re going to use AdamW as our optimizer, with a few neat options",
+   "what_it_says": "The optimizer is AdamW, with a few options enabled to stabilize training and improve the quality of generated images.",
+   "what_it_means": "AdamW is Adam with decoupled weight decay: the weights are shrunk directly at each step instead of adding an L2 penalty to the loss. Beyond the book: Keras's AdamW uses weight_decay=0.004 by default, so decay is active even though the code does not set it.",
+   "why_it_matters": "Diffusion training is long and noisy; the optimizer settings noticeably affect final sample quality.",
+   "terminology": [
+    {"term": "AdamW", "meaning": "Adam with decoupled weight decay."}
+   ],
+   "connections": [
+    "p.500: the mini-GPT training in chapter 16 is another example of a carefully configured optimizer."
+   ]
+  },
+  {
+   "ref": "p553_e07",
+   "excerpt": "Learning rate decay—We gradually reduce the learning rate during training, via an",
+   "what_it_says": "Learning-rate decay: the learning rate is gradually reduced during training with an InverseTimeDecay schedule.",
+   "what_it_means": "InverseTimeDecay computes lr(step) = initial_learning_rate / (1 + decay_rate * step / decay_steps), continuously (not in stairs, by default). With the book's values the rate halves after 10,000 steps. Beyond the book: with about 8,189 images and batches of 32 (last partial batch dropped), an epoch is 255 steps, so 100 epochs is 25,500 steps and the final learning rate is about 2.8e-4.",
+   "why_it_matters": "Large steps early make fast progress; smaller steps later let the model settle into a good minimum instead of bouncing around.",
+   "terminology": [
+    {"term": "InverseTimeDecay", "meaning": "Learning-rate schedule lr = lr0 / (1 + rate * step / decay_steps)."}
+   ],
+   "connections": [
+    "p.553: configured in the compile() code below."
+   ]
+  },
+  {
+   "ref": "p553_e08",
+   "excerpt": "Exponential moving average of model weights—Also known as Polyak averaging. This technique",
+   "what_it_says": "EMA of model weights, also called Polyak averaging, keeps a running average of the weights during training. Every 100 batches the model's weights are overwritten with this average, which stabilizes the model's representations when the loss landscape is noisy.",
+   "what_it_means": "After each optimizer step, the optimizer updates a shadow copy: ema = m * ema + (1 - m) * w (Keras's default ema_momentum is 0.99). Averaging over many steps cancels the random jitter in the weights caused by noisy gradients. Overwriting every 100 batches means training continues from the smoothed weights.",
+   "why_it_matters": "For diffusion models, every batch has random noise and random diffusion times, so gradients are very noisy. Weight averaging is a standard trick for getting better samples.",
+   "technical_idea": "Beyond the book: strictly, Polyak-Ruppert averaging is a uniform average of all iterates, while EMA weights recent iterates more; the names are often used interchangeably.",
+   "terminology": [
+    {"term": "EMA of weights", "meaning": "An exponentially weighted running average of the model's parameters over training steps."},
+    {"term": "ema_overwrite_frequency", "meaning": "How many iterations between copying the EMA weights into the model's variables."}
+   ],
+   "connections": [
+    "p.554: ModelCheckpoint saves the weights during training."
+   ]
+  },
+  {
+   "ref": "p553_e11",
+   "excerpt": "Let’s fit the model. We’ll use our VisualizationCallback callback to plot examples",
+   "what_it_says": "The model is fit with VisualizationCallback to plot generated examples after each epoch and the ModelCheckpoint callback to save the model's weights.",
+   "what_it_means": "fit(dataset, epochs=100, callbacks=[...]) runs 100 passes over the flowers dataset. The callbacks list, shown on p.554, includes ModelCheckpoint(filepath='diffusion_model.weights.h5', save_weights_only=True, save_best_only=True).",
+   "why_it_matters": "Visual monitoring plus checkpointing is the standard setup for long generative training runs.",
+   "terminology": [
+    {"term": "ModelCheckpoint", "meaning": "A callback that saves the model or its weights during training."}
+   ],
+   "connections": [
+    "p.552: VisualizationCallback is defined there.",
+    "p.554: the rest of the fit() call and the Colab output-size note."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "learning_rate_schedule",
+   "name": "Learning-rate schedule (InverseTimeDecay)",
+   "definition": "A rule that changes the learning rate as training progresses; InverseTimeDecay divides the initial rate by a factor growing linearly with the step count.",
+   "intuition": "Take big strides at first, then shorter steps as you approach the goal.",
+   "technical": "lr(step) = 1e-3 / (1 + 0.1 * step / 1000).",
+   "significance": "Stabilizes late training and improves final quality.",
+   "example": "Step 0: 1e-3; step 10,000: 5e-4; step 25,500: about 2.8e-4.",
+   "misconception": "That decay_steps=1000 means the rate drops only once every 1,000 steps. With staircase=False (default) it decreases smoothly at every step.",
+   "related": ["learning_rate", "optimizer"],
+   "source": "book"
+  },
+  {
+   "id": "ema_weights",
+   "name": "Exponential moving average of weights (Polyak averaging)",
+   "definition": "Maintaining a running exponential average of the model's weights during training and periodically using it as the model's weights.",
+   "intuition": "Smooth out the zig-zag of noisy training by averaging where the weights have recently been.",
+   "technical": "ema <- m * ema + (1 - m) * w after each step (Keras default m = 0.99); with ema_overwrite_frequency=100, model weights are set to ema every 100 iterations.",
+   "significance": "Stabilizes representations when the loss landscape is noisy; widely used in diffusion models.",
+   "example": "With m = 0.99, the average effectively covers about the last 100 steps.",
+   "misconception": "That EMA changes the gradients. It only averages the weights the optimizer produced.",
+   "related": ["optimizer", "adam"],
+   "source": "book"
+  },
+  {
+   "id": "adamw",
+   "name": "AdamW",
+   "definition": "The Adam optimizer with decoupled weight decay.",
+   "intuition": "Adam's adaptive steps plus a gentle pull of all weights toward zero.",
+   "technical": "w <- w - lr * (Adam update + weight_decay * w); the decay term is not passed through Adam's adaptive scaling.",
+   "significance": "The optimizer chosen for diffusion training here.",
+   "example": "keras.optimizers.AdamW(learning_rate=schedule, use_ema=True, ema_overwrite_frequency=100).",
+   "misconception": "That AdamW is the same as Adam with an L2 penalty in the loss. With adaptive optimizers they differ.",
+   "related": ["adam", "optimizer", "regularization"],
+   "source": "book"
+  },
+  {
+   "id": "input_normalization",
+   "name": "Normalization layer adaptation",
+   "definition": "Computing the dataset mean and variance for a Normalization layer with adapt().",
+   "intuition": "Measure the data before standardizing it.",
+   "technical": "model.normalizer.adapt(dataset) iterates over the image batches and stores per-channel mean and variance.",
+   "significance": "Required for both input normalization (call) and output denormalization (generate).",
+   "example": "The callout: 'don't forget it!'.",
+   "misconception": "That the layer learns its statistics through backpropagation. They are computed once by adapt() and are not trained.",
+   "related": ["denormalization"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "InverseTimeDecay learning rate",
+   "latex": "\\eta(k) = \\frac{\\eta_0}{1 + r\\,\\dfrac{k}{K}} = \\frac{10^{-3}}{1 + 0.1\\,\\dfrac{k}{1000}}",
+   "source_text": "InverseTimeDecay(initial_learning_rate=1e-3, decay_steps=1000, decay_rate=0.1)",
+   "variables": [
+    {"symbol": "\\eta(k)", "meaning": "learning rate at optimizer step k"},
+    {"symbol": "\\eta_0", "meaning": "initial_learning_rate = 1e-3"},
+    {"symbol": "r", "meaning": "decay_rate = 0.1"},
+    {"symbol": "K", "meaning": "decay_steps = 1000"},
+    {"symbol": "k", "meaning": "optimizer iteration (batch) count"}
+   ],
+   "operations": "Hyperbolic decay in the step count.",
+   "purpose": "Gradually reduce the learning rate during training.",
+   "interpretation": "The rate halves after K/r = 10,000 steps and keeps decreasing slowly (proportional to 1/k for large k).",
+   "intuition": "The more you have trained, the smaller your steps.",
+   "numerical_example": "$k = 1000$: $10^{-3}/1.1 \\approx 9.09\\times10^{-4}$. $k = 10{,}000$: $5\\times10^{-4}$. $k = 25{,}500$ (100 epochs of 255 steps, an estimate beyond the book): $10^{-3}/3.55 \\approx 2.82\\times10^{-4}$.",
+   "source": "book",
+   "book_ref": "p.553"
+  },
+  {
+   "id": "m2",
+   "title": "Exponential moving average of weights",
+   "latex": "\\bar{w}_k = m\\,\\bar{w}_{k-1} + (1-m)\\,w_k",
+   "source_text": "use_ema=True, ema_overwrite_frequency=100",
+   "variables": [
+    {"symbol": "w_k", "meaning": "model weights after optimizer step k"},
+    {"symbol": "\\bar w_k", "meaning": "EMA of the weights"},
+    {"symbol": "m", "meaning": "ema_momentum (Keras default 0.99; not set in the book's code)"}
+   ],
+   "operations": "Exponentially weighted running average; every 100 steps, $w_k \\leftarrow \\bar w_k$.",
+   "purpose": "Smooth out noise in the weights.",
+   "interpretation": "Recent weights count most, with weight $(1-m)m^j$ for the weights j steps ago.",
+   "intuition": "A low-pass filter on the training trajectory.",
+   "numerical_example": "One weight oscillating 1.0, 1.2, 0.8, 1.2 with $m = 0.9$ and $\\bar w_0 = 1.0$: $\\bar w = 1.02, 1.0, 1.02$, much steadier than the raw values.",
+   "source": "ai_explanation",
+   "book_ref": "p.553"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Instantiating the model and adapting the normalizer",
+   "original_code": "model = DiffusionModel(image_size, widths=[32, 64, 96, 128], block_depth=2)\nmodel.normalizer.adapt(dataset)",
+   "language": "python",
+   "what_it_does": "Creates the DiffusionModel with a 4-stage U-Net and computes the per-channel mean and variance of the flower images for the Normalization layer.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "image_size = 128 (p.545); widths are the Conv2D sizes of the successive U-Net stages; 2 residual blocks per stage."},
+    {"lines": "2", "explanation": "Callout: 'Computes the mean and variance necessary to perform normalization, don't forget it!' Iterates once over the dataset."}
+   ],
+   "inputs_outputs": "Input: the batched image dataset. Output: a ready-to-compile model with adapted normalization statistics.",
+   "algorithm": "Build model, then a statistics pass over the data.",
+   "theory_link": "Implements the normalization requirement explained on p.549.",
+   "parameters": [
+    {"name": "widths", "role": "[32, 64, 96, 128] filters per stage."},
+    {"name": "block_depth", "role": "2 residual blocks per stage."}
+   ],
+   "pitfalls": [
+    "Skipping adapt() leaves the normalizer without dataset statistics, so inputs are not standardized and outputs are denormalized incorrectly.",
+    "adapt() reads the whole dataset; with image decoding this takes a moment."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Compiling with AdamW, InverseTimeDecay and EMA",
+   "original_code": "model.compile(\n    optimizer=keras.optimizers.AdamW(\n        learning_rate=keras.optimizers.schedules.InverseTimeDecay(\n            initial_learning_rate=1e-3,\n            decay_steps=1000,\n            decay_rate=0.1,\n        ),\n        use_ema=True,\n        ema_overwrite_frequency=100,\n    ),\n)",
+   "language": "python",
+   "what_it_does": "Configures training with an AdamW optimizer whose learning rate decays as 1e-3 / (1 + 0.1 * step / 1000) and which keeps an EMA of the weights, written into the model every 100 iterations.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Only an optimizer is passed: no loss and no metrics, because the loss comes from the custom compute_loss() (p.551)."},
+    {"lines": "3-7", "explanation": "Callout 'Configures the learning rate decay schedule': InverseTimeDecay with initial rate 1e-3, decay_steps 1000, decay_rate 0.1."},
+    {"lines": "8", "explanation": "Callout 'Turns on Polyak averaging': the optimizer keeps an EMA of the model's variables."},
+    {"lines": "9", "explanation": "Callout 'Configures how often to overwrite the model's weights with their exponential moving average': every 100 iterations."}
+   ],
+   "inputs_outputs": "Configures the model in place; returns None.",
+   "algorithm": "Per step: AdamW update with lr(step); update EMA; every 100 steps copy EMA into weights.",
+   "theory_link": "Learning-rate decay and weight averaging are both ways to reduce the effect of noisy gradients late in training.",
+   "parameters": [
+    {"name": "initial_learning_rate", "role": "1e-3 at step 0."},
+    {"name": "decay_steps / decay_rate", "role": "Control how fast the rate shrinks: halves after 10,000 steps."},
+    {"name": "use_ema", "role": "Enable the weight EMA."},
+    {"name": "ema_overwrite_frequency", "role": "100: iterations between overwriting model weights with the EMA."}
+   ],
+   "pitfalls": [
+    "The EMA momentum is left at its default (0.99 in Keras); it is a separate argument, ema_momentum.",
+    "AdamW applies a default weight decay (0.004 in Keras 3) even though it is not specified here."
+   ]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Starting model.fit() (continued on p.554)",
+   "original_code": "model.fit(\n    dataset,\n    epochs=100,",
+   "language": "python",
+   "what_it_does": "Begins the training call: 100 epochs over the flowers dataset. The callbacks argument (VisualizationCallback and a ModelCheckpoint saving to diffusion_model.weights.h5) follows on p.554.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "The dataset yields only images; call() builds the noisy inputs and targets itself."},
+    {"lines": "3", "explanation": "100 epochs; the book reports about 90 minutes on a free Colab T4 GPU (p.554)."}
+   ],
+   "inputs_outputs": "Input: the image dataset. Output: a History object (after the call completes on p.554).",
+   "algorithm": "Standard Keras training loop calling call() and compute_loss() for each batch.",
+   "theory_link": "Runs the noise-prediction training defined on pp.550-551.",
+   "parameters": [
+    {"name": "epochs", "role": "100 passes over the data."}
+   ],
+   "pitfalls": [
+    "On Colab the image output of the callback can exceed the cell output limit; p.554 suggests five fit(..., epochs=20) calls instead."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "How many steps, and what learning rate at the end?",
+   "kind": "numerical",
+   "body": "Estimate beyond the book: the Oxford 102 Flowers set has 8,189 images. With batches of 32 and the last partial batch dropped (p.545), one epoch is $\\lfloor 8189/32 \\rfloor = 255$ steps; 100 epochs is 25,500 steps. The learning rate then goes from $10^{-3}$ to $10^{-3}/(1 + 0.1 \\cdot 25.5) \\approx 2.8\\times10^{-4}$, and the EMA weights are copied into the model 255 times.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why weight averaging helps diffusion models",
+   "kind": "breakdown",
+   "body": "Each batch draws new random noise masks and diffusion times, so two consecutive gradient steps can disagree a lot even on the same images. The raw weights therefore jitter around a good region. Averaging them gives a point near the centre of that region, which typically generates cleaner, more consistent images. That is why the book describes EMA as stabilizing representations 'where the loss landscape is noisy'. (Explanation beyond the book.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Analogy: averaging a shaky hand",
+   "kind": "analogy",
+   "body": "A photographer with a shaky hand takes many quick shots and averages them to get one steady image. The optimizer's weights are the shaky shots; the EMA is the steady average.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "InverseTimeDecay(1e-3, decay_steps=1000, decay_rate=0.1) over 100 epochs",
+   "why": "Plots the learning rate configured on this page over the estimated 25,500 training steps (255 steps per epoch is an estimate, not a number from the book).",
+   "chart": {
+    "type": "line",
+    "data": {
+     "labels": [0, 2550, 5100, 7650, 10200, 12750, 15300, 17850, 20400, 22950, 25500],
+     "datasets": [
+      {"label": "Learning rate (x 1e-4)", "data": [10.0, 7.968, 6.623, 5.666, 4.95, 4.396, 3.953, 3.591, 3.289, 3.035, 2.817]}
+     ]
+    },
+    "options": {
+     "scales": {
+      "x": {"title": {"display": true, "text": "Optimizer step (10 epochs per tick)"}},
+      "y": {"title": {"display": true, "text": "Learning rate (x 1e-4)"}, "min": 0}
+     }
+    }
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "compile() must always receive a loss.",
+   "correction": "Here the loss is computed by the overridden compute_loss(), so compile() only needs the optimizer."
+  },
+  {
+   "claim": "The Normalization layer learns its mean and variance during fit().",
+   "correction": "They are computed once by model.normalizer.adapt(dataset) before training; the callout warns not to forget it."
+  },
+  {
+   "claim": "With ema_overwrite_frequency=100, the EMA is only updated every 100 batches.",
+   "correction": "The moving average is updated every step; the 100 refers to how often the model's weights are overwritten with it."
+  },
+  {
+   "claim": "InverseTimeDecay with decay_steps=1000 lowers the learning rate in steps every 1,000 batches.",
+   "correction": "By default the decay is continuous; staircase=True would make it piecewise constant."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 552, "note": "VisualizationCallback and the end of generate()."},
+   {"page": 551, "note": "call() and compute_loss(), the logic that fit() runs."},
+   {"page": 549, "note": "Why images are normalized to zero mean, unit variance."},
+   {"page": 547, "note": "get_model() and the widths=[32, 64, 96, 128], block_depth=2 example."},
+   {"page": 545, "note": "The flowers dataset, image_size = 128 and batch_size = 32."}
+  ],
+  "later": [
+   {"page": 554, "note": "The callbacks list, the Colab output-limit workaround and Figure 17.12 with generated flowers after 100 epochs."},
+   {"page": 555, "note": "Section 17.3 extends diffusion to text-to-image models."}
+  ],
+  "prerequisites": [
+   {"page": 550, "note": "The DiffusionModel class."}
+  ],
+  "related_math": [
+   {"page": 548, "note": "The diffusion schedule used in every training step."}
+  ],
+  "related_code": [
+   {"page": 552, "note": "VisualizationCallback, passed to fit()."},
+   {"page": 554, "note": "Continuation of model.fit() with ModelCheckpoint."}
+  ],
+  "related_figures": [
+   {"page": 554, "note": "Figure 17.12, generated flowers."}
+  ]
+ },
+ "takeaways": [
+  "Instantiate DiffusionModel(image_size, widths=[32, 64, 96, 128], block_depth=2) and always call model.normalizer.adapt(dataset).",
+  "AdamW with InverseTimeDecay: lr = 1e-3 / (1 + 0.1 * step / 1000), halving after 10,000 steps.",
+  "use_ema=True keeps an exponential moving average of the weights; ema_overwrite_frequency=100 copies it into the model every 100 batches.",
+  "compile() takes no loss because compute_loss() defines it.",
+  "fit() runs 100 epochs with VisualizationCallback and ModelCheckpoint (p.554)."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "math",
+   "question": "What learning rate does the InverseTimeDecay schedule give at step 5,000?",
+   "options": [],
+   "answer": "1e-3 / (1 + 0.1 * 5000 / 1000) = 1e-3 / 1.5, about 6.67e-4.",
+   "explanation": "Apply lr = initial / (1 + decay_rate * step / decay_steps).",
+   "page_refs": [553]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "What does ema_overwrite_frequency=100 control?",
+   "options": ["How often the learning rate is decayed", "How often the model's weights are overwritten with their exponential moving average", "How many epochs to train", "How often the VisualizationCallback runs"],
+   "answer": "How often the model's weights are overwritten with their exponential moving average",
+   "explanation": "Per the callout and the bullet: every 100 batches, the model's weights are replaced with the averaged weights. The learning-rate decay is continuous, epochs are set in fit(), and the callback runs once per epoch.",
+   "page_refs": [553]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "Why does the callout say 'don't forget it!' about model.normalizer.adapt(dataset)?",
+   "options": [],
+   "answer": "Because adapt() computes the mean and variance the Normalization layer needs; without it the images are not standardized to match the unit-variance noise, and generate() cannot denormalize correctly, with no error raised.",
+   "explanation": "The normalizer is used in call() (p.551) and its mean/variance in generate() (p.552).",
+   "page_refs": [553, 551, 552]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why is weight averaging particularly useful for training this diffusion model?",
+   "options": [],
+   "answer": "Each batch uses random noise masks and random diffusion times, so gradients are very noisy and the weights jitter. An EMA of the weights smooths out this jitter, stabilizing the model's representations and improving the generated images.",
+   "explanation": "The book says EMA 'helps stabilize the model's representations in scenarios where the loss landscape is noisy'; the source of the noise is an inference from pp.550-551.",
+   "page_refs": [553, 551]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Why is no loss passed to model.compile()?",
+   "options": ["Keras uses MSE by default", "The loss is computed by the custom compute_loss() method", "Diffusion models are trained without a loss", "The loss is passed to fit() instead"],
+   "answer": "The loss is computed by the custom compute_loss() method",
+   "explanation": "compute_loss() (p.551) returns MAE between real and predicted noise masks. Keras has no default MSE loss, diffusion models do have a loss, and fit() does not accept a loss.",
+   "page_refs": [553, 551]
+  },
+  {
+   "id": "q6",
+   "type": "math",
+   "question": "After how many steps has the learning rate fallen to a quarter of its initial value?",
+   "options": [],
+   "answer": "When 1 + 0.1 * k / 1000 = 4, i.e. k = 30,000 steps.",
+   "explanation": "Solve the InverseTimeDecay formula for a factor of 4.",
+   "page_refs": [553]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you set up training for this model from scratch: instantiate, adapt, compile with the two optimizer options, and fit with both callbacks?",
+   "options": [],
+   "answer": "See the three snippets on this page and the callbacks list on p.554.",
+   "explanation": "Check especially that you remembered adapt() and that compile() has no loss.",
+   "page_refs": [553, 554]
+  }
+ ]
+}

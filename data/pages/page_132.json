@@ -1,0 +1,593 @@
+{
+ "page_id": "page_132",
+ "pdf_page": 132,
+ "printed_page": "108",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:14:31Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction; listing 4.3, the REPL output, the label-casting snippet and the 4.1.3 opening text all match the page image."
+ },
+ "overview": {
+  "title": "Multi-hot encoding the IMDb reviews and choosing a Dense architecture",
+  "chapter": "4 Classification and regression",
+  "section": "4.1 Classifying movie reviews: A binary classification example",
+  "subsection": "4.1.3 Building your model",
+  "main_topic": "Turning integer word-index sequences into fixed-size multi-hot vectors, casting labels to float32, and the architecture decision for a stack of Dense layers",
+  "central_idea": "Variable-length lists of word indices are converted into 10,000-dimensional 0/1 vectors with a small NumPy function, labels become float32, and the resulting vector-in/scalar-out problem is handled by a plain stack of Dense+relu layers: two hidden layers of 16 units plus a scalar output layer.",
+  "importance": "This page completes the data-preparation step of the book's first end-to-end text classifier and opens the model-design step. The multi-hot trick, the label dtype conversion and the 'how many layers / how many units' framing reappear in every example of chapter 4.",
+  "learning_objectives": [
+   "Explain what multi-hot encoding is and how listing 4.3 implements it with NumPy fancy indexing",
+   "Predict the shape and content of x_train after encoding",
+   "Explain why labels are cast to float32",
+   "Name the two key architecture decisions for a stack of Dense layers",
+   "State the architecture the book chooses for IMDb (16-16-1)"
+  ],
+  "prerequisites": [
+   "The IMDb dataset as lists of word indices restricted to the top 10,000 words (p.130-131)",
+   "NumPy arrays, shapes and dtypes (chapter 2)",
+   "Dense layers and relu (chapters 2-3)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with **Listing 4.3**, the manual implementation of the second option described on p.131: *multi-hot encoding*. The function `multi_hot_encode(sequences, num_classes)` allocates an all-zero matrix of shape `(len(sequences), num_classes)` and, for each review `i`, sets `results[i][sequence] = 1.0`. Because `sequence` is a Python list of integer word indices, NumPy's integer-array indexing sets every listed position to 1 at once. Applied with `num_classes=10000` to `train_data` and `test_data`, it yields `x_train` and `x_test`, each a 2-D float matrix with one 10,000-dimensional row per review. Printing `x_train[0]` shows a vector like `[0., 1., 1., ..., 0., 0., 0.]`.\n\nThe labels are vectorized too, which is trivial: they are already NumPy integer arrays, so `astype(\"float32\")` converts them to floats (`y_train`, `y_test`). At that point \"the data is ready to be fed into a neural network.\"\n\nSection **4.1.3 Building your model** then characterizes the problem: inputs are vectors, labels are scalars (1s and 0s) — \"one of the simplest problem setups you'll ever encounter.\" A plain stack of `Dense` layers with `relu` activations works well here. Designing such a stack means making two decisions: **how many layers** and **how many units per layer**. The authors defer the principled answer to chapter 5 and ask the reader to trust them for now: **two intermediate layers with 16 units each**, followed by **a third layer that outputs the scalar sentiment prediction**. The Keras code for this model (listing 4.4) and figure 4.1 come on the next page (p.133).",
+ "paragraphs": [
+  {
+   "ref": "p132_e05",
+   "excerpt": "Here’s what the samples look like now:",
+   "what_it_says": "Short lead-in to the REPL display of the first encoded training sample.",
+   "what_it_means": "After encoding, a review is no longer a list of indices but a dense float vector of length 10,000 with 1.0 at the positions of words that occur in it. The 0. at index 0 and the 1. at indices 1 and 2 reflect the presence of those low indices (index 1 is the start token prepended to every review, per p.131).",
+   "why_it_matters": "Seeing the concrete array helps you verify the shape and meaning of the encoding before building a model.",
+   "technical_idea": "x_train[0] has shape (10000,) and dtype float64 (np.zeros default).",
+   "terminology": [
+    {
+     "term": "sample",
+     "meaning": "One data point; here one encoded review (one row of x_train)."
+    }
+   ],
+   "connections": [
+    "p.131: p.131 explains that the leading ? in decoded reviews corresponds to a start token prefixed to each review, consistent with index 1 being set."
+   ]
+  },
+  {
+   "ref": "p132_e07",
+   "excerpt": "In addition to vectorizing the input sequences, you should also vectorize",
+   "what_it_says": "Labels must also be vectorized, but it is easy: they are already NumPy arrays, so only their type needs to change from ints to floats.",
+   "what_it_means": "The model's output will be a float probability and the loss (binary crossentropy, introduced shortly) compares floats; giving the targets a float dtype keeps the arithmetic consistent.",
+   "why_it_matters": "Matching target dtype to the model's output dtype avoids silent casting and type errors in the loss computation.",
+   "technical_idea": "astype returns a new array; float32 is the standard precision for deep-learning computation.",
+   "terminology": [
+    {
+     "term": "astype",
+     "meaning": "NumPy method returning a copy of the array converted to the given dtype."
+    },
+    {
+     "term": "float32",
+     "meaning": "32-bit floating point, the default compute dtype in Keras."
+    }
+   ],
+   "connections": [
+    "p.130: The labels were introduced as 0 (negative) and 1 (positive) with the IMDb dataset."
+   ]
+  },
+  {
+   "ref": "p132_e12",
+   "excerpt": "The input data is vectors, and the labels are scalars (1s and",
+   "what_it_says": "The problem is vector input and scalar 0/1 label, among the simplest setups possible; a plain stack of Dense layers with relu activations performs well on it.",
+   "what_it_means": "Because each review is now a fixed-size vector with no spatial or sequential structure retained, there is nothing for convolutions or recurrence to exploit; fully connected layers are the natural choice.",
+   "why_it_matters": "It links the shape of the data to the choice of model family, a reasoning pattern the book uses throughout.",
+   "technical_idea": "Multi-hot vectors discard word order (a bag-of-words representation), so an order-agnostic model such as an MLP is appropriate.",
+   "terminology": [
+    {
+     "term": "Dense layer",
+     "meaning": "A fully connected layer computing activation(dot(input, W) + b)."
+    },
+    {
+     "term": "relu",
+     "meaning": "Rectified linear unit, max(x, 0)."
+    }
+   ],
+   "connections": [
+    "p.140: The 4.1.7 wrap-up repeats that stacks of Dense layers with relu activations can solve a wide range of problems, including sentiment classification.",
+    "p.423: Chapter 14 revisits multi-hot bag-of-words models for IMDb with the TextVectorization layer."
+   ]
+  },
+  {
+   "ref": "p132_e13",
+   "excerpt": "There are two key architecture decisions to be made about such",
+   "what_it_says": "Designing a stack of Dense layers comes down to two decisions: how many layers, and how many units in each.",
+   "what_it_means": "Depth (number of layers) and width (units per layer) together set the model's capacity: how complex a function it can represent.",
+   "why_it_matters": "These are the main hyperparameters you will tune in every MLP; framing them explicitly prepares the ground for chapter 5's discussion of capacity and overfitting.",
+   "terminology": [
+    {
+     "term": "architecture",
+     "meaning": "The structure of the model: layer types, their number, and their sizes."
+    },
+    {
+     "term": "unit",
+     "meaning": "One output dimension of a Dense layer; the layer's width."
+    }
+   ],
+   "connections": [
+    "p.149: Section 4.2.7 shows what happens when intermediate layers are too small (information bottleneck)."
+   ]
+  },
+  {
+   "ref": "p132_e16",
+   "excerpt": "In chapter 5, you’ll learn formal principles to guide you in",
+   "what_it_says": "Formal principles for these choices come in chapter 5; for now the authors prescribe two intermediate layers of 16 units each and a third layer outputting the scalar sentiment prediction.",
+   "what_it_means": "The resulting network is 10,000 -> 16 -> 16 -> 1. The final layer has one unit because the target is a single probability of the review being positive.",
+   "why_it_matters": "It gives a concrete working baseline before theory is available; the 16-unit choice is revisited in 4.1.6 'Further experiments' (p.139), which suggests trying other depths and widths.",
+   "technical_idea": "Parameter count: 10000*16+16 = 160,016 for the first layer, 16*16+16 = 272 for the second, 16*1+1 = 17 for the output; 160,305 in total. Almost all parameters sit in the first layer because of the 10,000-dim input.",
+   "terminology": [
+    {
+     "term": "intermediate (hidden) layer",
+     "meaning": "A layer between the input and the output layer."
+    }
+   ],
+   "connections": [
+    "p.133: Listing 4.4 and figure 4.1 implement and draw this three-layer model.",
+    "p.139: Section 4.1.6 Further experiments invites trying other depths and widths."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "multi_hot_encoding",
+   "name": "Multi-hot encoding",
+   "definition": "Representing a set of integer indices as a fixed-length vector of 0s with 1s at the positions of the indices present.",
+   "intuition": "A checklist of 10,000 vocabulary words: tick every word that appears in the review.",
+   "technical": "For a sequence s and vocabulary size V, the encoding is v in {0,1}^V with v_j = 1 iff j in s. Listing 4.3 builds a (N, V) matrix for N reviews.",
+   "significance": "Turns variable-length sequences into same-length tensors that a Dense network can process in batches.",
+   "example": "With V = 10, the sequence [8, 5] becomes [0,0,0,0,0,1,0,0,1,0] (the book's own 10,000-dim version of this example is on p.131).",
+   "misconception": "It is not a count vector: repeated words still give 1, not their frequency. Word order is also lost.",
+   "related": [
+    "one_hot_encoding",
+    "tokenization",
+    "embedding"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "vectorization",
+   "name": "Data vectorization",
+   "definition": "Converting raw inputs and targets into numeric tensors of a fixed shape and dtype.",
+   "intuition": "Neural networks only eat tensors; everything must be translated into that format first.",
+   "technical": "Here inputs -> float64 matrix (25000, 10000); labels -> float32 vector (25000,).",
+   "significance": "A required preprocessing step in every example in the book.",
+   "example": "train_labels.astype(\"float32\")",
+   "misconception": "Labels do not need multi-hot encoding for binary classification; a scalar 0/1 per sample suffices.",
+   "related": [
+    "tensor",
+    "multi_hot_encoding"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "dense_layer",
+   "name": "Dense layer stack",
+   "definition": "A sequence of fully connected layers, each computing activation(dot(input, W) + b).",
+   "intuition": "Each layer re-describes the input in a new learned coordinate system.",
+   "technical": "A Dense(16) on a 10,000-dim input has a (10000, 16) kernel and a (16,) bias.",
+   "significance": "The default model for vector data with no spatial or temporal structure.",
+   "example": "10000 -> Dense(16, relu) -> Dense(16, relu) -> Dense(1).",
+   "misconception": "More layers are not always better; chapter 5 discusses overfitting from excess capacity.",
+   "related": [
+    "relu",
+    "sequential_model",
+    "keras_layer"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "model_capacity",
+   "name": "Depth and width (model capacity)",
+   "definition": "The number of layers and the number of units per layer, the two architecture decisions named on this page.",
+   "intuition": "Width is how many features each layer can express; depth is how many successive transformations are composed.",
+   "technical": "Increasing either increases the number of trainable parameters and the family of functions the model can represent.",
+   "significance": "Choosing them well is the subject of chapter 5.",
+   "example": "16-16-1 here; section 4.1.6 (p.139) invites experimenting with other depths and widths.",
+   "misconception": "Width is not just a cost knob; too narrow layers can drop information (p.149).",
+   "related": [
+    "overfitting",
+    "dense_layer"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Multi-hot encoding of a review",
+   "latex": "x_{i,j} = \\begin{cases} 1 & \\text{if } j \\in s_i \\\\ 0 & \\text{otherwise} \\end{cases}, \\qquad j = 0,\\dots,V-1",
+   "source_text": "results[i][sequence] = 1.0  (on an all-zero matrix of shape (len(sequences), num_classes))",
+   "variables": [
+    {
+     "symbol": "s_i",
+     "meaning": "The list of word indices for review i"
+    },
+    {
+     "symbol": "V",
+     "meaning": "Vocabulary size, num_classes = 10000"
+    },
+    {
+     "symbol": "x_{i,j}",
+     "meaning": "Entry j of the encoded vector of review i"
+    }
+   ],
+   "operations": "Indicator function over the vocabulary, implemented by writing 1.0 into the listed positions of a zero row.",
+   "purpose": "Formalizes what listing 4.3 computes.",
+   "interpretation": "Each coordinate answers the question 'does word j occur in this review?'.",
+   "intuition": "Presence/absence only; neither counts nor order survive.",
+   "numerical_example": "V = 10, s = [1, 2, 2, 7]: x = [0, 1, 1, 0, 0, 0, 0, 1, 0, 0]. The duplicate 2 still yields a single 1.",
+   "source": "ai_explanation",
+   "book_ref": "p.132"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "4.3",
+   "title": "Encoding the integer sequences via multi-hot encoding",
+   "original_code": "import numpy as np\n\ndef multi_hot_encode(sequences, num_classes):\n    results = np.zeros((len(sequences), num_classes))\n    for i, sequence in enumerate(sequences):\n        results[i][sequence] = 1.0\n    return results\n\nx_train = multi_hot_encode(train_data, num_classes=10000)\nx_test = multi_hot_encode(test_data, num_classes=10000)",
+   "language": "python",
+   "what_it_does": "Converts each review (a list of word indices) into a 10,000-dimensional 0/1 vector and stacks them into matrices x_train and x_test.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Imports NumPy."
+    },
+    {
+     "lines": "3-4",
+     "explanation": "Defines the function and creates an all-zero matrix of shape (len(sequences), num_classes), as the book's callout says."
+    },
+    {
+     "lines": "5-6",
+     "explanation": "For each review i, uses the list of indices as a fancy index into row i, setting all those positions to 1.0 in a single assignment (callout: 'Sets specific indices of results[i] to 1s')."
+    },
+    {
+     "lines": "7",
+     "explanation": "Returns the encoded matrix."
+    },
+    {
+     "lines": "9-10",
+     "explanation": "Vectorizes the training data and the test data with a vocabulary of 10,000 (matching num_words=10000 used when loading IMDb)."
+    }
+   ],
+   "inputs_outputs": "Input: sequence of 25,000 lists of ints in [0, 9999]. Output: float64 array of shape (25000, 10000).",
+   "algorithm": "Allocate zeros; loop over samples; scatter ones at index positions.",
+   "theory_link": "Implements the second encoding option of p.131 (multi-hot) rather than padding plus an Embedding layer.",
+   "parameters": [
+    {
+     "name": "sequences",
+     "role": "List of integer index lists, one per review"
+    },
+    {
+     "name": "num_classes",
+     "role": "Length of each output vector; must exceed the largest index"
+    }
+   ],
+   "pitfalls": [
+    "Memory: 25,000 x 10,000 float64 values is about 2 GB per matrix (8 bytes each). Using dtype='float32' would halve it.",
+    "An index >= num_classes raises IndexError; the vocabulary limit at load time must match num_classes.",
+    "Duplicates collapse to 1; this is presence, not frequency."
+   ],
+   "illustrative_code": "# AI-written: memory-friendlier variant (not in the book)\ndef multi_hot_encode_f32(sequences, num_classes):\n    results = np.zeros((len(sequences), num_classes), dtype=\"float32\")\n    for i, sequence in enumerate(sequences):\n        results[i, sequence] = 1.0\n    return results\n\nmulti_hot_encode_f32([[8, 5]], 10)\n# array([[0., 0., 0., 0., 0., 1., 0., 0., 1., 0.]], dtype=float32)"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Inspecting the first encoded sample",
+   "original_code": ">>> x_train[0]\narray([ 0.,  1.,  1., ...,  0.,  0.,  0.])",
+   "language": "python",
+   "what_it_does": "Shows the first row of x_train: a long float vector of mostly zeros with ones at word positions present in the review.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Indexes the first sample."
+    },
+    {
+     "lines": "2",
+     "explanation": "NumPy abbreviates the 10,000 entries with '...'."
+    }
+   ],
+   "inputs_outputs": "Output: array of shape (10000,).",
+   "algorithm": "Indexing.",
+   "theory_link": "Confirms the encoding produced fixed-size vectors.",
+   "parameters": [],
+   "pitfalls": [
+    "The '...' hides almost all values; use x_train[0].sum() to count distinct words in the review."
+   ]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Vectorizing the labels",
+   "original_code": "y_train = train_labels.astype(\"float32\")\ny_test = test_labels.astype(\"float32\")",
+   "language": "python",
+   "what_it_does": "Converts the integer 0/1 label arrays to float32.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "astype returns float32 copies of the training and test labels."
+    }
+   ],
+   "inputs_outputs": "Input: int arrays of shape (25000,). Output: float32 arrays of shape (25000,).",
+   "algorithm": "dtype conversion.",
+   "theory_link": "Targets for a sigmoid output and binary crossentropy loss are floats in [0, 1].",
+   "parameters": [
+    {
+     "name": "\"float32\"",
+     "role": "Target dtype"
+    }
+   ],
+   "pitfalls": [
+    "Keras would usually cast for you, but explicit dtypes make the pipeline predictable."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why NumPy fancy indexing makes the loop short",
+   "kind": "step_by_step",
+   "body": "Beyond the book: `results[i]` is a 1-D view of row *i*. Indexing it with a list, `row[[3, 7, 7]] = 1.0`, assigns 1.0 to positions 3 and 7 in one vectorized C-level operation. So the Python loop only runs over the 25,000 reviews, not over the ~230 words per review. `results[i, sequence]` is equivalent and slightly more idiomatic.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "What the encoding throws away",
+   "kind": "breakdown",
+   "body": "Beyond the book: multi-hot is a *bag-of-words* (set) representation. 'not good, quite bad' and 'not bad, quite good' map to the same vector. The book returns to this trade-off in chapter 14, where set models (p.423) are compared with sequence models (p.430).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Where the parameters live",
+   "kind": "numerical",
+   "body": "Note (not in the book): for 10000 -> 16 -> 16 -> 1, the first Dense layer holds 10000·16 + 16 = 160,016 parameters, the second 16·16 + 16 = 272, the output 16 + 1 = 17. Over 99.8% of the 160,305 weights connect the vocabulary to the first hidden layer, so each first-layer column is effectively a learned per-word score for one of 16 features.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "From word-index lists to model output",
+   "why": "Traces the shapes created on this page (listing 4.3) into the 16-16-1 architecture chosen at the bottom of the page.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "multi-hot (listing 4.3)",
+      "shape": [
+       25000,
+       10000
+      ]
+     },
+     {
+      "op": "Dense 16 relu",
+      "shape": [
+       25000,
+       16
+      ]
+     },
+     {
+      "op": "Dense 16 relu",
+      "shape": [
+       25000,
+       16
+      ]
+     },
+     {
+      "op": "Dense 1",
+      "shape": [
+       25000,
+       1
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "The architecture chosen in 4.1.3",
+   "why": "The page prescribes two intermediate layers of 16 units and a scalar output layer on 10,000-dim input; click layers to see parameter counts.",
+   "widget": "nn_architecture",
+   "params": {
+    "layers": [
+     {
+      "name": "multi-hot input",
+      "type": "input",
+      "shape": "(None, 10000)"
+     },
+     {
+      "name": "hidden 1",
+      "type": "dense",
+      "units": 16,
+      "activation": "relu"
+     },
+     {
+      "name": "hidden 2",
+      "type": "dense",
+      "units": 16,
+      "activation": "relu"
+     },
+     {
+      "name": "output",
+      "type": "output",
+      "units": 1,
+      "activation": "sigmoid"
+     }
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Multi-hot vectors count how often each word appears.",
+   "correction": "Listing 4.3 writes 1.0, not +1, so repeated words still give 1; it encodes presence only."
+  },
+  {
+   "claim": "The labels also need multi-hot or one-hot encoding.",
+   "correction": "For binary classification each label is a single scalar 0 or 1; it only needs a float dtype."
+  },
+  {
+   "claim": "16 units is a derived optimum.",
+   "correction": "The authors explicitly say 'trust us' for now; principled choices come in chapter 5 and p.139 suggests experimenting."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 131,
+    "note": "Introduces the two ways to tensorize lists (padding+Embedding vs multi-hot) and the [8, 5] example."
+   },
+   {
+    "page": 130,
+    "note": "The IMDb dataset and its 0/1 labels."
+   }
+  ],
+  "later": [
+   {
+    "page": 133,
+    "note": "Listing 4.4 defines the 16-16-1 model and figure 4.1 draws it."
+   },
+   {
+    "page": 139,
+    "note": "Further experiments on number of layers and units."
+   },
+   {
+    "page": 142,
+    "note": "Reuters reuses the same multi-hot vectorization with a wider model."
+   },
+   {
+    "page": 423,
+    "note": "TextVectorization performs multi-hot encoding as a Keras layer."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 131,
+    "note": "Why lists of integers cannot be fed to a network directly."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 131,
+    "note": "Listing 4.2 decodes reviews back to text."
+   },
+   {
+    "page": 133,
+    "note": "Listing 4.4 model definition."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 133,
+    "note": "Figure 4.1, the three-layer model."
+   }
+  ]
+ },
+ "takeaways": [
+  "Listing 4.3 turns each review into a 10,000-dim 0/1 vector using an all-zero matrix and fancy indexing.",
+  "x_train and x_test have shape (25000, 10000); x_train[0] looks like [0., 1., 1., ..., 0.].",
+  "Labels only need a dtype change: astype(\"float32\").",
+  "Vector input plus scalar 0/1 label is among the simplest setups; a stack of Dense+relu layers fits it.",
+  "Architecture decisions for a Dense stack: number of layers and units per layer.",
+  "The book's choice: two hidden layers of 16 units and one output layer producing a scalar."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What is the shape of x_train after listing 4.3 is applied to the 25,000 IMDb training reviews?",
+   "options": [
+    "(25000,)",
+    "(25000, 10000)",
+    "(10000, 25000)",
+    "(25000, max_length)"
+   ],
+   "answer": "(25000, 10000)",
+   "explanation": "np.zeros((len(sequences), num_classes)) creates one row per review and one column per vocabulary index. (25000,) is the label shape; (10000, 25000) is transposed; (25000, max_length) would be the padding approach.",
+   "page_refs": [
+    132,
+    131
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Encode the sequence [3, 0, 3, 5] with multi_hot_encode and num_classes=6.",
+   "options": [],
+   "answer": "[1, 0, 0, 1, 0, 1]",
+   "explanation": "Indices 0, 3 and 5 are set to 1.0; the repeated 3 does not change anything.",
+   "page_refs": [
+    132
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why does the line results[i][sequence] = 1.0 not need an inner loop over words?",
+   "options": [],
+   "answer": "Because sequence is a list of integers, which NumPy treats as an integer-array (fancy) index, assigning 1.0 to all those positions at once.",
+   "explanation": "NumPy vectorized assignment handles all indices in one operation.",
+   "page_refs": [
+    132
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "Which two architecture decisions does the page say must be made for a stack of Dense layers?",
+   "options": [
+    "Optimizer and learning rate",
+    "Number of layers and number of units per layer",
+    "Activation and loss function",
+    "Batch size and number of epochs"
+   ],
+   "answer": "Number of layers and number of units per layer",
+   "explanation": "The page lists exactly these two bullets. The other options are training or compile choices, not stack architecture choices.",
+   "page_refs": [
+    132
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "math",
+   "question": "How many trainable parameters does the first Dense(16) layer have on the 10,000-dim multi-hot input?",
+   "options": [],
+   "answer": "160,016",
+   "explanation": "Kernel 10000 x 16 = 160,000 plus 16 biases.",
+   "page_refs": [
+    132,
+    133
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Why is a plain stack of Dense layers a good fit for this representation, rather than a model that exploits word order?",
+   "options": [],
+   "answer": "Multi-hot vectors have no order information left; each input is just a fixed-size feature vector, the setting Dense layers handle well.",
+   "explanation": "The page calls vector-in/scalar-out one of the simplest setups; with order discarded there is no sequential structure to model.",
+   "page_refs": [
+    132
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you explain, without looking, what each line of listing 4.3 does and why the labels are cast to float32?",
+   "options": [],
+   "answer": "Self-check against the code notes.",
+   "explanation": "If not, revisit the line explanations for listing 4.3 and the label-vectorization paragraph.",
+   "page_refs": [
+    132
+   ]
+  }
+ ]
+}

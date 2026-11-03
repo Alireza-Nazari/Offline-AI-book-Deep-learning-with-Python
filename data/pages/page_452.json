@@ -1,0 +1,374 @@
+{
+  "page_id": "page_452",
+  "pdf_page": 452,
+  "printed_page": "428",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T08:06:00Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean. The extractor merged two printed paragraphs (the Bidirectional warning and the 'This language modeling setup...' paragraph) into element p452_e07; they get separate notes here. Blank lines between speakers in the sample output were dropped by the extractor and restored from the page image."
+  },
+  "overview": {
+    "title": "Generated Shakespeare, causality, and the start of seq2seq",
+    "chapter": "15 Language models and the Transformer",
+    "section": "15.1 The language model / 15.2 Sequence-to-sequence learning",
+    "subsection": "15.1.2 Generating Shakespeare",
+    "main_topic": "Detokenizing and inspecting the generated text, why the language-model setup only works with a forward-only (causal) model, why inference needs its own loop, and an introduction to sequence-to-sequence learning.",
+    "central_idea": "A model trained only to guess the next character can generate open-ended, Shakespeare-like text, but only if it cannot see future tokens during training. Unlike other models in the book, it needs an inference-time loop that feeds predictions back in. Section 15.2 extends this idea to translation: generating a target sequence conditioned on a source sequence.",
+    "importance": "The causality point (a Bidirectional GRU \"cheats\") is the same principle behind causal masking in Transformer decoders later in the chapter. The seq2seq introduction frames everything up to section 15.3.4.",
+    "learning_objectives": [
+      "Detokenize generated IDs and judge the quality of the sample.",
+      "Explain why a Bidirectional GRU gives above 99% training accuracy yet breaks generation.",
+      "Explain why language-model inference cannot be a single `model.predict()` call.",
+      "Distinguish the recurrent state loop (used in training and inference) from feeding predictions back (inference only).",
+      "Define sequence-to-sequence modeling and give translation and question answering as examples."
+    ],
+    "prerequisites": [
+      "Listings 15.6 to 15.8: the generation model, priming and greedy decoding (pp.450-451).",
+      "Bidirectional RNNs.",
+      "The character-level training setup with labels offset by one character (p.447)."
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page finishes the Shakespeare example. Two lines of code turn `generated_ids` back into a string by looking up each ID in `id_to_char` and joining the characters, then print `prompt + output`. The output shows speaker headings (`KING RICHARD III:`, `FRIAR LAURENCE:`, `BUCKINGHAM:`) followed by lines such as \"Stay, men! hear me speak.\" and \"Thou bear them both. Here comes the king;\". The text has the format, archaic vocabulary and rhythm of a play, but little coherent meaning.\n\nThe authors note this is \"not terrible for two minutes of training on a minimal dataset.\" The point is the **power of the language-model setup**: a model trained on the narrow task of guessing one character is used for a much broader one, generating open-ended text.\n\nThey then explain why the setup works at all. An RNN passes information **only forward** in the sequence. If you replace the `GRU` with `Bidirectional(GRU(...))`, training accuracy jumps above **99%** immediately, but generation stops working. During training the model sees the whole sequence, so letting the next token influence the current prediction makes the task trivially easy, and the model never learns to predict from the past alone.\n\nThis *language modeling* setup is fundamental in the text domain and unusual compared with earlier models in the book. You cannot just call `model.predict()`. There is a whole loop with nontrivial logic that exists only at inference time. The RNN's state loop runs in both training and inference, but **at no point during training are predicted labels fed back as inputs**.\n\nSection **15.2 Sequence-to-sequence learning** begins: the language-model idea is extended to **machine translation**, part of a class of problems called **sequence-to-sequence** (seq2seq). The model takes a source text as a fixed input sequence and generates the translated sequence. Question answering is another classic seq2seq problem.",
+  "paragraphs": [
+    {
+      "ref": "p452_e06",
+      "excerpt": "We have yet to produce the next great tragedy, but this is",
+      "what_it_says": "The sample is not a masterpiece, but it is not bad for two minutes of training on a small dataset. The toy example shows the power of the language-model setup: a model trained to guess one character at a time is used for open-ended, Shakespeare-like generation.",
+      "what_it_means": "The sample shows the model has learned the format (uppercase speaker names followed by a colon and a newline), real character names, archaic forms ('Thou', 'hath', 'wouldst') and punctuation. Long-range meaning is missing, as expected from a single-layer character-level GRU trained briefly with greedy decoding.",
+      "why_it_matters": "It shows a key property of language models: the training task is narrow, but what the trained model can be used for is very broad. Chapter 16 scales the same idea up to GPT-style models.",
+      "technical_idea": "Beyond the book: no labels were needed; the text supervised itself. This is self-supervised learning.",
+      "terminology": [
+        {"term": "language model setup", "meaning": "Training a model to predict the next token from previous tokens, then generating by calling it in a loop."}
+      ],
+      "connections": [
+        "p.450: about 70% next-character accuracy after 20 epochs.",
+        "p.502: chapter 16 applies the same generation approach to a mini-GPT."
+      ]
+    },
+    {
+      "ref": "p452_e07",
+      "excerpt": "It’s important to notice that this training setup only works because a",
+      "what_it_says": "The setup works only because an RNN passes information forward. Replacing the GRU with `Bidirectional(GRU(...))` sends training accuracy above 99% immediately, and generation stops working entirely. During training the model sees the whole sequence each step, so letting the next token influence the current prediction makes the task trivially easy.",
+      "what_it_means": "Labels are the inputs shifted by one character (p.447): the target at position $t$ is the input at position $t+1$. A backward-running GRU at position $t$ has already read input $t+1$, so it can simply copy the answer. The model learns to copy, not to predict. At generation time the future does not exist, so the trick has nothing to use.",
+      "why_it_matters": "This is the principle of causality. A model of $p(x_t\\mid x_{<t})$ must not see $x_{\\ge t+1}$ when predicting position $t$. Transformers enforce the same rule with a causal mask in the decoder (section 15.3.3, p.470).",
+      "technical_idea": "A near-100% training accuracy on a prediction task is a warning sign of target leakage, not a success.",
+      "terminology": [
+        {"term": "Bidirectional RNN", "meaning": "A wrapper that runs one RNN forward and a copy backward over the sequence and combines their outputs, so each position sees both past and future context."},
+        {"term": "cheating / leakage", "meaning": "Letting information about the target reach the model's inputs, which makes training trivially easy and generalization fail."}
+      ],
+      "connections": [
+        "p.447: labels are the input sequence offset by a single character.",
+        "p.470: the Transformer decoder block must also hide future tokens."
+      ]
+    },
+    {
+      "ref": "p452_e07",
+      "excerpt": "This language modeling setup is fundamental to countless problems in the text",
+      "what_it_says": "The language-modeling setup is fundamental to many text problems and unusual among the book's models. You cannot just call `model.predict()`; an entire loop with nontrivial logic exists only at inference time. The RNN's state loop runs during both training and inference, but predicted labels are never fed back into the model during training.",
+      "what_it_means": "There are two different loops. (1) The **recurrent state loop** inside the GRU runs over time steps in both phases. (2) The **feedback loop**, where output becomes the next input, runs only at inference. During training the inputs are always the true previous characters (beyond the book, this is called teacher forcing), so all 100 positions can be trained in one pass.",
+      "why_it_matters": "This train/inference mismatch is why Listings 15.6 to 15.8 were needed. It is also a design issue in all generative text models: training is parallel over ground truth, while generation is sequential over the model's own outputs.",
+      "technical_idea": "Beyond the book: because training always conditions on true text while generation conditions on the model's own (possibly wrong) outputs, errors can compound during generation. This is often called exposure bias.",
+      "terminology": [
+        {"term": "language modeling", "meaning": "The setup of learning p(next token | past tokens), italicized on the page as a term."},
+        {"term": "inference-time logic", "meaning": "Code (priming, the decoding loop, token selection) that runs only when using the model, not when training it."}
+      ],
+      "connections": [
+        "p.451: the priming and greedy generation loops are that inference-only logic.",
+        "p.453: seq2seq training versus inference follows the same pattern."
+      ]
+    },
+    {
+      "ref": "p452_e09",
+      "excerpt": "Let’s take the language model idea and extend it to tackle an",
+      "what_it_says": "The language-model idea is extended to machine translation, a member of the class of sequence-to-sequence (seq2seq) problems. The goal is a model that takes a source text as a fixed input sequence and generates the translated text sequence. Question answering is another classic seq2seq problem.",
+      "what_it_means": "A plain language model generates from its own past only. A seq2seq model generates the target from its own past and a separate, fully known source sequence. The source can be read in full (even bidirectionally), while the target must still be generated causally.",
+      "why_it_matters": "Seq2seq is the setting in which the Transformer was introduced, and it organizes the rest of the chapter: an RNN seq2seq model (section 15.2.2), then a Transformer one (section 15.3.4).",
+      "terminology": [
+        {"term": "sequence-to-sequence (seq2seq)", "meaning": "Modeling problems that map an input sequence to an output sequence of possibly different length, such as translation."},
+        {"term": "machine translation", "meaning": "Automatically translating text from one language to another."}
+      ],
+      "connections": [
+        "p.453: the encoder/decoder template of figure 15.1.",
+        "p.454: the English-to-Spanish translation dataset.",
+        "p.488: the summary defines a seq2seq language model."
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "causal_modeling",
+      "name": "Causality in language-model training",
+      "definition": "The requirement that the prediction at position t uses only tokens at positions up to t, never future tokens.",
+      "intuition": "You cannot use tomorrow's newspaper to predict tomorrow's news.",
+      "technical": "With labels $y_t = x_{t+1}$, any path from $x_{t+1}$ to the output at $t$ leaks the label. A forward RNN has no such path; a bidirectional RNN does.",
+      "significance": "Without causality, training accuracy is meaningless and generation fails.",
+      "example": "`Bidirectional(GRU(...))` reaches over 99% training accuracy and generation stops working (p.452).",
+      "misconception": "That higher training accuracy always means a better language model. Here it signals leakage.",
+      "related": ["language_model", "rnn", "autoregressive_generation"],
+      "source": "book"
+    },
+    {
+      "id": "train_inference_asymmetry",
+      "name": "Training versus inference in language models",
+      "definition": "During training the model is fed the true previous tokens in parallel; during inference it must be run in a loop on its own predictions.",
+      "intuition": "Practising with the answer key in front of you versus taking the exam.",
+      "technical": "Training: one forward pass over (batch, 100) inputs with the loss at all positions. Inference: priming plus a token-by-token loop with explicit state (pp.450-451).",
+      "significance": "It is why generation code is separate from `fit` and `predict`.",
+      "example": "Listings 15.6 to 15.8 exist only for inference.",
+      "misconception": "That `model.predict()` on the prompt gives the continuation. It only gives next-character distributions for the prompt's positions.",
+      "related": ["autoregressive_generation", "teacher_forcing"],
+      "source": "book"
+    },
+    {
+      "id": "detokenization",
+      "name": "Detokenization",
+      "definition": "Mapping token IDs back to strings and joining them.",
+      "intuition": "Decoding the number code back into letters.",
+      "technical": "`\"\".join([id_to_char[token_id] for token_id in generated_ids])`.",
+      "significance": "It makes the model's output readable.",
+      "example": "The Shakespeare sample shown on the page.",
+      "misconception": "That you must use the TextVectorization layer to detokenize; a plain dictionary works.",
+      "related": ["tokenization", "vocabulary_lookup"],
+      "source": "book"
+    },
+    {
+      "id": "seq2seq",
+      "name": "Sequence-to-sequence learning",
+      "definition": "Modeling problems where a source sequence is mapped to a generated target sequence, such as translation or question answering.",
+      "intuition": "Read the whole question, then write the answer word by word.",
+      "technical": "Learns $p(y_t\\mid y_{<t}, x)$: next target token given past target tokens and the full source $x$.",
+      "significance": "It is the main application through section 15.3.4 and the original Transformer task.",
+      "example": "English-to-Spanish translation (p.454).",
+      "misconception": "That seq2seq outputs have the same length as the inputs. Lengths can differ freely.",
+      "related": ["language_model", "encoder_decoder", "transformer"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Why bidirectional context leaks the label",
+      "latex": "y_t = x_{t+1},\\qquad \\text{forward: } \\hat y_t = g(x_1,\\dots,x_t),\\qquad \\text{bidirectional: } \\hat y_t = g(x_1,\\dots,x_{100}) \\ni x_{t+1}",
+      "source_text": "Not printed as a formula; the page says letting information from the next token affect the current prediction makes the problem trivially easy.",
+      "variables": [
+        {"symbol": "x_t", "meaning": "input character at position t"},
+        {"symbol": "y_t", "meaning": "label at position t, the next character (p.447)"},
+        {"symbol": "g", "meaning": "the network's function producing the prediction at position t"}
+      ],
+      "operations": "Compare which inputs the prediction at t may depend on.",
+      "purpose": "It formalizes the 'cheating' described on the page.",
+      "interpretation": "With bidirectional context, the label $y_t$ is literally among the inputs, so the model can just copy it.",
+      "intuition": "An exam where the answer is printed on the next line.",
+      "numerical_example": "Input \"hear\", labels \"ear \". At position 0 the label is 'e', and a backward GRU has already read 'e' at position 1.",
+      "source": "inference",
+      "book_ref": "p.452"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Detokenizing the generated IDs",
+      "original_code": "output = \"\".join([id_to_char[token_id] for token_id in generated_ids])\nprint(prompt + output)",
+      "language": "python",
+      "what_it_does": "Converts each generated ID to its character and concatenates them, then prints the prompt followed by the continuation.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "List comprehension maps the 250 IDs from Listing 15.8 to characters; `\"\".join` concatenates them with no separator, which is right for a character-level vocabulary."},
+        {"lines": "2", "explanation": "Print the prompt (\"\\nKING RICHARD III:\\n\") plus the generated text."}
+      ],
+      "inputs_outputs": "Input: `generated_ids` (list of 250 ints) and `id_to_char`. Output: a printed string.",
+      "algorithm": "Dictionary lookup and string join.",
+      "theory_link": "Detokenization, the reverse of tokenization (p.446).",
+      "parameters": [],
+      "pitfalls": [
+        "For a word-level vocabulary you would join with spaces instead of \"\"."
+      ]
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Sample output",
+      "original_code": "KING RICHARD III:\nStay, men! hear me speak.\n\nFRIAR LAURENCE:\nThou wouldst have done thee here that he hath made for them?\n\nBUCKINGHAM:\nWhat straight shall stop his dismal threatening son,\nThou bear them both. Here comes the king;\nThough I be good to put a wife to him,",
+      "language": "text",
+      "what_it_does": "Shows the text generated by the greedy loop after the prompt.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "The prompt."},
+        {"lines": "2", "explanation": "The first generated line, beginning right after the prompt's trailing newline."},
+        {"lines": "4, 7", "explanation": "The model invents new speaker headings in the correct format: uppercase name, colon, newline."},
+        {"lines": "5, 8-10", "explanation": "Locally grammatical, archaic English with little global meaning."}
+      ],
+      "inputs_outputs": "Output of the previous code cell.",
+      "algorithm": "n/a",
+      "theory_link": "Shows what about 70% next-character accuracy and greedy decoding produce.",
+      "parameters": [],
+      "pitfalls": [
+        "Your own run will differ because training is random, but for a given trained model greedy decoding always gives the same continuation."
+      ]
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Two loops, only one at training time",
+      "kind": "breakdown",
+      "body": "**Recurrent state loop**: $h_t = \\mathrm{GRU}(x_t, h_{t-1})$. It runs inside the layer during `fit`, and outside it, call by call, during generation.\n\n**Prediction feedback loop**: $x_{t+1} \\leftarrow \\arg\\max \\hat y_t$. It runs only during generation. During training $x_{t+1}$ is always the real next character from the text.\n\nBeyond the book: feeding the ground truth during training is called *teacher forcing*.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Spotting leakage from the training curve",
+      "kind": "application",
+      "body": "If a next-token model's training accuracy suddenly jumps to around 99% (from about 70% for the causal GRU on p.450), suspect that future information is reaching the prediction. The same check applies to Transformers whose causal mask is missing or broken.",
+      "source": "inference"
+    },
+    {
+      "title": "Analogy: the crossword with the answers peeking through",
+      "kind": "analogy",
+      "body": "Training a bidirectional model on next-character labels is like doing a crossword where the answers show through from the back of the page. You score perfectly, but hand the same person a clean puzzle (generation, where there is no future) and they have no skill to fall back on.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "Forward GRU versus Bidirectional GRU on next-character labels",
+      "why": "The page explains that a Bidirectional GRU lets the next token affect the current prediction, which is why it cheats.",
+      "mermaid": "flowchart LR\n  subgraph F[\"Forward GRU: causal\"]\n    x1[x_t-1] --> h1[h_t-1] --> h2[h_t]\n    x2[x_t] --> h2\n    h2 --> y[\"predict x_t+1\"]\n  end\n  subgraph B[\"Bidirectional GRU: leaks\"]\n    a[x_t] --> c[\"output at t\"]\n    n[\"x_t+1 = the label\"] -->|backward pass| c\n    c --> yy[\"predict x_t+1: copy it\"]\n  end"
+    },
+    {
+      "id": "v2",
+      "type": "mermaid",
+      "title": "Language model to sequence-to-sequence",
+      "why": "Section 15.2 extends the language model to translation; seq2seq conditions generation on a separate source sequence.",
+      "mermaid": "flowchart LR\n  LM[\"Language model: p(next token | past tokens)\"] --> S2S[\"Seq2seq: p(next target token | past target tokens, source sequence)\"]\n  S2S --> MT[\"Machine translation\"]\n  S2S --> QA[\"Question answering\"]"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "A Bidirectional GRU should make a better language model because it has more context.",
+      "correction": "The extra context includes the label itself, so the model learns to copy. Accuracy exceeds 99% while generation fails."
+    },
+    {
+      "claim": "During training, the language model feeds its own predictions back as input.",
+      "correction": "Training always uses the true previous characters; only inference feeds predictions back."
+    },
+    {
+      "claim": "The generated text shows the model understands the plays.",
+      "correction": "It reproduces format and local style; it does not keep plot or meaning across lines."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 447, "note": "Labels are inputs offset by one character, which is why future context leaks the label."},
+      {"page": 450, "note": "Autoregressive model definition and the one-step generation model."},
+      {"page": 451, "note": "Priming and greedy generation that produced generated_ids."},
+      {"page": 446, "note": "Detokenization as the reverse of tokenization."}
+    ],
+    "later": [
+      {"page": 453, "note": "Seq2seq template: encoder, decoder, and inference from a [start] token to [end]."},
+      {"page": 454, "note": "English-to-Spanish translation dataset."},
+      {"page": 457, "note": "Why the source must be read fully before translating."},
+      {"page": 470, "note": "Transformer decoder block, where future tokens must also be hidden."},
+      {"page": 488, "note": "Summary of language models and seq2seq models."}
+    ],
+    "prerequisites": [
+      {"page": 451, "note": "Listings 15.7 and 15.8."}
+    ],
+    "related_math": [
+      {"page": 488, "note": "p(token|past tokens)."}
+    ],
+    "related_code": [
+      {"page": 451, "note": "Listing 15.8 produces generated_ids."}
+    ],
+    "related_figures": [
+      {"page": 453, "note": "Figure 15.1, sequence-to-sequence learning."}
+    ]
+  },
+  "takeaways": [
+    "Detokenizing is a dictionary lookup per ID plus `\"\".join`.",
+    "Two minutes of training yields text with correct play formatting and archaic style but little meaning.",
+    "Narrow training (next character) supports broad use (open-ended generation): the power of the language-model setup.",
+    "The setup requires causality: a Bidirectional GRU sees the label, reaches over 99% training accuracy, and fails at generation.",
+    "Language models need an inference-only loop; predictions are never fed back during training.",
+    "Seq2seq extends the idea to generating a target sequence from a fixed source sequence, as in translation and question answering."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "What happens, according to the page, if the GRU is replaced by `Bidirectional(GRU(...))`?",
+      "options": [
+        "Training accuracy drops sharply and generation improves",
+        "Training accuracy rises above 99% immediately and generation stops working",
+        "Both training accuracy and generation improve",
+        "The model cannot be compiled"
+      ],
+      "answer": "Training accuracy rises above 99% immediately and generation stops working",
+      "explanation": "The backward direction sees the next character, which is the label, so training becomes trivial. At generation time there is no future to read, so the model fails. The other options contradict the page.",
+      "page_refs": [452]
+    },
+    {
+      "id": "q2",
+      "type": "conceptual",
+      "question": "Explain the difference between the recurrent state loop and feeding predictions back. Which happens during training?",
+      "options": [],
+      "answer": "The state loop (h_t from h_{t-1} and x_t) happens in both training and inference. Feeding predicted labels back as the next input happens only at inference; training always uses the true previous characters.",
+      "explanation": "The page says: \"at no point during training do we feed a model's predicted labels back into itself as input.\"",
+      "page_refs": [452]
+    },
+    {
+      "id": "q3",
+      "type": "short",
+      "question": "Why can you not simply call `model.predict()` to generate text with a language model?",
+      "options": [],
+      "answer": "`predict` returns only next-token distributions for the inputs you give it. Generating requires a loop that picks a token, appends it, and calls the model again.",
+      "explanation": "The page calls this \"an entire loop, and a nontrivial amount of logic, that exists only at inference time\".",
+      "page_refs": [452, 451]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "Which of the following is NOT given on this page as a sequence-to-sequence problem?",
+      "options": [
+        "Machine translation",
+        "Question answering",
+        "Translating a source text into a target-language sequence",
+        "Classifying a movie review as positive or negative"
+      ],
+      "answer": "Classifying a movie review as positive or negative",
+      "explanation": "Classification maps a sequence to a single label, not to a sequence. Translation (which is what the third option describes) and question answering are both named on the page.",
+      "page_refs": [452]
+    },
+    {
+      "id": "q5",
+      "type": "conceptual",
+      "question": "Using the label construction from p.447, explain precisely why a backward-running GRU makes the task 'trivially easy'.",
+      "options": [],
+      "answer": "The label at position t is the input at t+1. A backward GRU's output at position t has already processed input t+1, so it can output that character directly.",
+      "explanation": "This is target leakage: the answer is part of the input.",
+      "page_refs": [447, 452]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "What features of Shakespeare's text has the model clearly learned, judging from the sample?",
+      "options": [],
+      "answer": "Uppercase speaker names followed by a colon and newline, real character names, archaic words (thou, hath, wouldst), punctuation and verse-like line lengths.",
+      "explanation": "Meaning across lines is weak, consistent with a small character-level model trained briefly.",
+      "page_refs": [452]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you predict what you would see if a Transformer language model were trained without hiding future tokens? Relate it to the Bidirectional GRU warning.",
+      "options": [],
+      "answer": "The same thing: near-perfect training accuracy and failed generation, because each position could attend to the next token, which is the label.",
+      "explanation": "The decoder block in section 15.3.3 (p.470) must keep future positions hidden for this reason.",
+      "page_refs": [452, 470]
+    }
+  ]
+}

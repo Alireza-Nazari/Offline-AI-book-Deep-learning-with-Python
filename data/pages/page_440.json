@@ -1,0 +1,325 @@
+{
+ "page_id": "page_440",
+ "pdf_page": 440,
+ "printed_page": "416",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:04:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Typo in a code callout of Listing 14.27: \"Splits middle wonder into a label\" should read \"Splits middle word into a label\".",
+   "In split_label, the label index is hard-coded as window[4] while the slices use context_size; this is correct only for context_size = 4 (window[context_size] would be general). Not a bug as printed, but inconsistent with the parameterized code around it."
+  ],
+  "extraction_quality": "Clean. The code element p440_e03 is the continuation of Listing 14.27 (its first two lines, the import and context_size = 4, are on p.439). Callouts were matched to lines from the page image: \"Total window size\" (window_size = 9), \"Uses all training data, including the unsup/ directory\" (text_dataset_from_directory on imdb_extract_dir / \"train\"), \"Drops label\" (map lambda x, y: x), \"Tokenizes\" (map tokenize_no_padding), \"Creates context windows\" (interleave window_data), \"Splits middle wonder into a label\" (map split_label). Listing 14.28 starts on this page and continues on p.441 with the Dense output layer, compile and summary."
+ },
+ "overview": {
+  "title": "Building CBOW windows with tf.data and the start of the CBOW model",
+  "chapter": "14 Text classification",
+  "section": "14.5 Sequence models",
+  "subsection": "14.5.4 Pretraining a word embedding",
+  "main_topic": "The body of Listing 14.27 (window_data, split_label, and a tf.data pipeline over the full IMDb train directory including unsup/), and the start of Listing 14.28: an Embedding layer plus GlobalAveragePooling1D for the CBOW model",
+  "central_idea": "Each unpadded review is turned into all of its nine-token windows with a vectorized gather, each window is split into an eight-token context bag and the middle token as label, and the CBOW model embeds the bag and averages the embeddings to predict the middle word.",
+  "importance": "This is where the unsupervised dataset is actually built, and where the model whose Embedding weights will be transferred to the LSTM (p.442) is defined.",
+  "learning_objectives": [
+   "Explain how window_data builds all sliding windows with tf.range broadcasting and tf.gather",
+   "Explain split_label and the shapes of its outputs",
+   "Trace the tf.data pipeline: load, drop labels, tokenize, window, split",
+   "Explain why reading imdb_extract_dir / \"train\" includes the unsup/ reviews",
+   "Describe the CBOW model: Embedding (max_tokens x 64) followed by GlobalAveragePooling1D",
+   "Explain why averaging makes the context an unordered bag"
+  ],
+  "prerequisites": [
+   "context_size = 4 and tokenize_no_padding (p.439)",
+   "tf.data map and interleave",
+   "Broadcasting (chapter 2)",
+   "The Embedding layer (p.434)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page holds most of **Listing 14.27**. `window_size = 9` is the total window size. **`window_data(token_ids)`** computes the number of complete windows, `tf.maximum(tf.size(token_ids) - context_size * 2, 0)`, then builds an index matrix by broadcasting: `tf.range(window_size)[None, :] + tf.range(num_windows)[:, None]` has shape `(num_windows, 9)`, row *i* being `i, i+1, ..., i+8`. `tf.gather` uses it to collect the tokens of every window at once, and `Dataset.from_tensor_slices` emits the windows one by one. **`split_label(window)`** takes the four tokens to the left (`window[:context_size]`) and four to the right (`window[context_size + 1 :]`), concatenates them into the `bag`, and uses `window[4]`, the middle token, as the `label`.\n\nThe pipeline loads text with `keras.utils.text_dataset_from_directory(imdb_extract_dir / \"train\", batch_size=None)`. That is the original IMDb training directory, so it **uses all training data, including the `unsup/` directory**. It then **drops the label** (`lambda x, y: x`), **tokenizes** with `tokenize_no_padding`, **creates context windows** with `interleave(window_data, cycle_length=8, ...)` (which mixes windows from eight reviews at a time), and **splits the middle word into a label** with `split_label`. Every step uses `num_parallel_calls=8`.\n\nAfter preprocessing, each example is **eight integer token IDs as context paired with a single token ID label**.\n\nThe model is **exceedingly simple**: an `Embedding` layer embeds all context tokens, and `GlobalAveragePooling1D` computes **the average embedding of the bag**, which is used to predict the middle token. \"That's it!\" By repeatedly refining the embedding space to be good at predicting a word from nearby word embeddings, we learn a rich embedding of the tokens used in movie reviews.\n\n**Listing 14.28** begins with `hidden_dim = 64`, `inputs = keras.Input(shape=(2 * context_size,))` (8 tokens), `cbow_embedding = layers.Embedding(max_tokens, hidden_dim)`, then `x = cbow_embedding(inputs)` and `x = layers.GlobalAveragePooling1D()(x)`. The output layer, compilation and summary are on p.441. The embedding layer is kept in its own variable, `cbow_embedding`, so its weights can be reused later.",
+ "paragraphs": [
+  {
+   "ref": "p440_e04",
+   "excerpt": "After preprocessing, we can see that we have eight integer token IDs",
+   "what_it_says": "After preprocessing, each example is eight integer token IDs as context paired with a single token ID label.",
+   "what_it_means": "The dataset yields pairs (bag, label) with bag of shape (8,) and label a scalar. This is an ordinary supervised classification dataset whose \"classes\" are the vocabulary words, and it was made without any human labels.",
+   "why_it_matters": "These shapes define the model's input, keras.Input(shape=(2 * context_size,)) = (8,), and its output: one class out of max_tokens.",
+   "terminology": [
+    {"term": "Token ID", "meaning": "The integer index of a token in the vocabulary."}
+   ],
+   "connections": ["p.439: the nine-token windows were described in prose."]
+  },
+  {
+   "ref": "p440_e05",
+   "excerpt": "The model we train with this data is exceedingly simple. We will",
+   "what_it_says": "The model is very simple: an Embedding layer embeds all context tokens, and GlobalAveragePooling1D computes the average embedding of the bag of context tokens. That average embedding is then used to predict the middle label token.",
+   "what_it_means": "Embedding maps (batch, 8) IDs to (batch, 8, 64) vectors; averaging over the 8 positions gives (batch, 64). Because the average does not depend on order, the context really is a bag. The only learned parts are the embedding table and the output layer (p.441). Each training step nudges the eight context vectors so that their average predicts the middle word better.",
+   "why_it_matters": "This realizes figure 14.6 (where the combination is labeled \"sum\"; an average is a sum divided by 8, so they differ only by scale).",
+   "technical_idea": "GlobalAveragePooling1D averages over the sequence axis (axis 1). Beyond the book: original word2vec CBOW also averages context vectors, and makes the large softmax affordable with tricks like negative sampling or hierarchical softmax; the book uses a plain full-vocabulary output.",
+   "terminology": [
+    {"term": "GlobalAveragePooling1D", "meaning": "A Keras layer that averages a (batch, steps, features) tensor over the steps axis, giving (batch, features)."}
+   ],
+   "connections": ["p.439: figure 14.6 shows the combination as \"sum\".", "p.441: the Dense output layer over max_tokens."]
+  },
+  {
+   "ref": "p440_e05",
+   "excerpt": "That’s it! By repeatedly refining our embedding space so that we are",
+   "what_it_says": "That's it! By repeatedly refining the embedding space so that we are good at predicting a word from nearby word embeddings, we learn a rich embedding of the tokens used in movie reviews.",
+   "what_it_means": "The prediction task is only a means to an end. The \"richness\" comes from the corpus: words that play similar roles in movie reviews (for example \"terrible\" and \"awful\", or actor names) appear in similar contexts and end up with similar vectors.",
+   "why_it_matters": "It states the purpose of the CBOW model: produce domain-specific embeddings for movie reviews that the LSTM can start from.",
+   "connections": ["p.442: the learned embedding is used in the LSTM classifier."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "context_window",
+   "name": "Sliding context windows via gather",
+   "definition": "All windows of length 9 in a sequence, extracted at once by gathering with an index matrix.",
+   "intuition": "Write down the start positions 0..n-9, add 0..8 to each, and read off those tokens.",
+   "technical": "idx = range(9)[None,:] + range(n-8)[:,None] (broadcast to (n-8, 9)); windows = gather(tokens, idx).",
+   "significance": "Vectorized and fast inside a tf.data pipeline, with no Python loop.",
+   "example": "n = 11 tokens -> idx rows [0..8], [1..9], [2..10]: 3 windows.",
+   "misconception": "The windows overlap; consecutive windows share 8 of 9 tokens.",
+   "related": ["cbow", "broadcasting"],
+   "source": "book"
+  },
+  {
+   "id": "cbow",
+   "name": "CBOW model",
+   "definition": "Embedding -> average over the context -> prediction of the middle word.",
+   "intuition": "The average of the neighbors' vectors should point to the missing word.",
+   "technical": "Input (None, 8) -> Embedding(max_tokens, 64) -> (None, 8, 64) -> GlobalAveragePooling1D -> (None, 64) -> Dense(max_tokens) (p.441).",
+   "significance": "Learns a rich embedding of tokens used in movie reviews without labels.",
+   "example": "Listing 14.28.",
+   "misconception": "The model has no recurrence or attention; it ignores order inside the window entirely.",
+   "related": ["embedding", "pretraining", "global_average_pooling"],
+   "source": "book"
+  },
+  {
+   "id": "global_average_pooling",
+   "name": "GlobalAveragePooling1D",
+   "definition": "Averages a sequence of vectors over the time axis.",
+   "intuition": "Collapses eight word vectors into their mean.",
+   "technical": "(batch, steps, features) -> (batch, features); permutation-invariant over steps.",
+   "significance": "Makes the context a bag of words.",
+   "example": "(None, 8, 64) -> (None, 64).",
+   "misconception": "It has no trainable parameters.",
+   "related": ["cbow", "pooling"],
+   "source": "book"
+  },
+  {
+   "id": "tf_data_pipeline",
+   "name": "tf.data pipeline with map and interleave",
+   "definition": "A chain of dataset transformations that stream, transform and mix examples in parallel.",
+   "intuition": "An assembly line: read a review, strip its label, tokenize it, cut it into windows, split each window.",
+   "technical": "map applies a function per element; interleave maps each element to a dataset and mixes elements from cycle_length of them; num_parallel_calls runs transformations in parallel.",
+   "significance": "Produces many training examples per review efficiently; independent of the Keras backend (p.439).",
+   "example": "dataset.interleave(window_data, cycle_length=8, num_parallel_calls=8).",
+   "misconception": "interleave is not the same as flat_map: it draws from several sub-datasets in turn, so consecutive windows come from different reviews.",
+   "related": ["text_vectorization"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Number of windows and the window index matrix",
+   "latex": "N_{\\text{win}} = \\max(n - 2c,\\ 0), \\qquad I_{ij} = i + j,\\quad 0 \\le i < N_{\\text{win}},\\ 0 \\le j < 2c+1",
+   "source_text": "num_windows = tf.maximum(tf.size(token_ids) - context_size * 2, 0); windows = tf.range(window_size)[None, :] + tf.range(num_windows)[:, None]",
+   "variables": [
+    {"symbol": "n", "meaning": "Length of the tokenized review (tf.size(token_ids))"},
+    {"symbol": "c", "meaning": "context_size = 4"},
+    {"symbol": "N_{\\text{win}}", "meaning": "Number of complete windows"},
+    {"symbol": "I", "meaning": "Index matrix of shape (N_win, 9); row i lists the positions of window i"}
+   ],
+   "operations": "Subtraction and max to count windows; broadcasting addition of a row vector (1, 9) and a column vector (N_win, 1).",
+   "purpose": "Lets tf.gather extract all windows in one call.",
+   "interpretation": "Window i is centered on token i + c, so every token except the first and last c becomes a label once.",
+   "intuition": "Start positions down the rows, offsets across the columns.",
+   "numerical_example": "For $n = 11$, $c = 4$: $N_{\\text{win}} = 3$ and $I = \\begin{bmatrix}0&1&\\cdots&8\\\\1&2&\\cdots&9\\\\2&3&\\cdots&10\\end{bmatrix}$. A review of 5 tokens gives $\\max(5-8,0) = 0$ windows.",
+   "source": "book",
+   "book_ref": "p.440"
+  },
+  {
+   "id": "m2",
+   "title": "Averaged context embedding",
+   "latex": "h = \\frac{1}{8}\\sum_{k=1}^{8} E[\\text{bag}_k] \\in \\mathbb{R}^{64}",
+   "source_text": "an Embedding layer to embed all context tokens and a GlobalAveragePooling1D to compute the average embedding of our \"bag\" of context tokens",
+   "variables": [
+    {"symbol": "E", "meaning": "Embedding matrix of shape (max_tokens, 64)"},
+    {"symbol": "\\text{bag}_k", "meaning": "k-th context token ID"},
+    {"symbol": "h", "meaning": "Average context vector fed to the output layer"}
+   ],
+   "operations": "Eight row lookups and a mean.",
+   "purpose": "Combines the context into one fixed-size, order-independent vector.",
+   "interpretation": "Permuting the bag leaves h unchanged.",
+   "intuition": "The \"center of mass\" of the neighbors' vectors.",
+   "source": "book",
+   "book_ref": "p.440"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "14.27",
+   "title": "Preprocessing our IMDb data for pretraining a CBOW model (continued)",
+   "original_code": "window_size = 9\ndef window_data(token_ids):\n    num_windows = tf.maximum(tf.size(token_ids) - context_size * 2, 0)\n    windows = tf.range(window_size)[None, :]\n    windows = windows + tf.range(num_windows)[:, None]\n    windowed_tokens = tf.gather(token_ids, windows)\n    return tf.data.Dataset.from_tensor_slices(windowed_tokens)\ndef split_label(window):\n    left = window[:context_size]\n    right = window[context_size + 1 :]\n    bag = tf.concat((left, right), axis=0)\n    label = window[4]\n    return bag, label\ndataset = keras.utils.text_dataset_from_directory(\n    imdb_extract_dir / \"train\", batch_size=None\n)\ndataset = dataset.map(lambda x, y: x, num_parallel_calls=8)\ndataset = dataset.map(tokenize_no_padding, num_parallel_calls=8)\ndataset = dataset.interleave(window_data, cycle_length=8, num_parallel_calls=8)\ndataset = dataset.map(split_label, num_parallel_calls=8)",
+   "language": "python",
+   "what_it_does": "Continues Listing 14.27 from p.439 (where import tensorflow as tf and context_size = 4 appear). It defines the windowing and label-splitting functions and builds a tf.data pipeline that turns every review in the IMDb train directory (pos/, neg/ and unsup/) into (8-token bag, middle-token label) pairs.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "window_size = 9 (callout: \"Total window size\") = 2 x context_size + 1."},
+    {"lines": "2-3", "explanation": "num_windows = max(n - 8, 0): how many full windows fit; reviews shorter than 9 tokens produce none."},
+    {"lines": "4-5", "explanation": "A (1, 9) row of offsets plus a (num_windows, 1) column of start positions broadcasts to a (num_windows, 9) index matrix."},
+    {"lines": "6-7", "explanation": "tf.gather picks the token IDs at those indices; from_tensor_slices turns the (num_windows, 9) tensor into a dataset of individual windows."},
+    {"lines": "8-13", "explanation": "split_label: left = first 4 tokens, right = last 4 tokens (skipping index 4), concatenated into an 8-token bag; label = window[4], the middle token."},
+    {"lines": "14-16", "explanation": "Loads all text files under the original aclImdb/train directory with no batching (callout: \"Uses all training data, including the unsup/ directory\"). The subfolders pos/, neg/, unsup/ become (ignored) class labels."},
+    {"lines": "17", "explanation": "Drops the label, keeping only the review text (callout: \"Drops label\")."},
+    {"lines": "18", "explanation": "Tokenizes each review into a variable-length ID sequence (callout: \"Tokenizes\")."},
+    {"lines": "19", "explanation": "interleave applies window_data to each review and mixes windows from 8 reviews at a time (callout: \"Creates context windows\")."},
+    {"lines": "20", "explanation": "Splits each window into (bag, label) (callout, misprinted: \"Splits middle wonder into a label\")."}
+   ],
+   "inputs_outputs": "Input: review text files on disk. Output: a tf.data.Dataset of (bag: int tensor of shape (8,), label: int scalar) pairs, unbatched (batching happens in Listing 14.29 on p.441).",
+   "algorithm": "For each review: tokenize -> all overlapping 9-token windows -> (context, middle) pairs.",
+   "theory_link": "Builds the self-labeled CBOW dataset; every token with four neighbors on each side becomes a target once.",
+   "parameters": [
+    {"name": "window_size", "role": "Tokens per window (9)"},
+    {"name": "context_size", "role": "Tokens on each side of the label (4, from p.439)"},
+    {"name": "batch_size=None", "role": "Yield individual reviews rather than batches, so each can be windowed separately"},
+    {"name": "cycle_length=8", "role": "Number of reviews whose windows are interleaved at once"},
+    {"name": "num_parallel_calls=8", "role": "Parallelism of each map/interleave step"}
+   ],
+   "pitfalls": [
+    "label = window[4] is hard-coded; with a different context_size it should be window[context_size].",
+    "imdb_extract_dir / \"train\" also contains the 20% of labeled reviews that were copied to the validation directory (p.421). Their labels are dropped, so this is not label leakage, but the embedding does see the validation texts.",
+    "Windows never cross review boundaries, and reviews shorter than 9 tokens contribute nothing.",
+    "interleave with cycle_length=8 only mixes 8 reviews at a time; windows from the same review still arrive close together, so there is limited shuffling (no shuffle() is applied in the listing)."
+   ],
+   "illustrative_code": "# AI-written check of the index-matrix trick (not from the book), NumPy version\nimport numpy as np\ntoken_ids = np.arange(100, 111)   # 11 fake token IDs\nnum_windows = max(token_ids.size - 8, 0)   # 3\nidx = np.arange(9)[None, :] + np.arange(num_windows)[:, None]\nprint(idx.shape)          # (3, 9)\nprint(token_ids[idx])     # each row is one window\nbag = np.concatenate([token_ids[idx][0, :4], token_ids[idx][0, 5:]])\nprint(bag, token_ids[idx][0, 4])   # 8 context IDs, middle label"
+  },
+  {
+   "id": "c2",
+   "listing": "14.28",
+   "title": "Building a CBOW model (first part)",
+   "original_code": "hidden_dim = 64\ninputs = keras.Input(shape=(2 * context_size,))\ncbow_embedding = layers.Embedding(\n    max_tokens,\n    hidden_dim,\n)\nx = cbow_embedding(inputs)\nx = layers.GlobalAveragePooling1D()(x)",
+   "language": "python",
+   "what_it_does": "Defines the input (8 token IDs), a 64-dimensional Embedding layer over the max_tokens vocabulary stored in the variable cbow_embedding, and averages the eight embeddings. The listing continues on p.441 with the Dense(max_tokens) output layer, the keras.Model, compile() and the model summary.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "hidden_dim = 64 matches the embedding size of the LSTM model, so the weights can be transferred."},
+    {"lines": "2", "explanation": "Input of shape (8,): the bag of 2 x context_size token IDs."},
+    {"lines": "3-6", "explanation": "Embedding table of shape (max_tokens, 64); keeping a reference in cbow_embedding makes it easy to extract its weights later."},
+    {"lines": "7", "explanation": "Looks up the 8 vectors: (None, 8) -> (None, 8, 64)."},
+    {"lines": "8", "explanation": "Averages over the 8 positions: (None, 8, 64) -> (None, 64)."}
+   ],
+   "inputs_outputs": "Input: (batch, 8) int IDs. Output so far: (batch, 64) average context vector.",
+   "algorithm": "Embedding lookup followed by mean pooling.",
+   "theory_link": "Implements figure 14.6, with an average in place of the sum.",
+   "parameters": [
+    {"name": "hidden_dim", "role": "Embedding dimension (64)"},
+    {"name": "max_tokens", "role": "Vocabulary size (30,000 according to the summary on p.441)"}
+   ],
+   "pitfalls": [
+    "No mask_zero is set; since the inputs are unpadded windows this is fine, but padding tokens would otherwise be averaged in.",
+    "The embedding size must match the downstream model's Embedding layer for the transfer on p.442."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Trace one tiny review through the pipeline",
+   "kind": "numerical",
+   "body": "Suppose a review tokenizes to 10 IDs: `[12, 7, 33, 5, 81, 9, 4, 27, 60, 15]`.\n\n- `num_windows = max(10 - 8, 0) = 2`\n- index matrix rows: `[0..8]` and `[1..9]`\n- window 0: `[12, 7, 33, 5, 81, 9, 4, 27, 60]` -> bag `[12, 7, 33, 5, 9, 4, 27, 60]`, label `81`\n- window 1: `[7, 33, 5, 81, 9, 4, 27, 60, 15]` -> bag `[7, 33, 5, 81, 4, 27, 60, 15]`, label `9`\n\nSo each review of n tokens gives n - 8 examples. (Example values are ours.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the unsup/ reviews are included without extra code",
+   "kind": "breakdown",
+   "body": "On p.421 the authors built their own `train_dir` with only `neg/` and `pos/` copied from the original download (minus a 20% validation split). Here they point `text_dataset_from_directory` back at the **original** `imdb_extract_dir / \"train\"`, which still has `pos/`, `neg/` and `unsup/` subfolders (listed on p.420). The utility treats the three folders as three classes, and the next line throws the class away. That is how this listing \"uses all training data, including the unsup/ directory\", about 50,000 reviews.",
+   "source": "inference"
+  },
+  {
+   "title": "Bag of words twice over",
+   "kind": "alternative",
+   "body": "The chapter's bag-of-words classifier (p.423) ignored order across a whole review. CBOW ignores order only inside a nine-token window, and the windows themselves are local, so the embedding still captures which words occur near each other. Beyond the book: the skip-gram variant of word2vec reverses the task (predict each neighbor from the middle word) and often gives better vectors for rare words.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "The tf.data pipeline of Listing 14.27",
+   "why": "Lays out each dataset step with the page's callouts and the shape of the elements after it.",
+   "mermaid": "flowchart TD\n  A[\"text_dataset_from_directory<br/>aclImdb/train: pos, neg, unsup\"] -->|\"(text, class)\"| B[\"map lambda x, y: x<br/>Drops label\"]\n  B -->|\"text\"| C[\"map tokenize_no_padding<br/>Tokenizes\"]\n  C -->|\"IDs, shape (n,)\"| D[\"interleave window_data<br/>Creates context windows\"]\n  D -->|\"window, shape (9,)\"| E[\"map split_label<br/>Splits middle word into a label\"]\n  E -->|\"bag (8,), label ()\"| F[\"CBOW model<br/>Listing 14.28\"]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Shapes through the CBOW model so far",
+   "why": "Follows Listing 14.28 on this page: 8 token IDs are embedded to 64 dimensions and averaged.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "input bag", "shape": [null, 8]},
+     {"op": "Embedding(max_tokens, 64)", "shape": [null, 8, 64]},
+     {"op": "GlobalAveragePooling1D", "shape": [null, 64]}
+    ]
+   }
+  },
+  {
+   "id": "v3",
+   "type": "widget",
+   "title": "Broadcasting that builds the window index matrix",
+   "why": "window_data adds tf.range(window_size)[None, :] (shape (1, 9)) to tf.range(num_windows)[:, None] (shape (num_windows, 1)); here with 3 windows.",
+   "widget": "broadcasting",
+   "params": {"a_shape": [3, 1], "b_shape": [1, 9]}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "The CBOW dataset only uses the 20,000 labeled training reviews.", "correction": "It reads the original train directory, which includes unsup/, so all 50,000 training-split reviews are used (labels dropped)."},
+  {"claim": "window_data loops over positions in Python.", "correction": "It builds all windows at once with a broadcast index matrix and tf.gather."},
+  {"claim": "GlobalAveragePooling1D has trainable weights.", "correction": "It is a parameter-free mean over the sequence axis."},
+  {"claim": "The windows partition the review into separate chunks.", "correction": "They overlap and advance by one token, so each token (except near the ends) is the label of exactly one window and appears in the context of eight others."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 439, "note": "Listing 14.26 (tokenize_no_padding) and the start of Listing 14.27 (context_size = 4)."},
+   {"page": 420, "note": "Directory listing showing aclImdb/train/unsup."},
+   {"page": 421, "note": "Construction of the separate train/validation directories that excluded unsup/."}
+  ],
+  "later": [
+   {"page": 441, "note": "Rest of Listing 14.28 (Dense output, compile, summary) and Listing 14.29 (training with batch(1024).cache())."},
+   {"page": 442, "note": "Reusing cbow_embedding's weights in the LSTM classifier."}
+  ],
+  "prerequisites": [
+   {"page": 434, "note": "The Embedding layer."},
+   {"page": 438, "note": "Why we pretrain and what CBOW is."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 439, "note": "tokenize_no_padding used in the pipeline."},
+   {"page": 441, "note": "The continuation of Listing 14.28."}
+  ],
+  "related_figures": [
+   {"page": 439, "note": "Figure 14.6, which this model implements."}
+  ]
+ },
+ "takeaways": [
+  "window_data extracts all max(n - 8, 0) overlapping nine-token windows of a review in one vectorized gather.",
+  "split_label turns each window into an 8-token bag and the middle token as label.",
+  "The pipeline reads the original train directory, so the unsup/ reviews are included; class labels are dropped.",
+  "Each training example is eight token IDs paired with one token ID.",
+  "The CBOW model embeds the 8 tokens in 64 dimensions and averages them with GlobalAveragePooling1D; the listing continues on p.441.",
+  "The Embedding layer is kept as cbow_embedding so its weights can be transferred later."
+ ],
+ "questions": [
+  {"id": "q1", "type": "math", "question": "A tokenized review has 20 tokens. How many windows does window_data produce, and what is the shape of the index matrix?", "options": [], "answer": "20 - 8 = 12 windows; the index matrix has shape (12, 9).", "explanation": "num_windows = max(n - 2 x context_size, 0), and the matrix has one row per window and window_size = 9 columns.", "page_refs": [440]},
+  {"id": "q2", "type": "mcq", "question": "Why does this pipeline include the unsup/ reviews?", "options": ["Because tokenize_no_padding adds them", "Because it reads the original imdb_extract_dir / \"train\" directory, which contains pos/, neg/ and unsup/", "Because interleave downloads them", "Because split_label creates them"], "answer": "Because it reads the original imdb_extract_dir / \"train\" directory, which contains pos/, neg/ and unsup/", "explanation": "The callout says \"Uses all training data, including the unsup/ directory\". The other functions only transform reviews that have already been loaded.", "page_refs": [440, 420]},
+  {"id": "q3", "type": "short", "question": "What does dataset.map(lambda x, y: x) do, and why is it needed?", "options": [], "answer": "It drops the class label from each (text, label) pair. CBOW creates its own labels (the middle word), so the directory-based class (pos/neg/unsup) is not needed.", "explanation": "Callout \"Drops label\".", "page_refs": [440]},
+  {"id": "q4", "type": "conceptual", "question": "Why does averaging the context embeddings make CBOW a \"bag of words\" model?", "options": [], "answer": "The mean does not depend on the order of its inputs, so any permutation of the eight context words gives the same vector; only which words are present matters.", "explanation": "GlobalAveragePooling1D computes the average of the bag.", "page_refs": [440]},
+  {"id": "q5", "type": "mcq", "question": "What is the output shape after layers.GlobalAveragePooling1D()(x) in Listing 14.28?", "options": ["(None, 8, 64)", "(None, 64)", "(None, 8)", "(None, max_tokens)"], "answer": "(None, 64)", "explanation": "It averages over the 8 positions of (None, 8, 64). (None, 8) is the input, (None, 8, 64) the embedding output, and (None, max_tokens) the Dense output on p.441.", "page_refs": [440, 441]},
+  {"id": "q6", "type": "conceptual", "question": "What would go wrong in split_label if you changed context_size to 3 without editing anything else?", "options": [], "answer": "window_size is still hard-coded to 9 while num_windows becomes n - 6, so the last two windows would index past the end of the review (tf.gather raises an out-of-range error on CPU). Even ignoring that, left = window[:3] takes positions 0-2 and right = window[4:] takes positions 4-8, so the bag skips position 3 and includes position 4, which is exactly the label window[4]: the model would be asked to predict a token it is given as input.", "explanation": "window_size and the label index are hard-coded; window_size = 2 * context_size + 1 and label = window[context_size] would generalize.", "page_refs": [440]},
+  {"id": "q7", "type": "self", "question": "Can you explain how tf.range(window_size)[None, :] + tf.range(num_windows)[:, None] produces all window positions?", "options": [], "answer": "Broadcasting adds every start position (column) to every offset 0..8 (row), giving a matrix whose row i is i, i+1, ..., i+8.", "explanation": "This is broadcasting from chapter 2 applied to index arithmetic.", "page_refs": [440]}
+ ]
+}

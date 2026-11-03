@@ -1,0 +1,507 @@
+{
+ "page_id": "page_550",
+ "pdf_page": 550,
+ "printed_page": "526",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:20:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. Both code fragments extracted verbatim; the denoise() fragment is a method of the DiffusionModel class (indented one level) and continues the class begun in the first snippet. The printed numbered list (steps 1-5) is split across e08 and e09 at the column break; covered as one note."
+ },
+ "overview": {
+  "title": "DiffusionModel constructor and denoise()",
+  "chapter": "17 Image generation",
+  "section": "17.2 Diffusion models",
+  "subsection": "17.2.4 The training process",
+  "main_topic": "The DiffusionModel constructor, the denoise() method that reconstructs clean images from predicted noise, and the plan for the training forward pass in call().",
+  "central_idea": "DiffusionModel wraps the U-Net, a seed generator, an MAE loss and a Normalization layer. denoise() asks the U-Net for the noise mask and inverts noisy = signal * image + noise * mask to recover the image. Training is done by putting the forward pass in call() and the loss in a custom compute_loss(), which keeps the model backend-agnostic.",
+  "importance": "denoise() is the core operation reused by both training (p.551) and generation (pp.551-552), and the call()/compute_loss() split is the pattern that lets the same code run on TensorFlow, JAX and PyTorch.",
+  "learning_objectives": [
+   "List the attributes the DiffusionModel constructor creates and the role of each.",
+   "Derive the reconstruction formula used in denoise() from the noising equation.",
+   "Explain why the training logic goes in compute_loss() rather than train_step().",
+   "Enumerate the five steps of the training forward pass in call()."
+  ],
+  "prerequisites": [
+   "Subclassing keras.Model (chapter 7) and the VAE example of section 17.1.3",
+   "get_model() U-Net (p.547) taking [noisy_images, noise_rates]",
+   "diffusion_schedule() (p.548)",
+   "The noise-prediction MAE loss and normalization layer (p.549)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "This page writes the first parts of the `DiffusionModel` class announced on p.549.\n\n**Constructor.** `DiffusionModel(keras.Model)` takes `image_size`, `widths`, `block_depth` (forwarded to `get_model()`, p.547) and `**kwargs` (forwarded to `keras.Model`). It stores:\n\n- `self.image_size`;\n- `self.denoising_model`: the U-Net;\n- `self.seed_generator = keras.random.SeedGenerator()`: a stateful source of randomness for sampling noise and diffusion times;\n- `self.loss = keras.losses.MeanAbsoluteError()`: the loss (callout: \"Our loss function\");\n- `self.normalizer = keras.layers.Normalization()`: used to normalize input images (callout).\n\n**denoise().** Given noisy images and their noise and signal rates, it calls the denoiser with `[noisy_images, noise_rates]` to get `pred_noise_masks`, then reconstructs the clean image as `(noisy_images - noise_rates * pred_noise_masks) / signal_rates`. This is the noising equation `noisy = signal * image + noise * mask` solved for `image`. It returns both the predicted images and the predicted noise masks.\n\n**Training logic.** As with the VAE, the authors implement a custom `compute_loss()` to stay **backend-agnostic**. You could write a custom `train_step()` instead, but that requires backend-specific code for gradient computation and weight updates. Because `compute_loss()` receives the output of `call()`, the denoising forward pass goes in `call()`, which takes a batch of clean images and:\n\n1. normalizes them,\n2. samples random diffusion times (to train on the full spectrum),\n3. computes the matching noise and signal rates with the schedule,\n4. adds random noise to the clean images based on those rates,\n5. denoises the images.\n\nThe code for `call()` and `compute_loss()` follows on p.551.",
+ "paragraphs": [
+  {
+   "ref": "p550_e03",
+   "excerpt": "Let’s start by writing the model constructor:",
+   "what_it_says": "Introduces the constructor of DiffusionModel, which creates the denoiser, a seed generator, the MAE loss and a Normalization layer.",
+   "what_it_means": "All stateful pieces live on the model object so that Keras tracks them: the U-Net's weights become the model's trainable weights, the Normalization layer's mean/variance become non-trainable state, and the SeedGenerator holds the RNG state used in call() and generate().",
+   "why_it_matters": "Using a SeedGenerator (instead of fixed seeds) gives fresh random noise on every call while staying reproducible and compatible with JAX's functional randomness.",
+   "terminology": [
+    {
+     "term": "keras.random.SeedGenerator",
+     "meaning": "A stateful object holding a random seed that advances each time it is used, so successive random calls differ."
+    },
+    {
+     "term": "**kwargs",
+     "meaning": "Extra keyword arguments (like name) passed through to keras.Model.__init__."
+    }
+   ],
+   "connections": [
+    "p.547: get_model(image_size, widths, block_depth) builds the U-Net.",
+    "p.549: the need for a loss and a normalization layer is explained."
+   ]
+  },
+  {
+   "ref": "p550_e05",
+   "excerpt": "The first method we’re going to need is the denoising method. It",
+   "what_it_says": "The denoise() method calls the denoising model to get a predicted noise mask and uses it to reconstruct a denoised image.",
+   "what_it_means": "The U-Net only predicts noise. To get an image estimate, denoise() inverts the mixing formula: subtract the scaled predicted noise from the noisy image, then divide by the signal rate. The U-Net receives the noise rate too, so it knows how much noise to look for (p.545).",
+   "why_it_matters": "This single method is used in training (call(), p.551) and at every step of generation (p.552).",
+   "technical_idea": "x_hat_0 = (x_t - n * eps_hat) / s. If eps_hat equals the true noise, the reconstruction is exact.",
+   "terminology": [
+    {
+     "term": "Predicted noise mask",
+     "meaning": "The U-Net's estimate of the Gaussian noise present in the noisy image."
+    }
+   ],
+   "connections": [
+    "p.551: call() uses denoise() during training.",
+    "p.552: generate() uses denoise() at each step."
+   ]
+  },
+  {
+   "ref": "p550_e07",
+   "excerpt": "Next comes the training logic. This is the most important part! Like",
+   "what_it_says": "The training logic is the most important part. As in the VAE example, a custom compute_loss() keeps the model backend-agnostic. You could write a custom train_step() with the same logic, plus backend-specific gradient and update code.",
+   "what_it_means": "Keras's built-in train_step() already handles gradients and optimizer updates for each backend; it calls the model's forward pass and then compute_loss(). By overriding only compute_loss() (and call()), you plug custom logic into that machinery without writing any GradientTape (TensorFlow), jax.grad (JAX) or loss.backward() (PyTorch) code.",
+   "why_it_matters": "The same DiffusionModel works with any Keras backend, which is a central theme of Keras 3.",
+   "terminology": [
+    {
+     "term": "compute_loss()",
+     "meaning": "A keras.Model method called by the default train_step with (x, y, y_pred, sample_weight, training) that returns the loss value."
+    },
+    {
+     "term": "train_step()",
+     "meaning": "The method that runs one training step: forward pass, loss, gradients, weight update."
+    },
+    {
+     "term": "Backend agnostic",
+     "meaning": "Runs unchanged on TensorFlow, JAX or PyTorch."
+    }
+   ],
+   "connections": [
+    "p.537: the VAE implementation in section 17.1.3 used the same compute_loss() pattern."
+   ]
+  },
+  {
+   "ref": "p550_e08",
+   "excerpt": "Since compute_loss() receives as input the output of call(), we’re going",
+   "what_it_says": "Because compute_loss() receives the output of call(), the denoising forward pass goes in call(). call() takes clean images and (1) normalizes them, (2) samples random diffusion times so the model is trained on the full spectrum, (3) computes noise and signal rates with the schedule, (4) adds random noise according to those rates, and (5) denoises the images.",
+   "what_it_means": "In fit(), the dataset yields only images (no labels). call(images) builds the noisy training inputs itself and runs the denoiser, returning everything compute_loss() needs as y_pred. Sampling diffusion times uniformly means each batch mixes many noise levels, so a single network learns to denoise at all of them, which generation needs because it visits every level from 1 down to 0.",
+   "why_it_matters": "This is the whole training recipe of a diffusion model in five steps; the code on p.551 implements them one by one.",
+   "technical_idea": "Training pairs are synthesized on the fly: (x_t, n(t)) as input, epsilon as target, with x_t = s(t) x_0 + n(t) epsilon.",
+   "terminology": [
+    {
+     "term": "Full spectrum of diffusion times",
+     "meaning": "All noise levels in [0, 1], obtained by uniform sampling."
+    }
+   ],
+   "connections": [
+    "p.551: the call() implementation, with callouts for each step.",
+    "p.548: the schedule used in step 3."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "denoise_reconstruction",
+   "name": "Reconstructing the image from predicted noise",
+   "definition": "Recovering an estimate of the clean image by subtracting the predicted noise from the noisy image and rescaling by the signal rate.",
+   "intuition": "If you know how the mix was made and you can guess the noise, you can undo the mix.",
+   "technical": "pred_images = (noisy_images - noise_rates * pred_noise_masks) / signal_rates.",
+   "significance": "Lets a noise-predicting network produce image estimates, needed for generation.",
+   "example": "Noisy pixel 0.9 with s = 0.6, n = 0.8 and predicted noise 0.5: (0.9 - 0.4) / 0.6 = 0.833.",
+   "misconception": "That the reconstruction is equally reliable at every noise level. Dividing by a small signal rate (as low as 0.02) magnifies noise-prediction errors.",
+   "related": [
+    "noise_prediction",
+    "diffusion_schedule"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "compute_loss_override",
+   "name": "Overriding compute_loss() for backend-agnostic training",
+   "definition": "Implementing a model's custom loss in compute_loss() and its forward pass in call(), and letting Keras's default train_step handle gradients and updates.",
+   "intuition": "Change what is computed, not how it is differentiated.",
+   "technical": "Default train_step: y_pred = self(x, training=True); loss = self.compute_loss(x, y, y_pred, sample_weight); then backend-specific gradient code.",
+   "significance": "One implementation runs on TensorFlow, JAX and PyTorch.",
+   "example": "The VAE in section 17.1.3 and DiffusionModel here.",
+   "misconception": "That custom training always requires a custom train_step(). Only if you need non-standard update logic.",
+   "related": [
+    "keras_model",
+    "loss_function"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "diffusion_model",
+   "name": "Diffusion model",
+   "definition": "A generative model that learns to denoise and generates by iterated denoising from noise.",
+   "intuition": "A denoising autoencoder in a loop.",
+   "technical": "Here: DiffusionModel(keras.Model) with a U-Net, MAE noise-prediction loss and a cosine schedule.",
+   "significance": "Basis of modern image generators.",
+   "example": "Trained on Oxford Flowers on pp.553-554.",
+   "misconception": "That the model is trained by running the full generation loop. Training uses a single denoising step at a random noise level.",
+   "related": [
+    "diffusion_schedule",
+    "noise_prediction"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Noising equation and its inversion in denoise()",
+   "latex": "x_t = s\\,x_0 + n\\,\\varepsilon \\quad\\Longrightarrow\\quad \\hat{x}_0 = \\frac{x_t - n\\,\\hat\\varepsilon}{s}",
+   "source_text": "pred_images = (noisy_images - noise_rates * pred_noise_masks) / signal_rates",
+   "variables": [
+    {
+     "symbol": "x_t",
+     "meaning": "noisy_images"
+    },
+    {
+     "symbol": "x_0",
+     "meaning": "the clean (normalized) image"
+    },
+    {
+     "symbol": "s",
+     "meaning": "signal_rates"
+    },
+    {
+     "symbol": "n",
+     "meaning": "noise_rates"
+    },
+    {
+     "symbol": "\\varepsilon",
+     "meaning": "the true noise mask"
+    },
+    {
+     "symbol": "\\hat\\varepsilon",
+     "meaning": "pred_noise_masks, the U-Net output"
+    },
+    {
+     "symbol": "\\hat x_0",
+     "meaning": "pred_images, the reconstructed image"
+    }
+   ],
+   "operations": "Element-wise multiply, subtract, divide; the rates have shape (batch, 1, 1, 1) and broadcast over pixels and channels.",
+   "purpose": "Turns a noise prediction into an image prediction.",
+   "interpretation": "The error in the reconstructed image is $(n/s)(\\varepsilon - \\hat\\varepsilon)$: noise-prediction errors are scaled by $n/s$, about 0.33 at t = 0 but about 50 at t = 1.",
+   "intuition": "Undo the recipe: remove the noise ingredient, then scale the remaining image back up.",
+   "numerical_example": "Take $x_0 = 1.0$, $\\varepsilon = -0.5$, $s = 0.6$, $n = 0.8$: $x_t = 0.6 - 0.4 = 0.2$. If $\\hat\\varepsilon = -0.5$: $\\hat x_0 = (0.2 + 0.4)/0.6 = 1.0$ (exact). If $\\hat\\varepsilon = -0.4$: $\\hat x_0 = (0.2 + 0.32)/0.6 \\approx 0.867$.",
+   "source": "book",
+   "book_ref": "p.550"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "DiffusionModel constructor",
+   "original_code": "class DiffusionModel(keras.Model):\n    def __init__(self, image_size, widths, block_depth, **kwargs):\n        super().__init__(**kwargs)\n        self.image_size = image_size\n        self.denoising_model = get_model(image_size, widths, block_depth)\n        self.seed_generator = keras.random.SeedGenerator()\n        self.loss = keras.losses.MeanAbsoluteError()\n        self.normalizer = keras.layers.Normalization()",
+   "language": "python",
+   "what_it_does": "Defines the DiffusionModel subclass of keras.Model and creates its components: the U-Net denoiser, a seed generator, the MAE loss and a Normalization layer.",
+   "line_explanations": [
+    {
+     "lines": "1-3",
+     "explanation": "Subclass keras.Model; forward extra keyword arguments to the base constructor."
+    },
+    {
+     "lines": "4",
+     "explanation": "Store the image size (128 for Oxford Flowers, p.545); used to shape random noise in call() and generate()."
+    },
+    {
+     "lines": "5",
+     "explanation": "Build the U-Net with get_model() from p.547. It becomes a tracked sub-model whose weights are trained."
+    },
+    {
+     "lines": "6",
+     "explanation": "SeedGenerator: a stateful RNG used for noise masks and diffusion times."
+    },
+    {
+     "lines": "7",
+     "explanation": "Callout 'Our loss function': mean absolute error, used in compute_loss() on p.551."
+    },
+    {
+     "lines": "8",
+     "explanation": "Callout 'We'll use this to normalize input images.' Its statistics are computed later with adapt() (p.553)."
+    }
+   ],
+   "inputs_outputs": "Inputs: image_size, widths, block_depth (+ kwargs). Output: a DiffusionModel instance (methods added in the following snippets).",
+   "algorithm": "Composition: the diffusion training logic wraps a plain functional U-Net.",
+   "theory_link": "Collects the three ingredients announced on p.549: denoiser, loss, normalization layer.",
+   "parameters": [
+    {
+     "name": "image_size",
+     "role": "Spatial size of the square images (128)."
+    },
+    {
+     "name": "widths",
+     "role": "Conv2D widths per U-Net stage, e.g. [32, 64, 96, 128]."
+    },
+    {
+     "name": "block_depth",
+     "role": "Number of residual blocks per stage, e.g. 2."
+    }
+   ],
+   "pitfalls": [
+    "The Normalization layer is created un-adapted; forgetting model.normalizer.adapt(dataset) (p.553) leaves it without the dataset's mean and variance.",
+    "The loss is stored as an attribute instead of being passed to compile(); it is used only through the custom compute_loss()."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "The denoise() method",
+   "original_code": "    def denoise(self, noisy_images, noise_rates, signal_rates):\n        pred_noise_masks = self.denoising_model([noisy_images, noise_rates])\n        pred_images = (\n            noisy_images - noise_rates * pred_noise_masks\n        ) / signal_rates\n        return pred_images, pred_noise_masks",
+   "language": "python",
+   "what_it_does": "Predicts the noise in a batch of noisy images and reconstructs the corresponding clean images.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "A method of DiffusionModel. Takes noisy images (batch, 128, 128, 3) and rates (batch, 1, 1, 1)."
+    },
+    {
+     "lines": "2",
+     "explanation": "Callout 'Calls the denoising model': the U-Net gets both the noisy image and the noise rate (upsampled to a feature map inside get_model, p.547) and outputs a predicted noise mask of the same shape as the image."
+    },
+    {
+     "lines": "3-5",
+     "explanation": "Callout 'Reconstructs the predicted clean image': solve noisy = signal * image + noise * mask for image, using the predicted mask."
+    },
+    {
+     "lines": "6",
+     "explanation": "Returns both outputs: the images are needed for generation and the masks for the loss and the next generation step."
+    }
+   ],
+   "inputs_outputs": "Inputs: noisy_images, noise_rates, signal_rates. Outputs: (pred_images, pred_noise_masks), both shaped like noisy_images.",
+   "algorithm": "One U-Net forward pass plus an algebraic inversion of the noising equation.",
+   "theory_link": "Implements x_hat_0 = (x_t - n eps_hat) / s.",
+   "parameters": [
+    {
+     "name": "noise_rates",
+     "role": "Fed to the U-Net as conditioning and used in the inversion."
+    },
+    {
+     "name": "signal_rates",
+     "role": "Divisor in the inversion; never below 0.02 thanks to the schedule."
+    }
+   ],
+   "pitfalls": [
+    "Pass noise_rates, not signal_rates or diffusion times, to the U-Net: it was built to receive the noise rate.",
+    "At high diffusion times the division by a small signal rate amplifies errors; early generation steps therefore give blurry, unreliable image estimates."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "How Keras's default train_step uses call() and compute_loss()",
+   "kind": "step_by_step",
+   "body": "Roughly, for each batch `x` from `fit()`:\n\n1. `y_pred = self(x, training=True)`: runs `call()`, which on p.551 returns `(pred_images, pred_noise_masks, noise_masks)`.\n2. `loss = self.compute_loss(x, y, y_pred, sample_weight)`: our override unpacks `y_pred` and returns `MAE(noise_masks, pred_noise_masks)`; `y` is `None` because the dataset has no labels.\n3. Keras computes gradients of the loss with respect to the trainable weights in a backend-specific way and applies the optimizer.\n\nThe real noise masks travel through `y_pred` because they are created inside `call()`. That is the trick that lets a self-supervised objective fit into the standard `(x, y, y_pred)` interface. (Explanation beyond the book.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Recipe analogy for denoise()",
+   "kind": "analogy",
+   "body": "A smoothie is 60% fruit and 80% ice 'by the recipe's units' (the rates). If you can guess exactly how much ice went in, you can take it out and scale what remains back up to get the fruit. The U-Net is the guesser; `denoise()` does the subtraction and rescaling.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Training forward pass planned for call()",
+   "why": "Lays out the five numbered steps on this page and where denoise() fits.",
+   "mermaid": "flowchart LR\n  A[Clean images] --> B[Step 1: Normalize]\n  T[Step 2: Sample t ~ U 0,1] --> R[Step 3: diffusion_schedule t]\n  R --> |signal s, noise n| M\n  E[Random noise masks eps] --> M[Step 4: x_t = s*x0 + n*eps]\n  B --> M\n  M --> D[Step 5: denoise: U-Net predicts eps_hat]\n  R --> |n| D\n  D --> P[pred_images = x_t - n*eps_hat / s]\n  D --> L[compute_loss: MAE eps vs eps_hat]\n  E --> L"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The U-Net directly outputs a denoised image.",
+   "correction": "It outputs a predicted noise mask; denoise() computes the image from it."
+  },
+  {
+   "claim": "Custom training logic in Keras requires writing a custom train_step().",
+   "correction": "Overriding compute_loss() (with the forward pass in call()) is enough here and keeps the code backend-agnostic; train_step() is an alternative that needs backend-specific gradient code."
+  },
+  {
+   "claim": "The model is trained on images at one fixed noise level.",
+   "correction": "Diffusion times are sampled at random for every image, so the model sees the full spectrum of noise levels."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 549,
+    "note": "Announces the DiffusionModel class with an MAE loss on noise masks and an image normalization layer."
+   },
+   {
+    "page": 548,
+    "note": "diffusion_schedule() defines the noise and signal rates used by denoise()."
+   },
+   {
+    "page": 547,
+    "note": "get_model() builds the U-Net that takes [noisy_images, noise_rates]."
+   },
+   {
+    "page": 537,
+    "note": "Section 17.1.3, the VAE implementation that introduced the custom compute_loss() pattern."
+   }
+  ],
+  "later": [
+   {
+    "page": 551,
+    "note": "call() implements the five steps; compute_loss() returns the MAE between real and predicted noise masks."
+   },
+   {
+    "page": 552,
+    "note": "generate() calls denoise() at each step and re-noises with the next rates."
+   },
+   {
+    "page": 553,
+    "note": "The model is instantiated, its normalizer adapted, and it is compiled with AdamW."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 548,
+    "note": "The diffusion schedule."
+   },
+   {
+    "page": 549,
+    "note": "The loss and normalization design decisions."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 551,
+    "note": "The noising equation noisy_images = signal_rates * images + noise_rates * noise_masks, inverted here."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 551,
+    "note": "call() and compute_loss() continue this class."
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "DiffusionModel holds the U-Net, a SeedGenerator, a MeanAbsoluteError loss and a Normalization layer.",
+  "denoise() predicts the noise mask and reconstructs the image as (noisy - noise_rate * pred_noise) / signal_rate.",
+  "Overriding compute_loss() and putting the forward pass in call() keeps training backend-agnostic.",
+  "call() will normalize images, sample random diffusion times, compute rates, add noise and denoise.",
+  "Random diffusion times train one network for all noise levels."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "math",
+   "question": "Starting from noisy = signal * image + noise * mask, derive the formula denoise() uses for pred_images.",
+   "options": [],
+   "answer": "image = (noisy - noise * mask) / signal; substituting the predicted mask gives pred_images = (noisy_images - noise_rates * pred_noise_masks) / signal_rates.",
+   "explanation": "Subtract the noise term from both sides and divide by the signal rate.",
+   "page_refs": [
+    550,
+    551
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "Why do the authors implement compute_loss() instead of a custom train_step()?",
+   "options": [
+    "compute_loss() is faster on GPUs",
+    "To keep the model backend-agnostic, since train_step() would need backend-specific gradient and update code",
+    "train_step() cannot access the model's layers",
+    "Because MeanAbsoluteError cannot be used in train_step()"
+   ],
+   "answer": "To keep the model backend-agnostic, since train_step() would need backend-specific gradient and update code",
+   "explanation": "The page says so explicitly. Speed is not the reason; train_step() can access layers; any loss can be used in train_step().",
+   "page_refs": [
+    550
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What two inputs does the denoising model receive in denoise()?",
+   "options": [],
+   "answer": "The noisy images and their noise rates: self.denoising_model([noisy_images, noise_rates]).",
+   "explanation": "Giving the noise rate tells the U-Net how much noise it should remove (p.545).",
+   "page_refs": [
+    550,
+    547
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why does call() sample random diffusion times instead of using a fixed one?",
+   "options": [],
+   "answer": "Because the denoiser must work at every noise level visited during generation, from t = 1 down to 0; sampling uniformly trains it on the full spectrum of diffusion times.",
+   "explanation": "Step 2 of the list: 'the denoising model needs to be trained on the full spectrum of diffusion times'.",
+   "page_refs": [
+    550
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "math",
+   "question": "With signal rate 0.02 and noise rate about 1.0, by what factor is an error in the predicted noise mask amplified in pred_images?",
+   "options": [],
+   "answer": "About n/s = 1.0/0.02 = 50.",
+   "explanation": "pred_images - true image = (n/s)(true mask - predicted mask). This is a consequence of the denoise() formula (analysis beyond the book).",
+   "page_refs": [
+    550,
+    548
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "mcq",
+   "question": "What does keras.random.SeedGenerator() provide in the constructor?",
+   "options": [
+    "A fixed random seed reused identically on every call",
+    "A stateful random-seed source that advances so each random draw is different",
+    "The initial weights of the U-Net",
+    "A learning-rate schedule"
+   ],
+   "answer": "A stateful random-seed source that advances so each random draw is different",
+   "explanation": "It is passed as seed= to keras.random.normal/uniform in call() and generate() (p.551). It is not a fixed seed, not a weight initializer, and unrelated to the optimizer.",
+   "page_refs": [
+    550,
+    551
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you list, in order, the five steps call() performs, and say which attribute or function each step uses?",
+   "options": [],
+   "answer": "1 normalize (self.normalizer), 2 sample diffusion times (keras.random.uniform with self.seed_generator), 3 rates (diffusion_schedule), 4 add noise (keras.random.normal + mixing formula), 5 denoise (self.denoise).",
+   "explanation": "Compare with the code on p.551.",
+   "page_refs": [
+    550,
+    551
+   ]
+  }
+ ]
+}

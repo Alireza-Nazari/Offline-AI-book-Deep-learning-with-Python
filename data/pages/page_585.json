@@ -1,0 +1,523 @@
+{
+ "page_id": "page_585",
+ "pdf_page": 585,
+ "printed_page": "561",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:00:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "p585_e06: the book says the int8 range [-127, 127] is 'a total of 256 possible values'. [-127, 127] contains 255 integers; 256 is the count of all int8 bit patterns ([-128, 127]). The abs-max scheme deliberately uses the symmetric 255-value range."
+  ],
+  "extraction_quality": "Clean. The `abs_max_quantize` function is split across pages: the cast to int8, the return statement and the calls on x and kernel are on p.586. Callout annotations were recovered from the bundle."
+ },
+ "overview": {
+  "title": "int8 quantization: the idea and abs-max scaling",
+  "chapter": "18 Best practices for the real world",
+  "section": "18.3 Speeding up training and inference with lower-precision computation",
+  "subsection": "18.3.6 Faster inference with quantization",
+  "main_topic": "Converting a trained float32 model's matmuls to int8: scale inputs into [-127, 127], multiply in int8, cast back and divide by the product of scales.",
+  "central_idea": "Because matmul is linear, you can scale its inputs, run it in fast int8 arithmetic and exactly undo the scaling on the output; the only error comes from rounding the scaled inputs to integers. The abs-max scheme picks each tensor's scale so its largest value maps to 127.",
+  "importance": "int8 quantization is a standard way to make inference faster and models about 4x smaller than float32; understanding the math tells you where its accuracy loss comes from.",
+  "learning_objectives": [
+   "State when float8 is worth using, per the end of section 18.3.5.",
+   "Explain the goal of int8 quantization of an already-trained model.",
+   "Derive why scaling matmul inputs and dividing the output by the product of the scales recovers the original result.",
+   "Explain why naive casting to int8 is destructive and how abs-max scaling fixes it.",
+   "Read the `abs_max_quantize` function line by line."
+  ],
+  "prerequisites": [
+   "Tensor operations and matmul (chapter 2).",
+   "Floating-point vs. integer dtypes (section 18.3.1, p.580).",
+   "float16 inference (p.582)."
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page first concludes the float8 discussion from p.584: float8 training is viable only for very large models (typically over 5B parameters) on large, recent GPUs such as the NVIDIA H100, and is rarely used outside foundation-model training runs.\n\nSection 18.3.6 then introduces **`int8` quantization**. Beyond running inference in float16 (or float8), you can take an already trained float32 model and convert its weights to a lower-precision dtype, typically `int8`, while preserving the numerical correctness of the forward pass as much as possible.\n\nThe math is simple. Scale every `matmul` input tensor by a factor so its coefficients fit the int8 range `[-127, 127]`, cast to int8, perform the `matmul` in int8 (faster than float16), cast the output back to float32 and **divide by the product of the input scaling factors**. Because `matmul` is linear, the unscaling cancels the scaling exactly; the only accuracy loss comes from rounding when the scaled inputs are cast to int8.\n\nThe worked example uses `x = [[0.1, 0.9], [1.2, -0.8]]` and `kernel = [[-0.1, -2.2], [1.1, 0.7]]`. Casting these directly to int8 would be destructive: `x` would become `[[0, 0], [1, 0]]`. Instead the book applies **abs-max scaling**: compute the maximum absolute value of the tensor, set `scale = 127 / (abs_max + 1e-7)` (the epsilon prevents division by zero), multiply, then round and clip to `[-127, 127]` (rounding and clipping first is more accurate than casting directly). The function continues on p.586 with the cast to int8 and the return of both the integer tensor and its scale.",
+ "paragraphs": [
+  {
+   "ref": "p585_e03",
+   "excerpt": "is only viable for very large models (typically over 5B parameters)",
+   "what_it_says": "Completes the p.584 sentence: float8 training is viable only for very large models (typically > 5B parameters) and large recent GPUs such as the H100; float8 is rarely used except in foundation-model training runs.",
+   "what_it_means": "Its rescaling overhead is only amortized when matmuls are huge and the hardware has native float8 tensor cores (Hopper-generation GPUs and later).",
+   "why_it_matters": "For most readers of the book, float8 training is not a tool to reach for; float16/bfloat16 mixed precision is.",
+   "technical_idea": "'NVDIA' on the printed page is a typo for NVIDIA.",
+   "terminology": [
+    {
+     "term": "foundation model",
+     "meaning": "A large model trained on huge data and reused across many tasks (p.35)."
+    }
+   ],
+   "connections": [
+    "p.584: the overhead that causes slowdowns on small models."
+   ]
+  },
+  {
+   "ref": "p585_e05",
+   "excerpt": "Running inference in float16—or even float8—will result in a nice speedup for your",
+   "what_it_says": "Besides lower-precision floats, there is int8 quantization: take an already trained float32 model and convert its weights to a lower-precision dtype (typically int8) while keeping the forward pass as numerically correct as possible.",
+   "what_it_means": "This is post-training quantization: training happens in floating point, and the integer conversion is applied afterward, for inference. int8 weights take 1 byte each instead of 4, and integer matrix units on GPUs/TPUs/CPUs are typically faster than float16 ones.",
+   "why_it_matters": "It reduces memory, bandwidth and latency at deployment, often with negligible accuracy loss.",
+   "technical_idea": "Integers are evenly spaced, unlike floats, so you need an explicit scale that maps the float values onto the integer grid.",
+   "terminology": [
+    {
+     "term": "int8 quantization",
+     "meaning": "Representing tensors as 8-bit signed integers plus a float scale factor."
+    },
+    {
+     "term": "post-training quantization",
+     "meaning": "Quantizing an already trained model without retraining (term not used in the book)."
+    }
+   ],
+   "connections": [
+    "p.212: chapter 6 mentioned weight quantization and `model.quantize(\"int8\")` for a model four times smaller.",
+    "p.582: float16 inference as the simpler alternative."
+   ]
+  },
+  {
+   "ref": "p585_e06",
+   "excerpt": "If you want to implement quantization from scratch, the math is simple:",
+   "what_it_says": "Scale all matmul inputs so their coefficients fit [-127, 127], cast to int8, matmul in int8, cast the output to float32 and divide by the product of the input scaling factors. Linearity makes the unscaling cancel the scaling, so the only error is rounding during the cast.",
+   "what_it_means": "If $x_q \\approx s_x x$ and $W_q \\approx s_W W$, then $x_q W_q \\approx s_x s_W\\,(xW)$, so dividing by $s_x s_W$ recovers $xW$. The scales are scalars, so they factor out of every dot product.",
+   "why_it_matters": "This is the whole theory of symmetric int8 quantization in one paragraph; everything else is engineering.",
+   "technical_idea": "Note on the count: [-127, 127] holds 255 values, not 256 as the text says; int8 itself has 256 bit patterns from -128 to 127, and the symmetric range drops -128 so that +x and -x quantize symmetrically. Beyond the book: the integer products are accumulated in a wider type (int32), since sums of many int8 x int8 products overflow 8 bits.",
+   "terminology": [
+    {
+     "term": "scaling factor",
+     "meaning": "The float multiplier mapping a tensor's values onto the integer grid."
+    },
+    {
+     "term": "linear operation",
+     "meaning": "An operation f with f(a x) = a f(x) and f(x + y) = f(x) + f(y); matmul is linear in each argument."
+    }
+   ],
+   "connections": [
+    "p.586: the unscaling line `y = ops.cast(int_y, dtype=\"float32\") / (x_scale * kernel_scale)`."
+   ]
+  },
+  {
+   "ref": "p585_e06",
+   "excerpt": "Let’s make this concrete with an example. Let’s say you want to perform matmul(x,",
+   "what_it_says": "Introduces the running example: compute matmul(x, kernel) for two small 2x2 tensors (code c1).",
+   "what_it_means": "A 2x2 example lets you verify every number by hand; the same steps apply to large weight matrices.",
+   "why_it_matters": "The example is carried through p.586 to a comparison with the exact float32 result.",
+   "terminology": [],
+   "connections": [
+    "p.586: the quantized result is compared with `ops.matmul(x, kernel)`."
+   ]
+  },
+  {
+   "ref": "p585_e08",
+   "excerpt": "If you were to naively cast these values to int8 without scaling first,",
+   "what_it_says": "Casting directly to int8 would be very destructive: x would become [[0, 0], [1, 0]]. So the book uses 'abs-max' scaling to spread each tensor's values across [-127, 127].",
+   "what_it_means": "Casting truncates toward zero: 0.1 -> 0, 0.9 -> 0, 1.2 -> 1, -0.8 -> 0. Three of four entries are lost. With abs-max scaling, the largest-magnitude entry (1.2) maps to 127 and the others land proportionally, using the full 8 bits.",
+   "why_it_matters": "It shows why a scale is mandatory: integer grids have spacing 1, but neural-network weights are typically much smaller than 1.",
+   "technical_idea": "Abs-max is a symmetric, per-tensor scheme. Its weakness (beyond the book) is outliers: one huge value stretches the scale so that all other values get few distinct levels; production schemes use per-channel scales to mitigate this.",
+   "terminology": [
+    {
+     "term": "abs-max scaling",
+     "meaning": "scale = 127 / max(|v|), so the largest-magnitude value maps to ±127."
+    }
+   ],
+   "connections": []
+  }
+ ],
+ "concepts": [
+  {
+   "id": "quantization",
+   "name": "int8 quantization",
+   "definition": "Converting float tensors (weights and, at run time, activations) to 8-bit integers plus scale factors so that matmuls can run in integer arithmetic.",
+   "intuition": "Measure everything in a coarser unit that fits a small integer counter, and remember the unit.",
+   "technical": "$q = \\mathrm{clip}(\\mathrm{round}(s\\,v), -127, 127)$ with $s = 127/\\max|v|$; matmul outputs are divided by $s_x s_W$.",
+   "significance": "Faster inference than float16 and 4x smaller weights than float32.",
+   "example": "x = [[0.1, 0.9], [1.2, -0.8]] with s = 127/1.2 ≈ 105.83 becomes [[11, 95], [127, -85]].",
+   "misconception": "Quantization does not retrain or change the function's intent; the error comes only from rounding.",
+   "related": [
+    "float8_training",
+    "mixed_precision",
+    "dense_layer"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "abs_max_scaling",
+   "name": "Abs-max scaling",
+   "definition": "Choosing a tensor's quantization scale as the int range maximum (127) divided by the tensor's maximum absolute value.",
+   "intuition": "Stretch the values so the biggest one just touches the edge of the integer range.",
+   "technical": "scale = 127 / (max|v| + 1e-7); the epsilon avoids division by zero for an all-zero tensor.",
+   "significance": "Simple, symmetric, and uses the full int8 range for the largest value.",
+   "example": "kernel abs max is 2.2, so scale ≈ 57.73 and -2.2 maps to -127.",
+   "misconception": "Abs-max does not guarantee small error for every value: outliers make the step size large for all others.",
+   "related": [
+    "quantization"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "matmul_linearity",
+   "name": "Linearity of matmul",
+   "definition": "Scaling either input of a matmul by a scalar scales the output by the same scalar.",
+   "intuition": "Doubling every price doubles every total bill.",
+   "technical": "$(s_x x)(s_W W) = s_x s_W (xW)$ for scalars $s_x, s_W$.",
+   "significance": "It is why the unscaling 'cancels out the initial scaling'.",
+   "example": "Non-linear ops like softmax do not have this property, which is why quantization targets matmul-heavy layers.",
+   "misconception": "Linearity cancels the scale, not the rounding error.",
+   "related": [
+    "quantization",
+    "tensor_operations"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Abs-max quantization of a tensor",
+   "latex": "s = \\frac{127}{\\max_i |v_i| + \\epsilon}, \\qquad q = \\operatorname{clip}\\big(\\operatorname{round}(s\\,v),\\,-127,\\,127\\big)",
+   "source_text": "abs_max = ops.max(ops.abs(value), keepdims=True); scale = ops.divide(127, abs_max + 1e-7); scaled_value = ops.clip(ops.round(value * scale), -127, 127)",
+   "variables": [
+    {
+     "symbol": "v",
+     "meaning": "the float tensor to quantize (x or kernel)"
+    },
+    {
+     "symbol": "s",
+     "meaning": "its scale factor"
+    },
+    {
+     "symbol": "\\epsilon",
+     "meaning": "1e-7, avoids dividing by zero"
+    },
+    {
+     "symbol": "q",
+     "meaning": "the integer-valued tensor, later cast to int8"
+    }
+   ],
+   "operations": "Max of absolute values, division, elementwise multiplication, rounding to nearest integer, clipping.",
+   "purpose": "Map the tensor onto the int8 grid using the whole symmetric range.",
+   "interpretation": "The step size in original units is $1/s = \\max|v|/127$; rounding error per entry is at most half of that.",
+   "intuition": "The largest-magnitude entry becomes ±127; everything else scales proportionally.",
+   "numerical_example": "For `x`: $\\max|x| = 1.2$, $s_x = 127/1.2 \\approx 105.83$. $s_x x = [[10.58, 95.25],[127.0, -84.67]]$, rounded: $[[11, 95],[127, -85]]$. For `kernel`: $\\max = 2.2$, $s_W \\approx 57.73$; $s_W W = [[-5.77, -127.0],[63.50, 40.41]]$, rounded: $[[-6, -127],[64, 40]]$. Subtlety (beyond the book): $1.1 \\times 127/2.2$ is exactly the tie 63.5; in float32 the product comes out as 63.5 and rounds (half-to-even) to 64, matching the book's printed output on p.586, whereas float64 with the 1e-7 epsilon gives 63.49999... and rounds to 63. Max rounding error for x is $0.5/105.83 \\approx 0.0047$.",
+   "source": "book",
+   "book_ref": "p.585"
+  },
+  {
+   "id": "m2",
+   "title": "Quantized matmul and unscaling",
+   "latex": "x W \\approx \\frac{q_x\\, q_W}{s_x\\, s_W}, \\quad \\text{since}\\quad (s_x x)(s_W W) = s_x s_W\\,(xW)",
+   "source_text": "cast the output back to float32, and you divide it by the product of the input scaling factors",
+   "variables": [
+    {
+     "symbol": "q_x, q_W",
+     "meaning": "int8 versions of x and the kernel"
+    },
+    {
+     "symbol": "s_x, s_W",
+     "meaning": "their abs-max scales"
+    }
+   ],
+   "operations": "Integer matmul, cast to float, division by a scalar.",
+   "purpose": "Recover the float32 result of the matmul from integer arithmetic.",
+   "interpretation": "Equality holds exactly before rounding; the approximation sign is entirely due to rounding $s_x x$ and $s_W W$ to integers.",
+   "intuition": "Do the math in 'scaled units', then convert units back once.",
+   "numerical_example": "First entry: $q_x q_W$ row 1 · col 1 $= 11\\cdot(-6) + 95\\cdot 64 = 6014$; $s_x s_W \\approx 6109.4$; $6014/6109.4 \\approx 0.9844$ vs. exact $0.1\\cdot(-0.1)+0.9\\cdot1.1 = 0.98$ (see p.586).",
+   "source": "book",
+   "book_ref": "p.585"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Example inputs for matmul(x, kernel)",
+   "original_code": "from keras import ops\nx = ops.array([[0.1, 0.9], [1.2, -0.8]])\nkernel = ops.array([[-0.1, -2.2], [1.1, 0.7]])",
+   "language": "python",
+   "what_it_does": "Creates two 2x2 float32 tensors with Keras's backend-agnostic `ops` module.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "`keras.ops` provides NumPy-like operations that run on the active backend (JAX, TensorFlow or PyTorch)."
+    },
+    {
+     "lines": "2",
+     "explanation": "The input batch `x`: 2 samples with 2 features."
+    },
+    {
+     "lines": "3",
+     "explanation": "The weight matrix `kernel`, mapping 2 features to 2 outputs, as in a Dense layer."
+    }
+   ],
+   "inputs_outputs": "Outputs two float32 tensors of shape (2, 2).",
+   "algorithm": "Data setup only.",
+   "theory_link": "The exact product (computed on p.586) is [[0.98, 0.41], [-1.0, -3.2]].",
+   "parameters": [],
+   "pitfalls": [
+    "Values are mostly below 1 in magnitude, which is exactly why naive int8 casting fails."
+   ],
+   "illustrative_code": null
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "abs_max_quantize (first part; continues on p.586)",
+   "original_code": "def abs_max_quantize(value):\n    abs_max = ops.max(ops.abs(value), keepdims=True)\n    scale = ops.divide(127, abs_max + 1e-7)\n    scaled_value = value * scale\n    scaled_value = ops.clip(ops.round(scaled_value), -127, 127)",
+   "language": "python",
+   "what_it_does": "Computes the abs-max scale of a tensor and maps the tensor onto integers in [-127, 127]. On p.586 the function casts the result to int8 and returns it together with the scale.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Defines the quantizer for any float tensor."
+    },
+    {
+     "lines": "2",
+     "explanation": "Callout: 'Max of absolute value of the tensor'. `keepdims=True` keeps a shape like (1, 1) so it broadcasts against `value`."
+    },
+    {
+     "lines": "3",
+     "explanation": "Callout: 'Scale is max of int range divided by max of tensor (1e-7 is to avoid dividing by 0)'."
+    },
+    {
+     "lines": "4",
+     "explanation": "Callout: 'Scales the value'. The largest-magnitude entry becomes ±127."
+    },
+    {
+     "lines": "5",
+     "explanation": "Callout: 'Rounding and clipping first is more accurate than directly casting.' A cast would truncate toward zero; rounding picks the nearest integer, and clipping guards against values just outside the range."
+    }
+   ],
+   "inputs_outputs": "Input: a float tensor. After line 5: a float tensor holding integer values in [-127, 127] (still float dtype until the cast on p.586).",
+   "algorithm": "abs-max symmetric per-tensor quantization: s = 127/max|v|, q = clip(round(s·v)).",
+   "theory_link": "Implements math m1.",
+   "parameters": [
+    {
+     "name": "value",
+     "role": "Tensor to quantize."
+    },
+    {
+     "name": "1e-7",
+     "role": "Epsilon to avoid division by zero."
+    },
+    {
+     "name": "127",
+     "role": "Maximum of the symmetric int8 range."
+    }
+   ],
+   "pitfalls": [
+    "Without `keepdims=True`, the max would be a scalar; that also broadcasts, but keepdims keeps a consistent rank for later per-axis variants.",
+    "A single outlier makes the scale small for every other entry (beyond the book)."
+   ],
+   "illustrative_code": "# AI-written: reproduce the scaled values by hand with NumPy\nimport numpy as np\nx = np.array([[0.1, 0.9], [1.2, -0.8]])\ns = 127 / (np.abs(x).max() + 1e-7)\nprint(s)                                 # ~105.83\nprint(np.clip(np.round(x * s), -127, 127))  # [[11, 95], [127, -85]]\nprint(x.astype(np.int8))                 # naive cast: [[0, 0], [1, 0]]"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Where the speed and memory gains come from",
+   "kind": "breakdown",
+   "body": "- **Memory/bandwidth**: an int8 weight is 1 byte vs. 4 for float32 and 2 for float16; for large models inference is often limited by how fast weights stream from memory, so this alone speeds things up.\n- **Arithmetic**: integer matrix units can perform more int8 multiply-adds per cycle than float16 ones on many accelerators.\n- **Overhead**: computing abs-max, scaling, rounding, clipping and casting are cheap elementwise ops compared with an $O(n^3)$ matmul (p.586 makes this point).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Truncation vs. rounding",
+   "kind": "numerical",
+   "body": "Casting truncates toward zero: $0.9 \\to 0$, $-0.8 \\to 0$. Rounding chooses the nearest integer. After scaling, x·s = 95.25 truncates and rounds to 95 (same), but 10.58 truncates to 10 and rounds to 11, and -84.67 truncates to -84 and rounds to -85. Truncation has a systematic bias toward zero; rounding error is unbiased and at most 0.5 grid steps, which is why the callout says rounding first is more accurate.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "The int8 quantized matmul pipeline",
+   "why": "Diagrams the recipe in paragraph p585_e06: scale, cast, int8 matmul, cast back, divide by the product of scales.",
+   "mermaid": "flowchart LR\n X[x float32] --> SX[\"q_x = round(s_x * x)\"]\n K[kernel float32] --> SK[\"q_W = round(s_W * kernel)\"]\n SX --> M[int8 matmul]\n SK --> M\n M --> C[cast to float32]\n C --> D[\"divide by s_x * s_W\"]\n D --> Y[y approx x @ kernel]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "The exact float matmul of the book's example",
+   "widget": "matrix_product",
+   "why": "These are the exact x and kernel values from code c1; compute matmul(x, kernel) cell by cell to get the reference [[0.98, 0.41], [-1.0, -3.2]] that the quantized result is compared against on p.586.",
+   "params": {
+    "A": [
+     [
+      0.1,
+      0.9
+     ],
+     [
+      1.2,
+      -0.8
+     ]
+    ],
+    "B": [
+     [
+      -0.1,
+      -2.2
+     ],
+     [
+      1.1,
+      0.7
+     ]
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Quantization loses accuracy because the scale factor distorts the result.",
+   "correction": "The scale cancels exactly because matmul is linear; the only loss is rounding when casting scaled inputs to int8."
+  },
+  {
+   "claim": "You can quantize by simply casting float weights to int8.",
+   "correction": "Without scaling, x = [[0.1, 0.9], [1.2, -0.8]] becomes [[0, 0], [1, 0]]: almost all information is lost."
+  },
+  {
+   "claim": "[-127, 127] has 256 values.",
+   "correction": "It has 255; the full int8 type [-128, 127] has 256. The book's text says 256 for the symmetric range (see review flag)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 584,
+    "note": "float8 training and its overhead, concluded at the top of this page."
+   },
+   {
+    "page": 582,
+    "note": "float16 inference, the other inference speedup mentioned here."
+   },
+   {
+    "page": 212,
+    "note": "Chapter 6 introduced weight quantization to int8 and `model.quantize(\"int8\")`."
+   }
+  ],
+  "later": [
+   {
+    "page": 586,
+    "note": "Rest of abs_max_quantize, the int8 matmul, the accuracy comparison and Keras's built-in `model.quantize(\"int8\")`."
+   },
+   {
+    "page": 587,
+    "note": "Chapter summary: speed up inference with float16 or int8 quantization."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 580,
+    "note": "Understanding floating-point precision."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 44,
+    "note": "First look at tensor operations in a neural network."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 586,
+    "note": "Unscaling: `y = ops.cast(int_y, dtype=\"float32\") / (x_scale * kernel_scale)`."
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "float8 training is for >5B-parameter models on recent GPUs; it is rarely used otherwise.",
+  "int8 quantization converts an already-trained float32 model's matmul inputs to int8 plus a scale.",
+  "Because matmul is linear, dividing the int8 result by the product of the scales recovers the float result; errors come only from rounding.",
+  "Naive casting destroys small values; abs-max scaling maps each tensor's largest magnitude to 127.",
+  "Round and clip before casting: rounding beats the truncation a cast performs."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why can the output of an int8 matmul be converted back to the correct float result?",
+   "options": [
+    "Because int8 has the same range as float32",
+    "Because matmul is linear, so dividing by the product of the input scales cancels the scaling",
+    "Because the rounding errors cancel out on average",
+    "Because the kernel is stored in float32"
+   ],
+   "answer": "Because matmul is linear, so dividing by the product of the input scales cancels the scaling",
+   "explanation": "This is the book's argument. int8's range is tiny; rounding errors do not cancel exactly (they are the residual error); the kernel is quantized to int8 too.",
+   "page_refs": [
+    585
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Using abs-max scaling, compute the scale for kernel = [[-0.1, -2.2], [1.1, 0.7]] and its quantized values.",
+   "options": [],
+   "answer": "scale = 127/2.2 ≈ 57.73; quantized kernel = [[-6, -127], [64, 40]].",
+   "explanation": "-0.1×57.73 = -5.77 -> -6; -2.2 -> -127; 1.1×57.73 = 63.50 -> 64 (a tie; in float32, as Keras computes it, this rounds to 64, matching p.586's output); 0.7×57.73 = 40.41 -> 40.",
+   "page_refs": [
+    585
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What does x become if cast directly to int8 without scaling, and why?",
+   "options": [],
+   "answer": "[[0, 0], [1, 0]], because casting truncates toward zero and most entries have magnitude below 1.",
+   "explanation": "Given on the page; truncation maps 0.1, 0.9 and -0.8 to 0 and 1.2 to 1.",
+   "page_refs": [
+    585
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why does abs_max_quantize round and clip before casting, instead of casting directly?",
+   "options": [],
+   "answer": "Casting truncates, introducing a bias toward zero and up to a full grid step of error; rounding gives at most half a step. Clipping guarantees values stay within [-127, 127].",
+   "explanation": "The callout says rounding and clipping first is more accurate than direct casting.",
+   "page_refs": [
+    585
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "According to the page, when is float8 training viable?",
+   "options": [
+    "For any model on any modern GPU",
+    "For very large models (typically over 5B parameters) on recent GPUs such as the H100",
+    "Only for inference",
+    "For small models on CPUs"
+   ],
+   "answer": "For very large models (typically over 5B parameters) on recent GPUs such as the H100",
+   "explanation": "Stated in the first paragraph; the other options contradict the p.584 warning about overhead on small models and weaker hardware.",
+   "page_refs": [
+    585,
+    584
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "The text says [-127, 127] is 'a total of 256 possible values'. Is that right?",
+   "options": [],
+   "answer": "No: [-127, 127] contains 255 integers. The int8 type has 256 values ([-128, 127]); the symmetric scheme leaves -128 unused.",
+   "explanation": "Count: 127 negatives + 0 + 127 positives = 255.",
+   "page_refs": [
+    585
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you quantize x by hand with abs-max scaling and predict the integer tensor before reading p.586?",
+   "options": [],
+   "answer": "[[11, 95], [127, -85]] with scale ≈ 105.83.",
+   "explanation": "Compare with the numerical example in math m1.",
+   "page_refs": [
+    585,
+    586
+   ]
+  }
+ ]
+}

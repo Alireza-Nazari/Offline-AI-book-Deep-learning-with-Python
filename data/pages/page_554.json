@@ -1,0 +1,389 @@
+{
+ "page_id": "page_554",
+ "pdf_page": 554,
+ "printed_page": "530",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:00:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "The ModelCheckpoint callback in the fit() call (code that begins on p.553) uses save_best_only=True without setting `monitor`, so it monitors the default 'val_loss'. The fit() call passes no validation data, so 'val_loss' never exists. Keras warns ('Can save best model only with val_loss available') and, depending on the version, either skips saving or saves anyway. Passing monitor=\"loss\" would make the intended behaviour explicit. Not verified against a specific Keras release."
+  ],
+  "extraction_quality": "Good. Element e03 is the tail of the `model.fit(` call that begins on p.553 (dataset, epochs=100). Figure 17.12 is a 3x6 grid of generated flower images with no internal labels. The page ends the 17.2 section; 17.3 begins on p.555."
+ },
+ "overview": {
+  "title": "Training the diffusion model and first generated flowers",
+  "chapter": "17 Image generation",
+  "section": "17.2 Diffusion models",
+  "subsection": "17.2.7 It’s go time!",
+  "main_topic": "Finishing the fit() call for the Oxford Flowers diffusion model, practical Colab advice, the results after 100 epochs, and the transition to text conditioning.",
+  "central_idea": "The diffusion model is trained for 100 epochs with a visualization callback and a weight checkpoint. After about 90 minutes on a free T4 GPU it produces plausible flower images (figure 17.12). The next step is to condition generation on text.",
+  "importance": "This page shows the payoff of section 17.2: the denoising U-Net, diffusion schedule, training loss and generation loop from pp.545–552 combine into a model that turns pure noise into flower images. It also introduces text conditioning, the idea behind modern text-to-image systems such as Stable Diffusion (p.555).",
+  "learning_objectives": [
+   "Read the callbacks list of the diffusion model's fit() call and explain what each callback does at the end of every epoch.",
+   "Explain why image-producing callbacks can overflow a Colab cell's output buffer, and why chaining five 20-epoch fit() calls is equivalent to one 100-epoch call.",
+   "Interpret figure 17.12: what a 100-epoch diffusion model on Oxford Flowers can and cannot do.",
+   "Define text conditioning and explain how it turns an unconditional diffusion model into a text-to-image model."
+  ],
+  "prerequisites": [
+   "The DiffusionModel class, its compute_loss() and generate() methods (pp.550–552)",
+   "The VisualizationCallback class (p.552)",
+   "Keras callbacks such as ModelCheckpoint (chapter 7)",
+   "The AdamW optimizer with learning-rate decay and EMA set up on p.553"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the end of the `model.fit(...)` call started on p.553. The full call is `model.fit(dataset, epochs=100, callbacks=[...])`. Two callbacks run at the end of every epoch:\n\n- `VisualizationCallback()` (defined on p.552) calls the model's `generate()` method to produce a 3×6 grid of flower images using 20 diffusion steps, then plots them. This lets you watch sample quality improve as training goes on.\n- `keras.callbacks.ModelCheckpoint(filepath=\"diffusion_model.weights.h5\", save_weights_only=True, save_best_only=True)` saves only the weights (not the full model) to an `.h5` file, and only when the monitored metric improves.\n\nThe authors then give a practical Colab tip. Because the training logs contain one image grid per epoch, a 100-epoch run can exceed a notebook cell's output limit and trigger \"Buffered data was truncated after reaching the output size limit.\" The workaround is to run `model.fit(..., epochs=20)` five times in five cells. Keras models keep their weights and optimizer state between `fit()` calls, so this is equivalent to one `fit(..., epochs=100)` call.\n\nAfter 100 epochs (about 90 minutes on a T4, the free Colab GPU), the model generates flowers like those in figure 17.12. They have vivid petal colors and textures, and the composition (a flower filling a frame with a green or dark background) looks right, although the shapes are still impressionistic. Training longer gives more realistic results.\n\nThe page closes the diffusion section and introduces the next idea: **text conditioning**. Giving the denoiser a representation of a text caption, in addition to the noisy image, gives a *text-to-image* model whose outputs match a prompt. Section 17.3 (p.555) develops this with Stable Diffusion.",
+ "paragraphs": [
+  {
+   "ref": "p554_e04",
+   "excerpt": "If you’re running on Colab, you might run into the error, “Buffered data",
+   "what_it_says": "On Colab, the fit() logs can exceed the output size limit of a notebook cell because they include an image grid for every epoch. The suggested fix is to chain five `model.fit(..., epochs=20)` calls in five cells, which is equivalent to a single `fit(..., epochs=100)` call.",
+   "what_it_means": "The `VisualizationCallback` calls `plt.show()` at the end of every epoch (p.552), so each epoch adds an image to the cell output. Over 100 epochs that adds up to a lot of output. Splitting training across cells spreads the output across several cells, each under the limit. The equivalence holds because a Keras model is stateful: weights, optimizer slots (AdamW moments, the EMA copy of the weights) and the optimizer's `iterations` counter all persist between `fit()` calls. Training resumes where it stopped. The `InverseTimeDecay` learning-rate schedule (p.553) is driven by the optimizer's step counter, not by the epoch index, so it continues correctly too.",
+   "why_it_matters": "This tells you something about Keras in general: calling `fit()` again continues training rather than restarting it. You can use this to train in chunks, inspect results between chunks, or resume after an interruption, as long as the model object is still in memory.",
+   "technical_idea": "Note (not in the book): the equivalence is nearly exact but not bit-for-bit. The `epoch` argument passed to callbacks restarts at 0 in each call (unless you pass `initial_epoch`), and `ModelCheckpoint` with `save_best_only=True` resets its 'best' value at the start of each `fit()`. Shuffling also restarts its sequence. None of this changes the optimization in a meaningful way.",
+   "terminology": [
+    {
+     "term": "Output size limit",
+     "meaning": "Colab caps how much output (text and images) a single notebook cell can display; beyond it, output is truncated."
+    },
+    {
+     "term": "Chaining fit() calls",
+     "meaning": "Calling model.fit() repeatedly on the same model; each call continues from the current weights and optimizer state."
+    }
+   ],
+   "connections": [
+    "p.552: VisualizationCallback plots a grid of generated images in on_epoch_end, which is what fills the output.",
+    "p.553: the AdamW optimizer with InverseTimeDecay and EMA, whose state persists across chained fit() calls."
+   ]
+  },
+  {
+   "ref": "p554_e05",
+   "excerpt": "After 100 epochs (which takes about 90 minutes on a T4, the",
+   "what_it_says": "After 100 epochs, which take about 90 minutes on a T4 (the free Colab GPU), the model generates flowers like those in figure 17.12. The short line that follows the figure adds that training longer gives increasingly realistic results.",
+   "what_it_means": "Figure 17.12 shows 18 samples (the 3×6 grid that `VisualizationCallback` produces by default). They have convincing flower colors (magentas, oranges, yellows, purples), petal-like textures and plausible backgrounds, but the structure is impressionistic: petals merge, flower centers are vague, and many images look like close-up crops rather than whole, well-formed flowers. This is typical of a small U-Net (widths [32, 64, 96, 128], block_depth=2, p.553) trained on a few thousand images for a limited time. Every image starts from pure Gaussian noise and is denoised in 20 steps.",
+   "why_it_matters": "This is the first time the reader sees that a diffusion model can produce new images, not memorized ones, from pure noise. The training cost also gives a sense of scale. Even a toy diffusion model needs about an hour and a half of GPU time, which explains why the book later uses a pretrained text-to-image model instead of training one (p.555).",
+   "technical_idea": "Beyond the book: diffusion models usually keep improving for a long time, because the denoising loss covers every noise level and coarse structure (decided at high noise) and fine detail (at low noise) improve at different rates. The EMA of the weights set up on p.553 also helps sample quality, since sampling uses smoothed weights rather than the noisy latest iterate.",
+   "terminology": [
+    {
+     "term": "T4",
+     "meaning": "An NVIDIA data-center GPU (16 GB) that Colab offers on its free tier."
+    },
+    {
+     "term": "Epoch",
+     "meaning": "One full pass over the training dataset (here, the Oxford Flowers images)."
+    }
+   ],
+   "connections": [
+    "p.544: the Oxford Flowers dataset the model is trained on.",
+    "p.553: the model is instantiated with widths=[32, 64, 96, 128] and block_depth=2."
+   ]
+  },
+  {
+   "ref": "p554_e08",
+   "excerpt": "So that’s how image generation with diffusion works! Now, the next step",
+   "what_it_says": "This concludes the explanation of diffusion-based image generation. The next step is to add text conditioning, which gives a text-to-image model that produces images matching a text caption.",
+   "what_it_means": "The flower model is unconditional: it samples from the distribution of all flower images, and you cannot choose what comes out. Conditioning means giving the denoiser extra input that describes the desired output. With text conditioning, that input is an embedding of a caption. The model then learns the conditional distribution p(image | text), so the caption steers the denoising process.",
+   "why_it_matters": "This links the self-built toy model to systems like Stable Diffusion. The core mechanism (iterative denoising from noise) stays the same. Only an extra input is added. Section 17.3 (p.555) explains this extension and then uses a pretrained Stable Diffusion 3 model.",
+   "technical_idea": "Note (not in the book): in practice, conditioning is usually injected through cross-attention or joint attention between image and text tokens, and generation uses classifier-free guidance to strengthen the effect of the prompt. Pages 556 and 558 touch on the related ideas of negative prompts and `guidance_scale`.",
+   "terminology": [
+    {
+     "term": "Text conditioning",
+     "meaning": "Giving a generative model a representation of a text caption as an additional input, so that its outputs depend on the caption."
+    },
+    {
+     "term": "Text-to-image model",
+     "meaning": "A generative model that maps a natural-language prompt to an image matching it."
+    }
+   ],
+   "connections": [
+    "p.533: text conditioning was first introduced as mapping a space of prompts onto the image latent space.",
+    "p.555: section 17.3 explains how to build a text-conditioned diffusion model."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "diffusion_model",
+   "name": "Diffusion model",
+   "definition": "A generative model that learns to reverse a gradual noising process: a denoiser is trained to remove noise at every noise level, and images are generated by starting from pure noise and denoising step by step.",
+   "intuition": "Like a sculptor revealing a statue in a block of stone (p.544): every patch of noise contains an image, and the model chips away noise until the image appears.",
+   "technical": "Training samples a diffusion time, mixes clean images with Gaussian noise according to the diffusion schedule (signal rate and noise rate), and trains the U-Net to predict the noise (mean absolute error loss in this chapter). Generation runs the denoiser for a fixed number of steps (20 in the callback), each time re-noising the current estimate to a slightly lower noise level.",
+   "significance": "Diffusion models are the dominant image-generation approach today (p.561). Figure 17.12 is the payoff of the chapter's from-scratch implementation.",
+   "example": "Figure 17.12: 18 flower images produced from Gaussian noise after 100 training epochs.",
+   "misconception": "Generated images are not retrieved or collaged from the training set. Each is synthesized by the denoiser from random noise.",
+   "related": [
+    "vae",
+    "text_conditioning",
+    "keras_callback"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "keras_callback",
+   "name": "Keras callbacks (VisualizationCallback, ModelCheckpoint)",
+   "definition": "Objects passed to fit() whose hook methods (on_epoch_end and others) run at fixed points during training.",
+   "intuition": "Hooks that let you look in on and act during training without writing your own training loop.",
+   "technical": "VisualizationCallback overrides on_epoch_end to call self.model.generate() and plot a grid. ModelCheckpoint writes the weights to diffusion_model.weights.h5; with save_weights_only=True only weights are stored, and with save_best_only=True a save happens only when the monitored quantity (default 'val_loss') improves.",
+   "significance": "Generative models have no accuracy metric to watch, so looking at samples each epoch is the main way to judge progress. Checkpoints protect against losing 90 minutes of training.",
+   "example": "callbacks=[VisualizationCallback(), keras.callbacks.ModelCheckpoint(filepath=\"diffusion_model.weights.h5\", save_weights_only=True, save_best_only=True)]",
+   "misconception": "save_best_only does not mean 'best-looking images'. It compares a logged scalar such as a loss, which for diffusion models is only loosely related to sample quality.",
+   "related": [
+    "diffusion_model"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "text_conditioning",
+   "name": "Text conditioning",
+   "definition": "Supplying an embedding of a text caption to a generative model as an extra input, so the model learns p(image | text) instead of p(image).",
+   "intuition": "Instead of asking the sculptor for 'a statue', you tell them 'a statue of a horse rearing'.",
+   "technical": "A pretrained text encoder maps the prompt to vectors. The denoiser takes noisy images, noise level and text embeddings, and is trained on (prompt, image) pairs (p.555).",
+   "significance": "This is how a toy flower generator becomes a text-to-image system.",
+   "example": "Stable Diffusion 3 generating 'A NASA astronaut riding an origami elephant in New York City' (pp.555–556).",
+   "misconception": "Text conditioning does not need a new generation algorithm. The denoising loop is unchanged; only the denoiser's inputs change.",
+   "related": [
+    "diffusion_model",
+    "embedding"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "End of the fit() call: visualization and checkpoint callbacks",
+   "original_code": "    callbacks=[\n        VisualizationCallback(),\n        keras.callbacks.ModelCheckpoint(\n            filepath=\"diffusion_model.weights.h5\",\n            save_weights_only=True,\n            save_best_only=True,\n        ),\n    ],\n)",
+   "language": "python",
+   "what_it_does": "Completes `model.fit(dataset, epochs=100, ...)` from p.553 by passing a list of two callbacks. At the end of each epoch, `VisualizationCallback` generates and shows 18 sample images, and `ModelCheckpoint` saves the model's weights to `diffusion_model.weights.h5` if the monitored metric improved.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "The `callbacks` keyword argument of `fit()` takes a list of `keras.callbacks.Callback` objects."
+    },
+    {
+     "lines": "2",
+     "explanation": "Instantiates the custom callback from p.552 with its defaults: diffusion_steps=20, num_rows=3, num_cols=6. Its `on_epoch_end` calls `self.model.generate(...)` and plots the images with matplotlib."
+    },
+    {
+     "lines": "3-7",
+     "explanation": "A built-in checkpoint callback. `filepath` must end in `.weights.h5` when `save_weights_only=True` in Keras 3. `save_weights_only=True` stores only the weight values, not the architecture or optimizer. `save_best_only=True` saves only when the monitored metric beats its previous best."
+    },
+    {
+     "lines": "8-9",
+     "explanation": "Closes the callbacks list and the `model.fit(` call opened on p.553."
+    }
+   ],
+   "inputs_outputs": "Inputs: the `dataset` of Oxford Flowers images (batched, resized) and the compiled `DiffusionModel`. Outputs: trained weights in memory, a plotted image grid per epoch, and the file `diffusion_model.weights.h5` on disk.",
+   "algorithm": "For each of 100 epochs: run the custom compute_loss() over all batches (sample diffusion times, noise the images, predict the noise, MAE loss, AdamW update, EMA update), then fire on_epoch_end on each callback in list order.",
+   "theory_link": "The visual callback stands in for a missing metric. A diffusion model's loss decreases slowly and says little about perceptual quality, so looking at samples is the practical way to monitor progress.",
+   "parameters": [
+    {
+     "name": "filepath",
+     "role": "Where to save; the .weights.h5 suffix is required for weights-only saving in Keras 3."
+    },
+    {
+     "name": "save_weights_only",
+     "role": "Save only the variables; reload later with model.load_weights() into a model built the same way."
+    },
+    {
+     "name": "save_best_only",
+     "role": "Only overwrite the file when the monitored quantity (default monitor='val_loss') improves."
+    }
+   ],
+   "pitfalls": [
+    "No validation data is passed to fit(), so the default monitor 'val_loss' is never logged. Keras emits a warning and, depending on the version, may not save on the 'best' criterion. Adding monitor=\"loss\" makes the behaviour explicit (inference, not stated in the book).",
+    "On Colab, 100 epochs of plotted images can overflow the cell output; split training into several fit() calls as the book suggests.",
+    "The weights are saved with the EMA-overwritten values only every 100 steps (ema_overwrite_frequency=100, p.553), so a checkpoint reflects whichever weights are current at the end of the epoch.",
+    "To reload, recreate DiffusionModel with the same image_size, widths and block_depth, build it, then call load_weights()."
+   ],
+   "illustrative_code": "# AI-written variant (not from the book): explicit monitor and chunked training\ncheckpoint = keras.callbacks.ModelCheckpoint(\n    filepath=\"diffusion_model.weights.h5\",\n    save_weights_only=True,\n    save_best_only=True,\n    monitor=\"loss\",   # no validation set, so track the training loss\n)\nfor chunk in range(5):          # 5 x 20 epochs = 100 epochs\n    model.fit(dataset, epochs=20, callbacks=[VisualizationCallback(), checkpoint])"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why chained fit() calls are equivalent to one long call",
+   "kind": "step_by_step",
+   "body": "1. `model.fit()` does not re-initialize anything. The model's weights are Keras variables that live on the model object.\n2. The optimizer is attached to the model in `compile()`, and its state (first and second moment estimates for AdamW, the EMA shadow weights, and `optimizer.iterations`) persists too.\n3. The learning-rate schedule `InverseTimeDecay` computes `lr = initial_lr / (1 + decay_rate * step / decay_steps)` from `optimizer.iterations`, so the 21st epoch of the second call uses the same learning rate as the 21st epoch of a single long call.\n4. The only differences are cosmetic: epoch numbers in the logs restart at 1, callback state (such as ModelCheckpoint's best value) is reset, and the dataset shuffle sequence restarts.\n\nSo `5 × fit(epochs=20)` follows the same optimization trajectory, up to data-order randomness.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "From unconditional to conditional generation",
+   "kind": "breakdown",
+   "body": "The flower model learns $p(x)$, the distribution of flower images, and sampling gives a random flower. A text-conditioned model learns $p(x \\mid c)$, where $c$ is a caption embedding. Architecturally, the denoiser gets one more input. The training data changes from images to `(prompt, image)` pairs. At generation time you fix $c$ and denoise as before. The book introduces exactly this change on p.555; this note just writes it in probabilistic terms.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "What happens in each epoch of model.fit()",
+   "why": "The callbacks on this page run at the end of every epoch; this flow shows where they fit relative to the training steps.",
+   "mermaid": "flowchart TD\n  A[Epoch starts] --> B[For each batch: sample diffusion times, add noise, predict noise, MAE loss]\n  B --> C[AdamW update + learning-rate decay + EMA tracking]\n  C -->|more batches| B\n  C -->|epoch done| D[VisualizationCallback.on_epoch_end: generate 18 images with 20 diffusion steps, plot grid]\n  D --> E[ModelCheckpoint.on_epoch_end: save weights to diffusion_model.weights.h5 if monitored value improved]\n  E -->|epoch < 100| A\n  E -->|epoch = 100| F[Trained model: figure 17.12]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Calling model.fit() a second time restarts training from scratch.",
+   "correction": "Keras continues from the current weights and optimizer state. That is why five 20-epoch calls equal one 100-epoch call."
+  },
+  {
+   "claim": "save_best_only=True keeps the checkpoint with the best-looking samples.",
+   "correction": "It compares a logged scalar metric (default 'val_loss'), not image quality. For this fit() call there is no validation loss at all."
+  },
+  {
+   "claim": "The flowers in figure 17.12 are copies of training images.",
+   "correction": "Each one is generated from fresh Gaussian noise by 20 denoising steps; the model learned the statistics of flower images, not a lookup table."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 553,
+    "note": "Instantiates DiffusionModel, compiles it with AdamW (InverseTimeDecay, EMA) and opens the model.fit(dataset, epochs=100, ...) call."
+   },
+   {
+    "page": 552,
+    "note": "Defines VisualizationCallback, which generates and plots images at each epoch end."
+   },
+   {
+    "page": 550,
+    "note": "The DiffusionModel class with its denoise() method and training logic."
+   },
+   {
+    "page": 544,
+    "note": "The Oxford Flowers dataset and the 'denoising autoencoder in a loop' view of diffusion."
+   }
+  ],
+  "later": [
+   {
+    "page": 555,
+    "note": "Section 17.3 introduces text-to-image diffusion models and Stable Diffusion."
+   },
+   {
+    "page": 561,
+    "note": "The chapter summary: diffusion models dominate image generation and are easily conditioned on text."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 547,
+    "note": "Diffusion time and the diffusion schedule (signal and noise rates)."
+   },
+   {
+    "page": 549,
+    "note": "The training process of the diffusion model."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 553,
+    "note": "The first half of this fit() call and the optimizer configuration."
+   },
+   {
+    "page": 552,
+    "note": "VisualizationCallback source code."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 555,
+    "note": "Figure 17.13: a text-conditioned Stable Diffusion output, for contrast with the unconditional flowers."
+   }
+  ]
+ },
+ "takeaways": [
+  "The diffusion model is trained with model.fit(dataset, epochs=100) plus two callbacks: one plots generated samples each epoch, one checkpoints the weights.",
+  "Keras fit() is resumable: five fit(epochs=20) calls equal one fit(epochs=100) call, which avoids Colab's per-cell output limit.",
+  "100 epochs take about 90 minutes on a free T4 and give plausible but impressionistic flowers (figure 17.12); longer training helps.",
+  "Adding text conditioning to the denoiser turns an unconditional diffusion model into a text-to-image model."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why can chaining five `model.fit(..., epochs=20)` calls replace one `fit(..., epochs=100)` call?",
+   "options": [
+    "Because Keras automatically saves and reloads the model from disk between calls",
+    "Because the model's weights and optimizer state persist on the model object between fit() calls",
+    "Because the diffusion loss does not depend on the optimizer state",
+    "Because each fit() call trains a separate model whose weights are averaged at the end"
+   ],
+   "answer": "Because the model's weights and optimizer state persist on the model object between fit() calls",
+   "explanation": "fit() continues from the model's current state, including AdamW moments, EMA weights and the step counter that drives the learning-rate schedule. Nothing is written to disk automatically (option 1). The loss does depend on the weights the optimizer produces (option 3). No averaging of separate models happens (option 4); the EMA averages one model's weights over time.",
+   "page_refs": [
+    554,
+    553
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "What causes the Colab error 'Buffered data was truncated after reaching the output size limit' in this example?",
+   "options": [],
+   "answer": "The fit() logs include the image grids plotted by VisualizationCallback at the end of every epoch, and over 100 epochs they exceed the output allowed for a single notebook cell.",
+   "explanation": "The book says the logs of fit() include images, which take up a lot of space, while a cell's output is limited. VisualizationCallback calls plt.show() each epoch (p.552).",
+   "page_refs": [
+    554,
+    552
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "The checkpoint uses save_best_only=True, but fit() receives no validation data. What quantity does ModelCheckpoint monitor by default, and what would you change?",
+   "options": [],
+   "answer": "By default it monitors 'val_loss', which is never logged without validation data. Set monitor=\"loss\" (or pass validation data) so the 'best' criterion refers to a quantity that exists.",
+   "explanation": "ModelCheckpoint's monitor argument defaults to 'val_loss'. Without validation data Keras warns that it cannot find the metric. This goes beyond what the book states; it is an analysis of the printed code.",
+   "page_refs": [
+    554
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "What does text conditioning add to the diffusion model built in section 17.2?",
+   "options": [
+    "A new sampling algorithm that replaces iterative denoising",
+    "A discriminator that judges whether images match a caption",
+    "An extra input to the denoiser carrying an embedding of a text caption",
+    "A larger U-Net with more residual blocks"
+   ],
+   "answer": "An extra input to the denoiser carrying an embedding of a text caption",
+   "explanation": "Pages 554–555 describe text conditioning as passing the embedded prompt to the denoising model alongside the noisy images. The denoising loop stays the same (not option 1). There is no discriminator, which would be a GAN idea (option 2). Model size is unrelated to conditioning (option 4).",
+   "page_refs": [
+    554,
+    555
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "Per epoch, how many images does VisualizationCallback generate with its default arguments, and with how many diffusion steps?",
+   "options": [],
+   "answer": "18 images (3 rows × 6 columns), each with 20 diffusion steps.",
+   "explanation": "The callback is constructed with no arguments on this page, so it uses its defaults from p.552: diffusion_steps=20, num_rows=3, num_cols=6. Figure 17.12 shows exactly such a 3×6 grid.",
+   "page_refs": [
+    554,
+    552
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "self",
+   "question": "Look at figure 17.12. Which properties of real flower photos has the model captured, and which has it not yet captured? What would you try first to improve it?",
+   "options": [],
+   "answer": "Captured: colour palettes, petal textures, flower-in-foreground composition. Not yet: coherent global shape, clear centers and petal counts. First steps: train longer (the book's suggestion), use more diffusion steps at generation time, or use a bigger U-Net.",
+   "explanation": "The book only says that longer training gives increasingly realistic results. The other remedies are standard levers (capacity, sampling steps), offered here as reasoning beyond the text.",
+   "page_refs": [
+    554
+   ]
+  }
+ ]
+}

@@ -1,0 +1,384 @@
+{
+ "page_id": "page_364",
+ "pdf_page": 364,
+ "printed_page": "340",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:09:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Callout/code mismatch in listing 12.7: the first callout says the first loop \"Finds all grid cells whose center falls inside the box\", but the code (math.floor of the left/top edge, math.ceil of the right/bottom edge) marks every grid cell that intersects the box, which is also what the bullet text above says (\"mark all grid cells that intersect with a bounding box\").",
+   "Terminology inconsistency (p364_e09): the text says \"the entire class activation map\", whereas the same output is called the \"class probability map\" everywhere else (p.361, p.364 bullet).",
+   "Naming in listing 12.7: `bottom, top = math.floor(y * grid_size), math.ceil((y + h) * grid_size)` uses image coordinates where y grows downward, so `bottom` is actually the top row index and `top` the bottom one. The slice `bottom:top` is still correct; only the names are swapped."
+  ],
+  "extraction_quality": "Good. The first code element is the end of `from_grid`, which started on p.363. Listing 12.7 and its three callouts match the page image; callout positions were read from the image."
+ },
+ "overview": {
+  "title": "Listing 12.7: building the YOLO class and box targets",
+  "chapter": "12 Object detection",
+  "section": "12.2 Training a YOLO model from scratch",
+  "subsection": "12.2.3 Readying the COCO data for the YOLO model",
+  "main_topic": "Finishing `from_grid` and converting every COCO annotation into two grid-shaped target arrays: a class probability map marking every cell a box overlaps, and a box array holding (x, y, w, h, 1.0) in the cell containing each box's center",
+  "central_idea": "Training targets must have the same structure as the model's outputs. `class_array` (N, 6, 6) holds an integer label per cell, set for every cell a box intersects; `box_array` (N, 6, 6, 5) holds the grid-encoded box and a confidence of 1 in the responsible cell and zeros everywhere else, and the class at the center cell is forced to match the box.",
+  "importance": "These arrays are exactly what `fit()` will compare against the `\"class\"` and `\"box\"` outputs (p.366). The simplifications here (no handling of overlaps, last-written label wins) shape what the model can learn.",
+  "learning_objectives": [
+   "Complete and explain `from_grid` as the inverse of `to_grid`.",
+   "Describe the shapes and contents of `class_array` and `box_array`.",
+   "Trace how the first loop computes the range of cells a box intersects using floor and ceil.",
+   "Explain why the second loop writes `[*grid_box, 1.0]` and overwrites `class_array` at the center cell.",
+   "Identify the simplifications and edge cases of this target encoding (overlapping boxes, two centers in one cell, label 0)."
+  ],
+  "prerequisites": [
+   "`to_grid` and the YOLO box encoding (p.363)",
+   "The model's output shapes `(6, 6, 5)` and `(6, 6, 91)` (p.362)",
+   "NumPy zero arrays and slice assignment",
+   "The filtered, shuffled `metadata` list (p.360)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the last three lines of **`from_grid`**: `x = (xi + x) / grid_size - w / 2`, `y = (yi + y) / grid_size - h / 2`, `return (x, y, w, h)`. It adds the cell index to the in-cell offset, divides by the grid size to get the center in image units, and subtracts half the width/height to recover the top-left corner, undoing `to_grid` (p.363).\n\nNext the training data is reworked to fit the grid. Two arrays, each as long as the dataset, are created:\n\n- a **class probability map**, in which **all grid cells that intersect a bounding box** get that box's label (overlapping boxes are ignored for simplicity);\n- a **box array**, in which each box is translated to the grid and written into the **correct grid cell** (the one holding its center). The **confidence is always 1** for a real box and **0 everywhere else**.\n\n**Listing 12.7** implements this. `class_array = np.zeros((len(metadata), grid_size, grid_size))` and `box_array = np.zeros((len(metadata), grid_size, grid_size, 5))`. The first loop computes, for each box, `left, right = floor(x * S), ceil((x + w) * S)` and the analogous row bounds, and fills `class_array[index, bottom:top, left:right] = label`. The second loop calls `to_grid(box)` (callout: *transforms the box to the grid coordinate system*), sets `box_array[index, yi, xi] = [*grid_box, 1.0]`, and re-sets `class_array[index, yi, xi] = label` (callout: *makes sure the class label for the box's center location matches the box*), so that an overlapping box drawn later in the first loop cannot leave the wrong label at another box's center.\n\nFinally the authors announce a visualization of these targets (figure 12.5, p.365), drawing the class map over the first image together with each box's confidence and label.",
+ "paragraphs": [
+  {
+   "ref": "p364_e04",
+   "excerpt": "Let's rework our training data so it conforms to this new grid structure.",
+   "what_it_says": "The training data is converted to the grid structure by creating two arrays as long as the dataset.",
+   "what_it_means": "One target array per model output: the `\"class\"` output `(6, 6, 91)` will be compared against integer labels `(6, 6)` (sparse labels, so no one-hot axis), and the `\"box\"` output `(6, 6, 5)` against `(6, 6, 5)` box targets.",
+   "why_it_matters": "Targets must align element by element with outputs; the dict keys and shapes chosen in listing 12.6 dictate this design.",
+   "terminology": [
+    {"term": "target", "meaning": "The desired output the loss compares predictions against."}
+   ],
+   "connections": [
+    "p.362: the model's two outputs.",
+    "p.366: `sparse_categorical_crossentropy` handles the integer class targets."
+   ]
+  },
+  {
+   "ref": "p364_e05",
+   "excerpt": "The first will contain our class probability map. We will mark all grid cells",
+   "what_it_says": "The first array is the class probability map: every grid cell that intersects a bounding box is marked with that box's label. Overlapping boxes are not handled, to keep the code simple.",
+   "what_it_means": "The class target is a coarse, grid-resolution segmentation map. Where two boxes overlap, whichever box is processed last overwrites the label. Cells covered by no box keep the value 0, which acts as 'no object' (COCO category ids start at 1, and `color_map` in listing 12.4 maps 0 to gray, p.358).",
+   "why_it_matters": "This decides what class each predicted box will get at inference, since a box's label is read from the class map at its cell (p.365). The overlap simplification is one of the improvements listed on p.370.",
+   "technical_idea": "Every cell, even those far from any box center, receives a class target, so the classification loss gets dense supervision over the grid.",
+   "terminology": [
+    {"term": "class probability map", "meaning": "The per-cell class target/prediction; the target stores integer labels, the prediction stores a softmax distribution."}
+   ],
+   "connections": [
+    "p.361: figure 12.4's class probability map.",
+    "p.370: 'Improve our class probability map for overlapping boxes' is listed as a future improvement."
+   ]
+  },
+  {
+   "ref": "p364_e06",
+   "excerpt": "The second will contain the boxes themselves. We will translate all boxes to the grid",
+   "what_it_says": "The second array holds the boxes: each is converted to grid coordinates and written into the correct grid cell. Confidence is always 1 for a real box and 0 for every other location.",
+   "what_it_means": "For each image, at most four cells (after the p.360 filter) receive a 5-vector `(dx, dy, w, h, 1.0)`; the other 32 or more cells stay all zeros, including confidence 0. These zeros are what teach the model to output near-zero confidence in empty cells (p.360).",
+   "why_it_matters": "The confidence target is the signal that separates real detections from the 36 always-present box outputs. Later the book refines what confidence should mean (p.366).",
+   "terminology": [
+    {"term": "confidence target", "meaning": "1.0 in the cell holding a box's center, 0 elsewhere."}
+   ],
+   "connections": [
+    "p.363: `to_grid` defines the encoding written here.",
+    "p.366: the loss computes box error only for cells with real boxes and treats confidence specially."
+   ]
+  },
+  {
+   "ref": "p364_e09",
+   "excerpt": "Let's visualize our YOLO training data with our box drawing helpers (figure 12.5).",
+   "what_it_says": "The targets will be visualized with the box-drawing helpers: the whole class map is drawn over the first input image, and each box is drawn with its label and confidence.",
+   "what_it_means": "A visual sanity check that the encoding is correct before training. Note that the text calls it the 'class activation map'; it is the same class probability map described above.",
+   "why_it_matters": "Checking targets visually catches coordinate bugs (swapped x/y, wrong offsets) that would otherwise silently ruin training.",
+   "terminology": [],
+   "connections": [
+    "p.358-359: the `draw_image`, `draw_box` and `label_to_color` helpers.",
+    "p.365: listing 12.8 and figure 12.5."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "yolo_targets",
+   "name": "YOLO training targets",
+   "definition": "Per image, a `(S, S)` integer class map and a `(S, S, 5)` box array with the grid-encoded box and confidence 1 in each box's center cell, zeros elsewhere.",
+   "intuition": "An answer sheet laid out exactly like the model's output sheet.",
+   "technical": "`class_array.shape == (N, 6, 6)`, `box_array.shape == (N, 6, 6, 5)` with N = len(metadata).",
+   "significance": "What the model is trained to reproduce.",
+   "example": "For the cat box `[0.12, 0.27, 0.57, 0.33]`: class cells rows 1-3, columns 0-4 get label 17; `box_array[i, 2, 2] = [0.43, 0.61, 0.57, 0.33, 1.0]`.",
+   "misconception": "The class map is not limited to the center cell; it covers every intersected cell.",
+   "related": ["yolo_box_encoding", "confidence_score", "class_probability_map"],
+   "source": "book"
+  },
+  {
+   "id": "class_probability_map",
+   "name": "Class probability map (as a target)",
+   "definition": "The per-cell label target: each cell intersecting a box gets the box's label; uncovered cells get 0.",
+   "intuition": "Coloring the grid squares under each object.",
+   "technical": "Filled with a slice assignment `class_array[index, row0:row1, col0:col1] = label` using floor of the near edge and ceil of the far edge.",
+   "significance": "Supplies labels for predicted boxes and dense classification supervision.",
+   "example": "Figure 12.5 (p.365) shows it as colored cells.",
+   "misconception": "Integer targets of shape (6, 6) are compared with (6, 6, 91) softmax outputs through a sparse crossentropy; they are not one-hot.",
+   "related": ["yolo", "sparse_categorical_crossentropy"],
+   "source": "book"
+  },
+  {
+   "id": "confidence_score",
+   "name": "Confidence target",
+   "definition": "The fifth box value, set to 1 for cells containing a real box center and 0 elsewhere.",
+   "intuition": "A yes/no flag in the answer sheet.",
+   "technical": "`[*grid_box, 1.0]` writes it; `np.zeros` provides the zeros.",
+   "significance": "Teaches the model to suppress boxes in empty cells.",
+   "example": "Figure 12.5 shows the target boxes labeled with confidence 1.00.",
+   "misconception": "The target is binary here, but the book later trains confidence toward IoU (p.366, p.374).",
+   "related": ["yolo_targets"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Inverse grid transform (from_grid)",
+   "latex": "x = \\frac{i_x + \\hat{x}}{S} - \\frac{w}{2}, \\qquad y = \\frac{i_y + \\hat{y}}{S} - \\frac{h}{2}",
+   "source_text": "x = (xi + x) / grid_size - w / 2\ny = (yi + y) / grid_size - h / 2",
+   "variables": [
+    {"symbol": "i_x, i_y", "meaning": "Column and row index of the cell (`xi`, `yi`)."},
+    {"symbol": "\\hat{x}, \\hat{y}", "meaning": "Center offsets within the cell (the incoming `x`, `y`)."},
+    {"symbol": "S", "meaning": "`grid_size` = 6."},
+    {"symbol": "w, h", "meaning": "Box size relative to the image."},
+    {"symbol": "x, y", "meaning": "Recovered top-left corner in unit-square image coordinates."}
+   ],
+   "operations": "Add the integer cell index to the fractional offset, divide by S (center in image units), subtract half the box size (top-left corner).",
+   "purpose": "Convert grid-encoded targets or predictions into drawable boxes.",
+   "interpretation": "Exactly undoes to_grid.",
+   "intuition": "'Cell 2 plus 43% of a cell' is 2.43 cells, which is 2.43/6 = 0.405 of the image.",
+   "numerical_example": "Cell (2, 2), offsets (0.43, 0.61), w = 0.57, h = 0.33: $x = 2.43/6 - 0.285 = 0.12$, $y = 2.61/6 - 0.165 = 0.27$, recovering the cat box from p.358.",
+   "source": "book",
+   "book_ref": "p.364"
+  },
+  {
+   "id": "m2",
+   "title": "Range of grid cells a box intersects",
+   "latex": "\\text{cols} = \\big[\\lfloor xS \\rfloor,\\ \\lceil (x + w)S \\rceil\\big), \\qquad \\text{rows} = \\big[\\lfloor yS \\rfloor,\\ \\lceil (y + h)S \\rceil\\big)",
+   "source_text": "left, right = math.floor(x * grid_size), math.ceil((x + w) * grid_size)\nbottom, top = math.floor(y * grid_size), math.ceil((y + h) * grid_size)",
+   "variables": [
+    {"symbol": "x, y, w, h", "meaning": "Top-left corner and size of the box in the unit square."},
+    {"symbol": "S", "meaning": "`grid_size`."}
+   ],
+   "operations": "Floor the near edge and ceil the far edge after scaling to grid units; use them as half-open slice bounds.",
+   "purpose": "Selects every cell that the box touches for the class map.",
+   "interpretation": "Rounding outward guarantees partially covered cells are included.",
+   "intuition": "Snap the box outward to the grid lines.",
+   "numerical_example": "Cat box `[0.12, 0.27, 0.57, 0.33]`, $S = 6$: $\\lfloor 0.72 \\rfloor = 0$, $\\lceil 4.14 \\rceil = 5$, so columns 0-4; $\\lfloor 1.62 \\rfloor = 1$, $\\lceil 3.6 \\rceil = 4$, so rows 1-3. That is 15 cells labeled 17 (cat).",
+   "source": "book",
+   "book_ref": "p.364"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "End of from_grid (started on p.363)",
+   "original_code": "    x = (xi + x) / grid_size - w / 2\n    y = (yi + y) / grid_size - h / 2\n    return (x, y, w, h)",
+   "language": "python",
+   "what_it_does": "Finishes `from_grid(loc, box)`, whose signature and unpacking line `(xi, yi), (x, y, w, h) = loc, box` are on p.363: it converts the cell-relative center back to an image-space top-left corner.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Center in image units `(xi + x) / grid_size`, minus half the width, gives the left edge."},
+    {"lines": "2", "explanation": "Same for the vertical axis: top edge."},
+    {"lines": "3", "explanation": "Returns a box in the same `(x, y, w, h)` format as the dataset and `draw_box`."}
+   ],
+   "inputs_outputs": "Input (from p.363): `loc = (xi, yi)`, `box = (x, y, w, h)` in grid encoding. Output: `(x, y, w, h)` in unit-square image coordinates.",
+   "algorithm": "Inverse of `to_grid`.",
+   "theory_link": "Needed to draw targets and predictions on the image (listing 12.8, p.365).",
+   "parameters": [
+    {"name": "grid_size", "role": "Global grid size, 6."}
+   ],
+   "pitfalls": [
+    "The local variable `x` is reused: on the right-hand side it is the in-cell offset, on the left it becomes the image coordinate.",
+    "Must use the same `grid_size` that was used in `to_grid`."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "12.7",
+   "title": "Creating the YOLO targets",
+   "original_code": "import numpy as np\nimport math\n\nclass_array = np.zeros((len(metadata), grid_size, grid_size))\nbox_array = np.zeros((len(metadata), grid_size, grid_size, 5))\n\nfor index, sample in enumerate(metadata):\n    boxes, labels = sample[\"boxes\"], sample[\"labels\"]\n    for box, label in zip(boxes, labels):\n        (x, y, w, h) = box\n        left, right = math.floor(x * grid_size), math.ceil((x + w) * grid_size)\n        bottom, top = math.floor(y * grid_size), math.ceil((y + h) * grid_size)\n        class_array[index, bottom:top, left:right] = label\n\nfor index, sample in enumerate(metadata):\n    boxes, labels = sample[\"boxes\"], sample[\"labels\"]\n    for box, label in zip(boxes, labels):\n        (xi, yi), (grid_box) = to_grid(box)\n        box_array[index, yi, xi] = [*grid_box, 1.0]\n        class_array[index, yi, xi] = label",
+   "language": "python",
+   "what_it_does": "Builds the class-map targets `(N, 6, 6)` and box targets `(N, 6, 6, 5)` for all N images in `metadata`.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "NumPy for arrays, `math` for `floor`/`ceil`."},
+    {"lines": "4-5", "explanation": "Zero-initialized targets: 0 means 'no object' in the class map and 'no box, confidence 0' in the box array."},
+    {"lines": "7-9", "explanation": "First pass over every image and every (box, label) pair."},
+    {"lines": "10-12", "explanation": "Callout 'Finds all grid cells whose center falls inside the box': computes column bounds `left:right` and row bounds `bottom:top` by flooring the near edge and ceiling the far edge. In practice this selects every cell the box intersects (see review flag). `bottom` is actually the upper row index because y grows downward."},
+    {"lines": "13", "explanation": "Slice assignment labels the whole block of cells; later boxes overwrite earlier ones where they overlap."},
+    {"lines": "15-18", "explanation": "Second pass. Callout 'Transforms the box to the grid coordinate system': `to_grid` returns the center cell and the encoded box."},
+    {"lines": "19", "explanation": "Writes `(dx, dy, w, h, 1.0)` into the center cell (row `yi`, column `xi`)."},
+    {"lines": "20", "explanation": "Callout 'Makes sure the class label for the box's center location matches the box': re-labels the center cell, undoing any overwrite by an overlapping box in the first pass."}
+   ],
+   "inputs_outputs": "Input: `metadata` (filtered, shuffled list of dicts) and `grid_size`. Output: `class_array` float array `(N, 6, 6)` holding integer label values, `box_array` float array `(N, 6, 6, 5)`.",
+   "algorithm": "Two passes: (1) rasterize each box's extent onto the grid for the class map; (2) place each box's encoded coordinates and confidence at its center cell and fix the center label.",
+   "theory_link": "Implements the 'responsible cell' rule (p.363) and the confidence target (1 for real boxes, 0 elsewhere).",
+   "parameters": [
+    {"name": "grid_size", "role": "6; determines target resolution."},
+    {"name": "5", "role": "Box target depth: x, y, w, h, confidence."},
+    {"name": "1.0", "role": "Confidence target for a real box."}
+   ],
+   "pitfalls": [
+    "Two boxes whose centers fall in the same cell: the second overwrites the first in `box_array`, so one object is lost (one box per cell, p.360).",
+    "Two separate loops are needed: doing the center write inside the first loop would let a later box's block assignment overwrite an earlier box's center label.",
+    "`class_array` is float (np.zeros default); convert to int before using it as sparse labels if your loss requires it.",
+    "Index order is `[index, row, column]` = `[index, yi, xi]`, the reverse of the `(xi, yi)` tuple order returned by `to_grid`.",
+    "Python loops over ~tens of thousands of images are slow but run once; the arrays are small (N x 36 x 6 floats)."
+   ],
+   "illustrative_code": "# AI-written: inspect the targets of one image\ni = 0\nprint(class_array[i].astype(int))      # 6 x 6 grid of label ids (0 = no object)\nconf = box_array[i, ..., 4]\nprint(np.argwhere(conf == 1.0))        # (row, col) of each responsible cell\nprint(box_array[i][conf == 1.0])       # their (dx, dy, w, h, 1.0) vectors"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Tracing listing 12.7 on the cat box",
+   "kind": "numerical",
+   "body": "Take the cat box from p.358, `[0.12, 0.27, 0.57, 0.33]` with label 17, and $S = 6$ (illustrative; the actual `metadata[0]` after shuffling is a different image).\n\n**First loop.** `left = floor(0.72) = 0`, `right = ceil(4.14) = 5`, `bottom = floor(1.62) = 1`, `top = ceil(3.6) = 4`. So `class_array[i, 1:4, 0:5] = 17`: rows 1-3, columns 0-4, 15 cells.\n\n**Second loop.** `to_grid` gives cell `(xi, yi) = (2, 2)` and `grid_box = (0.43, 0.61, 0.57, 0.33)`. So `box_array[i, 2, 2] = [0.43, 0.61, 0.57, 0.33, 1.0]` and `class_array[i, 2, 2] = 17`.\n\nIf the bench box (label 15, `[0.0, 0.15, 0.79, 0.69]`) were processed after the cat in the first loop, it would overwrite all cat cells with 15, including (2, 2). The bench's center is also cell (2, 2) (p.363 question), so in the second loop the bench would overwrite the cat's box too: a concrete example of the one-box-per-cell limitation.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the class map covers whole boxes but the box array only centers",
+   "kind": "breakdown",
+   "body": "The two targets answer different questions. The class map asks every cell 'what object occupies you?', which is well defined for every covered cell and gives many training signals per image. The box array asks 'is an object *centered* in you, and what is its exact geometry?', which has a unique answer only for one cell per object; allowing every overlapped cell to predict the same box would produce many duplicate detections. This is an interpretation of the design, not the book's stated rationale.",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "svg",
+   "title": "Targets for one box: class cells vs. responsible cell",
+   "why": "Listing 12.7 marks every intersected cell in class_array and only the center cell in box_array. Shown for the cat box [0.12, 0.27, 0.57, 0.33] (p.358) on the 6 x 6 grid: rows 1-3, columns 0-4 get the label; cell (2, 2) gets [0.43, 0.61, 0.57, 0.33, 1.0].",
+   "svg": "<svg viewBox=\"0 0 500 320\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"11\" fill=\"none\" stroke=\"currentColor\"><rect x=\"10\" y=\"60\" width=\"250\" height=\"150\" fill=\"currentColor\" fill-opacity=\"0.12\" stroke=\"none\"/><rect x=\"110\" y=\"110\" width=\"50\" height=\"50\" fill=\"currentColor\" fill-opacity=\"0.35\" stroke-width=\"2\"/><g stroke-opacity=\"0.35\"><path d=\"M10 10h300v300h-300z\"/><path d=\"M60 10v300M110 10v300M160 10v300M210 10v300M260 10v300M10 60h300M10 110h300M10 160h300M10 210h300M10 260h300\"/></g><rect x=\"46\" y=\"91\" width=\"171\" height=\"99\" stroke-width=\"2\" stroke-dasharray=\"6 3\"/><circle cx=\"131.5\" cy=\"140.5\" r=\"4\" fill=\"currentColor\"/><text x=\"320\" y=\"30\" fill=\"currentColor\" stroke=\"none\">light cells: class_array = 17</text><text x=\"320\" y=\"48\" fill=\"currentColor\" stroke=\"none\">rows 1:4, cols 0:5 (floor/ceil)</text><text x=\"320\" y=\"80\" fill=\"currentColor\" stroke=\"none\">dark cell (2, 2): box_array =</text><text x=\"320\" y=\"98\" fill=\"currentColor\" stroke=\"none\">[0.43, 0.61, 0.57, 0.33, 1.0]</text><text x=\"320\" y=\"130\" fill=\"currentColor\" stroke=\"none\">all other cells:</text><text x=\"320\" y=\"148\" fill=\"currentColor\" stroke=\"none\">class 0, box [0, 0, 0, 0, 0]</text><text x=\"320\" y=\"180\" fill=\"currentColor\" stroke=\"none\">dashed: ground-truth box</text><text x=\"320\" y=\"198\" fill=\"currentColor\" stroke=\"none\">dot: box center</text><text x=\"14\" y=\"24\" fill=\"currentColor\" stroke=\"none\">col 0</text><text x=\"264\" y=\"24\" fill=\"currentColor\" stroke=\"none\">col 5</text></svg>"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Every cell a box overlaps gets a box target with confidence 1.",
+   "correction": "Only the cell containing the box's center gets `[*grid_box, 1.0]`; overlapped cells receive only the class label."
+  },
+  {
+   "claim": "The first loop selects only the cells whose centers lie inside the box (as the callout says).",
+   "correction": "Flooring the near edge and ceiling the far edge selects every cell the box intersects, even slightly; that matches the bullet text 'mark all grid cells that intersect with a bounding box'."
+  },
+  {
+   "claim": "The second `class_array[index, yi, xi] = label` line is redundant.",
+   "correction": "It restores the correct label at a box's center cell if an overlapping box processed later in the first loop overwrote it."
+  },
+  {
+   "claim": "Label 0 is a real COCO class.",
+   "correction": "COCO category ids start at 1; the zero initialization makes 0 serve as 'no object' (drawn in gray / no color in the visualization)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 363, "note": "`to_grid`, the beginning of `from_grid`, and the responsible-cell rule."},
+   {"page": 362, "note": "Output shapes the targets must match."},
+   {"page": 360, "note": "Filtering to at most four boxes and the confidence-score idea."},
+   {"page": 358, "note": "Example boxes and labels; `color_map = {0: \"gray\"}`."}
+  ],
+  "later": [
+   {"page": 365, "note": "Listing 12.8 draws these targets (figure 12.5)."},
+   {"page": 366, "note": "Losses comparing predictions with `class_array` and `box_array`."},
+   {"page": 370, "note": "Handling overlapping boxes is listed as an improvement."}
+  ],
+  "prerequisites": [
+   {"page": 363, "note": "Box encoding and `to_grid`."}
+  ],
+  "related_math": [
+   {"page": 363, "note": "The forward transform `to_grid`."}
+  ],
+  "related_code": [
+   {"page": 363, "note": "`to_grid` and the start of `from_grid`."},
+   {"page": 365, "note": "Listing 12.8 uses `from_grid`, `class_array`, `box_array`."}
+  ],
+  "related_figures": [
+   {"page": 365, "note": "Figure 12.5, the visualized targets."}
+  ]
+ },
+ "takeaways": [
+  "`from_grid` inverts `to_grid`: (cell index + offset) / S - size / 2.",
+  "`class_array` (N, 6, 6) labels every cell a box intersects; 0 means no object.",
+  "`box_array` (N, 6, 6, 5) stores (dx, dy, w, h, 1.0) only in each box's center cell; all else is zero confidence.",
+  "Overlaps are not handled: later boxes overwrite earlier ones, and two centers in one cell lose a box.",
+  "The second loop re-asserts the label at each center cell so box and class agree."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What does `box_array[index, yi, xi] = [*grid_box, 1.0]` store?",
+   "options": [
+    "The cell-relative center offsets, the image-relative width and height, and a confidence of 1",
+    "The top-left corner and size of the box in image coordinates, and the label",
+    "The class probabilities of the box",
+    "The box coordinates for every cell the box intersects"
+   ],
+   "answer": "The cell-relative center offsets, the image-relative width and height, and a confidence of 1",
+   "explanation": "`grid_box` comes from `to_grid` (offsets dx, dy plus w, h) and 1.0 is the confidence. It is not in image coordinates, contains no label or probabilities, and is written only at the center cell.",
+   "page_refs": [364, 363]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "For a box `[0.5, 0.0, 0.2, 0.3]` with `grid_size = 6`, which cells does the first loop of listing 12.7 label, and which cell gets the box target?",
+   "options": [],
+   "answer": "Columns floor(3.0) = 3 to ceil(4.2) = 5 (exclusive), i.e. 3-4; rows floor(0) = 0 to ceil(1.8) = 2, i.e. 0-1: four cells. Center (0.6, 0.15) gives cx = 3.6, cy = 0.9, so the box target goes to cell (xi, yi) = (3, 0) with offsets (0.6, 0.9).",
+   "explanation": "Apply the floor/ceil bounds for the class map and `to_grid` for the box target.",
+   "page_refs": [364, 363]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What confidence values do the box targets contain, and why are the zeros important?",
+   "options": [],
+   "answer": "1.0 in each cell holding a real box center, 0 everywhere else. The zeros teach the model to output near-zero confidence in the many cells that contain no object.",
+   "explanation": "Stated in the second bullet; it connects to the goal stated on p.360 that most grid locations report near-zero confidence.",
+   "page_refs": [364, 360]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why does listing 12.7 use two separate loops instead of writing the class block and the center box in one loop?",
+   "options": [],
+   "answer": "With one loop, a box processed later could overwrite, in its class block, the center cell of an earlier box, leaving that box's center with the wrong label. Doing all class blocks first and then the centers (with `class_array[index, yi, xi] = label`) ensures the label at each center matches its box.",
+   "explanation": "The callout 'Makes sure the class label for the box's center location matches the box' describes this purpose.",
+   "page_refs": [364]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Which limitation of these targets does the text explicitly acknowledge?",
+   "options": [
+    "Overlapping boxes are not handled",
+    "Boxes larger than one cell cannot be represented",
+    "Only one image can be processed at a time",
+    "Confidence values are not stored"
+   ],
+   "answer": "Overlapping boxes are not handled",
+   "explanation": "'To keep our code simple, we won't worry about overlapping boxes.' Large boxes are represented via image-relative w, h; all images are processed; confidence is stored as the fifth value.",
+   "page_refs": [364]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "What value marks a grid cell with no object in `class_array`, and why does that work for COCO?",
+   "options": [],
+   "answer": "0, from `np.zeros`. COCO category ids start at 1, so 0 is free to mean 'no object' (and the drawing code maps 0 to no color/gray).",
+   "explanation": "The array is zero-initialized and only cells under boxes are overwritten with real labels.",
+   "page_refs": [364, 358]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Pick a box from `metadata[435]` (p.358) and compute by hand both its class-map cell range and its box target. Did you index the array as [row, column]?",
+   "options": [],
+   "answer": "For example the cat box: rows 1-3, columns 0-4 labeled 17; `box_array[i, 2, 2] = [0.43, 0.61, 0.57, 0.33, 1.0]`.",
+   "explanation": "Row = y index, column = x index; mixing them up is the most common bug with this encoding.",
+   "page_refs": [364, 358]
+  }
+ ]
+}

@@ -1,0 +1,424 @@
+{
+  "page_id": "page_516",
+  "pdf_page": 516,
+  "printed_page": "492",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:58:00Z",
+    "confidence": "medium",
+    "review_flags": [
+      "Sidebar 'Customizing LoRA training' says the loop enabling LoRA on key_dense and query_dense is 'equivalent' to gemma_lm.backbone.enable_lora(rank=8) (listing 16.13, p.515). As far as I know, KerasHub's Backbone.enable_lora() targets the query and VALUE projections by default (get_lora_target_names returns query_dense/value_dense), which is also what the cited LoRA paper (Hu et al., 2021) found to work best (W_q, W_v). The book's text on p.515 ('query and key projections') and this sidebar (key + query, then 'also add LoRA to the value projection') therefore appear inconsistent with both the library default and the paper. For Gemma3-1B the key and value projections have identical shapes, so the trainable-parameter count printed on p.517 (1,304,576) is the same either way and cannot settle the question. Please verify against the KerasHub source."
+    ],
+    "extraction_quality": "Good. Figure 16.4 labels, the sidebar, its code and callouts, and the beginning of the model summary were all extracted correctly; the summary table continues on p.517."
+  },
+  "overview": {
+    "title": "LoRA's low-rank decomposition and per-layer LoRA control",
+    "chapter": "16 Text generation",
+    "section": "16.3 Using a pretrained LLM",
+    "subsection": "16.3.3 Low-Rank Adaptation (LoRA)",
+    "main_topic": "Figure 16.4 (frozen kernel plus trainable alpha/beta low-rank matrices), a sidebar showing how to enable LoRA layer by layer on Gemma's attention projections, and the start of the post-LoRA model summary.",
+    "central_idea": "LoRA keeps the huge pretrained (hidden_size, hidden_size) kernel frozen and learns only two thin matrices of shapes (hidden_size, rank) and (rank, hidden_size); in KerasHub this can be switched on for the whole backbone at once or, with more control, on individual Dense projections inside each decoder block.",
+    "importance": "This page turns the LoRA idea from p.515 into a picture and into concrete, controllable code. It is the bridge between 'why fine-tuning a 1B-parameter model runs out of memory' (p.514) and the actual fine-tuning run (p.517).",
+    "learning_objectives": [
+      "Read Figure 16.4 and state the shapes of the frozen kernel and of the alpha and beta matrices.",
+      "Compute the parameter count of a LoRA decomposition and compare it to the full kernel.",
+      "Explain what `layer.trainable = False` and `enable_lora(rank=8)` each do, and why both appear in the sidebar code.",
+      "Navigate a KerasHub backbone with `num_layers` and `get_layer(f\"decoder_block_{i}\")` to reach attention sub-layers.",
+      "Describe how per-layer LoRA lets you choose which projections and which depths of the model to adapt."
+    ],
+    "prerequisites": [
+      "The `Linear` and `LoraLinear` layer sketches on p.515",
+      "Dense / projection layers as matrix multiplications",
+      "Query, key and value projections in multi-head attention (chapter 15)",
+      "Freezing layers with the `trainable` attribute (transfer learning)",
+      "Why optimizer state dominates training memory (p.514)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page opens with **Figure 16.4**, which visualizes the LoRA layer sketched as `LoraLinear` on p.515. On the left, a large blue square labelled *Pretrained weights (hidden_size, hidden_size)* sits between *Inputs* and *Outputs*: this is the frozen kernel. Next to it, two green trapezoids form a narrow-waisted path: *Alpha (hidden_size, rank)* squeezes the input down to `rank` dimensions, and *Beta (rank, hidden_size)* expands it back. The caption makes the key point: the low-rank decomposition contains **far fewer parameters** than the kernel itself (with the numbers of p.515: 2048 × 2048 = 4,194,304 frozen weights versus 2 × 2048 × 8 = 32,768 trainable ones).\n\nA sidebar, **Customizing LoRA training**, then explains that `enable_lora()` is not just a backbone-level convenience (listing 16.13, `gemma_lm.backbone.enable_lora(rank=8)`); it is also a method of individual `Dense` layers. The sidebar's code first freezes the whole backbone (`gemma_lm.backbone.trainable = False`), then loops over `gemma_lm.backbone.num_layers` decoder blocks, fetches each with `get_layer(f\"decoder_block_{i}\")`, and for both `attention.key_dense` and `attention.query_dense` sets `trainable = True` and calls `enable_lora(rank=8)`. The authors present this as an equivalent, more verbose version of the one-liner, and note that this style lets you put more trainable parameters earlier or later in the network, or add LoRA to the **value** projection too.\n\nFinally, the main text calls `gemma_lm.summary()` again. On this page we only see the head of the output: the preprocessor `gemma3_causal_lm_preprocessor` with its `gemma3_tokenizer` (vocab size 262,144), and the start of the `gemma3_causal_lm` model table. The rest, including the crucial trainable-parameter count (1,304,576, about 5 MB), is on p.517.\n\n*Note (not in the book):* to my knowledge KerasHub's default LoRA targets are the query and value projections, which is also the configuration recommended by the LoRA paper; see the review flag.",
+  "paragraphs": [
+    {
+      "ref": "p516_e03",
+      "excerpt": "Figure 16.4 The low-rank kernel decomposition contains far fewer parameters than the kernel itself.",
+      "what_it_says": "The figure shows a large frozen 'Pretrained weights' block of shape (hidden_size, hidden_size) alongside two small trainable blocks, 'Alpha' of shape (hidden_size, rank) and 'Beta' of shape (rank, hidden_size), both connecting the same Inputs to the same Outputs. The caption stresses that the decomposition has far fewer parameters than the kernel.",
+      "what_it_means": "The two paths run in parallel: the input goes through the big frozen matrix and, separately, through alpha then beta; their outputs are summed (exactly the `frozen + update` line of `LoraLinear.call()` on p.515). The trapezoid shapes are a visual cue for the bottleneck: alpha narrows the representation to `rank` numbers, beta widens it back. The product alpha·beta is itself a (hidden_size, hidden_size) matrix, but one whose rank is at most `rank`.",
+      "why_it_matters": "This is the core reason LoRA saves memory: only the green blocks get gradients and optimizer state. With hidden_size = 2048 and rank = 8, the green blocks hold 32,768 parameters versus 4,194,304 in the blue block, a 128× reduction for that layer.",
+      "technical_idea": "Effective weight $W_{\\text{eff}} = W_0 + AB$ with $W_0 \\in \\mathbb{R}^{d\\times d}$ frozen and $A \\in \\mathbb{R}^{d\\times r}$, $B \\in \\mathbb{R}^{r\\times d}$ trainable; $\\operatorname{rank}(AB) \\le r$.",
+      "terminology": [
+        {"term": "hidden_size", "meaning": "The width of the model's token representations (2048 in the p.515 example; 1152 for Gemma3-1B, as the summary on p.517 shows)."},
+        {"term": "rank", "meaning": "The inner dimension of the alpha/beta decomposition; it bounds the matrix rank of the learned update."},
+        {"term": "Pretrained weights", "meaning": "The original kernel learned during pretraining, kept frozen during LoRA fine-tuning."}
+      ],
+      "connections": [
+        "p.515: the `LoraLinear` layer whose `call()` computes `frozen + update` is exactly what this figure draws.",
+        "p.515: the 2048 × 2048 versus rank-8 parameter arithmetic (4,194,304 vs 32,768).",
+        "p.517: Figure 16.5 shows the resulting memory savings for gradients and optimizer state."
+      ]
+    },
+    {
+      "ref": "p516_e05",
+      "excerpt": "The `enable_lora()` method is also available on individual `Dense` layers. We could equivalently",
+      "what_it_says": "The sidebar 'Customizing LoRA training' states that `enable_lora()` exists on individual `Dense` layers, and that the backbone-wide call from listing 16.13 could be written more verbosely by iterating through the layers of the Transformer.",
+      "what_it_means": "`backbone.enable_lora(rank=8)` is a convenience that walks the model and calls `enable_lora` on a predefined set of projection layers. Doing it yourself exposes the mechanism: LoRA is a per-layer feature of Keras core layers (`Dense`, and `EinsumDense`, which Gemma's attention projections actually use), not a special model-level mode.",
+      "why_it_matters": "Understanding the per-layer mechanism lets you decide where adaptation capacity goes, which matters when the default targets are not ideal for your task or memory budget.",
+      "technical_idea": "Calling `enable_lora(rank)` on a Keras layer freezes its existing kernel and creates two new trainable weights (`lora_kernel_a`, `lora_kernel_b`) whose product is added to the kernel in the forward pass. Beyond the book: Keras initializes one of them to zeros so the layer's output is unchanged at the start of fine-tuning.",
+      "terminology": [
+        {"term": "enable_lora()", "meaning": "Keras layer method that adds trainable low-rank matrices to a layer and freezes its original kernel."},
+        {"term": "Dense layer", "meaning": "A fully connected projection; in Transformers the query, key, value and output projections are dense-style layers."}
+      ],
+      "connections": [
+        "p.515: listing 16.13, `gemma_lm.backbone.enable_lora(rank=8)`, the one-line version this sidebar expands.",
+        "p.515: the claim that the LoRA authors suggest adapting the query and key projections, which this code follows."
+      ]
+    },
+    {
+      "ref": "p516_e07",
+      "excerpt": "With this approach, we could add more trainable parameters earlier or later in",
+      "what_it_says": "Iterating explicitly over the layers makes it possible to add more trainable parameters earlier or later in the model, and also to add LoRA to the value projection.",
+      "what_it_means": "Because you control the loop, you can, for example, use a higher rank in the last few decoder blocks, skip the first blocks entirely, or include `value_dense` (and even the output or feedforward projections). Each choice trades memory for expressive power of the update.",
+      "why_it_matters": "LoRA's effectiveness depends on which weights are adapted; per-layer control is how practitioners tune that choice. The sentence also shows that, in the authors' version, the value projection is not part of the default they reproduce.",
+      "technical_idea": "Trainable LoRA parameters per adapted projection = rank × (d_in + d_out) (or rank × (prod of input-side kernel dims + d_out) for an EinsumDense); the total is the sum over all adapted projections and blocks.",
+      "terminology": [
+        {"term": "value projection", "meaning": "The attention projection that produces the vectors averaged by the attention weights (`value_dense` in KerasHub)."}
+      ],
+      "connections": [
+        "p.514: researchers found the attention weights are the most important ones to leave unfrozen.",
+        "p.517: the resulting trainable parameter count, 1,304,576."
+      ]
+    },
+    {
+      "ref": "p516_e08",
+      "excerpt": "Let’s look at our model summary again:",
+      "what_it_says": "Back in the main text (after listing 16.13), the authors print the model summary again to see the effect of enabling LoRA.",
+      "what_it_means": "The summary is the quickest way to verify that freezing worked: Keras reports total, trainable and non-trainable parameter counts separately. The part visible here is only the preprocessor header (tokenizer with a 262,144-token vocabulary) and the model name; the parameter table follows on p.517.",
+      "why_it_matters": "Checking the trainable-parameter count before calling `fit()` is a good habit: it tells you immediately whether your optimizer state will fit in memory.",
+      "terminology": [
+        {"term": "gemma3_causal_lm_preprocessor", "meaning": "The KerasHub preprocessing layer that tokenizes, pads and builds sample weights for the causal LM."},
+        {"term": "Vocab size: 262,144", "meaning": "The number of distinct tokens in Gemma 3's tokenizer (2^18)."}
+      ],
+      "connections": [
+        "p.513: the CausalLM wraps a preprocessor and a backbone.",
+        "p.517: the continuation of this summary with 1,304,576 trainable parameters."
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "lora",
+      "name": "Low-Rank Adaptation (LoRA)",
+      "definition": "A parameter-efficient fine-tuning method that freezes a pretrained weight matrix and learns an additive update expressed as the product of two thin matrices, alpha (hidden_size × rank) and beta (rank × hidden_size).",
+      "intuition": "Instead of repainting a whole mural, you add a thin transparent overlay that can only express a few broad strokes; fine-tuning needs only those few strokes.",
+      "technical": "Output = x·W0 + (x·A)·B. Only A and B receive gradients, so optimizer memory scales with r·(d_in + d_out) rather than d_in·d_out per adapted layer.",
+      "significance": "It makes fine-tuning a 1B-parameter LLM feasible on a single 16 GB GPU, as the next page demonstrates.",
+      "example": "hidden_size = 2048, rank = 8: 4,194,304 frozen kernel parameters vs 32,768 LoRA parameters (p.515).",
+      "misconception": "LoRA does not shrink the model or its inference cost: the frozen kernel is still there (and still uses its 3.7 GB, p.517). It shrinks only what is trained.",
+      "related": ["transfer_learning", "fine_tuning", "attention", "optimizer", "low_rank_matrix"],
+      "source": "book"
+    },
+    {
+      "id": "low_rank_matrix",
+      "name": "Low-rank matrix product",
+      "definition": "A matrix that can be written as the product of a (d × r) and an (r × d) matrix with r much smaller than d; its rank is at most r.",
+      "intuition": "All information must squeeze through r numbers at the narrow middle point, like the waist of the two trapezoids in Figure 16.4.",
+      "technical": "rank(AB) ≤ min(rank(A), rank(B)) ≤ r. Storage is 2dr instead of d².",
+      "significance": "It is the reason LoRA updates are cheap yet still affect every entry of the effective weight matrix.",
+      "example": "For d = 1152 (Gemma3-1B) and r = 8: 2 × 1152 × 8 = 18,432 numbers instead of 1,327,104 for a square matrix.",
+      "misconception": "A low-rank update is not sparse: it generally changes every entry of the weight matrix, just in a constrained, correlated way.",
+      "related": ["lora"],
+      "source": "ai_explanation"
+    },
+    {
+      "id": "layer_freezing",
+      "name": "Freezing layers (trainable = False)",
+      "definition": "Marking a layer or model as non-trainable so its weights receive no updates and need no optimizer state.",
+      "intuition": "Locking parts of the machine so only selected knobs can turn.",
+      "technical": "In Keras, setting `trainable` on a model propagates to all its sublayers; setting it back to True on a specific sublayer re-enables only that sublayer.",
+      "significance": "The sidebar code first freezes the whole backbone, then selectively unfreezes the key and query projections before adding LoRA to them.",
+      "example": "`gemma_lm.backbone.trainable = False` followed by `layer.attention.key_dense.trainable = True`.",
+      "misconception": "Re-enabling `trainable = True` on a layer and then calling `enable_lora` does not make the full kernel trainable: `enable_lora` freezes the original kernel and only the new LoRA matrices train.",
+      "related": ["transfer_learning", "lora"],
+      "source": "book"
+    },
+    {
+      "id": "attention",
+      "name": "Query/key/value projections",
+      "definition": "The dense projections in a Transformer attention layer that map each token representation to query, key and value vectors.",
+      "intuition": "Queries ask, keys advertise, values carry the content; LoRA adjusts how the model asks and advertises.",
+      "technical": "In KerasHub's Gemma decoder blocks they are accessible as `layer.attention.query_dense`, `key_dense` and `value_dense`.",
+      "significance": "They are the layers the book targets with LoRA on this page.",
+      "example": "For Gemma3-1B, the query projection maps 1152 → 4 heads × 256 and the key/value projections map 1152 → 1 head × 256 (grouped-query attention); not shown on the page.",
+      "misconception": "Adapting only attention projections does not mean the feedforward layers are irrelevant; it is a memory/quality trade-off.",
+      "related": ["self_attention", "transformer", "lora"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "LoRA forward pass (Figure 16.4)",
+      "latex": "y = x W_0 + (x\\,\\alpha)\\,\\beta, \\qquad W_0 \\in \\mathbb{R}^{h\\times h},\\ \\alpha \\in \\mathbb{R}^{h\\times r},\\ \\beta \\in \\mathbb{R}^{r\\times h}",
+      "source_text": "Figure 16.4: Pretrained weights (hidden_size, hidden_size); Alpha (hidden_size, rank); Beta (rank, hidden_size); Inputs → Outputs (code on p.515: frozen = ops.matmul(inputs, self.kernel); update = ops.matmul(ops.matmul(inputs, self.alpha), self.beta); return frozen + update)",
+      "variables": [
+        {"symbol": "x", "meaning": "Input row vector (or batch of vectors) of width h = hidden_size"},
+        {"symbol": "W_0", "meaning": "Frozen pretrained kernel"},
+        {"symbol": "\\alpha", "meaning": "Trainable down-projection to the rank-r bottleneck"},
+        {"symbol": "\\beta", "meaning": "Trainable up-projection back to width h"},
+        {"symbol": "r", "meaning": "LoRA rank (8 in the sidebar code)"},
+        {"symbol": "y", "meaning": "Layer output"}
+      ],
+      "operations": "Two parallel branches: one matrix product with the frozen kernel, and two successive products with alpha and beta; the results are added.",
+      "purpose": "Express the fine-tuning change to the layer as a low-rank additive update while keeping the original weights intact.",
+      "interpretation": "Equivalent to using the effective kernel W_0 + αβ, whose deviation from W_0 has rank at most r.",
+      "intuition": "The pretrained behaviour is preserved; a narrow side channel learns a correction.",
+      "numerical_example": "With $h=2048$, $r=8$: $|W_0| = 2048^2 = 4{,}194{,}304$; $|\\alpha|+|\\beta| = 2\\cdot 2048\\cdot 8 = 32{,}768$, i.e. $0.78\\%$ of the kernel (a 128× reduction).",
+      "source": "book",
+      "book_ref": "p.515–516"
+    },
+    {
+      "id": "m2",
+      "title": "LoRA parameter count",
+      "latex": "N_{\\text{LoRA}} = h\\cdot r + r\\cdot h = 2hr \\ll h^2",
+      "source_text": "The low-rank kernel decomposition contains far fewer parameters than the kernel itself.",
+      "variables": [
+        {"symbol": "h", "meaning": "hidden_size"},
+        {"symbol": "r", "meaning": "rank"}
+      ],
+      "operations": "Sum of the element counts of alpha and beta.",
+      "purpose": "Quantifies the caption's claim.",
+      "interpretation": "The ratio $2r/h$ is the fraction of the kernel that is trained; for $h=1152$, $r=8$ it is about 1.4%.",
+      "intuition": "Parameter count grows linearly with h for LoRA but quadratically for the full kernel.",
+      "numerical_example": "$h=1152$, $r=8$: $2\\cdot1152\\cdot8 = 18{,}432$ vs $1152^2 = 1{,}327{,}104$.",
+      "source": "ai_explanation",
+      "book_ref": "p.516"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Sidebar: enabling LoRA layer by layer on Gemma's key and query projections",
+      "original_code": "gemma_lm.backbone.trainable = False\nfor i in range(gemma_lm.backbone.num_layers):\n    layer = gemma_lm.backbone.get_layer(f\"decoder_block_{i}\")\n    layer.attention.key_dense.trainable = True\n    layer.attention.key_dense.enable_lora(rank=8)\n    layer.attention.query_dense.trainable = True\n    layer.attention.query_dense.enable_lora(rank=8)",
+      "language": "python",
+      "what_it_does": "Freezes the entire Gemma backbone, then, in every decoder block, re-enables training on the key and query projections of the attention layer and attaches rank-8 LoRA matrices to them.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Callout: 'Sets all layers to not be trainable'. Setting `trainable` on the backbone model propagates to every sublayer."},
+        {"lines": "2", "explanation": "Loops over the decoder blocks; `num_layers` is the backbone's block count (26 for Gemma3-1B, not stated in the book)."},
+        {"lines": "3", "explanation": "Fetches the i-th Transformer block by its layer name, e.g. `decoder_block_0`."},
+        {"lines": "4-5", "explanation": "Callout: 'Makes key and query projections trainable and enables LoRA'. The key projection is unfrozen and given rank-8 LoRA weights; `enable_lora` keeps the original kernel frozen."},
+        {"lines": "6-7", "explanation": "Same for the query projection."}
+      ],
+      "inputs_outputs": "Input: the `gemma_lm` CausalLM loaded earlier. Output: none; the model is modified in place, adding 2 LoRA weight tensors to each of 2 projections in each block.",
+      "algorithm": "Freeze all → for each block: for each target projection: unfreeze → enable LoRA.",
+      "theory_link": "Implements Figure 16.4 on specific attention projections; matches the p.515 statement that the LoRA authors suggest adapting query and key projections (see review flag on this point).",
+      "parameters": [
+        {"name": "rank", "role": "Inner dimension of the LoRA decomposition; controls trainable parameter count and expressiveness of the update."},
+        {"name": "num_layers", "role": "Number of decoder blocks to iterate over."},
+        {"name": "f\"decoder_block_{i}\"", "role": "Naming convention used by KerasHub for Transformer blocks."}
+      ],
+      "pitfalls": [
+        "The order matters: unfreezing the layer after `enable_lora` might be needed for the LoRA weights to train; the book sets `trainable = True` first and then calls `enable_lora`, which is the safe order.",
+        "Calling `enable_lora` twice on the same layer raises an error in Keras, so do not run this after `backbone.enable_lora(rank=8)` has already been called on the same model.",
+        "Layer names (`decoder_block_{i}`, `key_dense`, `query_dense`) are model-specific; other KerasHub backbones may use different names.",
+        "Beyond the book: the one-line `backbone.enable_lora` likely targets query and value, not key, so this loop may not be strictly equivalent (see review flag)."
+      ],
+      "illustrative_code": "# AI-written variant: adapt query AND value, with a higher rank in the last 4 blocks\ngemma_lm.backbone.trainable = False\nn = gemma_lm.backbone.num_layers\nfor i in range(n):\n    att = gemma_lm.backbone.get_layer(f\"decoder_block_{i}\").attention\n    r = 16 if i >= n - 4 else 8\n    for proj in (att.query_dense, att.value_dense):\n        proj.trainable = True\n        proj.enable_lora(rank=r)"
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Model summary after enabling LoRA (beginning)",
+      "original_code": ">>> gemma_lm.summary()\nPreprocessor: \"gemma3_causal_lm_preprocessor\"\n┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n┃ Layer (type)                                 ┃                        Config ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩\n│ gemma3_tokenizer (Gemma3Tokenizer)           │           Vocab size: 262,144 │\n└──────────────────────────────────────────────┴───────────────────────────────┘\nModel: \"gemma3_causal_lm\"",
+      "language": "text",
+      "what_it_does": "Prints the structure of the CausalLM. This page shows only the preprocessor section and the model name; the layer table with parameter counts continues on p.517.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Calls `summary()` on the CausalLM after `backbone.enable_lora(rank=8)` from listing 16.13."},
+        {"lines": "2-6", "explanation": "The preprocessor contains the Gemma 3 tokenizer with a 262,144-token vocabulary; preprocessing layers have no trainable weights."},
+        {"lines": "7", "explanation": "Header of the model table, continued on p.517 (padding_mask and token_ids inputs, gemma3_backbone, token_embedding, and the parameter totals)."}
+      ],
+      "inputs_outputs": "No inputs; prints text.",
+      "algorithm": "n/a",
+      "theory_link": "Used to verify that LoRA reduced trainable parameters (result on p.517: 1,304,576 trainable out of 1,001,190,528).",
+      "parameters": [],
+      "pitfalls": [
+        "Do not judge memory from this fragment alone: the decisive 'Trainable params' line is on the next page."
+      ]
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why rank 8 can be enough",
+      "kind": "breakdown",
+      "body": "p.515 argues that during fine-tuning you 'no longer need the expressive power you needed during pretraining'. Beyond the book: the LoRA paper's hypothesis is that the *change* in weights during adaptation has low intrinsic rank. Pretraining builds a rich general-purpose representation; instruction tuning mostly re-weights a few directions (e.g. 'answer after `[response]`, stop at `[end]`'). A rank-8 update can express 8 independent input directions mapped to 8 output directions, which is a lot of steering power when applied in every block.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Counting LoRA parameters for Gemma3-1B",
+      "kind": "numerical",
+      "body": "Beyond the book (model config not given on this page): Gemma3-1B has 26 decoder blocks, hidden size 1152, 4 query heads and 1 key/value head of size 256. KerasHub uses `EinsumDense` kernels of shape (heads, 1152, 256), and Keras's LoRA for `EinsumDense` creates `lora_kernel_a` with shape (heads, 1152, r) and `lora_kernel_b` with shape (r, 256).\n\n- query: 4·1152·8 + 8·256 = 36,864 + 2,048 = 38,912\n- key (or value): 1·1152·8 + 8·256 = 9,216 + 2,048 = 11,264\n\nPer block 38,912 + 11,264 = 50,176; times 26 = **1,304,576**, exactly the trainable count printed on p.517. Because key and value have the same shape, this matches either query+key or query+value.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Initialization: starting from the pretrained model",
+      "kind": "step_by_step",
+      "body": "Beyond the book: if alpha and beta were both random, the model would be perturbed before training even starts. LoRA implementations (including Keras) initialize one of the two matrices to zero, so at step 0, $\\alpha\\beta = 0$ and the fine-tuned model behaves exactly like the pretrained one. Gradients then grow the update from zero.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Analogy: a dimmer panel instead of rewiring",
+      "kind": "analogy",
+      "body": "The pretrained kernel is the building's full wiring. Rewiring (full fine-tuning) is expensive and needs a crew (memory) for every wire. LoRA installs a small panel with 8 dimmers that can adjust the whole building's lighting in coordinated patterns. You can't make arbitrary changes, but you can make the ones that matter for a new use.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "svg",
+      "title": "Figure 16.4 as a data flow with sizes",
+      "why": "Redraws Figure 16.4 with the parameter counts from p.515 (hidden_size 2048, rank 8) and the addition of the two branches.",
+      "svg": "<svg viewBox=\"0 0 520 260\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"12\" fill=\"currentColor\"><rect x=\"190\" y=\"10\" width=\"140\" height=\"26\" fill=\"none\" stroke=\"currentColor\"/><text x=\"260\" y=\"28\" text-anchor=\"middle\">Inputs (h=2048)</text><rect x=\"40\" y=\"70\" width=\"190\" height=\"120\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"135\" y=\"120\" text-anchor=\"middle\">W0 frozen (2048, 2048)</text><text x=\"135\" y=\"140\" text-anchor=\"middle\">4,194,304 params</text><polygon points=\"300,70 460,70 420,120 340,120\" fill=\"none\" stroke=\"currentColor\" stroke-dasharray=\"4 2\"/><text x=\"380\" y=\"90\" text-anchor=\"middle\">alpha (2048, 8)</text><text x=\"380\" y=\"106\" text-anchor=\"middle\">16,384</text><polygon points=\"340,140 420,140 460,190 300,190\" fill=\"none\" stroke=\"currentColor\" stroke-dasharray=\"4 2\"/><text x=\"380\" y=\"166\" text-anchor=\"middle\">beta (8, 2048)</text><text x=\"380\" y=\"182\" text-anchor=\"middle\">16,384</text><line x1=\"260\" y1=\"36\" x2=\"135\" y2=\"70\" stroke=\"currentColor\"/><line x1=\"260\" y1=\"36\" x2=\"380\" y2=\"70\" stroke=\"currentColor\"/><line x1=\"380\" y1=\"120\" x2=\"380\" y2=\"140\" stroke=\"currentColor\"/><circle cx=\"260\" cy=\"215\" r=\"10\" fill=\"none\" stroke=\"currentColor\"/><text x=\"260\" y=\"219\" text-anchor=\"middle\">+</text><line x1=\"135\" y1=\"190\" x2=\"250\" y2=\"215\" stroke=\"currentColor\"/><line x1=\"380\" y1=\"190\" x2=\"270\" y2=\"215\" stroke=\"currentColor\"/><text x=\"260\" y=\"248\" text-anchor=\"middle\">Outputs = x·W0 + (x·alpha)·beta  (trainable: 32,768)</text></svg>"
+    },
+    {
+      "id": "v2",
+      "type": "chart",
+      "title": "Frozen kernel vs LoRA parameters as rank grows (hidden_size = 2048)",
+      "why": "The caption claims the decomposition has far fewer parameters; this shows how the count 2·2048·r compares to the 4,194,304-parameter kernel for several ranks, including the book's rank 8.",
+      "chart": {
+        "type": "bar",
+        "data": {
+          "labels": ["r=4", "r=8", "r=16", "r=64", "r=256", "full kernel"],
+          "datasets": [{"label": "parameters", "data": [16384, 32768, 65536, 262144, 1048576, 4194304]}]
+        },
+        "options": {"scales": {"y": {"type": "logarithmic", "title": {"display": true, "text": "parameters (log scale)"}}}}
+      }
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "With LoRA the model becomes smaller.",
+      "correction": "The frozen pretrained weights are all still present (the summary on p.517 still shows ~1B parameters, 3.73 GB). LoRA reduces only the trainable parameters, and hence gradient and optimizer memory."
+    },
+    {
+      "claim": "Setting `key_dense.trainable = True` makes the whole key kernel trainable again.",
+      "correction": "In the sidebar it is immediately followed by `enable_lora`, which freezes the original kernel and adds trainable low-rank matrices; only those train."
+    },
+    {
+      "claim": "A rank-8 update can change only 8 weights.",
+      "correction": "The product alpha·beta is a full (hidden_size × hidden_size) matrix that generally changes every entry; 'rank 8' limits the number of independent directions, not the number of entries."
+    },
+    {
+      "claim": "LoRA can only be applied to the whole model at once.",
+      "correction": "The sidebar shows it is a per-layer method on `Dense` layers, so you can pick layers, depths and ranks individually."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 514, "note": "Why `fit()` would run out of memory: Adam state for 1B parameters needs ~15 GB."},
+      {"page": 515, "note": "`Linear` and `LoraLinear` sketches, the 2048 × 2048 vs rank-8 arithmetic, and listing 16.13 `backbone.enable_lora(rank=8)`."},
+      {"page": 513, "note": "The CausalLM wraps a preprocessor and a backbone, which explains the two parts of the summary."}
+    ],
+    "later": [
+      {"page": 517, "note": "Rest of the summary: 1,304,576 trainable parameters (4.98 MB), Figure 16.5 on memory, and listing 16.14 fine-tuning."},
+      {"page": 518, "note": "Testing the instruction-tuned model's answers."},
+      {"page": 531, "note": "Chapter summary: LoRA freezes most Transformer parameters and updates a low-rank decomposition of attention projections."}
+    ],
+    "prerequisites": [
+      {"page": 469, "note": "Transformer architecture and its attention/feedforward components."},
+      {"page": 483, "note": "Classification with a pretrained Transformer (fine-tuning pretrained weights)."}
+    ],
+    "related_math": [
+      {"page": 515, "note": "Parameter counts 4,194,304 vs 32,768."}
+    ],
+    "related_code": [
+      {"page": 515, "note": "`LoraLinear` layer and listing 16.13."},
+      {"page": 517, "note": "Listing 16.14 compiles and fits the LoRA-enabled Gemma model."}
+    ],
+    "related_figures": [
+      {"page": 517, "note": "Figure 16.5: memory breakdown, normal vs LoRA."}
+    ]
+  },
+  "takeaways": [
+    "Figure 16.4: a frozen (hidden_size, hidden_size) kernel in parallel with trainable alpha (hidden_size, rank) and beta (rank, hidden_size); their outputs are added.",
+    "LoRA's trainable parameter count is 2·hidden_size·rank per square projection, e.g. 32,768 vs 4,194,304 for hidden_size 2048, rank 8.",
+    "`enable_lora(rank=...)` is a per-layer Keras method; `backbone.enable_lora` is a convenience that applies it to default attention projections.",
+    "Per-layer control (freeze all, then unfreeze + enable LoRA on chosen projections) lets you vary depth, rank and which of query/key/value get adapted.",
+    "Check `summary()` to confirm the trainable count before training; the numbers are on p.517."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "math",
+      "question": "A projection has a kernel of shape (1152, 1152). How many trainable parameters does a rank-8 LoRA decomposition add, and what fraction of the kernel size is that?",
+      "options": [],
+      "answer": "2 × 1152 × 8 = 18,432 parameters, about 1.39% of the 1,327,104-entry kernel.",
+      "explanation": "Alpha has 1152×8 = 9,216 entries and beta 8×1152 = 9,216; the kernel has 1152² = 1,327,104. 18,432 / 1,327,104 ≈ 0.0139.",
+      "page_refs": [515, 516]
+    },
+    {
+      "id": "q2",
+      "type": "mcq",
+      "question": "In Figure 16.4, what are the shapes of Alpha and Beta?",
+      "options": [
+        "Alpha (hidden_size, rank), Beta (rank, hidden_size)",
+        "Alpha (rank, rank), Beta (hidden_size, hidden_size)",
+        "Alpha (hidden_size, hidden_size), Beta (rank, hidden_size)",
+        "Alpha (rank, hidden_size), Beta (rank, hidden_size)"
+      ],
+      "answer": "Alpha (hidden_size, rank), Beta (rank, hidden_size)",
+      "explanation": "Alpha projects inputs down to the rank bottleneck and beta projects back up, as labelled in the figure. The second option would not reduce parameters; the third includes a full-size matrix; the fourth is not composable as x·alpha·beta.",
+      "page_refs": [516]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "Why does the sidebar code set `gemma_lm.backbone.trainable = False` first, and then `trainable = True` on specific projections?",
+      "options": [],
+      "answer": "To freeze every weight in the backbone, then re-enable training only on the key and query projections, whose `enable_lora` call adds the trainable LoRA matrices while keeping their original kernels frozen.",
+      "explanation": "Freezing everything guarantees no stray weights (norms, feedforward, embeddings) get optimizer state; re-enabling the target layers ensures the LoRA weights created by `enable_lora` are trainable.",
+      "page_refs": [516]
+    },
+    {
+      "id": "q4",
+      "type": "short",
+      "question": "According to the sidebar, what two kinds of customization does iterating over layers make possible?",
+      "options": [],
+      "answer": "Adding more trainable parameters earlier or later in the model, and adding LoRA to the value projection as well.",
+      "explanation": "Stated directly in the sidebar's last sentence.",
+      "page_refs": [516]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "Which statement about LoRA's effect on the model in this chapter is correct?",
+      "options": [
+        "It deletes the pretrained kernel and replaces it with alpha and beta.",
+        "It keeps the pretrained kernel frozen and adds a trainable low-rank update in parallel.",
+        "It reduces the model's total parameter count by about 1000×.",
+        "It only works on the token embedding layer."
+      ],
+      "answer": "It keeps the pretrained kernel frozen and adds a trainable low-rank update in parallel.",
+      "explanation": "Figure 16.4 shows both branches; the kernel is kept. Total parameters stay ~1B (p.517); only trainable parameters shrink. LoRA is applied to attention projections here, not the embedding.",
+      "page_refs": [515, 516, 517]
+    },
+    {
+      "id": "q6",
+      "type": "conceptual",
+      "question": "Why is a rank-8 update 'less expressive' than training the full kernel, and why is that acceptable for fine-tuning?",
+      "options": [],
+      "answer": "The update alpha·beta has rank at most 8, so all changes must pass through 8 numbers at the bottleneck; fine-tuning a pretrained model needs only small, structured adjustments rather than the full capacity used in pretraining.",
+      "explanation": "This is the argument of p.515 ('at the narrow middle point, the entire update must be represented as eight floats' and 'you no longer need the expressive power you needed during pretraining'), visualized by Figure 16.4.",
+      "page_refs": [515, 516]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Could you modify the sidebar loop to apply LoRA only to the last half of the decoder blocks with rank 16? Sketch it.",
+      "options": [],
+      "answer": "Loop `for i in range(n//2, n)` after freezing the backbone, and call `enable_lora(rank=16)` on the chosen projections.",
+      "explanation": "Checks that you understand the per-layer API: the loop index chooses depth and the `rank` argument chooses capacity.",
+      "page_refs": [516]
+    }
+  ]
+}

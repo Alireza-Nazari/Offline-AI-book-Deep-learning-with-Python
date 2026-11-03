@@ -1,0 +1,492 @@
+{
+ "page_id": "page_477",
+ "pdf_page": 477,
+ "printed_page": "453",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T09:10:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. One short body line, Listing 15.19 and an unnumbered output block, all matching the page image. The book says the generation code is 'the same' as the RNN version (Listing 15.13, p.460), but it differs in one line (the `[:, :-1]` slice) and in calling `transformer` instead of `seq2seq_rnn`; this is explained in the notes rather than flagged."
+ },
+ "overview": {
+  "title": "Generating translations with the Transformer",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "15.3.5 Embedding positional information",
+  "main_topic": "Greedy, token-by-token decoding of Spanish translations from the trained sequence-to-sequence Transformer (Listing 15.19) and a look at its sample outputs.",
+  "central_idea": "Although the Transformer is trained in parallel on whole target sequences, at inference time it must still generate one token at a time: feed the source sentence plus the Spanish prefix so far, read the prediction at the current position, append the argmax token, and repeat until `[end]`.",
+  "importance": "This is the payoff of section 15.3: the positional-embedding Transformer from Listing 15.18 (p.476) is actually used to translate. It also shows the asymmetry between parallel training and sequential generation, a theme that returns with cached generation for GPT-style models in chapter 16 (p.504).",
+  "learning_objectives": [
+   "Trace each step of `generate_translation()` and explain what goes into and comes out of `transformer.predict` at iteration `i`.",
+   "Explain why the Transformer version slices the tokenized target with `[:, :-1]` while the RNN version on p.460 does not.",
+   "Explain why reading `next_token_predictions[0, i, :]` is correct even though the decoder input is padded to a fixed length.",
+   "Describe greedy (argmax) decoding and its limitations.",
+   "Critically read the sample translations: which are correct and which contain errors."
+  ],
+  "prerequisites": [
+   "The English and Spanish `TextVectorization` tokenizers and the `[start]`/`[end]` convention (p.455)",
+   "The Transformer encoder/decoder model with `PositionalEmbedding` (Listings 15.17-15.18, pp.475-476)",
+   "Causal (look-ahead) masking in the Transformer decoder (section 15.3.3, p.470)",
+   "The RNN generation loop in Listing 15.13 (p.460)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "With positional embeddings restored, the Transformer of Listing 15.18 reached about 67% next-word accuracy (p.476). This page puts it to work. The authors note that the generation code is essentially the one used for the RNN in Listing 15.13 (p.460).\n\n**Listing 15.19** builds a reverse lookup `spa_index_lookup` from token index to Spanish word, then defines `generate_translation()`. The English sentence is tokenized once. The Spanish output starts as the string `\"[start]\"`. For up to `sequence_length` (20) steps, the code re-tokenizes the whole partial Spanish sentence, drops its last position with `[:, :-1]`, runs the full model on `[english, spanish_prefix]`, and takes the **argmax** of the softmax distribution at position `i`. That is the model's guess for the token that follows the `i`-th input token. The word is appended to the string, and the loop stops early once `[end]` is produced. The driver code picks five random English test sentences and prints each with its translation.\n\nTwo details are not spelled out on the page. First, the slice: the Spanish tokenizer pads to `sequence_length + 1` = 21 tokens (p.455), but the Transformer's `PositionalEmbedding` only has `sequence_length` = 20 position slots (p.475), so the decoder input must be trimmed to 20. Second, the causal mask in the decoder guarantees that position `i` only sees tokens `0..i`, so the zero padding to its right does not affect the prediction.\n\nThe **sample output** shows mostly fluent and correct translations (\"te veré en la biblioteca mañana\", \"sabes montar en bici\", \"ya ha vuelto\"). The first one contains a clear error: \"cantantes\" (singers) is inserted, and \"son asombrosa\" has number/gender agreement mistakes. Another loses \"dirty\" (\"su trabajo\" instead of \"su trabajo sucio\"). The next page calls the result \"a better toy model\" than the GRU, judged subjectively (p.478).",
+ "paragraphs": [
+  {
+   "ref": "p477_e03",
+   "excerpt": "Let’s rerun generation with our newly trained Transformer. We can use the same code",
+   "what_it_says": "The authors propose to generate translations with the newly trained `Transformer` (the positional-embedding version from p.476), reusing the sampling code written for the RNN.",
+   "what_it_means": "The model interface did not change: both the RNN seq2seq model and the Transformer take `[english_tokens, spanish_tokens]` and return a softmax distribution over the Spanish vocabulary at every target position. So the same autoregressive loop works for both. The code is nearly identical, not exactly identical. The Transformer version adds `tokenized_target_sentence = tokenized_target_sentence[:, :-1]` and calls `transformer.predict` instead of `seq2seq_rnn.predict` (compare p.460).",
+   "why_it_matters": "It shows that the decoding procedure does not depend on the architecture. Any model trained with teacher forcing to predict the next target token can be decoded the same way. That separation (model vs. decoding strategy) is exploited in chapter 16, where sampling strategies are swapped in and out.",
+   "technical_idea": "Autoregressive decoding: $y_{t+1} = \\arg\\max_v p(v \\mid y_{\\le t}, x)$, repeated until an end token. Training used teacher forcing over all positions in parallel; inference has to be sequential because each step depends on the previous output.",
+   "terminology": [
+    {
+     "term": "Generation / sampling",
+     "meaning": "Producing an output sequence by repeatedly querying the model for the next token and feeding it back in."
+    },
+    {
+     "term": "Teacher forcing",
+     "meaning": "Training regime in which the decoder receives the ground-truth previous tokens rather than its own predictions (set up on pp.455-456)."
+    }
+   ],
+   "connections": [
+    "p.460: Listing 15.13, the RNN version of the same loop",
+    "p.476: Listing 15.18 defines the `transformer` model used here",
+    "p.504: chapter 16 notes the inefficiency of re-running the whole sequence each step and introduces cached generation"
+   ]
+  },
+  {
+   "ref": "p477_e06",
+   "excerpt": "Running the generation code, we get the following output:",
+   "what_it_says": "This line introduces the five sample translations printed by the loop.",
+   "what_it_means": "Each block is a `-` separator, the English source, and the decoded Spanish string including `[start]` and `[end]`. The sentences are picked with `random.choice`, and the weights depend on random initialization and shuffling (as the book noted for the RNN on p.460), so your run will show different sentences and possibly different translations.",
+   "why_it_matters": "The samples are the only qualitative evidence offered for the claim on p.478 that the Transformer is \"significantly better\" than the GRU model. Read them critically. Four are acceptable translations. The first contains a hallucinated word (\"cantantes\" = singers) and agreement errors (\"el parecido ... son asombrosa\" should be \"es asombroso\"). The fourth drops \"dirty\".",
+   "technical_idea": "Next-token accuracy (67% on p.476) and translation quality are different measures. Errors compound during free-running generation because the model conditions on its own possibly wrong outputs (p.459 discusses why accuracy is a crude metric and mentions BLEU).",
+   "terminology": [
+    {
+     "term": "Exposure bias (beyond the book)",
+     "meaning": "The mismatch between training on gold prefixes and generating from the model's own prefixes; errors early in a sequence can derail the rest."
+    }
+   ],
+   "connections": [
+    "p.459: why next-token accuracy is a poor translation metric; BLEU",
+    "p.478: the authors' subjective verdict on these outputs"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "autoregressive_decoding",
+   "name": "Autoregressive (greedy) decoding",
+   "definition": "Generating a sequence one token at a time. Each new token is chosen from the model's predicted distribution conditioned on the source and all previously generated tokens; greedy decoding always takes the most probable token.",
+   "intuition": "Like writing a sentence word by word, rereading what you have written so far before choosing the next word.",
+   "technical": "At step $i$ the decoder input is `[start] y_1 ... y_i` padded to length 20; the model outputs a (1, 20, vocab_size) tensor; row `i` is $p(\\cdot \\mid y_{\\le i}, x)$ and `np.argmax` picks $y_{i+1}$.",
+   "significance": "This is how every encoder-decoder and decoder-only language model produces text, from this toy translator to GPT-style LLMs (chapter 16).",
+   "example": "Step 0: input `[start]` → model predicts `te`. Step 1: `[start] te` → `veré`. ... until `[end]`.",
+   "misconception": "That a Transformer, being parallel at training time, also generates whole sentences in one shot. It does not: inference is sequential.",
+   "related": [
+    "language_model",
+    "transformer",
+    "causal_attention",
+    "teacher_forcing"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "causal_attention",
+   "name": "Causal mask during generation",
+   "definition": "The decoder's self-attention mask that prevents position $i$ from attending to positions $> i$.",
+   "intuition": "Each position wears blinders that hide everything to its right.",
+   "technical": "Because of the mask, the output at position `i` depends only on target tokens `0..i` (plus the full encoder output). The zero padding after the current prefix therefore cannot change `next_token_predictions[0, i, :]`.",
+   "significance": "It makes the padded, fixed-length re-tokenization in Listing 15.19 correct, and it is the same mechanism that makes teacher-forced parallel training equivalent to step-by-step prediction.",
+   "example": "With prefix `[start] te` (positions 0,1) and 18 pad tokens, the prediction read at `i = 1` sees only `[start]` and `te`.",
+   "misconception": "That padding tokens to the right of the current position must be stripped before inference. They are harmless thanks to the causal mask.",
+   "related": [
+    "self_attention",
+    "transformer",
+    "autoregressive_decoding"
+   ],
+   "source": "inference"
+  },
+  {
+   "id": "positional_embedding",
+   "name": "Fixed-size learned positional embedding",
+   "definition": "A learned `Embedding(sequence_length, dim)` table indexed by token position, added to token embeddings (Listing 15.17, p.475).",
+   "intuition": "A lookup table with one learned vector per seat number, so it has a fixed number of seats.",
+   "technical": "Because the table has only `sequence_length` = 20 rows, inputs longer than 20 positions would index out of range. This is why the 21-token Spanish tokenization is trimmed with `[:, :-1]` before calling the Transformer.",
+   "significance": "It explains the single line that differs from the RNN generation code, and it is a general limitation of learned absolute position embeddings: they cannot extrapolate past the trained length.",
+   "example": "`spanish_tokenizer([\"[start] te\"])` has shape (1, 21); after slicing, (1, 20), positions 0..19.",
+   "misconception": "That `[:, :-1]` drops a meaningful token. With at most 20 generated steps, the last slot is always padding when it matters.",
+   "related": [
+    "transformer",
+    "embedding"
+   ],
+   "source": "inference"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Greedy next-token choice",
+   "latex": "y_{i+1} = \\arg\\max_{v \\in \\mathcal{V}} \\; p_\\theta\\left(v \\mid y_0, y_1, \\dots, y_i;\\; x\\right), \\qquad y_0 = \\texttt{[start]}",
+   "source_text": "sampled_token_index = np.argmax(next_token_predictions[0, i, :])",
+   "variables": [
+    {
+     "symbol": "x",
+     "meaning": "the tokenized English source sentence (`tokenized_input_sentence`)"
+    },
+    {
+     "symbol": "y_0, \\dots, y_i",
+     "meaning": "the Spanish tokens generated so far, starting with `[start]`"
+    },
+    {
+     "symbol": "\\mathcal{V}",
+     "meaning": "the Spanish vocabulary (`spa_vocab`)"
+    },
+    {
+     "symbol": "p_\\theta",
+     "meaning": "the softmax output of the trained Transformer at position i, i.e. `next_token_predictions[0, i, :]`"
+    },
+    {
+     "symbol": "y_{i+1}",
+     "meaning": "the next token appended to `decoded_sentence`"
+    }
+   ],
+   "operations": "Run the model on (x, prefix), take the distribution at row i, pick the index with the largest probability, map it back to a word with `spa_index_lookup`.",
+   "purpose": "Formalizes the decoding rule implemented in Listing 15.19.",
+   "interpretation": "Greedy decoding commits to the locally most likely word at each step. It does not search for the most likely complete sentence.",
+   "intuition": "At each fork in the road, take the widest path, without looking ahead.",
+   "numerical_example": "If at step 0 the model gives p(te)=0.41, p(yo)=0.22, p(nos)=0.09, ..., greedy picks `te`. If p(te)=0.41 led to a dead end while p(yo)=0.22 led to a much more probable full sentence, greedy would still miss it. Beam search (not in the book here) keeps several candidates to reduce this risk.",
+   "source": "ai_explanation",
+   "book_ref": "p.477"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "15.19",
+   "title": "Generating translations with a Transformer",
+   "original_code": "import numpy as np\nspa_vocab = spanish_tokenizer.get_vocabulary()\nspa_index_lookup = dict(zip(range(len(spa_vocab)), spa_vocab))\ndef generate_translation(input_sentence):\n    tokenized_input_sentence = english_tokenizer([input_sentence])\n    decoded_sentence = \"[start]\"\n    for i in range(sequence_length):\n        tokenized_target_sentence = spanish_tokenizer([decoded_sentence])\n        tokenized_target_sentence = tokenized_target_sentence[:, :-1]\n        inputs = [tokenized_input_sentence, tokenized_target_sentence]\n        next_token_predictions = transformer.predict(inputs, verbose=0)\n        sampled_token_index = np.argmax(next_token_predictions[0, i, :])\n        sampled_token = spa_index_lookup[sampled_token_index]\n        decoded_sentence += \" \" + sampled_token\n        if sampled_token == \"[end]\":\n            break\n    return decoded_sentence\ntest_eng_texts = [pair[0] for pair in test_pairs]\nfor _ in range(5):\n    input_sentence = random.choice(test_eng_texts)\n    print(\"-\")\n    print(input_sentence)\n    print(generate_translation(input_sentence))",
+   "language": "python",
+   "what_it_does": "Defines a greedy decoding function for the trained English-to-Spanish Transformer and prints translations for five random test sentences.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "NumPy is needed for `np.argmax` over the predicted probabilities."
+    },
+    {
+     "lines": "2-3",
+     "explanation": "`get_vocabulary()` returns the list of tokens in index order. Zipping it with `range` gives a dict from integer index to word, the inverse of what the tokenizer does."
+    },
+    {
+     "lines": "4-5",
+     "explanation": "The English sentence is tokenized once (shape (1, 20)); it is the same at every step."
+    },
+    {
+     "lines": "6",
+     "explanation": "The output string is seeded with the `[start]` token the decoder was trained to begin from (p.455)."
+    },
+    {
+     "lines": "7",
+     "explanation": "At most `sequence_length` (20) tokens are generated, the longest target the model saw in training."
+    },
+    {
+     "lines": "8",
+     "explanation": "The whole partial Spanish string is re-tokenized each step, giving shape (1, 21) because the Spanish tokenizer was built with `output_sequence_length=sequence_length + 1` (p.455)."
+    },
+    {
+     "lines": "9",
+     "explanation": "**The one new line vs. Listing 15.13.** Dropping the last column gives shape (1, 20). The model's `PositionalEmbedding` has only `sequence_length` position rows (p.475), so a 21-long input would index position 20, which does not exist. During training the decoder input was also the first 20 of the 21 tokens (the target being the last 20)."
+    },
+    {
+     "lines": "10-11",
+     "explanation": "One forward pass of the full encoder-decoder. Output shape (1, 20, vocab_size): a softmax distribution at every target position. `verbose=0` suppresses the progress bar."
+    },
+    {
+     "lines": "12",
+     "explanation": "Row `i` holds the prediction for the token that follows input position `i`. Because of the causal mask, it depends only on the prefix `[start] y_1..y_i`, so the padding to the right is irrelevant."
+    },
+    {
+     "lines": "13-14",
+     "explanation": "Map the index back to a word and append it, separated by a space so the tokenizer splits it correctly next time."
+    },
+    {
+     "lines": "15-17",
+     "explanation": "Stop as soon as the model emits `[end]`, then return the decoded string (still including `[start]` and `[end]`)."
+    },
+    {
+     "lines": "18-23",
+     "explanation": "Collect the English halves of the test pairs and print five random sentences with their translations. `random` must already be imported (it was earlier in the chapter)."
+    }
+   ],
+   "inputs_outputs": "Input: an English string. Output: a Spanish string of the form `[start] w1 w2 ... [end]` (or 20 tokens without `[end]` if the limit is reached).",
+   "algorithm": "Greedy autoregressive decoding: encode source; prefix ← [start]; repeat {predict distribution for position i; append argmax; stop on [end]}.",
+   "theory_link": "Implements $y_{i+1} = \\arg\\max p(\\cdot \\mid y_{\\le i}, x)$. Training with teacher forcing (p.455) taught the model exactly this conditional distribution at every position simultaneously.",
+   "parameters": [
+    {
+     "name": "sequence_length",
+     "role": "20; the maximum number of decoding steps and the number of position embeddings."
+    },
+    {
+     "name": "i",
+     "role": "Current position; selects which row of the prediction tensor to read."
+    },
+    {
+     "name": "[:, :-1]",
+     "role": "Trims the 21-token Spanish tokenization to the 20 positions the model accepts."
+    }
+   ],
+   "pitfalls": [
+    "Quadratic cost: each of up to 20 steps re-runs the encoder and the full decoder over all 20 positions. The encoder output never changes and could be computed once; chapter 16 (p.504) addresses the decoder side with caching.",
+    "Calling `model.predict` inside a Python loop is slow because of per-call overhead; calling the model directly (`transformer(inputs, training=False)`) is usually faster for single examples.",
+    "If you forget `[:, :-1]`, the positional embedding lookup fails (or silently misbehaves on some backends) for index 20.",
+    "Greedy decoding can produce repetitions or miss better overall translations; it is deterministic for a given model."
+   ],
+   "illustrative_code": "# AI-written sketch, not from the book: encode once, then reuse the encoder output\n# (requires splitting the model into encoder and decoder sub-models)\n# enc_out = encoder_model(tokenized_input_sentence)\n# for i in range(sequence_length):\n#     tgt = spanish_tokenizer([decoded_sentence])[:, :-1]\n#     probs = decoder_model([tgt, enc_out, tokenized_input_sentence])\n#     ..."
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Sample translations from the Transformer",
+   "original_code": "-\nThe resemblance between these two men is uncanny.\n[start] el parecido entre estos cantantes de dos hombres son asombrosa [end]\n-\nI'll see you at the library tomorrow.\n[start] te veré en la biblioteca mañana [end]\n-\nDo you know how to ride a bicycle?\n[start] sabes montar en bici [end]\n-\nTom didn't want to do their dirty work.\n[start] tom no quería hacer su trabajo [end]\n-\nIs he back already?\n[start] ya ha vuelto [end]",
+   "language": "text",
+   "what_it_does": "Shows the printed output of Listing 15.19 for five random test sentences.",
+   "line_explanations": [
+    {
+     "lines": "1-3",
+     "explanation": "\"The resemblance between these two men is uncanny.\" → \"el parecido entre estos cantantes de dos hombres son asombrosa\". The beginning is right, but the model inserts \"cantantes\" (singers), uses plural \"son\" for singular \"el parecido\", and feminine \"asombrosa\" for a masculine noun. A correct rendering would be roughly \"el parecido entre estos dos hombres es asombroso\"."
+    },
+    {
+     "lines": "4-6",
+     "explanation": "\"te veré en la biblioteca mañana\" is a correct and natural translation."
+    },
+    {
+     "lines": "7-9",
+     "explanation": "\"sabes montar en bici\" is correct (colloquial \"bici\" for bicycle); the question marks are lost because the custom standardization strips punctuation (p.455)."
+    },
+    {
+     "lines": "10-12",
+     "explanation": "\"tom no quería hacer su trabajo\" omits \"dirty\" (\"sucio\"); \"su\" is ambiguous between his/their, which happens to suit the English \"their\"."
+    },
+    {
+     "lines": "13-15",
+     "explanation": "\"ya ha vuelto\" is a correct translation of \"Is he back already?\" (Spanish can drop the subject pronoun)."
+    }
+   ],
+   "inputs_outputs": "English test sentences in, lower-cased, punctuation-stripped Spanish token sequences out.",
+   "algorithm": "Output of greedy decoding; no post-processing.",
+   "theory_link": "Illustrates that a 67% next-token accuracy model (p.476) can produce mostly fluent sentences, but errors still occur, especially in longer sentences.",
+   "parameters": [],
+   "pitfalls": [
+    "Your outputs will differ: the test sentences are random and training is stochastic.",
+    "Five samples are anecdotal evidence, not a benchmark."
+   ],
+   "illustrative_code": ""
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why the slice is needed: shapes step by step",
+   "kind": "step_by_step",
+   "body": "1. `spanish_tokenizer` was built with `output_sequence_length = sequence_length + 1 = 21` (p.455) so that, during training, one 21-token Spanish sequence yields both the decoder input (`[:, :-1]`, 20 tokens) and the target (`[:, 1:]`, 20 tokens).\n2. The Transformer's `PositionalEmbedding(sequence_length, ...)` (p.476) owns exactly 20 position vectors, indices 0-19, computed by `cumsum(ones_like(inputs)) - 1` (p.475).\n3. The RNN (p.460) had no position table; a GRU can run over any length, so feeding 21 tokens was fine there.\n4. For the Transformer, a 21-token input would request position 20, which does not exist. Slicing to 20 reproduces exactly the input shape used during training.\n5. Since `i` never exceeds 19, the slice never removes a token that the prediction at row `i` depends on.",
+   "source": "inference"
+  },
+  {
+   "title": "Parallel training, sequential inference",
+   "kind": "breakdown",
+   "body": "p.476 stresses that the Transformer trains about three times faster per epoch than the GRU because attention has no sequential loop. That advantage holds **only during training**, where the full target sentence is known and the causal mask lets all 20 positions be predicted at once. At generation time, token $i+1$ cannot be computed before token $i$ exists, so the loop on this page is unavoidable.\n\nThe naive version here also wastes work: at step $i$ it recomputes the encoder (unchanged) and all decoder positions, though only row $i$ is used. For a 20-token output that is about 20 full forward passes, roughly $O(n^2)$ position computations for the decoder. Chapter 16 (p.504) observes the same waste for GPT and fixes it by caching keys and values.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Greedy vs. beam search vs. sampling",
+   "kind": "alternative",
+   "body": "Beyond the book's code here: `np.argmax` is **greedy decoding**. Production translation systems usually use **beam search**, keeping the $k$ most probable partial translations at each step and returning the one with the highest total (often length-normalized) log-probability. That often fixes errors like the inserted \"cantantes\". For open-ended generation, **sampling** with temperature or top-k/top-p is preferred, because it gives diversity. Chapter 16 covers sampling strategies (see the chapter 16 outline, \"Sampling strategies\").",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "One iteration of generate_translation()",
+   "why": "Listing 15.19's loop body as a flow: re-tokenize, trim to 20 positions, run the model, read row i, append, check for [end].",
+   "mermaid": "flowchart TD\n  A[\"English sentence\"] --> B[\"english_tokenizer → (1, 20)\"]\n  S[\"decoded_sentence = '[start] ...'\"] --> C[\"spanish_tokenizer → (1, 21)\"]\n  C --> D[\"slice [:, :-1] → (1, 20)\"]\n  B --> E[\"transformer.predict\"]\n  D --> E\n  E --> F[\"probs (1, 20, vocab_size)\"]\n  F --> G[\"row i → argmax\"]\n  G --> H[\"spa_index_lookup → word\"]\n  H --> I{\"word == '[end]' ?\"}\n  I -- no --> S\n  I -- yes --> J[\"return decoded_sentence\"]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Because Transformers have no recurrence, they generate an entire translation in a single forward pass.",
+   "correction": "Only training is parallel (teacher forcing with a causal mask). Generation is still a loop of up to `sequence_length` forward passes, one token per pass."
+  },
+  {
+   "claim": "Listing 15.19 is literally identical to the RNN generation code.",
+   "correction": "It adds `tokenized_target_sentence[:, :-1]`, required because the Transformer's learned positional embedding has only 20 positions, and it calls `transformer` instead of `seq2seq_rnn` (compare p.460)."
+  },
+  {
+   "claim": "The padding tokens after the current prefix contaminate the prediction.",
+   "correction": "The decoder's causal mask means position `i` attends only to positions `0..i`, so later padding has no effect on row `i`."
+  },
+  {
+   "claim": "67% next-token accuracy means 67% of the translations are correct.",
+   "correction": "Next-token accuracy is measured with gold prefixes (teacher forcing). Sentence-level quality under free-running generation is a different quantity, which is why metrics like BLEU exist (p.459)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 455,
+    "note": "Tokenizers: the Spanish one outputs sequence_length + 1 tokens; [start]/[end] convention"
+   },
+   {
+    "page": 460,
+    "note": "Listing 15.13: the RNN generation loop this listing reuses"
+   },
+   {
+    "page": 475,
+    "note": "Listing 15.17: PositionalEmbedding with sequence_length position slots"
+   },
+   {
+    "page": 476,
+    "note": "Listing 15.18: the trained transformer model (67% accuracy)"
+   }
+  ],
+  "later": [
+   {
+    "page": 478,
+    "note": "Subjective verdict: a better toy model than the GRU"
+   },
+   {
+    "page": 504,
+    "note": "Cached generation removes the redundant recomputation in this loop"
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 470,
+    "note": "Transformer decoder block and its causal mask"
+   },
+   {
+    "page": 455,
+    "note": "Data preparation for translation"
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 460,
+    "note": "RNN generate_translation()"
+   },
+   {
+    "page": 476,
+    "note": "Model definition and training call"
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "Listing 15.19 decodes greedily: re-run the model on the source plus the current Spanish prefix, take the argmax at position i, append, stop at [end].",
+  "The only code change from the RNN version is `[:, :-1]`, which trims the 21-token Spanish tokenization to the 20 positions the learned positional embedding supports.",
+  "The causal mask makes it safe to read row i of a padded, fixed-length decoder input.",
+  "Transformers train in parallel but still generate sequentially; this naive loop recomputes everything at every step.",
+  "The sample translations are mostly good but include a hallucinated word and agreement errors, so the model is still a toy."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why does Listing 15.19 apply `tokenized_target_sentence[:, :-1]`?",
+   "options": [
+    "To remove the [start] token",
+    "Because the Transformer's positional embedding only has sequence_length positions while the Spanish tokenizer outputs sequence_length + 1 tokens",
+    "To remove the [end] token before prediction",
+    "Because the encoder input is one token shorter than the decoder input"
+   ],
+   "answer": "Because the Transformer's positional embedding only has sequence_length positions while the Spanish tokenizer outputs sequence_length + 1 tokens",
+   "explanation": "The Spanish tokenizer is built with `output_sequence_length=sequence_length + 1` (p.455), and `PositionalEmbedding` has `sequence_length` rows (pp.475-476). [start] is at the front and is not removed by `[:, :-1]`. [end] is never in the prefix while decoding. The encoder input length is not involved.",
+   "page_refs": [
+    477,
+    455,
+    475
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "At iteration i, which row of `next_token_predictions` is read, and what does that row represent?",
+   "options": [],
+   "answer": "Row i (`[0, i, :]`): the probability distribution over the Spanish vocabulary for the token that follows the i-th token of the current prefix.",
+   "explanation": "With teacher forcing, the output at position i was trained to predict target token i+1. The prefix has i+1 tokens (positions 0..i), so row i predicts the next one.",
+   "page_refs": [
+    477
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "The decoder input is padded with zeros after the current prefix. Why doesn't this padding change the prediction read at row i?",
+   "options": [],
+   "answer": "The decoder's causal self-attention mask prevents position i from attending to any position after i, so the padding to the right is invisible to row i.",
+   "explanation": "This is the same mask that lets training predict all positions in parallel without leaking future tokens (section 15.3.3).",
+   "page_refs": [
+    477,
+    470
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "Which statement about the Transformer's speed is correct?",
+   "options": [
+    "It trains and generates in parallel over the whole sequence",
+    "It trains in parallel, but greedy generation still needs one forward pass per output token",
+    "It generates faster than it trains",
+    "Generation is parallel but training requires a loop"
+   ],
+   "answer": "It trains in parallel, but greedy generation still needs one forward pass per output token",
+   "explanation": "p.476 credits the absence of loops for faster training. Listing 15.19 shows generation is still a Python loop of up to 20 `predict` calls. The other options reverse or overstate this.",
+   "page_refs": [
+    476,
+    477
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "Identify two errors in the translation of \"The resemblance between these two men is uncanny.\"",
+   "options": [],
+   "answer": "It inserts \"cantantes\" (singers), a word not in the source; and it uses \"son asombrosa\" (plural verb, feminine adjective) where the singular masculine \"es asombroso\" is required for \"el parecido\".",
+   "explanation": "These are typical errors of a small model: a hallucinated token and broken agreement over a longer span.",
+   "page_refs": [
+    477
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Name one inefficiency in `generate_translation()` and how it could be removed.",
+   "options": [],
+   "answer": "The encoder is re-run on the unchanged English sentence at every step (it could be computed once and reused), and the decoder recomputes all previous positions (keys/values could be cached, as chapter 16 does).",
+   "explanation": "Only row i of a full (1, 20, vocab) output is used per call; p.504 discusses caching for decoder-only models.",
+   "page_refs": [
+    477,
+    504
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Without looking, write the loop body of the generation function from memory, including the line that differs from the RNN version.",
+   "options": [],
+   "answer": "Tokenize the prefix, slice `[:, :-1]`, predict on `[source, prefix]`, argmax at row i, look up the word, append, break on `[end]`.",
+   "explanation": "If you can reproduce it and justify the slice, you understand both the decoding loop and the shape constraint of the positional embedding.",
+   "page_refs": [
+    477,
+    460
+   ]
+  }
+ ]
+}

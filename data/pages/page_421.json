@@ -1,0 +1,325 @@
+{
+  "page_id": "page_421",
+  "pdf_page": 421,
+  "printed_page": "397",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:52:00Z",
+    "confidence": "high",
+    "review_flags": [
+      "Listing 14.10 callout says 'Moves the test data unaltered', but the code calls shutil.copytree, which copies the test directory and leaves the original in place (the body text correctly says 'make a copy')."
+    ],
+    "extraction_quality": "Clean. Both listings match the page image; the callouts were extracted separately and are reattached to their lines here."
+  },
+  "overview": {
+    "title": "Previewing a review and splitting off a validation set",
+    "chapter": "14 Text classification",
+    "section": "14.3 Sets vs. sequences",
+    "subsection": "14.3.1 Loading the IMDb classification dataset",
+    "main_topic": "Inspecting one raw IMDb review and building train/validation/test directories on disk",
+    "central_idea": "A raw review is informal, noisy text with HTML line breaks. Before tokenizing, the authors copy the test set unchanged and shuffle each training class with a fixed seed, sending 20% of the files to a new validation directory. The result can then be loaded with `text_dataset_from_directory`, the text counterpart of chapter 8's `image_dataset_from_directory`.",
+    "importance": "A validation set separate from the test set is needed to monitor training honestly. The `imdb_train`/`imdb_val`/`imdb_test` directories created here are reused by every model in chapter 14 and again in chapter 15 (p.482).",
+    "learning_objectives": [
+      "Describe what raw IMDb review text looks like and what noise it contains",
+      "Explain each step of Listing 14.10's directory-level validation split",
+      "Explain why the shuffle uses a fixed seed and why it is done per class",
+      "Relate `text_dataset_from_directory` to `image_dataset_from_directory`"
+    ],
+    "prerequisites": [
+      "Listing 14.8 and the aclImdb folder layout (p.420)",
+      "Training/validation/test splits (chapter 5, p.173)",
+      "`image_dataset_from_directory` (chapter 8)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "**Listing 14.9** reads and prints one positive training review, `train/pos/4077_10.txt`. The text is typical of user-written data: lowercase 'i', misspellings ('hole castle part', 'there own'), run-on sentences, and leftover **HTML line-break tags** (`<br/>`) before the final 'Enjoy'. This is what the tokenizers of section 14.2 will have to handle.\n\nBefore tokenizing, the authors **copy the data into a new layout** with two changes:\n\n1. The **unsupervised reviews are ignored** (only `neg` and `pos` are copied).\n2. A separate **validation set** is created to monitor accuracy during training, by moving **20% of the training files** into a new directory.\n\n**Listing 14.10** defines three local paths, `imdb_train`, `imdb_test` and `imdb_val`. It copies the whole test folder unchanged with `shutil.copytree` (the callout says 'Moves the test data unaltered'). Then, for each category in `(\"neg\", \"pos\")`, it:\n\n- lists the training files of that class,\n- shuffles them with `random.Random(1337)`, a seeded generator so the split is reproducible,\n- computes `num_val_samples = int(len(src_files) * 0.2)`,\n- copies the first `num_val_samples` files into `imdb_val/<category>/` and the rest into `imdb_train/<category>/`.\n\nBecause the split is done **per class**, the validation set keeps the 50/50 class balance. Each class has 12,500 training reviews, so 2,500 per class go to validation. That gives 20,000 training and 5,000 validation reviews, as p.422 confirms.\n\nFinally, the authors remind you of chapter 8's `image_dataset_from_directory`, which built a labeled `Dataset` from a folder structure. **`text_dataset_from_directory`** does the same for text files, and the next page creates the three `Dataset` objects (Listing 14.11).",
+  "paragraphs": [
+    {
+      "ref": "p421_e05",
+      "excerpt": "Before we begin tokenizing our input text, we will make a copy",
+      "what_it_says": "Before tokenizing, the authors make a modified copy of the training data. The unsupervised reviews are ignored for now, and a separate validation set is created to monitor accuracy during training by splitting 20% of the training text files into a new directory.",
+      "what_it_means": "The split is done at the file-system level, before any loading. The new directories contain only labeled classes, so a folder-based loader will see exactly two classes, and the validation data is physically separate from the training data.",
+      "why_it_matters": "The IMDb archive has only train and test splits. Tuning on the test set would leak information into model selection (p.173), so a validation set has to be carved out of the training data.",
+      "technical_idea": "This is simple hold-out validation with an 80/20 split of the training files. The test set (25,000 reviews) stays untouched for the final evaluation.",
+      "terminology": [
+        {"term": "validation set", "meaning": "Data held out from training and used to monitor generalization and make modeling decisions."},
+        {"term": "hold-out validation", "meaning": "Setting aside a fixed fraction of the training data as the validation set."}
+      ],
+      "connections": [
+        "p.173: why a validation set distinct from the test set is needed (information leaks)",
+        "p.420: the unsup/ folder of unlabeled reviews"
+      ]
+    },
+    {
+      "ref": "p421_e08",
+      "excerpt": "We are now ready to load the data. Remember how, in chapter 8,",
+      "what_it_says": "With the directories ready, the data can be loaded. Chapter 8 used `image_dataset_from_directory` to build a `Dataset` of images and labels from a directory structure. `text_dataset_from_directory` does the same for text files, and the authors will create three `Dataset` objects for training, validation and testing.",
+      "what_it_means": "The same convention carries over from images to text: one subfolder per class, with the label inferred from the folder name. The output is a `tf.data.Dataset` yielding batches of (string tensor, integer label).",
+      "why_it_matters": "Using a standard loader means no hand-written file-reading loop. Batching, shuffling and streaming from disk come for free, and the raw strings can later be mapped through a tokenizer inside the data pipeline.",
+      "technical_idea": "Labels are assigned in alphanumeric order of the subfolder names, so `neg` → 0 and `pos` → 1. With `label_mode` left at its default for two classes, labels are integers.",
+      "terminology": [
+        {"term": "text_dataset_from_directory", "meaning": "A Keras utility that builds a labeled Dataset of strings from a folder of class subfolders."},
+        {"term": "Dataset", "meaning": "A tf.data object that streams (possibly batched) examples for training."}
+      ],
+      "connections": [
+        "p.268: chapter 8 used image_dataset_from_directory for the cats-vs-dogs images",
+        "p.422: Listing 14.11 creates the training, validation and test Datasets"
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "validation_set",
+      "name": "Validation set",
+      "definition": "A held-out portion of the training data used to monitor performance during training and to guide modeling decisions.",
+      "intuition": "Practice exams you take while studying, kept separate from the final exam (the test set).",
+      "technical": "Here, 20% of each class's training files (2,500 negative and 2,500 positive) are copied to imdb_val/. Training uses the remaining 20,000.",
+      "significance": "It lets the authors watch validation accuracy without touching the test set.",
+      "example": "int(12500 * 0.2) = 2500 files per class go to validation.",
+      "misconception": "That you can use the test set as the validation set. Repeated tuning on it leaks information and inflates the final score (p.173).",
+      "related": ["data_split", "overfitting"],
+      "source": "book"
+    },
+    {
+      "id": "stratified_split",
+      "name": "Per-class (stratified) split",
+      "definition": "Splitting each class separately with the same fraction, so every split keeps the original class proportions.",
+      "intuition": "Take 20% from the positive pile and 20% from the negative pile, rather than 20% from a mixed pile.",
+      "technical": "Listing 14.10 loops over (\"neg\", \"pos\") and applies the same 0.2 fraction inside each loop.",
+      "significance": "The validation set stays balanced 50/50, like the original data.",
+      "example": "2,500 neg and 2,500 pos in validation, 10,000 of each in training.",
+      "misconception": "That random shuffling always gives balanced splits. It usually does approximately, but per-class splitting guarantees it.",
+      "related": ["validation_set"],
+      "source": "inference"
+    },
+    {
+      "id": "reproducible_shuffle",
+      "name": "Seeded shuffling for reproducibility",
+      "definition": "Using a random generator with a fixed seed so that the shuffle, and therefore the split, is the same every run.",
+      "intuition": "Shuffling a deck the same way every time, so everyone gets the same hands.",
+      "technical": "`random.Random(1337)` creates an independent generator seeded with 1337. Its `shuffle` permutes the file list in place, without affecting the global `random` state.",
+      "significance": "It makes the authors' results reproducible and lets chapter 15 reuse the exact same split (p.482).",
+      "example": "Running Listing 14.10 twice on the same os.listdir order puts the same files in imdb_val.",
+      "misconception": "That a fixed seed alone guarantees an identical split on every machine. `os.listdir` order is not guaranteed, so sorting the list first would make it fully deterministic (not in the book).",
+      "related": ["validation_set"],
+      "source": "book"
+    },
+    {
+      "id": "raw_text_noise",
+      "name": "Noise in raw text",
+      "definition": "Artifacts in real-world text, such as markup, misspellings and inconsistent casing, that a model's preprocessing must handle.",
+      "intuition": "Real reviews are written quickly by people, not edited by a copy editor.",
+      "technical": "The previewed review contains `<br/>` HTML tags, lowercase 'i', 'hole' for 'whole', 'there' for 'their', and comma-spliced sentences.",
+      "significance": "It motivates standardization and robust tokenization (section 14.2, and subword tokenizers for misspellings, p.419).",
+      "example": "'film.<br/><br/>Enjoy' could produce an odd token if markup is not stripped.",
+      "misconception": "That benchmark datasets are clean.",
+      "related": ["tokenization", "data_inspection"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Size of the validation split",
+      "latex": "n_{\\text{val}} = \\left\\lfloor 0.2 \\times n_{\\text{class}} \\right\\rfloor, \\qquad n_{\\text{train}} = n_{\\text{class}} - n_{\\text{val}}",
+      "source_text": "num_val_samples = int(len(src_files) * val_percentage)",
+      "variables": [
+        {"symbol": "n_{\\text{class}}", "meaning": "Number of training files in one category (neg or pos)."},
+        {"symbol": "n_{\\text{val}}", "meaning": "Number of those files copied to the validation directory."},
+        {"symbol": "n_{\\text{train}}", "meaning": "Number left for training."}
+      ],
+      "operations": "Multiply by the validation fraction 0.2 and truncate toward zero with int().",
+      "purpose": "Determines how many shuffled files go to validation for each class.",
+      "interpretation": "20% of each class is held out and 80% is kept for training.",
+      "intuition": "One in five reviews becomes a practice-exam question.",
+      "numerical_example": "With 12,500 files per class: $n_{\\text{val}} = 2500$ and $n_{\\text{train}} = 10000$. Over two classes: 5,000 validation and 20,000 training reviews (matching p.422).",
+      "source": "book",
+      "book_ref": "p.421"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": "14.9",
+      "title": "Previewing a single IMDb review",
+      "original_code": ">>> print(open(imdb_extract_dir / \"train\" / \"pos\" / \"4077_10.txt\", \"r\").read())\nI first saw this back in the early 90s on UK TV, i did like it then but i missed\nthe chance to tape it, many years passed but the film always stuck with me and i\nlost hope of seeing it TV again, the main thing that stuck with me was the end,\nthe hole castle part really touched me, its easy to watch, has a great story,\ngreat music, the list goes on and on, its OK me saying how good it is but\neveryone will take there own best bits away with them once they have seen it,\nyes the animation is top notch and beautiful to watch, it does show its age in a\nvery few parts but that has now become part of it beauty, i am so glad it has\ncame out on DVD as it is one of my top 10 films of all time. Buy it or rent it\njust see it, best viewing is at night alone with drink and food in reach so you\ndon't have to stop the film.<br/>\n<br/>Enjoy",
+      "language": "python",
+      "what_it_does": "Opens one positive training review by path and prints its full text.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Builds the path with pathlib's `/` operator, opens the file in text mode ('r') and prints the whole string. Beyond the book: in aclImdb, file names are `<id>_<rating>.txt`, so `4077_10` is review 4077 with a 10/10 rating."},
+        {"lines": "2-13", "explanation": "The printed review: clearly positive ('one of my top 10 films of all time'), informal, with typos and two `<br/>` HTML line breaks before 'Enjoy'."}
+      ],
+      "inputs_outputs": "Input: the path of one review file. Output: the review text printed to the console.",
+      "algorithm": "Open, read, print.",
+      "theory_link": "This follows the advice on p.420 to inspect your data before modeling.",
+      "parameters": [{"name": "\"r\"", "role": "Open the file for reading in text mode."}],
+      "pitfalls": [
+        "Beyond the book: the file is not explicitly closed. Prefer `with open(...) as f:` or `Path.read_text(encoding=\"utf-8\")`.",
+        "The HTML tags are part of the raw text and will become tokens unless they are removed during standardization."
+      ]
+    },
+    {
+      "id": "c2",
+      "listing": "14.10",
+      "title": "Splitting validation from the IMDb dataset",
+      "original_code": "train_dir = pathlib.Path(\"imdb_train\")\ntest_dir = pathlib.Path(\"imdb_test\")\nval_dir = pathlib.Path(\"imdb_val\")\n\nshutil.copytree(imdb_extract_dir / \"test\", test_dir)\n\nval_percentage = 0.2\nfor category in (\"neg\", \"pos\"):\n    src_dir = imdb_extract_dir / \"train\" / category\n    src_files = os.listdir(src_dir)\n    random.Random(1337).shuffle(src_files)\n    num_val_samples = int(len(src_files) * val_percentage)\n\n    os.makedirs(val_dir / category)\n    for file in src_files[:num_val_samples]:\n        shutil.copy(src_dir / file, val_dir / category / file)\n    os.makedirs(train_dir / category)\n    for file in src_files[num_val_samples:]:\n        shutil.copy(src_dir / file, train_dir / category / file)",
+      "language": "python",
+      "what_it_does": "Creates three local directories. imdb_test is an exact copy of the original test split. imdb_val and imdb_train hold a seeded 20/80 split of each class's training files, leaving out unsup/.",
+      "line_explanations": [
+        {"lines": "1-3", "explanation": "Relative paths for the new train, test and validation roots (created in the current working directory)."},
+        {"lines": "5", "explanation": "Callout: 'Moves the test data unaltered'. `shutil.copytree` recursively copies `aclImdb/test` (pos and neg) to `imdb_test`. It copies rather than moves, so the original stays in the Keras cache."},
+        {"lines": "7-8", "explanation": "Callout: 'Splits the training data into a train set and a validation set'. Only the two labeled categories are iterated, which is how unsup/ is left out."},
+        {"lines": "9-10", "explanation": "Lists all file names in the class's training folder (12,500 each)."},
+        {"lines": "11", "explanation": "Shuffles the list in place with a fresh generator seeded at 1337. The seed is re-created for each category, so both classes are shuffled with the same pseudo-random sequence."},
+        {"lines": "12", "explanation": "Number of validation files: int(12500 * 0.2) = 2500."},
+        {"lines": "14-16", "explanation": "Creates imdb_val/<category> and copies the first 2,500 shuffled files into it."},
+        {"lines": "17-19", "explanation": "Creates imdb_train/<category> and copies the remaining 10,000 files into it."}
+      ],
+      "inputs_outputs": "Input: the extracted aclImdb folder. Output on disk: imdb_train/{neg,pos} (10,000 files each), imdb_val/{neg,pos} (2,500 each), imdb_test/{neg,pos} (12,500 each).",
+      "algorithm": "Copy the test split unchanged; for each label: list files, shuffle with a fixed seed, slice into the first 20% and the remaining 80%, and copy each slice into its directory.",
+      "theory_link": "This is simple hold-out validation (chapter 5, p.173) with a per-class split that keeps the class balance, and shuffling before splitting to avoid order bias (p.177).",
+      "parameters": [
+        {"name": "val_percentage", "role": "Fraction of each class's training files held out for validation (0.2)."},
+        {"name": "1337", "role": "Random seed that makes the shuffle, and so the split, reproducible."}
+      ],
+      "pitfalls": [
+        "Re-running the listing fails: `os.makedirs` and `shutil.copytree` raise FileExistsError if the directories already exist. Delete them first, or pass `exist_ok=True` / `dirs_exist_ok=True` (not in the book).",
+        "`os.listdir` order is not guaranteed across file systems, so `sorted(os.listdir(...))` would make the split fully deterministic (not in the book).",
+        "Copying 50,000 small files takes some time and disk space."
+      ],
+      "illustrative_code": "# AI-written check of the resulting split (not from the book)\nfor d in [train_dir, val_dir, test_dir]:\n    for c in (\"neg\", \"pos\"):\n        print(d, c, len(os.listdir(d / c)))\n# imdb_train 10000/10000, imdb_val 2500/2500, imdb_test 12500/12500"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why split on disk instead of with validation_split?",
+      "kind": "alternative",
+      "body": "Beyond the book: `text_dataset_from_directory` also accepts `validation_split=0.2, subset=..., seed=...`, which splits in memory without copying files. The authors' explicit directory split has the advantage that it is visible and easy to check, it is independent of the loader, and it gives a fixed split that later code, including chapter 15 (p.482), can reuse just by pointing at `imdb_val`.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Same seed for both classes",
+      "kind": "breakdown",
+      "body": "Beyond the book: `random.Random(1337)` is created anew inside the loop, so both `neg` and `pos` lists are shuffled with the identical permutation of positions (both have 12,500 entries). This does no harm, because the file lists are different and independent of each other. It is simply a side effect of creating the generator inside the loop.",
+      "source": "ai_explanation"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "widget",
+      "title": "IMDb splits after Listing 14.10",
+      "why": "Listing 14.10 turns 25,000 labeled training reviews into 20,000 train and 5,000 validation, and keeps all 25,000 test reviews, out of 50,000 labeled reviews in total.",
+      "widget": "data_split",
+      "params": {"train": 0.4, "val": 0.1, "test": 0.5, "n": 50000}
+    },
+    {
+      "id": "v2",
+      "type": "mermaid",
+      "title": "From aclImdb to imdb_train / imdb_val / imdb_test",
+      "why": "Shows the file-copying flow of Listing 14.10.",
+      "mermaid": "flowchart LR\n A[aclImdb/test] -- copytree --> T[imdb_test/ neg,pos 12,500 each]\n B[aclImdb/train/neg] -- shuffle seed 1337 --> S1{first 20%?}\n C[aclImdb/train/pos] -- shuffle seed 1337 --> S2{first 20%?}\n S1 -- yes --> V[imdb_val/ 2,500 per class]\n S1 -- no --> TR[imdb_train/ 10,000 per class]\n S2 -- yes --> V\n S2 -- no --> TR\n U[aclImdb/train/unsup] -. ignored .-> X[ ]"
+    }
+  ],
+  "misconceptions": [
+    {"claim": "Listing 14.10 moves the test files out of the Keras cache.", "correction": "`shutil.copytree` copies them; the original aclImdb/test remains. The callout's word 'Moves' is loose."},
+    {"claim": "The validation set comes from the test set.", "correction": "It is taken from the training files (20% per class). The test set is copied unaltered."},
+    {"claim": "The unsup reviews are split between train and validation.", "correction": "Only the neg and pos categories are looped over, so unsup is left out entirely."}
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 420, "note": "Listing 14.8 defines imdb_extract_dir and imports os, pathlib, shutil and random."},
+      {"page": 173, "note": "Why a separate validation set is needed."},
+      {"page": 177, "note": "Shuffle before splitting, and watch for redundancy between splits."},
+      {"page": 268, "note": "image_dataset_from_directory in chapter 8."}
+    ],
+    "later": [
+      {"page": 422, "note": "Listing 14.11 loads these directories with text_dataset_from_directory (20,000 train and 5,000 validation reviews)."},
+      {"page": 482, "note": "Chapter 15 reuses the same train_dir, val_dir and test_dir."}
+    ],
+    "prerequisites": [
+      {"page": 420, "note": "Directory layout of the raw dataset."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 420, "note": "Listing 14.8 (download)."},
+      {"page": 422, "note": "Listing 14.11 (loading)."}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "Raw reviews are informal and contain HTML `<br/>` tags, so preprocessing has to cope with that.",
+    "The test split is copied unchanged; validation is carved out of the training data.",
+    "20% of each class (2,500 files) goes to validation, leaving 20,000 training and 5,000 validation reviews in total.",
+    "A seeded `random.Random(1337)` makes the split reproducible.",
+    "unsup/ is excluded by looping only over neg and pos.",
+    "`text_dataset_from_directory` is the text version of `image_dataset_from_directory`."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "math",
+      "question": "Each IMDb training class has 12,500 reviews. With val_percentage = 0.2, how many reviews end up in imdb_train and imdb_val in total?",
+      "options": [],
+      "answer": "imdb_val: 2 × 2,500 = 5,000; imdb_train: 2 × 10,000 = 20,000.",
+      "explanation": "int(12500 × 0.2) = 2500 per class go to validation, and the remaining 10,000 per class go to training. Page 422 confirms 20,000 train and 5,000 validation reviews.",
+      "page_refs": [421, 422]
+    },
+    {
+      "id": "q2",
+      "type": "mcq",
+      "question": "Why does Listing 14.10 use random.Random(1337).shuffle instead of an unseeded shuffle?",
+      "options": ["To make the shuffle faster", "So that the same files land in the validation set on every run", "Because os.listdir returns files in random order", "To balance positive and negative reviews"],
+      "answer": "So that the same files land in the validation set on every run",
+      "explanation": "A fixed seed makes the split reproducible. It does not affect speed. os.listdir order is arbitrary but not random. Class balance comes from looping over the classes separately, not from the seed.",
+      "page_refs": [421]
+    },
+    {
+      "id": "q3",
+      "type": "short",
+      "question": "How does Listing 14.10 make sure that the unsupervised reviews do not appear in the new datasets?",
+      "options": [],
+      "answer": "It loops only over the categories (\"neg\", \"pos\"), so files in train/unsup are never copied. The test folder has no unsup subfolder.",
+      "explanation": "The body text says the unsupervised reviews are ignored for now. This is implemented simply by choosing which categories to copy.",
+      "page_refs": [421, 420]
+    },
+    {
+      "id": "q4",
+      "type": "conceptual",
+      "question": "Why split each class separately instead of shuffling all 25,000 training files together and taking 20%?",
+      "options": [],
+      "answer": "Splitting per class guarantees that the validation set has exactly the same 50/50 class ratio as the training data. A pooled shuffle would be only approximately balanced.",
+      "explanation": "This is our reading of the loop structure; the book does not state the reason explicitly.",
+      "page_refs": [421]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "What does shutil.copytree(imdb_extract_dir / \"test\", test_dir) do?",
+      "options": ["Moves the test folder and deletes the original", "Recursively copies the test folder, unchanged, to imdb_test", "Splits the test folder into test and validation", "Creates an empty imdb_test folder"],
+      "answer": "Recursively copies the test folder, unchanged, to imdb_test",
+      "explanation": "copytree copies a whole directory tree. The original stays (despite the callout's word 'Moves'). The test data is not split, and the folder is not empty.",
+      "page_refs": [421]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "Name two kinds of noise visible in the review printed by Listing 14.9.",
+      "options": [],
+      "answer": "Any two of: HTML line-break tags (<br/>), misspellings or wrong words ('hole' for 'whole', 'there' for 'their'), inconsistent capitalization (lowercase 'i'), run-on sentences.",
+      "explanation": "All are visible in the printed text and affect how tokenization and standardization should be designed.",
+      "page_refs": [421]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you explain in your own words how text_dataset_from_directory will know which reviews are positive and which are negative?",
+      "options": [],
+      "answer": "From the folder names: each subdirectory (neg, pos) becomes a class, and the label is the index of the folder in alphanumeric order (neg = 0, pos = 1).",
+      "explanation": "The page links it to image_dataset_from_directory from chapter 8, which uses the same directory-to-label convention.",
+      "page_refs": [421, 422]
+    }
+  ]
+}

@@ -1,0 +1,488 @@
+{
+ "page_id": "page_545",
+ "pdf_page": 545,
+ "printed_page": "521",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T09:40:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. Three unnumbered code blocks extracted verbatim; callouts captured. The two-column layout at the bottom split the 17.2.2 opening paragraph into e10 and e12 and the Figure 17.8 caption into e11 and e13; they are treated as one paragraph and one caption. The sentence continues on p.546."
+ },
+ "overview": {
+  "title": "Loading Oxford Flowers as 128 × 128 batches; the denoiser's job",
+  "chapter": "17 Image generation",
+  "section": "17.2 Diffusion models",
+  "subsection": "17.2.2 A U-Net denoising autoencoder",
+  "main_topic": "Downloading and extracting the Oxford Flowers archive, turning the JPEGs into a batched dataset of undistorted 128 × 128 crops, viewing one example, and starting the description of the denoising model reused at every diffusion step.",
+  "central_idea": "The data pipeline produces fixed-size, aspect-preserving, unlabeled image batches of exactly 32. The denoiser is a single model reused at every step of the loop, and it is told how much noise to remove.",
+  "importance": "Data preparation choices here (no labels, aspect-preserving crops, equal-size batches) directly affect generation quality and training code. The last paragraph introduces the second model input, the noise level, which is central to how one network can denoise at every stage.",
+  "learning_objectives": [
+   "Use keras.utils.get_file with extract=True to download and unpack an archive and locate the image folder.",
+   "Explain each argument of image_dataset_from_directory used here, especially labels=None and crop_to_aspect_ratio=True.",
+   "Explain why the dataset is rebatched with drop_remainder=True.",
+   "Explain why the example image is cast to uint8 before plotting.",
+   "State why the denoiser is given the noise level as an extra input."
+  ],
+  "prerequisites": [
+   "tf.data datasets and image_dataset_from_directory (used for image classification in chapter 8)",
+   "Image tensors of shape (height, width, channels)",
+   "The diffusion-model idea of p.544"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The first code block downloads the Oxford Flowers archive (`102flowers.tgz` from the VGG site) with `keras.utils.get_file(..., extract=True)`. `fpath` is then the local path to the **extracted directory**, and the images are in its `jpg` subdirectory.\n\nThe second block builds an iterable dataset with `keras.utils.image_dataset_from_directory()`. Images must be a fixed size, but distorting their aspect ratio would hurt the quality of generated images, so `crop_to_aspect_ratio=True` extracts the **largest undistorted crop** of the right aspect ratio and resizes it to **128 × 128**. `labels=None` because only images are needed (callout: 'We won't need the labels, just the images.'). The dataset is then `rebatch`ed to `batch_size = 32` with `drop_remainder=True`, so every batch has exactly 32 images and the last, irregular batch is dropped.\n\nThe third block takes the first image of the first batch and displays it (Figure 17.8: a pink lotus-like flower, with 0-120 pixel ticks on both axes). It is cast with `astype(\"uint8\")` because the pipeline yields float32 values in [0, 255].\n\nSection **17.2.2 A U-Net denoising autoencoder** begins: the **same denoising model is reused at every iteration** of the diffusion process, erasing a little noise each time. To make the model's job easier, it is told how much noise it is supposed to extract from the input image. The sentence finishes on p.546, where this extra input is named `noise_rates`.",
+ "paragraphs": [
+  {
+   "ref": "p545_e04",
+   "excerpt": "`fpath` is now the local path to the extracted directory. The images are",
+   "what_it_says": "After the download, `fpath` is the local path to the extracted directory, and the images are in its `jpg` subdirectory. The next step is to turn them into an iterable dataset with `image_dataset_from_directory()`.",
+   "what_it_means": "`get_file` caches the archive (by default under `~/.keras/datasets/`) and, with `extract=True`, unpacks it. The archive contains a single folder `jpg/` with 8,189 files named `image_00001.jpg` and so on. Since they are all in one folder with no class subfolders, they are loaded as an unlabeled image collection.",
+   "why_it_matters": "Knowing where the files are is needed for `os.path.join(fpath, \"jpg\")` in the next block. Note (not in the book): in older tf.keras versions, `get_file(..., extract=True)` returned the archive's path rather than the extracted folder; the book's statement matches Keras 3 behaviour.",
+   "terminology": [
+    {
+     "term": "keras.utils.get_file",
+     "meaning": "Downloads a file from a URL into a local cache (if not already present) and returns its path; optionally extracts archives."
+    },
+    {
+     "term": "image_dataset_from_directory",
+     "meaning": "Keras utility that reads image files from a folder into a batched tf.data.Dataset, optionally inferring labels from subfolder names."
+    }
+   ],
+   "connections": [
+    "p.544: the Oxford Flowers dataset (8,189 images, 102 species) and 'Let's get the dataset archive and extract it:'."
+   ]
+  },
+  {
+   "ref": "p545_e05",
+   "excerpt": "We need to resize our images to a fixed size, but we don’t want",
+   "what_it_says": "Images must be resized to a fixed size, but distorting the aspect ratio would hurt the quality of generated images. So the code uses `crop_to_aspect_ratio` to extract maximally large undistorted crops of the right size (128 × 128).",
+   "what_it_means": "Flower photos have various shapes (e.g. 500 × 667). Plain resizing to a square would squash or stretch them, and the model would learn squashed flowers and reproduce them. With `crop_to_aspect_ratio=True`, Keras first takes the largest centred crop with the target aspect ratio (1:1 here), then resizes it to 128 × 128. Some content at the edges is lost, but shapes stay true.",
+   "why_it_matters": "A generative model reproduces the statistics of its training data, including artifacts like distortion. Clean, consistent inputs lead to cleaner outputs. 128 × 128 is also the input size the U-Net expects (p.546).",
+   "technical_idea": "Beyond the book: for a 500 × 667 image the centred square crop is 500 × 500 (removing 83-84 rows at the top and bottom), which is then downsampled by a factor of about 3.9 to 128 × 128.",
+   "terminology": [
+    {
+     "term": "aspect ratio",
+     "meaning": "Width divided by height of an image; preserving it avoids geometric distortion."
+    },
+    {
+     "term": "crop_to_aspect_ratio",
+     "meaning": "Option that crops the largest centred region with the target aspect ratio before resizing."
+    }
+   ],
+   "connections": [
+    "p.546: the U-Net takes 128 × 128 inputs and downsamples them to 16 × 16."
+   ]
+  },
+  {
+   "ref": "p545_e10",
+   "excerpt": "The same denoising model gets reused across each iteration of the diffusion denoising",
+   "what_it_says": "The same denoising model is reused at each iteration of the diffusion denoising process, erasing a little bit of noise each time. To make the model's job easier, it is told how much noise it is supposed to extract (the sentence continues on p.546, where this input is named `noise_rates`).",
+   "what_it_means": "There is one set of weights for all noise levels, not a separate network per step. But the same task looks very different at different noise levels: at high noise the model should make bold, coarse guesses; at low noise it should only touch up fine grain. Telling it the noise level as an input lets one network switch behaviour accordingly instead of having to estimate the noise level from the image itself.",
+   "why_it_matters": "This explains why the model on p.547 has two inputs, `noisy_images` and `noise_rates`, and why the training procedure (p.550) samples random diffusion times: the single model must be trained on the full spectrum of noise levels.",
+   "technical_idea": "Beyond the book: this is called conditioning on the noise level (or timestep). Large-scale diffusion models usually feed it through sinusoidal embeddings into every block; the book's simpler model upsamples the scalar noise rate to a 128 × 128 map and concatenates it with the image features at the input (p.547).",
+   "terminology": [
+    {
+     "term": "noise level conditioning",
+     "meaning": "Giving the denoiser the amount of noise present so it can adapt its output."
+    },
+    {
+     "term": "weight sharing across steps",
+     "meaning": "Using one network with the same parameters at every step of the diffusion loop."
+    }
+   ],
+   "connections": [
+    "p.546: the noise rate is the model's `noise_rates` input; the model predicts a noise mask.",
+    "p.547: `get_model()` builds the two-input U-Net.",
+    "p.550: training samples random diffusion times so the model sees all noise levels."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "tf_data_pipeline",
+   "name": "Image dataset pipeline",
+   "definition": "A tf.data.Dataset that streams batches of preprocessed images from disk.",
+   "intuition": "A conveyor belt that loads, crops, resizes and groups images into equal trays of 32.",
+   "technical": "`image_dataset_from_directory(images_dir, labels=None, image_size=(128, 128), crop_to_aspect_ratio=True)` yields float32 tensors of shape (batch, 128, 128, 3) with values in [0, 255]; `rebatch(32, drop_remainder=True)` guarantees a static batch size of 32.",
+   "significance": "Feeds the diffusion model efficiently; equal batch sizes simplify the training step.",
+   "example": "8,189 images → 255 full batches of 32; the last 29 images form an incomplete batch and are dropped (each epoch, since the default shuffle reshuffles which 29).",
+   "misconception": "That the pipeline normalizes pixels to [0, 1]. It does not; the model's normalization layer handles scaling later (p.549).",
+   "related": [
+    "data_augmentation",
+    "batch"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "aspect_ratio_crop",
+   "name": "Aspect-preserving crop",
+   "definition": "Cropping the largest region with the target aspect ratio before resizing, to avoid distortion.",
+   "intuition": "Trimming a photo to a square before shrinking it, instead of squeezing it.",
+   "technical": "`crop_to_aspect_ratio=True` in image_dataset_from_directory; the crop is centred.",
+   "significance": "The book notes that distortion would hurt the quality of generated images.",
+   "example": "A 500 × 667 photo → 500 × 500 centre crop → 128 × 128.",
+   "misconception": "That cropping is always worse than resizing because it loses content. For generative training, consistent geometry matters more than edge content.",
+   "related": [
+    "tf_data_pipeline"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "denoising_autoencoder",
+   "name": "Denoising autoencoder (reused across steps)",
+   "definition": "One network that removes a little noise at each step of the diffusion loop.",
+   "intuition": "One restorer who is told how damaged each photo is before working on it.",
+   "technical": "The same weights are applied at every diffusion step; the noise level is given as an extra input.",
+   "significance": "Makes diffusion models parameter-efficient and trainable with one loss.",
+   "example": "The U-Net of p.546-547 with inputs `noisy_images` and `noise_rates`.",
+   "misconception": "That each diffusion step uses a different network.",
+   "related": [
+    "diffusion_model",
+    "u_net",
+    "diffusion_time"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Downloading and extracting the Oxford Flowers archive",
+   "original_code": "import os\nfpath = keras.utils.get_file(\n    origin=\"https://www.robots.ox.ac.uk/~vgg/data/flowers/102/102flowers.tgz\",\n    extract=True,\n)",
+   "language": "python",
+   "what_it_does": "Downloads `102flowers.tgz` from the Oxford VGG website into the Keras cache, extracts it, and stores the path of the extracted directory in `fpath`.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "`os` is imported for `os.path.join` in the next block."
+    },
+    {
+     "lines": "2-5",
+     "explanation": "`keras.utils.get_file` downloads the file at `origin` (skipped if already cached) and, with `extract=True`, unpacks the tar.gz archive. According to the book, the returned value is the extracted directory."
+    }
+   ],
+   "inputs_outputs": "Input: the archive URL. Output: `fpath`, a local directory containing a `jpg/` subfolder with 8,189 JPEG files.",
+   "algorithm": "Download (with caching) → extract → return path.",
+   "theory_link": "Supplies the raw training images for the diffusion model; no labels are needed for unconditional generation.",
+   "parameters": [
+    {
+     "name": "origin",
+     "role": "URL of the archive to download."
+    },
+    {
+     "name": "extract",
+     "role": "If True, extracts the archive after downloading."
+    }
+   ],
+   "pitfalls": [
+    "The archive is about 330 MB; the first run takes a while and needs network access.",
+    "In older tf.keras versions `get_file(..., extract=True)` returned the archive path, not the extracted folder; if `os.path.join(fpath, \"jpg\")` does not exist, inspect the cache directory (`~/.keras/datasets/`).",
+    "`keras` must already be imported (import keras) from earlier in the chapter."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Building a dataset of 128 × 128 undistorted crops in batches of exactly 32",
+   "original_code": "batch_size = 32\nimage_size = 128\nimages_dir = os.path.join(fpath, \"jpg\")\ndataset = keras.utils.image_dataset_from_directory(\n    images_dir,\n    labels=None,\n    image_size=(image_size, image_size),\n    crop_to_aspect_ratio=True,\n)\ndataset = dataset.rebatch(\n    batch_size,\n    drop_remainder=True,\n)",
+   "language": "python",
+   "what_it_does": "Creates a tf.data dataset of flower images from the `jpg` folder without labels, center-cropped to a square and resized to 128 × 128, then regroups it into batches of exactly 32 images, dropping the final incomplete batch.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "Batch size 32 and target side length 128."
+    },
+    {
+     "lines": "3",
+     "explanation": "Path to the folder holding the JPEGs."
+    },
+    {
+     "lines": "4-9",
+     "explanation": "`image_dataset_from_directory` reads images from the folder. `labels=None` (callout: 'We won't need the labels, just the images.') makes it yield images only. `image_size=(128, 128)` sets the output size. `crop_to_aspect_ratio=True` (callout: 'Crops images when resizing them to preserve their aspect ratio') avoids distortion. Its own default batch size is already 32, and it shuffles by default."
+    },
+    {
+     "lines": "10-13",
+     "explanation": "`rebatch(batch_size, drop_remainder=True)` regroups elements into batches of 32 and drops the last batch if it has fewer (callout: 'We'd like all batches to have the same size, so we drop the last (irregular) batch.')."
+    }
+   ],
+   "inputs_outputs": "Input: a folder of 8,189 variously sized JPEGs. Output: a dataset whose elements are float32 tensors of shape (32, 128, 128, 3) with pixel values in [0, 255]; 255 batches per epoch (8,189 = 255 × 32 + 29).",
+   "algorithm": "List files → shuffle → decode JPEG → centre crop to 1:1 → resize to 128 × 128 → batch(32) → rebatch(32, drop_remainder=True).",
+   "theory_link": "Generative models reproduce training-data statistics, so avoiding geometric distortion preserves realistic shapes in generated flowers. A fixed batch size gives static shapes, which helps compiled training steps and avoids special-casing a small last batch.",
+   "parameters": [
+    {
+     "name": "labels=None",
+     "role": "No labels are inferred; elements are image batches only."
+    },
+    {
+     "name": "image_size",
+     "role": "Output height and width (128, 128)."
+    },
+    {
+     "name": "crop_to_aspect_ratio",
+     "role": "Crop to the target aspect ratio before resizing, to avoid distortion."
+    },
+    {
+     "name": "batch_size",
+     "role": "Number of images per batch (32)."
+    },
+    {
+     "name": "drop_remainder",
+     "role": "Drop the final batch if it has fewer than batch_size elements."
+    }
+   ],
+   "pitfalls": [
+    "Pixel values are float32 in [0, 255], not [0, 1]; the diffusion model normalizes them with a Normalization layer (p.549).",
+    "`rebatch` is a tf.data method; it is needed because `image_dataset_from_directory` has no drop_remainder option, so its last batch would have 29 images.",
+    "The central crop removes edge content; flowers off-centre in tall or wide photos may be partially cut."
+   ],
+   "illustrative_code": "# AI-written check (not in the book)\nfor batch in dataset.take(1):\n    print(batch.shape, batch.dtype)   # (32, 128, 128, 3) float32\nprint(dataset.cardinality())          # 255 (number of full batches)"
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Displaying one example image (Figure 17.8)",
+   "original_code": "from matplotlib import pyplot as plt\nfor batch in dataset:\n    img = batch.numpy()[0]\n    break\nplt.imshow(img.astype(\"uint8\"))",
+   "language": "python",
+   "what_it_does": "Takes the first batch from the dataset, extracts its first image as a NumPy array, and displays it with Matplotlib (Figure 17.8).",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Imports pyplot."
+    },
+    {
+     "lines": "2-4",
+     "explanation": "Iterates over the dataset but breaks after the first batch; `batch.numpy()[0]` converts the tensor to NumPy and takes image 0, shape (128, 128, 3)."
+    },
+    {
+     "lines": "5",
+     "explanation": "`imshow` treats float arrays as values in [0, 1] and clips anything above, so the [0, 255] floats are cast to `uint8` to display correct colours."
+    }
+   ],
+   "inputs_outputs": "Input: the dataset. Output: a plot of one 128 × 128 RGB flower image with pixel-index axes (0-120), as in Figure 17.8.",
+   "algorithm": "Fetch one batch → take one image → cast → plot.",
+   "theory_link": "A sanity check that the pipeline produced undistorted 128 × 128 crops before training.",
+   "parameters": [],
+   "pitfalls": [
+    "Without `astype(\"uint8\")`, Matplotlib clips the float values to [0, 1] and shows a nearly white image.",
+    "Because the dataset shuffles by default, you may see a different flower each time you run this."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why not resize without cropping?",
+   "kind": "numerical",
+   "body": "Beyond the book: take a 500 × 750 portrait photo. Squashing it to 128 × 128 scales width by 0.256 and height by 0.171, so a round flower becomes an ellipse 1.5× wider than tall. A diffusion model trained on such images learns that flowers are squat and reproduces that. With `crop_to_aspect_ratio=True`, the centred 500 × 500 crop is scaled uniformly by 0.256, so circles stay circles.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "One network, many noise levels",
+   "kind": "analogy",
+   "body": "Think of a single photo restorer who receives prints with a note saying '80% damaged' or '5% damaged'. With the note, they know whether to reconstruct whole regions from scratch or just remove a few specks. Without it, they would have to guess the damage level first. The `noise_rates` input is that note.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Shapes through the Oxford Flowers pipeline",
+   "why": "Traces the code on this page: a variably sized JPEG becomes a square crop, then a 128 × 128 × 3 image, then batches of exactly 32 (8,189 images give 255 full batches).",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "JPEG (e.g.)",
+      "shape": [
+       500,
+       667,
+       3
+      ]
+     },
+     {
+      "op": "center crop 1:1",
+      "shape": [
+       500,
+       500,
+       3
+      ]
+     },
+     {
+      "op": "resize",
+      "shape": [
+       128,
+       128,
+       3
+      ]
+     },
+     {
+      "op": "rebatch(32)",
+      "shape": [
+       32,
+       128,
+       128,
+       3
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The flower species labels help the diffusion model.",
+   "correction": "`labels=None`: this model generates flowers unconditionally from images alone."
+  },
+  {
+   "claim": "image_dataset_from_directory returns pixels scaled to [0, 1].",
+   "correction": "It returns float32 values in [0, 255]; that's why the display code casts to uint8, and why the model later normalizes its inputs (p.549)."
+  },
+  {
+   "claim": "A separate denoising network is trained for each step of the diffusion loop.",
+   "correction": "The same model is reused at every iteration and is told the noise level as an input."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 544,
+    "note": "The Oxford Flowers dataset and the diffusion-model idea."
+   }
+  ],
+  "later": [
+   {
+    "page": 546,
+    "note": "The noise_rates input, the predicted noise mask, and the U-Net architecture (Figure 17.9)."
+   },
+   {
+    "page": 547,
+    "note": "get_model(): the two-input U-Net in code."
+   },
+   {
+    "page": 549,
+    "note": "The DiffusionModel class with its image normalization layer."
+   },
+   {
+    "page": 553,
+    "note": "Training on this dataset; model.normalizer.adapt(dataset)."
+   }
+  ],
+  "prerequisites": [],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 553,
+    "note": "model.normalizer.adapt(dataset) uses the dataset built here."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 546,
+    "note": "Figure 17.9 Our U-Net-style denoising autoencoder architecture."
+   }
+  ]
+ },
+ "takeaways": [
+  "get_file(..., extract=True) downloads and unpacks the archive; images are in fpath/jpg.",
+  "image_dataset_from_directory with labels=None, image_size=(128, 128) and crop_to_aspect_ratio=True yields undistorted square crops.",
+  "rebatch(32, drop_remainder=True) makes every batch exactly 32 images; with 8,189 images, 29 are dropped per epoch.",
+  "Pixels are float32 in [0, 255]; cast to uint8 for display.",
+  "One denoising model is reused at every diffusion step and is told how much noise to remove."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What does crop_to_aspect_ratio=True do in image_dataset_from_directory?",
+   "options": [
+    "Crops the largest region with the target aspect ratio before resizing, avoiding distortion",
+    "Pads images with black borders to make them square",
+    "Randomly crops a 128 × 128 patch as data augmentation",
+    "Resizes images while ignoring their aspect ratio"
+   ],
+   "answer": "Crops the largest region with the target aspect ratio before resizing, avoiding distortion",
+   "explanation": "The book says it extracts 'maximally large undistorted crops of the right size'. Padding is a different option, random cropping is augmentation (not used here), and ignoring the aspect ratio is the default behaviour this option avoids.",
+   "page_refs": [
+    545
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Why is the dataset rebatched with drop_remainder=True?",
+   "options": [],
+   "answer": "So that all batches have the same size (32); the last, irregular batch is dropped.",
+   "explanation": "Stated in the code callout. With 8,189 images, the final batch would contain only 29 images.",
+   "page_refs": [
+    545
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "math",
+   "question": "How many full batches of 32 does the 8,189-image dataset give per epoch, and how many images are dropped?",
+   "options": [],
+   "answer": "255 batches; 29 images dropped.",
+   "explanation": "8,189 = 255 × 32 + 29, so floor(8,189 / 32) = 255 and the remainder is 29.",
+   "page_refs": [
+    544,
+    545
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why does the display code call img.astype(\"uint8\")?",
+   "options": [],
+   "answer": "Because the pipeline outputs float32 values in [0, 255]; Matplotlib interprets float images as [0, 1] and would clip them, so they are converted to 8-bit integers for correct display.",
+   "explanation": "image_dataset_from_directory does not rescale pixels; imshow treats float arrays and integer arrays differently.",
+   "page_refs": [
+    545
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "Why is the denoising model given the amount of noise as an extra input?",
+   "options": [],
+   "answer": "Because the same model is reused at every diffusion step, where noise levels range from almost none to pure noise. Telling it how much noise to extract makes its job easier: it can adapt its output to the noise level instead of estimating it.",
+   "explanation": "From the opening paragraph of 17.2.2 and its continuation on p.546 (the noise_rates input).",
+   "page_refs": [
+    545,
+    546
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "mcq",
+   "question": "Why does the code pass labels=None?",
+   "options": [
+    "Because only the images are needed, not the species labels",
+    "Because the Oxford Flowers archive contains no labels at all",
+    "Because labels would make training slower without changing anything",
+    "Because image_dataset_from_directory cannot read labels from .tgz archives"
+   ],
+   "answer": "Because only the images are needed, not the species labels",
+   "explanation": "The callout says 'We won't need the labels, just the images.' The dataset does have species labels (distributed separately); labels would not be inferred from the single jpg folder anyway; and the archive is already extracted when the function runs.",
+   "page_refs": [
+    545
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you predict the shape and value range of each element of `dataset` without running the code?",
+   "options": [],
+   "answer": "(32, 128, 128, 3), float32 values in [0, 255].",
+   "explanation": "Batches of 32 from rebatch; 128 × 128 RGB images from image_size; no rescaling by the loader.",
+   "page_refs": [
+    545
+   ]
+  }
+ ]
+}

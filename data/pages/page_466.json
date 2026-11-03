@@ -1,0 +1,564 @@
+{
+ "page_id": "page_466",
+ "pdf_page": 466,
+ "printed_page": "442",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T10:40:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. e03 is the parameterized-attention pseudocode introduced at the end of p.465. Figure 15.6 labels were read from the image (query 'dogs on the beach'; keys {Beach, Tree, Boat} match 0.5, {Beach, Dog, Tree} match 1.0, {Dog} match 0.5). e06 merges two printed paragraphs; the second continues on p.467. Minor wording: the text says 'scale down our softmax scores', but the scaling is applied to the dot-product scores before the softmax (as the p.467 code shows). This is explained in the notes."
+ },
+ "overview": {
+  "title": "Parameterized query-key-value attention and the scaling factor",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "15.3.1 Dot-product attention",
+  "main_topic": "The query/key/value form of attention with learned Dense projections, the image-search analogy (figure 15.6), and the first of two refinements from 'Attention Is All You Need': scaling the dot products by the square root of the vector size",
+  "central_idea": "Attention computes dot-product scores between projected queries and projected keys, normalizes them with a softmax over the source axis, and uses them to take a weighted sum of projected values, followed by an output projection. This alone is a working attention mechanism. Scaling the scores by $1/\\sqrt{d}$ keeps the softmax well-behaved for long vectors, and a second refinement (multiple heads) is motivated at the bottom of the page.",
+  "importance": "This function is, almost line for line, the core of every Transformer layer. Understanding its shapes and the role of each projection is the foundation for multi-head attention (p.467), the `MultiHeadAttention` layer (p.468) and the encoder/decoder blocks.",
+  "learning_objectives": [
+   "Read the einsum strings `btd,bsd->bts` and `bts,bsd->btd` and give every tensor's shape",
+   "Explain the roles of the query, key, value and output projections",
+   "Map the image-retrieval analogy of figure 15.6 onto query/key/value",
+   "Explain why dot products grow with vector length and why dividing by $\\sqrt{d}$ fixes it",
+   "State the 'washed out' problem that motivates multiple attention heads"
+  ],
+  "prerequisites": [
+   "Dot-product attention with target/source (p.464)",
+   "Einsum notation (p.463)",
+   "Softmax and its gradients"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the pseudocode announced at the end of p.465, **parameterized attention** with the standard names:\n\n- `query`, `key` and `value` are each passed through their own `Dense` projection (`query_dense`, `key_dense`, `value_dense`). These learned projections let the model find a shared space where relevant source and target vectors are close (p.465).\n- `scores = np.einsum(\"btd,bsd->bts\", query, key)` is the dot product of every query vector with every key vector, giving a `(batch, target_len, source_len)` score matrix.\n- `softmax(scores, axis=-1)` normalizes each row over the source positions so the weights sum to 1.\n- `np.einsum(\"bts,bsd->btd\", scores, value)` is the weighted sum of value vectors for each target position.\n- `output_dense` projects the result once more.\n- It is called as `parameterized_attention(query=target, key=source, value=source)`.\n\n**Figure 15.6** explains the vocabulary with an image search: the query \"dogs on the beach\" is compared to each photo's tags (keys), and the match scores (0.5, 1.0, 0.5) rank the photos (values).\n\nThe authors call this \"a perfectly functional attention mechanism\". It lets the model pull information from anywhere in the source, contextually, depending on the target word being decoded.\n\nThe \"Attention is all you need\" authors made **two more changes**, found by trial and error:\n1. **Scaling.** For long vectors, dot-product scores get large, which can destabilize the softmax gradients. The fix is to scale the scores down by the **square root of the vector length**, which works for any vector size.\n2. **Expressivity** (continued on p.467). The softmax sum gives a direct connection across distant parts of a sequence, but it is blunt: if the model attends to too many tokens at once, individual features get \"washed out\". This leads to multiple attention heads.",
+ "paragraphs": [
+  {
+   "ref": "p466_e05",
+   "excerpt": "This block is a perfectly functional attention mechanism! We just wrote a",
+   "what_it_says": "The `parameterized_attention` function is already a fully functional attention mechanism. It lets the model pull information from anywhere in the source sequence, contextually, depending on the target word being decoded.",
+   "what_it_means": "'Anywhere' means there is no locality constraint and no recurrence: every target position computes a weight for every source position. 'Contextually' means the weights are not fixed. They are computed from the current query vector, so a different target word gets a different mixture of the source. All four projections are trainable, so backpropagation learns which source information each target needs.",
+   "why_it_matters": "This solves the RNN bottleneck from p.461: the decoder no longer depends on a single summary vector, because it reads the full set of source vectors at every step.",
+   "technical_idea": "Output for target position $t$: $o_t = W_o \\sum_s \\alpha_{t,s} v_s$ with $\\alpha_{t,\\cdot} = \\operatorname{softmax}(q_t \\cdot k_s)_s$. This is a content-based, differentiable lookup.",
+   "terminology": [
+    {
+     "term": "Contextual",
+     "meaning": "Dependent on the current input: the attention weights change with the query."
+    }
+   ],
+   "connections": [
+    "p.461: the encoder bottleneck that attention removes.",
+    "p.464: the unparameterized `dot_product_attention` this extends."
+   ]
+  },
+  {
+   "ref": "p466_e06",
+   "excerpt": "The “Attention is all you need” authors made two more changes to our",
+   "what_it_says": "The original Transformer authors made two more changes through trial and error. The first is a scaling factor: when input vectors are long, dot-product scores can get large and destabilize the softmax gradients. The fix is to scale the scores down by the square root of the vector length, which works for any vector size.",
+   "what_it_means": "If query and key components are roughly independent with mean 0 and variance 1, their dot product $q\\cdot k = \\sum_{i=1}^{d} q_i k_i$ has variance $d$, so its typical size is $\\sqrt{d}$. With $d = 256$, scores of ±16 or more are common. A softmax of such large numbers is nearly one-hot: one weight ≈ 1, the rest ≈ 0. In that saturated regime the softmax gradients are almost zero, so learning stalls. Dividing by $\\sqrt{d}$ brings the variance back to about 1 for any $d$. Note on wording: the book says 'scale down our softmax scores', but what is scaled is the dot-product scores *before* the softmax, as the code on p.467 shows: `softmax(scores / math.sqrt(head_dim))`.",
+   "why_it_matters": "This is why the mechanism is called *scaled* dot-product attention. Without it, training deep Transformers with wide heads becomes unstable or slow.",
+   "technical_idea": "$\\operatorname{softmax}(z/\\sqrt d)$ is a softmax at temperature $T = \\sqrt d$. The Jacobian of softmax is $\\operatorname{diag}(p) - pp^\\top$, which goes to 0 as $p$ becomes one-hot.",
+   "terminology": [
+    {
+     "term": "Scaled dot-product attention",
+     "meaning": "Attention whose scores are $q\\cdot k/\\sqrt{d}$."
+    },
+    {
+     "term": "Saturation",
+     "meaning": "A regime where a function's output barely changes with its input, so gradients vanish."
+    }
+   ],
+   "connections": [
+    "p.467: the multi-head code applies `scores / math.sqrt(head_dim)`.",
+    "p.464: unscaled dot-product attention."
+   ]
+  },
+  {
+   "ref": "p466_e06",
+   "excerpt": "The other has to do with the expressivity of the attention mechanism.",
+   "what_it_says": "The second change concerns expressivity. The softmax sum is powerful because it directly connects distant parts of a sequence. But it is also blunt: if the model tries to attend to too many tokens at once… (continued on p.467: individual features get 'washed out').",
+   "what_it_means": "One attention operation produces *one* convex combination of value vectors per target position. If a target word needs two unrelated pieces of information, say the subject and the tense marker, a single softmax must split its weight between them. The average of two different vectors can blur both. Several independent attention operations (heads) can each focus sharply on one thing.",
+   "why_it_matters": "It motivates multi-head attention (p.467), the form used in every Transformer.",
+   "technical_idea": "A single head outputs $\\sum_s \\alpha_s v_s$ with $\\sum_s \\alpha_s = 1$. Averaging is a lossy compression of the attended set.",
+   "terminology": [
+    {
+     "term": "Expressivity",
+     "meaning": "The range of functions a mechanism can represent."
+    }
+   ],
+   "connections": [
+    "p.467: multiple heads with separate parameters, and figure 15.7."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "query_key_value",
+   "name": "Query, key, value",
+   "definition": "The three inputs of attention: queries are compared with keys to produce scores, and the scores weight a sum of values.",
+   "intuition": "Search engine (figure 15.6): the query is your search text, keys are each photo's tags, values are the photos.",
+   "technical": "$Q = XW_Q$, $K = YW_K$, $V = YW_V$ (plus biases). Scores $S = QK^\\top$, weights $A = \\operatorname{softmax}_{\\text{rows}}(S)$, output $AV$, then the output projection $W_O$.",
+   "significance": "Separating keys (what to match on) from values (what to return) adds flexibility. In cross-attention, query comes from the target and key/value from the source. In self-attention all three come from the same sequence (p.468).",
+   "example": "`parameterized_attention(query=target, key=source, value=source)`: target words query the English source.",
+   "misconception": "That key and value must be different tensors. Here both are `source`. They differ only after their separate projections.",
+   "related": [
+    "attention",
+    "dot_product_attention",
+    "self_attention"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "dot_product_attention",
+   "name": "Dot-product attention (parameterized)",
+   "definition": "Attention whose relevance score is the dot product between a projected query and a projected key.",
+   "intuition": "Vectors pointing in similar directions in the learned space are deemed relevant.",
+   "technical": "$\\text{out} = W_O\\,\\operatorname{softmax}(QK^\\top)V$, computed with einsum over batch b, target t, source s and feature d.",
+   "significance": "Simple, fully parallel (matrix multiplications only) and the default score in Transformers.",
+   "example": "With 20 target and 20 source tokens, the score matrix per example is 20 × 20.",
+   "misconception": "That the dot product of raw embeddings is used. The learned projections are what make the scores useful (p.465).",
+   "related": [
+    "query_key_value",
+    "softmax",
+    "scaled_dot_product"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "scaled_dot_product",
+   "name": "Scaling by 1/√d",
+   "definition": "Dividing attention scores by the square root of the key/query vector size before the softmax.",
+   "intuition": "Longer vectors give bigger dot products just from having more terms, so normalize for length.",
+   "technical": "If $q_i, k_i$ are i.i.d. with mean 0 and variance 1, then $\\operatorname{Var}(q\\cdot k) = d$. Dividing by $\\sqrt d$ gives unit variance and keeps the softmax out of saturation.",
+   "significance": "It stabilizes softmax gradients for any head size and is part of every standard Transformer.",
+   "example": "$d=64$: raw scores have std ≈ 8, scaled scores have std ≈ 1.",
+   "misconception": "That the scaling is applied after the softmax. It is applied to the scores (logits) before the softmax.",
+   "related": [
+    "dot_product_attention",
+    "softmax"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "einsum",
+   "name": "Einsum in attention",
+   "definition": "Einstein-summation notation that names each axis with a letter. Repeated letters are multiplied, and letters missing from the output are summed.",
+   "intuition": "A compact way to write batched matrix multiplications without transposes.",
+   "technical": "`btd,bsd->bts`: d is repeated and absent from the output, so it is summed (dot products). `bts,bsd->btd`: s is summed (weighted sum over source).",
+   "significance": "Transformer code is full of einsums. Reading them is essential (p.463).",
+   "example": "Shapes (2,4,8) and (2,6,8) → (2,4,6).",
+   "misconception": "That the output letter order is arbitrary in meaning. It defines the output axis order.",
+   "related": [
+    "dot_product_attention"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Projected attention scores",
+   "latex": "S_{b,t,s} = \\sum_{d} Q_{b,t,d}\\,K_{b,s,d}, \\qquad Q = \\text{query\\_dense}(\\text{target}),\\; K = \\text{key\\_dense}(\\text{source})",
+   "source_text": "query = query_dense(query); key = key_dense(key); scores = np.einsum(\"btd,bsd->bts\", query, key)",
+   "variables": [
+    {
+     "symbol": "Q",
+     "meaning": "Projected queries, shape (batch, target_len, d)"
+    },
+    {
+     "symbol": "K",
+     "meaning": "Projected keys, shape (batch, source_len, d)"
+    },
+    {
+     "symbol": "S",
+     "meaning": "Score matrix, shape (batch, target_len, source_len)"
+    },
+    {
+     "symbol": "b, t, s, d",
+     "meaning": "Batch index, target position, source position, feature index"
+    }
+   ],
+   "operations": "For each batch element, a matrix product $QK^\\top$: every target vector is dotted with every source vector.",
+   "purpose": "Measure the relevance of each source position to each target position.",
+   "interpretation": "Row $t$ of $S$ lists how strongly target token $t$ matches each source token.",
+   "intuition": "A large dot product means the projected vectors point the same way, so they are 'close' in the learned space.",
+   "numerical_example": "$q = (1, 0)$, keys $k_1 = (2, 0)$, $k_2 = (0, 3)$, $k_3 = (1, 1)$ → scores $(2, 0, 1)$.",
+   "source": "book",
+   "book_ref": "p.466"
+  },
+  {
+   "id": "m2",
+   "title": "Softmax weights and weighted sum of values",
+   "latex": "A_{b,t,s} = \\frac{e^{S_{b,t,s}}}{\\sum_{s'} e^{S_{b,t,s'}}}, \\qquad O_{b,t,d} = \\sum_s A_{b,t,s}\\,V_{b,s,d}, \\qquad \\text{output} = \\text{output\\_dense}(O)",
+   "source_text": "scores = softmax(scores, axis=-1); outputs = np.einsum(\"bts,bsd->btd\", scores, value); return output_dense(outputs)",
+   "variables": [
+    {
+     "symbol": "A",
+     "meaning": "Attention weights, each row over s sums to 1"
+    },
+    {
+     "symbol": "V",
+     "meaning": "Projected values, value_dense(source), shape (batch, source_len, d)"
+    },
+    {
+     "symbol": "O",
+     "meaning": "Attention output before the output projection, shape (batch, target_len, d)"
+    }
+   ],
+   "operations": "Softmax over the last (source) axis, then a batched matrix product $AV$, then a Dense layer.",
+   "purpose": "Turn scores into a probability-like distribution and use it to mix source information into each target position.",
+   "interpretation": "Each output vector is a convex combination of value vectors: a contextual summary of the source for that target token.",
+   "intuition": "Pay attention in proportion to relevance, and the weights always add up to 100%.",
+   "numerical_example": "Scores $(2, 0, 1)$ → softmax ≈ $(0.665, 0.090, 0.245)$. With values $v_1=(1,0)$, $v_2=(0,1)$, $v_3=(1,1)$: output ≈ $(0.665+0.245,\\ 0.090+0.245) = (0.910, 0.335)$.",
+   "source": "book",
+   "book_ref": "p.466"
+  },
+  {
+   "id": "m3",
+   "title": "Scaled scores",
+   "latex": "A = \\operatorname{softmax}\\!\\left(\\frac{QK^\\top}{\\sqrt{d}}\\right)",
+   "source_text": "\"we can scale down our softmax scores slightly. Scaling by the square root of the vector length works well for any vector size.\"",
+   "variables": [
+    {
+     "symbol": "d",
+     "meaning": "Length of the query/key vectors (head_dim on p.467)"
+    },
+    {
+     "symbol": "\\sqrt{d}",
+     "meaning": "Scaling divisor that normalizes the score variance"
+    }
+   ],
+   "operations": "Divide every score by $\\sqrt d$ before the softmax.",
+   "purpose": "Keep scores at unit scale so the softmax neither saturates nor yields vanishing gradients.",
+   "interpretation": "Equivalent to a softmax at temperature $\\sqrt d$.",
+   "intuition": "Sums of $d$ random terms grow like $\\sqrt d$. Dividing by $\\sqrt d$ cancels that growth.",
+   "numerical_example": "With $d = 256$: raw scores $(16, 0, -16)$ give softmax ≈ $(1.000, 1.1\\times10^{-7}, 1.3\\times10^{-14})$, which is saturated. Scaled by $1/16$ they become $(1, 0, -1)$ → $(0.665, 0.245, 0.090)$, a smooth distribution with useful gradients.",
+   "source": "book",
+   "book_ref": "p.466 (text); code form on p.467"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Parameterized attention with query/key/value (pseudocode)",
+   "original_code": "def parameterized_attention(query, key, value):\n    query = query_dense(query)\n    key = key_dense(key)\n    value = value_dense(value)\n    scores = np.einsum(\"btd,bsd->bts\", query, key)\n    scores = softmax(scores, axis=-1)\n    outputs = np.einsum(\"bts,bsd->btd\", scores, value)\n    return output_dense(outputs)\n\nparameterized_attention(query=target, key=source, value=source)",
+   "language": "python",
+   "what_it_does": "Projects queries, keys and values with separate Dense layers, computes dot-product scores between all query/key pairs, softmax-normalizes them over the source axis, mixes the values with these weights and applies an output projection. It is then called with target queries and source keys/values (cross-attention).",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Three-argument signature `sum(score(query, key) * value)` introduced on p.465."
+    },
+    {
+     "lines": "2-4",
+     "explanation": "Separate learned projections. `query_dense`, `key_dense` and `value_dense` are assumed to be `Dense` layers defined elsewhere. Query and key must project to the same size d so they can be dotted."
+    },
+    {
+     "lines": "5",
+     "explanation": "Einsum: batch b is kept, d is summed, giving all target-source dot products. Shape (b, t, s)."
+    },
+    {
+     "lines": "6",
+     "explanation": "Softmax over the last axis (source positions), so each target's weights sum to 1. Not yet scaled by 1/√d; that comes in the next paragraph and in the p.467 code."
+    },
+    {
+     "lines": "7",
+     "explanation": "Einsum: s is summed, giving a weighted average of value vectors per target position. Shape (b, t, d)."
+    },
+    {
+     "lines": "8",
+     "explanation": "Final Dense projection after the summation, as motivated on p.465 ('once again after the summation')."
+    },
+    {
+     "lines": "10",
+     "explanation": "Cross-attention call: the target sequence asks questions (queries) of the source sequence, which supplies keys and values."
+    }
+   ],
+   "inputs_outputs": "Inputs: query (b, t, d_q), key (b, s, d_k), value (b, s, d_v). Output: (b, t, d_out) where d_out is the size of `output_dense`. The output has one vector per *target* position.",
+   "algorithm": "Project → score (QKᵀ) → softmax over source → weighted sum (AV) → project.",
+   "theory_link": "This is the single-head version of Transformer attention, missing only the $1/\\sqrt d$ scale. Its only operations are matrix products and a softmax, which is why attention parallelizes well (p.489).",
+   "parameters": [
+    {
+     "name": "query_dense / key_dense",
+     "role": "Learn the space in which relevance is measured."
+    },
+    {
+     "name": "value_dense",
+     "role": "Learns what information is extracted from each source token."
+    },
+    {
+     "name": "output_dense",
+     "role": "Maps the mixed values to the output representation."
+    },
+    {
+     "name": "axis=-1",
+     "role": "Normalizes over source positions, not over target positions."
+    }
+   ],
+   "pitfalls": [
+    "Softmax on the wrong axis (axis=1 = target) would make each *source* token's weights sum to 1, which is the wrong normalization.",
+    "Query and key projections must produce the same last dimension, or the einsum fails.",
+    "Without scaling, large d makes the softmax saturate (next paragraph).",
+    "Padding tokens in the source would get weight unless masked, which the real layer handles with `attention_mask` (p.470).",
+    "`np.einsum` and a bare `softmax` are pseudocode here. In Keras you would use `keras.ops.einsum` and `keras.ops.softmax`."
+   ],
+   "illustrative_code": "# AI-written, runnable NumPy version (not from the book), including the\n# 1/sqrt(d) scaling described in the text below the figure.\nimport numpy as np\n\ndef softmax(x, axis=-1):\n    x = x - x.max(axis=axis, keepdims=True)      # numerical stability\n    e = np.exp(x)\n    return e / e.sum(axis=axis, keepdims=True)\n\nrng = np.random.default_rng(0)\nb, t, s, d_in, d = 2, 4, 6, 16, 8                # batch, target len, source len, dims\nW_q, W_k, W_v = (rng.normal(size=(d_in, d)) / np.sqrt(d_in) for _ in range(3))\nW_o = rng.normal(size=(d, d_in)) / np.sqrt(d)\n\ndef scaled_parameterized_attention(query, key, value):\n    q, k, v = query @ W_q, key @ W_k, value @ W_v            # (b,t,d), (b,s,d), (b,s,d)\n    scores = np.einsum(\"btd,bsd->bts\", q, k) / np.sqrt(d)   # (b,t,s)\n    weights = softmax(scores, axis=-1)                      # each row sums to 1\n    out = np.einsum(\"bts,bsd->btd\", weights, v)             # (b,t,d)\n    return out @ W_o                                        # (b,t,d_in)\n\ntarget = rng.normal(size=(b, t, d_in))\nsource = rng.normal(size=(b, s, d_in))\nprint(scaled_parameterized_attention(target, source, source).shape)  # (2, 4, 16)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Figure 15.6 as numbers",
+   "kind": "numerical",
+   "body": "In the figure, the query \"dogs on the beach\" matches two concepts {dog, beach}. The first photo's tags {Beach, Tree, Boat} contain 1 of 2, giving match 0.5. The second {Beach, Dog, Tree} contains both, giving 1.0. The third {Dog} contains 1 of 2, giving 0.5. A search engine ranks the photos by these scores. Attention instead *blends* them: softmax(0.5, 1.0, 0.5) ≈ (0.274, 0.452, 0.274), and the output is that weighted mix of the photos' value vectors. Hard ranking vs. soft, differentiable mixing is the key difference, and the soft version is what makes it trainable by gradient descent.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the dot product grows like √d",
+   "kind": "step_by_step",
+   "body": "Let $q_i, k_i$ be independent with mean 0 and variance 1.\n1. Each product $q_i k_i$ has mean 0 and variance $\\mathbb E[q_i^2]\\mathbb E[k_i^2] = 1$.\n2. A sum of $d$ independent such terms has variance $d$.\n3. So $q\\cdot k$ has standard deviation $\\sqrt d$.\n4. $\\frac{q\\cdot k}{\\sqrt d}$ has variance 1 for every $d$.\n\nThis is the reasoning in Vaswani et al. (footnote 4 of their paper; outside the book). The book summarizes it as 'scaling by the square root of the vector length works well for any vector size'.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Cross-attention vs. self-attention",
+   "kind": "breakdown",
+   "body": "This call, `query=target, key=source, value=source`, is **cross-attention**: one sequence queries another. On p.468 the same function is called with all three arguments equal to `source`, which is **self-attention**: each token gathers context from its own sentence. The function is identical. Only the inputs change.",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Query/key/value attention step by step",
+   "widget": "attention",
+   "params": {
+    "tokens": [
+     "I",
+     "will",
+     "bring",
+     "the",
+     "bag",
+     "to",
+     "you"
+    ],
+    "dim": 4,
+    "seed": 1
+   },
+   "why": "Click a query token to see the computation of `parameterized_attention`: dot-product scores against every key, softmax weights that sum to 1, and the weighted sum of values. The tokens are the English source sentence used in this chapter (p.457)."
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Why scaling by √d matters",
+   "widget": "softmax_temperature",
+   "params": {
+    "logits": [
+     16,
+     0,
+     -16
+    ],
+    "labels": [
+     "key 1",
+     "key 2",
+     "key 3"
+    ],
+    "temperature": 16
+   },
+   "why": "Dividing scores by √d is a softmax at temperature √d. Here d = 256, so √d = 16. Drag the temperature to 1 to see the unscaled, saturated near-one-hot softmax the text warns about, then back to 16 to see the smooth scaled distribution."
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The scaling is applied to the softmax output.",
+   "correction": "Despite the phrase 'scale down our softmax scores', the division by √d is applied to the dot-product scores before the softmax (see `scores / math.sqrt(head_dim)` on p.467). Scaling softmax outputs would break the weights-sum-to-1 property."
+  },
+  {
+   "claim": "Attention picks the single most relevant source token.",
+   "correction": "It computes a soft, weighted average over all source tokens. That is why it is differentiable, and also why it can 'wash out' features (the motivation for multiple heads)."
+  },
+  {
+   "claim": "Keys and values are the same thing.",
+   "correction": "Both come from `source` here, but they go through different projections: keys determine *where* to look, values determine *what* is retrieved."
+  },
+  {
+   "claim": "The output has one vector per source token.",
+   "correction": "It has one vector per query (target) token. Source information is summed into each target position."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 465,
+    "note": "Motivation for learned projections and the query/key/value naming."
+   },
+   {
+    "page": 464,
+    "note": "Unparameterized `dot_product_attention(target, source)` with the same einsum."
+   },
+   {
+    "page": 463,
+    "note": "Einsum notation explained."
+   },
+   {
+    "page": 461,
+    "note": "RNN limitations that attention addresses."
+   }
+  ],
+  "later": [
+   {
+    "page": 467,
+    "note": "Multiple attention heads and the scaled score in code."
+   },
+   {
+    "page": 468,
+    "note": "Keras `MultiHeadAttention` layer and self-attention."
+   },
+   {
+    "page": 470,
+    "note": "Attention masks to ignore padding."
+   },
+   {
+    "page": 504,
+    "note": "Keys and values as the cached state for Transformer generation."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 463,
+    "note": "Reading einsum strings."
+   },
+   {
+    "page": 464,
+    "note": "Softmax-weighted sum of source vectors."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 464,
+    "note": "Score matrix `btd,bsd->bts`."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 467,
+    "note": "`multi_head_attention` pseudocode."
+   },
+   {
+    "page": 468,
+    "note": "`keras.layers.MultiHeadAttention`."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 464,
+    "note": "Figure 15.4: attention assigns a relevance score to each source vector."
+   },
+   {
+    "page": 467,
+    "note": "Figure 15.7: multi-headed attention."
+   }
+  ]
+ },
+ "takeaways": [
+  "Attention = project Q, K, V → scores QKᵀ → softmax over source → weighted sum of V → output projection.",
+  "Queries are compared to keys, and the resulting scores weight the values, like search terms, tags and photos in figure 15.6.",
+  "`btd,bsd->bts` computes all query-key dot products; `bts,bsd->btd` computes the weighted sums.",
+  "Dot products grow like √d, so scores are divided by √d before the softmax to avoid saturated, gradient-starved softmaxes.",
+  "One softmax sum per position can blur many features together, which motivates multiple heads (p.467)."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In `np.einsum(\"btd,bsd->bts\", query, key)`, which axis is summed over?",
+   "options": [
+    "d, the feature axis",
+    "s, the source axis",
+    "t, the target axis",
+    "b, the batch axis"
+   ],
+   "answer": "d, the feature axis",
+   "explanation": "d appears in both inputs but not in the output, so it is multiplied and summed, which is a dot product. b, t and s all appear in the output. s is summed only in the second einsum.",
+   "page_refs": [
+    466,
+    463
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Query and key components are roughly independent with mean 0 and variance 1, and d = 64. What is the standard deviation of a raw dot-product score, and what is the scaling factor?",
+   "options": [],
+   "answer": "Var = 64, so std = 8. The scores are divided by √64 = 8, giving std ≈ 1.",
+   "explanation": "A sum of d unit-variance products has variance d. Dividing by √d normalizes it.",
+   "page_refs": [
+    466
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why do very large dot-product scores hurt training?",
+   "options": [],
+   "answer": "Large scores make the softmax nearly one-hot. Its Jacobian diag(p) − ppᵀ then approaches zero, so almost no gradient flows back to the queries and keys, and training becomes unstable or stalls.",
+   "explanation": "The book says large scores 'can affect the stability of our softmax gradients'. This answer spells out the mechanism.",
+   "page_refs": [
+    466
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "short",
+   "question": "In figure 15.6, what plays the role of the query, the keys and the values?",
+   "options": [],
+   "answer": "Query: the search text \"dogs on the beach\". Keys: the tags of each photo. Values: the photos themselves.",
+   "explanation": "Stated in the caption and on p.465.",
+   "page_refs": [
+    466,
+    465
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "What is the output shape of `parameterized_attention(query=target, key=source, value=source)` for a target of length 12 and a source of length 20 (ignoring feature size)?",
+   "options": [
+    "(batch, 12, features)",
+    "(batch, 20, features)",
+    "(batch, 12, 20)",
+    "(batch, 20, 12)"
+   ],
+   "answer": "(batch, 12, features)",
+   "explanation": "There is one output vector per query (target) position. (batch, 12, 20) is the score matrix, not the output. A source-length output would need source queries.",
+   "page_refs": [
+    466
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "What does 'washed out' mean in the context of the second refinement, and why does a single softmax sum cause it?",
+   "options": [],
+   "answer": "When a target position spreads its weight over many source tokens, the output is an average of their value vectors, and distinctive features of each token get diluted. A single softmax produces only one such average per position, so it cannot keep several separate pieces of information sharp.",
+   "explanation": "This motivates running several attention heads with separate parameters (p.467).",
+   "page_refs": [
+    466,
+    467
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you write `parameterized_attention` from memory, including the √d scaling, and give each intermediate shape?",
+   "options": [],
+   "answer": "Self-check against the illustrative code: (b,t,d) and (b,s,d) → scores (b,t,s) → weights (b,t,s) → output (b,t,d) → projected output.",
+   "explanation": "If the einsums are unclear, revisit p.463.",
+   "page_refs": [
+    466
+   ]
+  }
+ ]
+}

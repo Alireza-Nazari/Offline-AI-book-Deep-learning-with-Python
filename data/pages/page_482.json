@@ -1,0 +1,411 @@
+{
+ "page_id": "page_482",
+ "pdf_page": 482,
+ "printed_page": "458",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:49:01Z",
+  "confidence": "high",
+  "review_flags": [
+   "p482_e04 says the chapter 14 IMDb loading code is reused 'unchanged', but the code on this page differs from Listings 14.8-14.10 (pp.420-422): copytree and makedirs now pass dirs_exist_ok=True / exist_ok=True, the split loop uses enumerate with an if/else, and batch_size is 16 instead of 32 (p.422). The 16 matters: it is the batch size seen in the (16, 512) batch on p.483 and presumably keeps RoBERTa fine-tuning within GPU memory."
+  ],
+  "extraction_quality": "Clean. The unnumbered code block matches the page image. The final paragraph (p482_e07) ends with 'like this:' and the packing example it introduces is printed at the top of p.483. The code assumes the imports from chapter 14 (os, pathlib, shutil, random, keras) are already done."
+ },
+ "overview": {
+  "title": "Reloading IMDb for RoBERTa",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.4 Classification with a pretrained Transformer",
+  "subsection": "15.4.3 Preprocessing IMDb movie reviews",
+  "main_topic": "Reloading the raw IMDb reviews into train/validation/test tf.data datasets, and introducing RoBERTa's <s> ... </s> <pad> sequence-packing format",
+  "central_idea": "The data pipeline from chapter 14 is reused (with batch size 16) to get 20,000 training and 5,000 validation reviews. Before fine-tuning, these must be tokenized with RoBERTa's own tokenizer and packed exactly as during pretraining: `<s>` first, `</s>` last, then `<pad>` tokens.",
+  "importance": "It sets up the fine-tuning experiment so it can be compared directly with chapter 14's models trained from scratch on the same split, and it introduces the packing contract that the next listing implements.",
+  "learning_objectives": [
+   "Reproduce the IMDb download, the 80/20 train/validation split with a fixed seed, and the creation of tf.data datasets with text_dataset_from_directory",
+   "State the resulting dataset sizes (20,000 train, 5,000 validation; 25,000 test)",
+   "Explain why the reviews must be tokenized with the RoBERTa tokenizer rather than a vocabulary learned on IMDb",
+   "Describe RoBERTa's packing format with <s>, </s> and <pad> tokens"
+  ],
+  "prerequisites": [
+   "IMDb loading in chapter 14 (Listings 14.8-14.10, pp.420-422)",
+   "tf.data datasets and text_dataset_from_directory",
+   "The RoBERTa tokenizer loaded on p.480",
+   "Start/end/padding tokens in the translation model (section 15.2)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "Section **15.4.3** prepares the data for fine-tuning RoBERTa on IMDb sentiment classification.\n\nThe authors reuse the IMDb loading code from chapter 14, presented as unchanged; in fact it is lightly modified, as noted below. The code does the following:\n\n1. downloads and extracts `aclImdb_v1.tar.gz` with `keras.utils.get_file(..., extract=True)`;\n2. copies the official **test** set to `imdb_test`;\n3. for each class (`neg`, `pos`), shuffles the training files with a fixed seed (`random.Random(1337)`) and copies the first **20%** to `imdb_val` and the rest to `imdb_train`;\n4. builds three `tf.data` datasets with `text_dataset_from_directory`, which infers the label from the subdirectory name, using **`batch_size = 16`**.\n\nThe result is again **20,000 training** and **5,000 validation** reviews, the same split used for every chapter 14 model, so the results can be compared.\n\nThe page then explains what must happen before fine-tuning: the reviews must be tokenized with **the RoBERTa tokenizer loaded on p.480**. During pretraining, RoBERTa also used a specific way of *packing* tokens into a fixed-length sequence, similar to the translation model: each sequence starts with `<s>`, ends with `</s>`, and is followed by as many `<pad>` tokens as needed. The example of this format is printed at the top of p.483, where Listing 15.21 implements it with KerasHub's `StartEndPacker`.\n\nNote: compared with Listings 14.8-14.10, this version passes `dirs_exist_ok=True` / `exist_ok=True` (so it can be re-run when the directories already exist), uses a single `enumerate` loop, and halves the batch size from 32 to 16. The smaller batch is a sensible choice for a 124M-parameter model on 512-token sequences, although the book does not explain it.",
+ "paragraphs": [
+  {
+   "ref": "p482_e04",
+   "excerpt": "We can reuse the IMDb loading code we used in chapter 14 unchanged.",
+   "what_it_says": "The chapter 14 IMDb loading code is reused 'unchanged'. It downloads the reviews into a `train_dir` and a `test_dir` and splits a validation set into a `val_dir`.",
+   "what_it_means": "The pretrained model is evaluated on exactly the same split as the from-scratch models of chapter 14. The seeded shuffle `random.Random(1337)` makes the same 5,000 files go to validation, so any accuracy gain comes from the model, not from different data.",
+   "why_it_matters": "A fair comparison needs identical data. Chapter 14's best models reached the high 80s in accuracy, and the pretrained Transformer is measured against them.",
+   "technical_idea": "Note: the code is not literally unchanged. Compared with pp.420-422 it adds `dirs_exist_ok=True`/`exist_ok=True`, restructures the copy loop with `enumerate`, and uses `batch_size = 16` instead of 32.",
+   "terminology": [
+    {
+     "term": "train_dir / val_dir / test_dir",
+     "meaning": "Directories with one subfolder per class (neg/, pos/), the layout text_dataset_from_directory expects."
+    }
+   ],
+   "connections": [
+    "p.420: Listing 14.8 downloads and extracts the dataset",
+    "p.421: Listing 14.10 splits 20% of the training files into a validation set",
+    "p.422: chapter 14 builds the datasets with batch_size = 32"
+   ]
+  },
+  {
+   "ref": "p482_e06",
+   "excerpt": "After loading, we once again have a training set of 20,000 movie reviews",
+   "what_it_says": "After loading, there are once again 20,000 training reviews and 5,000 validation reviews.",
+   "what_it_means": "The IMDb training set has 25,000 labeled reviews (12,500 per class). Taking 20% per class gives 2,500 + 2,500 = 5,000 for validation, leaving 20,000 for training. The 25,000-review test set is untouched.",
+   "why_it_matters": "20,000 labeled examples is too few to train a good embedding from scratch (chapter 14's embedding-based LSTM overfit before learning good embeddings). Pretraining is the remedy, and that is what this section tests.",
+   "terminology": [
+    {
+     "term": "Validation set",
+     "meaning": "Held-out training data used to monitor generalization and choose hyperparameters, separate from the final test set."
+    }
+   ],
+   "connections": [
+    "p.422: 'we have 20,000 reviews to train on and 5,000 for validation'"
+   ]
+  },
+  {
+   "ref": "p482_e07",
+   "excerpt": "Before fine-tuning our classification model, we must tokenize our movie reviews with",
+   "what_it_says": "Before fine-tuning, the reviews must be tokenized with the RoBERTa tokenizer. RoBERTa was pretrained with a specific way of packing tokens into a sequence, similar to the translation model: begin with `<s>`, end with `</s>`, followed by any number of `<pad>` tokens. (The example follows on p.483.)",
+   "what_it_means": "Throughout pretraining, the model saw inputs in which position 0 was always `<s>` and the text was terminated by `</s>`. In particular, the final-layer vector at `<s>` is conventionally used as the sequence summary for classification. Feeding sequences in a different layout would present inputs the model has never seen.",
+   "why_it_matters": "This extends the 'matching tokenizer' requirement of pp.479-480. Matching the token ids is not enough; the arrangement of special tokens must match too. p.483 adds that the model trains faster and more accurately when you do this.",
+   "technical_idea": "Beyond the book: in RoBERTa's vocabulary `<s>` = 0, `<pad>` = 1 and `</s>` = 2, which is why the batch printed on p.483 begins each row with 0 and ends with 2 or a run of 1s.",
+   "terminology": [
+    {
+     "term": "Packing",
+     "meaning": "Arranging the tokens of an example into a fixed-length sequence with special start/end markers and padding."
+    },
+    {
+     "term": "<s>",
+     "meaning": "RoBERTa's start-of-sequence token (BERT's equivalent is [CLS])."
+    },
+    {
+     "term": "</s>",
+     "meaning": "RoBERTa's end-of-sequence token (BERT's equivalent is [SEP])."
+    },
+    {
+     "term": "<pad>",
+     "meaning": "A filler token that brings shorter sequences up to the fixed length; masked out by padding_mask."
+    }
+   ],
+   "connections": [
+    "p.483: the <s> ... </s> <pad> example and Listing 15.21's StartEndPacker",
+    "p.481: the backbone takes token_ids and padding_mask inputs",
+    "p.480: the tokenizer to use is the one loaded with from_preset"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "validation_set",
+   "name": "Seeded train/validation split",
+   "definition": "Holding out a fixed, reproducible fraction of the training data for validation.",
+   "intuition": "Shuffling with the same seed every time gives everyone the same deck.",
+   "technical": "Per class: shuffle the filenames with `random.Random(1337)`, put the first int(0.2·N) in val and the rest in train.",
+   "significance": "It makes the RoBERTa results directly comparable with chapter 14's models.",
+   "example": "12,500 negative reviews give 2,500 for validation and 10,000 for training; the same holds for the positive class.",
+   "misconception": "That the test set is split. Only the training directory is divided; the test set is copied unchanged.",
+   "related": [
+    "data_split"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "sequence_packing",
+   "name": "Sequence packing with special tokens",
+   "definition": "Formatting each tokenized input as `<s>` tokens `</s>` followed by `<pad>`s up to a fixed length, as during pretraining.",
+   "intuition": "It is the same envelope format the model learned to open during pretraining.",
+   "technical": "It is implemented by StartEndPacker (p.483), which also returns a padding mask and truncates sequences longer than the fixed length.",
+   "significance": "Matching the pretraining layout makes fine-tuning faster and more accurate (p.483).",
+   "example": "`[\"<s>\", \"the\", \"panda\", \"slept\", \".\", \"</s>\", \"<pad>\", \"<pad>\"]` (p.483).",
+   "misconception": "That special tokens are optional decoration. The model's representations at those positions are part of what it learned.",
+   "related": [
+    "tokenization",
+    "transfer_learning"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "tf_data_text_pipeline",
+   "name": "text_dataset_from_directory",
+   "definition": "A Keras utility that turns a directory of class subfolders of .txt files into a batched tf.data.Dataset of (string, label) pairs.",
+   "intuition": "Folder names become labels.",
+   "technical": "Labels are inferred alphabetically (neg = 0, pos = 1), the data is shuffled by default, and batches are 16 strings here.",
+   "significance": "Raw strings come out, so tokenization can be done in a `.map()` step (p.483).",
+   "example": "`train_ds = text_dataset_from_directory(train_dir, batch_size=16)`.",
+   "misconception": "That it tokenizes the text. It only reads files; tokenization is separate.",
+   "related": [
+    "validation_set"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Reloading and splitting the IMDb dataset (reused from chapter 14)",
+   "original_code": "zip_path = keras.utils.get_file(\n    origin=\"https://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz\",\n    fname=\"imdb\",\n    extract=True,\n)\n\nimdb_extract_dir = pathlib.Path(zip_path) / \"aclImdb\"\ntrain_dir = pathlib.Path(\"imdb_train\")\ntest_dir = pathlib.Path(\"imdb_test\")\nval_dir = pathlib.Path(\"imdb_val\")\n\nshutil.copytree(imdb_extract_dir / \"test\", test_dir, dirs_exist_ok=True)\n\nval_percentage = 0.2\nfor category in (\"neg\", \"pos\"):\n    src_dir = imdb_extract_dir / \"train\" / category\n    src_files = os.listdir(src_dir)\n    random.Random(1337).shuffle(src_files)\n    num_val_samples = int(len(src_files) * val_percentage)\n\n    os.makedirs(train_dir / category, exist_ok=True)\n    os.makedirs(val_dir / category, exist_ok=True)\n    for index, file in enumerate(src_files):\n        if index < num_val_samples:\n            shutil.copy(src_dir / file, val_dir / category / file)\n        else:\n            shutil.copy(src_dir / file, train_dir / category / file)\n\nfrom keras.utils import text_dataset_from_directory\n\nbatch_size = 16\ntrain_ds = text_dataset_from_directory(train_dir, batch_size=batch_size)\nval_ds = text_dataset_from_directory(val_dir, batch_size=batch_size)\ntest_ds = text_dataset_from_directory(test_dir, batch_size=batch_size)",
+   "language": "python",
+   "what_it_does": "Downloads the raw IMDb reviews, copies the test set, splits 20% of each training class into a validation directory with a fixed shuffle seed, and builds batched (text, label) tf.data datasets for train, validation and test.",
+   "line_explanations": [
+    {
+     "lines": "1-5",
+     "explanation": "`get_file` downloads the tarball (cached under ~/.keras/datasets) and extracts it."
+    },
+    {
+     "lines": "7-10",
+     "explanation": "Paths: the extracted `aclImdb` folder and three new local directories."
+    },
+    {
+     "lines": "12",
+     "explanation": "Copies the official test split unchanged. `dirs_exist_ok=True` makes re-running safe."
+    },
+    {
+     "lines": "14-19",
+     "explanation": "For each class, lists the files, shuffles them with seed 1337 and computes 20% of the count (2,500)."
+    },
+    {
+     "lines": "21-27",
+     "explanation": "Creates the class subfolders, then copies the first num_val_samples files to validation and the remainder to training. The unsup/ directory is ignored."
+    },
+    {
+     "lines": "29",
+     "explanation": "Imports the directory-to-dataset utility."
+    },
+    {
+     "lines": "31-34",
+     "explanation": "Builds three datasets of (string, int label) batches of 16. Labels come from the subfolder names (neg = 0, pos = 1)."
+    }
+   ],
+   "inputs_outputs": "Input: network access to the Stanford URL. Output: train_ds (20,000 reviews), val_ds (5,000), test_ds (25,000), each yielding (string tensor of shape (16,), int32 labels of shape (16,)).",
+   "algorithm": "Download, then a stratified seeded split, then directory-based dataset creation.",
+   "theory_link": "This is a held-out validation protocol: the same split as chapter 14, so the comparison is fair.",
+   "parameters": [
+    {
+     "name": "val_percentage = 0.2",
+     "role": "Fraction of each training class moved to validation."
+    },
+    {
+     "name": "random.Random(1337)",
+     "role": "Fixed seed, so the split is reproducible and identical to chapter 14's."
+    },
+    {
+     "name": "batch_size = 16",
+     "role": "Reviews per batch. It is smaller than chapter 14's 32, which fits the much larger RoBERTa model and 512-token inputs."
+    }
+   ],
+   "pitfalls": [
+    "Relies on imports from chapter 14 (os, pathlib, shutil, random, keras) that this page does not repeat.",
+    "If imdb_train/ or imdb_val/ already contain files from a run with a different split, `exist_ok=True` leaves the old files in place, so delete the directories for a clean split.",
+    "The extracted path depends on the Keras version's `get_file` behaviour; check that `imdb_extract_dir` exists."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why the batch size dropped from 32 to 16",
+   "kind": "breakdown",
+   "body": "The book doesn't explain the change, but the numbers suggest why. Each batch sent to RoBERTa is (16, 512) tokens (p.483). Every one of the 12 layers stores activations of shape (16, 512, 768), plus attention maps of shape (16, 12, 512, 512), for backpropagation. With a 124M-parameter model and Adam state on top, a batch of 32 could exceed common GPU memory. Small batches are also standard when fine-tuning BERT-family models.",
+   "source": "inference"
+  },
+  {
+   "title": "Comparing with BERT's packing",
+   "kind": "alternative",
+   "body": "BERT uses `[CLS] tokens [SEP] [PAD]...`. RoBERTa uses `<s> tokens </s> <pad>...`. The roles are the same: a summary position at the front, a terminator, and padding. For sentence pairs, RoBERTa writes `<s> A </s></s> B </s>`. Each model family has its own convention, which is why a packer configured from the tokenizer's own ids (p.483) is safer than hard-coding them. (Not in the book.)",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "IMDb split used for RoBERTa fine-tuning",
+   "why": "The code on this page produces 20,000 train, 5,000 validation and 25,000 test reviews out of 50,000 labeled reviews.",
+   "widget": "data_split",
+   "params": {
+    "train": 0.4,
+    "val": 0.1,
+    "test": 0.5,
+    "n": 50000
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "From raw files to RoBERTa-ready batches",
+   "why": "Shows this page's steps (download, split, datasets) and the packing step it introduces for p.483.",
+   "mermaid": "flowchart LR\n  A[\"aclImdb_v1.tar.gz\"] --> B[\"aclImdb/train (25k)\"]\n  A --> C[\"aclImdb/test (25k)\"]\n  B -->|\"seed 1337, 20%\"| D[\"imdb_val (5k)\"]\n  B -->|\"80%\"| E[\"imdb_train (20k)\"]\n  C --> F[\"imdb_test (25k)\"]\n  D & E & F --> G[\"text_dataset_from_directory<br/>batch_size=16\"]\n  G --> H[\"RoBERTa tokenizer + packing<br/>&lt;s&gt; ... &lt;/s&gt; &lt;pad&gt; (p.483)\"]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Because we reuse chapter 14's code, we can also reuse chapter 14's TextVectorization vocabulary.",
+   "correction": "Only the file loading is reused. Tokenization must use RoBERTa's tokenizer, or the pretrained embeddings are meaningless (pp.480, 482)."
+  },
+  {
+   "claim": "Packing just means padding to a fixed length.",
+   "correction": "It also includes the `<s>` start and `</s>` end tokens placed exactly as in pretraining."
+  },
+  {
+   "claim": "The validation set is carved from the test set.",
+   "correction": "It comes from the training directory (20% per class); the test set is copied intact."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 420,
+    "note": "Listing 14.8: downloading the IMDb dataset"
+   },
+   {
+    "page": 421,
+    "note": "Listing 14.10: the seeded 20% validation split"
+   },
+   {
+    "page": 422,
+    "note": "Datasets built with batch_size = 32; 20,000/5,000 split"
+   },
+   {
+    "page": 480,
+    "note": "Loading the RoBERTa tokenizer to use here"
+   },
+   {
+    "page": 481,
+    "note": "The backbone's token_ids and padding_mask inputs"
+   }
+  ],
+  "later": [
+   {
+    "page": 483,
+    "note": "Packing example and Listing 15.21 (StartEndPacker)"
+   },
+   {
+    "page": 484,
+    "note": "Fine-tuning the pretrained Transformer on these datasets"
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 421,
+    "note": "Validation split logic"
+   },
+   {
+    "page": 480,
+    "note": "RoBERTa tokenizer"
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 420,
+    "note": "Original download code"
+   },
+   {
+    "page": 483,
+    "note": "preprocess() maps over train_ds/val_ds/test_ds defined here"
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "The chapter 14 IMDb pipeline is reused, so fine-tuning results are comparable with the earlier models on the same 20,000/5,000 split.",
+  "This version is slightly modified: it can be re-run safely and uses batch size 16 instead of 32.",
+  "text_dataset_from_directory yields raw strings and labels; tokenization is a separate step.",
+  "Reviews must be tokenized with RoBERTa's tokenizer and packed as `<s>` ... `</s>` `<pad>`..., matching pretraining."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "short",
+   "question": "How many reviews end up in the training, validation and test datasets, and how is the 5,000 obtained?",
+   "options": [],
+   "answer": "20,000 train, 5,000 validation, 25,000 test. 20% of each class's 12,500 training files (2,500 × 2) moves to validation.",
+   "explanation": "val_percentage = 0.2 is applied per category; the test directory is copied whole.",
+   "page_refs": [
+    482,
+    422
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "What is the purpose of `random.Random(1337).shuffle(src_files)`?",
+   "options": [
+    "To augment the reviews with random noise",
+    "To produce the same random train/validation split every run, matching chapter 14",
+    "To balance positive and negative classes",
+    "To shuffle batches during training"
+   ],
+   "answer": "To produce the same random train/validation split every run, matching chapter 14",
+   "explanation": "A seeded shuffle gives a reproducible split. It does not change the text, class balance comes from splitting each class separately, and batch shuffling is done by text_dataset_from_directory.",
+   "page_refs": [
+    482,
+    421
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why must the reviews be packed with <s> at the start and </s> at the end, instead of just being tokenized?",
+   "options": [],
+   "answer": "RoBERTa was pretrained on sequences in this layout. Matching it gives inputs like those the model learned from, so fine-tuning is faster and more accurate, and the <s> position carries the learned summary representation.",
+   "explanation": "p482_e07 and p.483: 'It's important to match the token ordering used for pretraining as closely as possible.'",
+   "page_refs": [
+    482,
+    483
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "short",
+   "question": "Name two differences between this code and chapter 14's 'unchanged' version.",
+   "options": [],
+   "answer": "batch_size is 16 instead of 32, and copytree/makedirs use dirs_exist_ok/exist_ok=True; the copy loop also uses enumerate with if/else.",
+   "explanation": "Compare with Listings 14.8-14.10 on pp.420-421 and the dataset code on p.422.",
+   "page_refs": [
+    482,
+    421,
+    422
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "What does each element of `train_ds` contain?",
+   "options": [
+    "Integer token ids and a padding mask",
+    "A batch of 16 raw review strings and their integer labels",
+    "One-hot encoded reviews",
+    "RoBERTa embeddings of the reviews"
+   ],
+   "answer": "A batch of 16 raw review strings and their integer labels",
+   "explanation": "text_dataset_from_directory reads files and infers labels from folder names. Tokenization and packing happen later in preprocess() (p.483), and embeddings are computed by the backbone.",
+   "page_refs": [
+    482,
+    483
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "self",
+   "question": "Could you sketch the directory layout that text_dataset_from_directory expects, and explain how labels are assigned?",
+   "options": [],
+   "answer": "root/neg/*.txt and root/pos/*.txt; labels are assigned from the alphabetical order of the subfolders (neg = 0, pos = 1).",
+   "explanation": "The split code creates exactly this layout for imdb_train and imdb_val, and the copied imdb_test already has it.",
+   "page_refs": [
+    482
+   ]
+  }
+ ]
+}

@@ -1,0 +1,542 @@
+{
+ "page_id": "page_463",
+ "pdf_page": 463,
+ "printed_page": "439",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:58:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "The six np.einsum examples in the sidebar (p463_e11) show only the equation strings and omit the operand arrays (e.g. np.einsum(\"ij->ji\") with no array), so they are schematic and raise an error if run as printed; the prose example np.einsum('ij,jk->ik', a, b) shows the full form."
+  ],
+  "extraction_quality": "Good, with layout noise: the sidebar's bullets and the Keras sentence were split mid-word into alternating bullet/sidebar/body elements (e05-e09, e12-e14) because of hyphenation (\"togeth-er\", \"replace-ment\"). The code callouts (Transposes, matmul, ...) were matched to the six einsum lines from the page image."
+ },
+ "overview": {
+  "title": "Einsum notation; scoring source vectors",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "15.3.1 Dot-product attention",
+  "main_topic": "A sidebar explaining Einstein summation (einsum) notation, followed by the opening of section 15.3.1, which sets up attention for the translation RNN as scoring each source vector against the target vector being predicted.",
+  "central_idea": "An einsum string labels each input axis with a letter; repeated letters are multiplied together, letters missing from the output are summed over. With that tool in hand, attention starts as a function score(target_vector, source_vector) that rates the relevance of every source vector to the current target.",
+  "importance": "Einsum is how the book writes every attention computation from here on (\"btd,bsd->bts\" on p.464, \"bts,bsd->btd\" on p.465), so reading the sidebar fluently is required for the rest of the chapter. The second half introduces the score function that the next pages make concrete as a dot product.",
+  "learning_objectives": [
+   "Read and write einsum equations using the three rules on the page.",
+   "Identify transpose, matmul, batched matmul, dot product, element-wise product and full contraction from their einsum strings.",
+   "Know the two Keras einsum tools: keras.ops.einsum and keras.layers.EinsumDense.",
+   "Describe the setup of dot-product attention: one target vector, a sequence of source vectors, and a relevance score for each source vector."
+  ],
+  "prerequisites": [
+   "Tensor ranks, axes and shapes (chapter 2).",
+   "Dot products and matrix multiplication.",
+   "The GRU encoder-decoder translation model (section 15.2.2)."
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The top two thirds of the page are a sidebar, **\"What is Einsum notation?\"** Snippets such as `np.einsum('ij,jk->ik', a, b)` are common in ML code, and especially in Transformer code. The idea is to give each axis of each input a unique letter (a rank-3 input might be `ijk`) and write `input1,input2->output`. Three rules govern the equation:\n\n- letters **repeated across inputs** are multiplied together along those axes (their sizes must match);\n- letters that appear in the inputs but **not in the output** are summed over;\n- output axes can be listed **in any order**.\n\nSix examples follow, annotated: `\"ij->ji\"` transposes; `\"ij,jk->ik\"` is a matmul; `\"hij,jk->hik\"` matmuls a list of matrices against a single matrix; `\"i,i->\"` is a dot product; `\"ijk,ijk->ijk\"` is element-wise multiplication; and `\"ijk,ijk->\"` multiplies element-wise and sums everything. In Keras, `keras.ops.einsum` is a drop-in replacement for `np.einsum`, and `keras.layers.EinsumDense` is a `Dense` layer whose `matmul` is replaced by an einsum.\n\nThen **section 15.3.1, Dot-product attention**, begins. The authors return to the translation RNN and consider predicting a single token. After the `source` and `target` sequences go through the `GRU` layers, we have one vector for the target token about to be predicted and a sequence of vectors, one per source word. The goal of attention is to **score** every source vector by its **relevance** to the current target word (figure 15.4, p.464): a high score means the source token matters, a low score means we care less. For now, the authors assume a function `score(target_vector, source_vector)` exists; the following page says what it should be.",
+ "paragraphs": [
+  {
+   "ref": "p463_e04",
+   "excerpt": "In machine learning codebases, you will frequently see little snippets that look like this:",
+   "what_it_says": "Snippets like np.einsum('ij,jk->ik', a, b) are common in ML codebases. This is Einsum notation, short for Einstein summation notation. Once learned, it is a clear way to write complex array operations, which is why it appears often in Transformer code.",
+   "what_it_means": "The string 'ij,jk->ik' is a compact specification of a matrix product: a has axes (i, j), b has axes (j, k), and the result has axes (i, k). Instead of remembering which function (dot, matmul, tensordot, transpose) and which axis arguments to use, you name the axes and let einsum work out the computation.",
+   "why_it_matters": "Attention involves contractions over specific axes of rank-3 tensors (batch, sequence, features). Writing them with einsum makes the axis bookkeeping explicit, which is exactly how the book writes attention on p.464-467.",
+   "technical_idea": "Beyond the book: the name comes from Einstein's convention in physics of omitting the summation sign for repeated indices, writing $C_{ik} = A_{ij}B_{jk}$ to mean $\\sum_j A_{ij}B_{jk}$.",
+   "terminology": [
+    {
+     "term": "Einsum",
+     "meaning": "Einstein summation notation: an equation string naming each axis of each input with a letter, from which the product-and-sum operation is inferred."
+    }
+   ],
+   "connections": [
+    "p.464: dot_product_attention uses np.einsum(\"btd,bsd->bts\", target, source)"
+   ]
+  },
+  {
+   "ref": "p463_e04",
+   "excerpt": "The idea with an Einsum equation is to represent each axis of an input with a unique letter.",
+   "what_it_says": "Each axis of an input gets a unique letter, so a rank-3 input could be written ijk. An equation has any number of inputs and a single output, written input1,input2->output, and follows the rules listed next.",
+   "what_it_means": "The letters are labels, not sizes. Using the same letter in two inputs asserts that those axes line up (and have the same size); the output spec says which labelled axes survive and in what order.",
+   "why_it_matters": "This labelling is the whole notation; once you see the inputs as labelled axes, the rules below become obvious.",
+   "technical_idea": "",
+   "terminology": [
+    {
+     "term": "Rank",
+     "meaning": "The number of axes of a tensor; a rank-3 tensor needs three letters."
+    }
+   ],
+   "connections": [
+    "p.464: the attention einsums label axes b (batch), t (target), s (source) and d (vector size)"
+   ]
+  },
+  {
+   "ref": "p463_e05",
+   "excerpt": "For any repeated letters across inputs, multiply values along these axes togeth",
+   "what_it_says": "The three rules: (1) letters repeated across inputs mean values along those axes are multiplied together, and the sizes must match; (2) letters in the inputs but not in the output are summed over, so they do not appear in the result; (3) output axes can be returned in any order. \"This gets much clearer if we take a look at some examples.\"",
+   "what_it_means": "Rule 1 pairs up elements; rule 2 contracts axes; rule 3 lets transposition happen for free. Formally, the output element for a given set of output indices is the sum, over all non-output indices, of the product of the input elements those indices select.",
+   "why_it_matters": "Two consequences are worth noticing: a repeated letter that is kept in the output gives an element-wise (or batched) product, and a repeated letter that is dropped gives a dot-product-style contraction. That distinction is the difference between \"ijk,ijk->ijk\" and \"ijk,ijk->\".",
+   "technical_idea": "General rule (beyond the book's wording): for \"ij,jk->ik\", $C_{ik} = \\sum_{j} A_{ij}B_{jk}$. Any letter not on the right of -> is a summation index.",
+   "terminology": [
+    {
+     "term": "Contraction",
+     "meaning": "Summing over a shared axis after multiplying, which removes that axis from the result."
+    }
+   ],
+   "connections": []
+  },
+  {
+   "ref": "p463_e12",
+   "excerpt": "In Keras, you can use `einsum`s in two ways.",
+   "what_it_says": "Keras offers two ways to use einsums: keras.ops.einsum is a drop-in replacement for np.einsum, and keras.layers.EinsumDense is a Dense layer where the matmul is replaced by an einsum operation.",
+   "what_it_means": "keras.ops.einsum works on any backend (TensorFlow, JAX, PyTorch) and is differentiable, so the same equations can be used inside models. EinsumDense is a layer with trainable weights whose projection is described by an einsum string, useful when you want to project only some axes of a higher-rank tensor.",
+   "why_it_matters": "The NumPy pseudocode on the next pages can be turned into real model code by swapping np.einsum for keras.ops.einsum.",
+   "technical_idea": "Beyond the book: Keras's own MultiHeadAttention layer (used on p.468) builds its query, key and value projections with EinsumDense, so that a (batch, seq, dim) input is projected directly to (batch, seq, num_heads, head_dim).",
+   "terminology": [
+    {
+     "term": "keras.ops.einsum",
+     "meaning": "Backend-agnostic einsum with the same interface as np.einsum."
+    },
+    {
+     "term": "EinsumDense",
+     "meaning": "A Dense-like layer with a learned kernel whose product with the input is defined by an einsum equation."
+    }
+   ],
+   "connections": [
+    "p.468: keras.layers.MultiHeadAttention"
+   ]
+  },
+  {
+   "ref": "p463_e16",
+   "excerpt": "Let’s revisit our translation RNN and try to add the notion of selective attention.",
+   "what_it_says": "Section 15.3.1 begins by revisiting the translation RNN to add selective attention. Considering a single token prediction: after the source and target sequences pass through the GRU layers, there is a vector for the target token about to be predicted and a sequence of vectors for the words of the source text.",
+   "what_it_means": "In the RNN seq2seq model (p.456-461), the decoder only received the encoder's final state. Here, instead, all per-token encoder outputs are kept (one vector per source word), and the decoder's output at the current step is a vector for the target position. Attention will connect these two.",
+   "why_it_matters": "It frames attention as a fix for the specific bottleneck identified on p.461: the whole source no longer has to fit into one state vector.",
+   "technical_idea": "Beyond the book: with return_sequences=True on the encoder GRU, the source representation has shape (batch, source_length, units) instead of (batch, units). This is the source tensor used in the pseudocode on p.464.",
+   "terminology": [
+    {
+     "term": "Source sequence",
+     "meaning": "The sentence being translated (English), encoded into one vector per token."
+    },
+    {
+     "term": "Target sequence",
+     "meaning": "The translation being generated (Spanish); at each step one target token is predicted."
+    }
+   ],
+   "connections": [
+    "p.456: sequence-to-sequence learning with RNNs, the GRU encoder-decoder",
+    "p.461: the source representation is limited to the encoder state vector"
+   ]
+  },
+  {
+   "ref": "p463_e17",
+   "excerpt": "With attention, our goal is to give the model a way to score every",
+   "what_it_says": "The goal is to score every source vector by its relevance to the current word being predicted (figure 15.4). A high score means the source token is particularly important; a low score means we care less about it. For now, assume a function score(target_vector, source_vector) exists.",
+   "what_it_means": "Attention is broken into two questions: how to score relevance (left abstract for now, answered by the dot product on p.464) and how to use the scores (a softmax-weighted sum, also p.464). Treating score as a black box keeps the structure clear before the specific choice is made.",
+   "why_it_matters": "This is the first concrete form of the idea on p.462: \"more weight to some parts of a sequence and less to others, depending on the current input.\" Here the current input is the target vector and the parts are the source vectors.",
+   "technical_idea": "",
+   "terminology": [
+    {
+     "term": "Relevance score",
+     "meaning": "A number rating how useful a source vector is for predicting the current target token."
+    }
+   ],
+   "connections": [
+    "p.464: figure 15.4 shows scores from \"traeré\" to each English word; the dot product is chosen as the score",
+    "p.462: the general definition of attention"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "einsum",
+   "name": "Einsum notation",
+   "definition": "A way to specify array operations by labelling each input axis with a letter and writing input1,input2->output; repeated letters are multiplied, letters missing from the output are summed over.",
+   "intuition": "Name the axes, say which ones survive, and the operation follows.",
+   "technical": "For an equation with output indices $O$ and summation indices $S$ (all other letters), $\\text{out}[O] = \\sum_{S} \\prod_{n} \\text{in}_n[\\text{letters}_n]$.",
+   "significance": "It is the notation the book uses for every attention computation.",
+   "example": "\"btd,bsd->bts\" computes, for each batch b, every target-source dot product over d.",
+   "misconception": "A repeated letter does not always mean a sum: if it also appears in the output (\"ijk,ijk->ijk\"), it is element-wise multiplication only.",
+   "related": [
+    "tensor",
+    "dot_product_attention"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "dot_product_attention",
+   "name": "Attention scoring (setup)",
+   "definition": "Giving the model a way to score every source vector by its relevance to the current target word.",
+   "intuition": "Before writing a word of the translation, look over the original sentence and rate how useful each word is for this particular output word.",
+   "technical": "On this page the score is an abstract function score(target_vector, source_vector); p.464 makes it a dot product.",
+   "significance": "It is the core of dot-product attention.",
+   "example": "When predicting \"traeré\", the source words \"I\" and \"bring\" should score high (figure 15.4).",
+   "misconception": "",
+   "related": [
+    "attention",
+    "einsum",
+    "softmax"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "keras_einsum_tools",
+   "name": "keras.ops.einsum and EinsumDense",
+   "definition": "The two ways to use einsums in Keras: a backend-agnostic function and a Dense layer whose matmul is an einsum.",
+   "intuition": "Use the function for weight-free contractions and the layer when the contraction has trainable weights.",
+   "technical": "keras.ops.einsum mirrors np.einsum's signature; EinsumDense takes an equation, an output shape and optional bias axes.",
+   "significance": "They turn the NumPy pseudocode into trainable model code.",
+   "example": "keras.ops.einsum(\"btd,bsd->bts\", q, k)",
+   "misconception": "",
+   "related": [
+    "einsum",
+    "dense_layer"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "General einsum rule",
+   "latex": "C_{ik} = \\sum_{j} A_{ij}\\,B_{jk} \\quad\\Longleftrightarrow\\quad \\texttt{np.einsum(\"ij,jk->ik\", A, B)}",
+   "source_text": "np.einsum('ij,jk->ik', a, b)",
+   "variables": [
+    {
+     "symbol": "A",
+     "meaning": "First input, axes labelled i, j"
+    },
+    {
+     "symbol": "B",
+     "meaning": "Second input, axes labelled j, k"
+    },
+    {
+     "symbol": "j",
+     "meaning": "Repeated across inputs and absent from the output, so it is multiplied and summed over"
+    },
+    {
+     "symbol": "i, k",
+     "meaning": "Output axes"
+    }
+   ],
+   "operations": "Multiply along the shared axis j, sum over j because it is not in the output.",
+   "purpose": "Shows how the three rules turn an einsum string into an ordinary formula.",
+   "interpretation": "This is matrix multiplication.",
+   "intuition": "Every letter missing on the right of the arrow is a summation index.",
+   "numerical_example": "With $A = \\begin{pmatrix}1&2\\\\3&4\\end{pmatrix}$ and $B = \\begin{pmatrix}5&6\\\\7&8\\end{pmatrix}$: $C_{11} = 1\\cdot5 + 2\\cdot7 = 19$, $C_{12} = 1\\cdot 6 + 2\\cdot 8 = 22$, $C_{21} = 43$, $C_{22} = 50$.",
+   "source": "book",
+   "book_ref": "p.463"
+  },
+  {
+   "id": "m2",
+   "title": "The six sidebar examples as formulas",
+   "latex": "\\begin{aligned} \\text{\"ij->ji\"}&: \\; B_{ji} = A_{ij} \\\\ \\text{\"ij,jk->ik\"}&: \\; C_{ik} = \\textstyle\\sum_j A_{ij}B_{jk} \\\\ \\text{\"hij,jk->hik\"}&: \\; C_{hik} = \\textstyle\\sum_j A_{hij}B_{jk} \\\\ \\text{\"i,i->\"}&: \\; c = \\textstyle\\sum_i a_i b_i \\\\ \\text{\"ijk,ijk->ijk\"}&: \\; C_{ijk} = A_{ijk}B_{ijk} \\\\ \\text{\"ijk,ijk->\"}&: \\; c = \\textstyle\\sum_{i,j,k} A_{ijk}B_{ijk} \\end{aligned}",
+   "source_text": "np.einsum(\"ij->ji\") ... np.einsum(\"ijk,ijk->\")  (with callouts: Transposes, matmul, matmuls a list of matrices against a single matrix, Dot-product, Element-wise multiplication, Element-wise multiplies and sums everything)",
+   "variables": [
+    {
+     "symbol": "h",
+     "meaning": "Axis indexing a list (stack) of matrices"
+    },
+    {
+     "symbol": "i, j, k",
+     "meaning": "Other axis labels"
+    }
+   ],
+   "operations": "Reordering (transpose), contraction over shared axes, element-wise product, full sum.",
+   "purpose": "Translates each annotated example into standard notation.",
+   "interpretation": "Lines 3 and 5-6 show the difference between keeping a shared letter (element-wise) and dropping it (summed).",
+   "intuition": "Line 3 is the batched matmul pattern that attention uses: the h axis just rides along.",
+   "numerical_example": "For \"i,i->\" with $a = (1,2,3)$, $b = (4,5,6)$: $1\\cdot4 + 2\\cdot5 + 3\\cdot6 = 32$.",
+   "source": "book",
+   "book_ref": "p.463"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Einsum examples from the sidebar",
+   "original_code": "np.einsum(\"ij->ji\")\nnp.einsum(\"ij,jk->ik\")\nnp.einsum(\"hij,jk->hik\")\nnp.einsum(\"i,i->\")\nnp.einsum(\"ijk,ijk->ijk\")\nnp.einsum(\"ijk,ijk->\")",
+   "language": "python",
+   "what_it_does": "Lists six einsum equation strings, each annotated on the page with the operation it performs. The operand arrays are left out; they are notation examples, not runnable lines.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "\"ij->ji\": one input, axes reordered, nothing summed. Transposes."
+    },
+    {
+     "lines": "2",
+     "explanation": "\"ij,jk->ik\": j repeated and dropped, so multiplied and summed. matmul."
+    },
+    {
+     "lines": "3",
+     "explanation": "\"hij,jk->hik\": the extra h axis is kept, so each of the h matrices is multiplied by the same (j, k) matrix. Matmuls a list of matrices against a single matrix."
+    },
+    {
+     "lines": "4",
+     "explanation": "\"i,i->\": i repeated and dropped, output is a scalar. Dot-product."
+    },
+    {
+     "lines": "5",
+     "explanation": "\"ijk,ijk->ijk\": every letter repeated but kept, so values are multiplied and nothing is summed. Element-wise multiplication."
+    },
+    {
+     "lines": "6",
+     "explanation": "\"ijk,ijk->\": every letter repeated and dropped. Element-wise multiplies and sums everything."
+    }
+   ],
+   "inputs_outputs": "Implicit: line 1 needs a rank-2 array, lines 2-3 two arrays with matching j, line 4 two vectors of the same length, lines 5-6 two rank-3 arrays of the same shape. Outputs: a matrix, a matrix, a rank-3 array, a scalar, a rank-3 array, a scalar.",
+   "algorithm": "Product over repeated labels, sum over labels absent from the output, reorder to the output spec.",
+   "theory_link": "Line 3's batched pattern generalizes to the attention einsums \"btd,bsd->bts\" and \"bts,bsd->btd\" on p.464-465, where b is a batch axis kept in every output.",
+   "parameters": [
+    {
+     "name": "equation string",
+     "role": "Names the input axes and the output axes."
+    }
+   ],
+   "pitfalls": [
+    "As printed the calls have no operands; np.einsum(\"ij->ji\") alone raises an error. Pass the arrays after the string.",
+    "Shared letters must have the same size in every input, or einsum raises a shape error.",
+    "Forgetting a letter in the output silently sums over that axis."
+   ],
+   "illustrative_code": "# AI-written: the sidebar examples with real operands, checked against\n# the equivalent NumPy operations.\nimport numpy as np\nA = np.random.rand(3, 4)\nB = np.random.rand(4, 5)\nH = np.random.rand(2, 3, 4)\nu, v = np.random.rand(4), np.random.rand(4)\nX, Y = np.random.rand(2, 3, 4), np.random.rand(2, 3, 4)\n\nassert np.allclose(np.einsum(\"ij->ji\", A), A.T)\nassert np.allclose(np.einsum(\"ij,jk->ik\", A, B), A @ B)\nassert np.allclose(np.einsum(\"hij,jk->hik\", H, B), H @ B)\nassert np.allclose(np.einsum(\"i,i->\", u, v), np.dot(u, v))\nassert np.allclose(np.einsum(\"ijk,ijk->ijk\", X, Y), X * Y)\nassert np.allclose(np.einsum(\"ijk,ijk->\", X, Y), np.sum(X * Y))\nprint(\"all equivalences hold\")"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Reading an einsum in three questions",
+   "kind": "step_by_step",
+   "body": "Beyond the book, a quick procedure for any equation:\n\n1. **Which letters are shared between inputs?** Those axes are lined up and multiplied.\n2. **Which letters are missing from the output?** Those axes are summed away.\n3. **What order is the output in?** That is the shape of the result.\n\nApply it to the attention einsum on p.464, `\"btd,bsd->bts\"`: b and d are shared; d is missing from the output, so it is summed (a dot product over features); b is kept (batch rides along); the result has shape (batch, target_length, source_length), a score for every target-source pair.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the scoring setup only needs one target vector",
+   "kind": "breakdown",
+   "body": "The second half of the page deliberately simplifies to *predicting a single token*. Then there is one target vector $t \\in \\mathbb{R}^d$ and a list of source vectors $s_1, \\dots, s_S$. A score $\\text{score}(t, s_j)$ is a single number per source position, so the scores form a vector of length $S$. p.464 handles the whole target sequence at once, which turns that vector into a $T \\times S$ matrix (figure 15.5 on p.465).",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "\"ij,jk->ik\" as a matrix product",
+   "why": "The second sidebar example is a matmul: the shared letter j is multiplied and summed. Step through which pairs of elements are combined for each output cell.",
+   "widget": "matrix_product",
+   "params": {
+    "A": [
+     [
+      1,
+      2
+     ],
+     [
+      3,
+      4
+     ]
+    ],
+    "B": [
+     [
+      5,
+      6
+     ],
+     [
+      7,
+      8
+     ]
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Shapes in \"hij,jk->hik\"",
+   "why": "The third example matmuls a list of h matrices against one matrix; the h axis survives and j disappears. The shapes here are illustrative.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "input hij",
+      "shape": [
+       2,
+       3,
+       4
+      ]
+     },
+     {
+      "op": "einsum with jk (4,5)",
+      "shape": [
+       2,
+       3,
+       5
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "In einsum, any repeated letter is summed over.",
+   "correction": "Repeated letters are multiplied; only letters absent from the output are summed. \"ijk,ijk->ijk\" sums nothing."
+  },
+  {
+   "claim": "Einsum letters encode axis sizes.",
+   "correction": "Letters are labels. Sizes come from the arrays; the same letter in two inputs only requires those sizes to match."
+  },
+  {
+   "claim": "Attention needs a learned score function from the start.",
+   "correction": "The page leaves score() abstract; the next page picks the plain dot product, and learned projections are added only on p.465-466."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 462,
+    "note": "The general concept of attention and figure 15.3"
+   },
+   {
+    "page": 456,
+    "note": "The GRU translation model being revisited"
+   },
+   {
+    "page": 461,
+    "note": "RNN limitations that motivate attention"
+   }
+  ],
+  "later": [
+   {
+    "page": 464,
+    "note": "Figure 15.4, softmax-normalized scores, the dot product as score, and the first einsum attention code"
+   },
+   {
+    "page": 465,
+    "note": "Weighted sum with \"bts,bsd->btd\" and the query/key/value naming"
+   },
+   {
+    "page": 468,
+    "note": "keras.layers.MultiHeadAttention"
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 456,
+    "note": "The GRU encoder-decoder translation model being revisited"
+   }
+  ],
+  "related_math": [
+   {
+    "page": 464,
+    "note": "\"btd,bsd->bts\" computes all target-source dot products"
+   }
+  ],
+  "related_code": [
+   {
+    "page": 464,
+    "note": "dot_product_attention written with np.einsum"
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 464,
+    "note": "Figure 15.4: relevance scores from a target word to each source word"
+   }
+  ]
+ },
+ "takeaways": [
+  "Einsum labels each input axis with a letter and writes input1,input2->output.",
+  "Repeated letters are multiplied; letters missing from the output are summed; output order is free.",
+  "\"ij->ji\" transposes, \"ij,jk->ik\" is matmul, \"i,i->\" is a dot product, \"ijk,ijk->ijk\" is element-wise, \"ijk,ijk->\" sums everything.",
+  "keras.ops.einsum replaces np.einsum; keras.layers.EinsumDense is a Dense layer with an einsum instead of a matmul.",
+  "Dot-product attention starts by scoring every source vector by its relevance to the target token being predicted."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Which operation does np.einsum(\"ijk,ijk->\", x, y) perform?",
+   "options": [
+    "Element-wise multiplication returning an array of shape (i, j, k)",
+    "Element-wise multiplication followed by summing everything into a scalar",
+    "A transpose of x",
+    "A batched matrix multiplication"
+   ],
+   "answer": "Element-wise multiplication followed by summing everything into a scalar",
+   "explanation": "All letters are repeated (multiplied) and none appear in the output (all summed). \"ijk,ijk->ijk\" would keep the shape; a transpose has one input; a batched matmul needs a contracted inner axis with other axes kept.",
+   "page_refs": [
+    463
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Write the formula computed by np.einsum(\"hij,jk->hik\", A, B), and give the output shape if A has shape (8, 3, 4) and B has shape (4, 5).",
+   "options": [],
+   "answer": "$C_{hik} = \\sum_j A_{hij}B_{jk}$, shape (8, 3, 5).",
+   "explanation": "j is shared and dropped, so it is summed; h, i and k are kept in that order. Each of the 8 matrices of shape (3, 4) is multiplied by the (4, 5) matrix.",
+   "page_refs": [
+    463
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What are the two ways to use einsum in Keras mentioned in the sidebar?",
+   "options": [],
+   "answer": "keras.ops.einsum, a drop-in replacement for np.einsum, and keras.layers.EinsumDense, a Dense layer where the matmul is replaced by an einsum.",
+   "explanation": "Stated in the last sentence of the sidebar.",
+   "page_refs": [
+    463
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why does \"ijk,ijk->ijk\" not sum anything even though every letter is repeated?",
+   "options": [],
+   "answer": "Summation applies only to letters missing from the output. All three letters appear in the output, so the values are only multiplied element-wise.",
+   "explanation": "Rule 1 (multiply repeated letters) and rule 2 (sum letters absent from the output) are separate.",
+   "page_refs": [
+    463
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "In the setup of section 15.3.1, what does the attention score function take as input?",
+   "options": [
+    "Two source vectors",
+    "The target vector being predicted and one source vector",
+    "The final GRU state only",
+    "The whole target sequence and the loss"
+   ],
+   "answer": "The target vector being predicted and one source vector",
+   "explanation": "The page writes score(target_vector, source_vector) and applies it to every source vector. Comparing source vectors with each other is self-attention (p.468); the final state alone was the RNN bottleneck; the loss plays no role in scoring.",
+   "page_refs": [
+    463
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "math",
+   "question": "Using einsum rules, what shape does np.einsum(\"btd,bsd->bts\", target, source) produce for target of shape (32, 10, 64) and source of shape (32, 12, 64)?",
+   "options": [],
+   "answer": "(32, 10, 12)",
+   "explanation": "b and d are shared; d is dropped and summed (a dot product over 64 features); b, t and s remain. This is the score matrix used on p.464.",
+   "page_refs": [
+    463,
+    464
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you write einsum strings for: a matrix-vector product, a batched dot product of two (batch, d) arrays, and an outer product of two vectors?",
+   "options": [],
+   "answer": "\"ij,j->i\", \"bd,bd->b\", \"i,j->ij\".",
+   "explanation": "If these came easily, the attention einsums on the next pages will read naturally. The outer product shows that letters need not be shared: nothing is summed, and every pair is multiplied.",
+   "page_refs": [
+    463
+   ]
+  }
+ ]
+}

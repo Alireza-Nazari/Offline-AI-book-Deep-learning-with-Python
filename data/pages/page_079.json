@@ -1,0 +1,557 @@
+{
+ "page_id": "page_079",
+ "pdf_page": 79,
+ "printed_page": "55",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-fable-5-1",
+  "generated_at": "2026-11-03T04:24:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "As printed, listing 2.9 computes average_loss = ops.mean(loss) but then passes the per-sample `loss` (not `average_loss`) to get_gradients_of_loss_wrt_weights and returns `loss`. The notes reproduce the code verbatim and point this out as a pitfall rather than silently correcting it. The GradientTape version on p.81 uses average_loss in both places, confirming the intent."
+  ],
+  "extraction_quality": "Good. The BatchGenerator body, the four bullets, listing 2.9 and the opening of 'The weight update step' match the page image. Callouts were split into fragments by the extractor and are reassembled in the line explanations."
+ },
+ "overview": {
+  "title": "BatchGenerator and the single training step (listing 2.9)",
+  "chapter": "2 The mathematical building blocks of neural networks",
+  "section": "2.5 Looking back at our first example",
+  "subsection": "2.5.2 Running one training step",
+  "main_topic": "Completing the BatchGenerator, the four tasks of a training step, listing 2.9 one_training_step (forward pass, sparse categorical crossentropy, gradients, weight update), and the start of the weight-update explanation",
+  "central_idea": "A training step on one batch is four operations: predict, compute the loss against the true labels, compute the gradient of the loss with respect to the model's weights, and move the weights a small amount against the gradient. Listing 2.9 writes this as a six-line function, leaving the gradient computation and the update as two functions still to be defined.",
+  "importance": "This is the heart of training, the code equivalent of steps 1-5 of mini-batch SGD on p.68 and of what fit did 2,345 times on p.76. Every custom training loop in the book (chapter 7, p.239) has this same structure.",
+  "learning_objectives": [
+   "Explain how BatchGenerator slices consecutive batches and why num_batches uses math.ceil.",
+   "List the four tasks of a training step and map each to a line of listing 2.9.",
+   "Explain what ops.sparse_categorical_crossentropy returns and why it is averaged.",
+   "Describe the role of the two not-yet-defined functions get_gradients_of_loss_wrt_weights and update_weights.",
+   "State the purpose of the weight-update step: move the weights a bit in a direction that reduces the loss on this batch."
+  ],
+  "prerequisites": [
+   "NaiveSequential model and model.weights (p.78)",
+   "Mini-batch SGD algorithm (p.68)",
+   "Loss function and gradient (p.66, p.76)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page first completes `BatchGenerator` (begun on p.78). The constructor asserts that there are as many images as labels, sets `self.index = 0`, stores the data and batch size, and computes `self.num_batches = math.ceil(len(images) / batch_size)`. Its `next()` method slices `images[self.index : self.index + self.batch_size]` and the matching labels, advances `self.index` by `batch_size`, and returns the pair.\n\n**Section 2.5.2, Running one training step.** The most difficult part is the *training step*: updating the weights after running the model on one batch. It requires four things:\n\n1. compute the model's predictions for the images in the batch;\n2. compute the loss value for these predictions given the actual labels;\n3. compute the gradient of the loss with regard to the model's weights;\n4. move the weights by a small amount in the direction opposite to the gradient.\n\n**Listing 2.9** implements this as `one_training_step(model, images_batch, labels_batch)`: `predictions = model(images_batch)` runs the forward pass; `ops.sparse_categorical_crossentropy(labels_batch, predictions)` gives the per-sample loss; `ops.mean(loss)` averages it; `get_gradients_of_loss_wrt_weights(loss, model.weights)` returns a list of gradients, one per entry of `model.weights`; `update_weights(gradients, model.weights)` applies them. The callouts stress that the last two functions have **not been defined yet**.\n\n**The weight update step.** The page ends by restating that `update_weights()` must move the weights by \"a bit\" in a direction that reduces the loss on this batch, with the magnitude of the move set by the learning rate (sentence completed on p.80).",
+ "paragraphs": [
+  {
+   "ref": "p079_e06",
+   "excerpt": "The most difficult part of the process is the “training step”: updating",
+   "what_it_says": "The training step, updating the model's weights after running it on one batch, is the most difficult part. It requires computing predictions for the batch, computing the loss given the true labels, computing the gradient of the loss with respect to the weights, and moving the weights a small amount opposite to the gradient (the four bullets).",
+   "what_it_means": "The four bullets are the per-batch body of mini-batch SGD from p.68 (whose step 1, drawing a batch, is now handled by BatchGenerator). The first two bullets are the forward pass and only need tensor operations already explained in section 2.3. The third is the backward pass, which is why the step is 'difficult': it needs derivatives of the whole chain of operations. The fourth is the update, whose direction is minus the gradient because the gradient points toward increasing loss.",
+   "why_it_matters": "Everything else in training (batching, looping over epochs, logging) is bookkeeping around this step. Recognizing the four parts lets you read any training code, in any framework.",
+   "technical_idea": "In symbols: \\hat y = f(x; w); L = loss(y, \\hat y); g = \\nabla_w L; w \\leftarrow w - \\eta g.",
+   "terminology": [
+    {
+     "term": "training step",
+     "meaning": "One weight update computed from one batch of data."
+    },
+    {
+     "term": "predictions",
+     "meaning": "The model's outputs for the batch, here (128, 10) class probabilities."
+    },
+    {
+     "term": "direction opposite to the gradient",
+     "meaning": "The direction of steepest local decrease of the loss."
+    }
+   ],
+   "connections": [
+    "p.68: the five-step mini-batch SGD algorithm.",
+    "p.64: the training loop's step 4 identified as the difficult part.",
+    "p.239: the same three/four-step structure for custom loops in chapter 7."
+   ]
+  },
+  {
+   "ref": "p079_e14",
+   "excerpt": "As you already know, the purpose of the “weight update” step (represented",
+   "what_it_says": "The weight-update step, represented by update_weights(), moves the weights by 'a bit' in a direction that reduces the loss on this batch; the magnitude of the move is determined by the learning rate (the sentence ends on p.80).",
+   "what_it_means": "The update needs a direction (minus the gradient) and a step size (the learning rate, a small scalar). Too large a step can overshoot the minimum; too small a step makes training slow. Only the loss on the current batch is considered, which is the stochastic aspect of SGD.",
+   "why_it_matters": "It introduces the implementation on p.80, w.assign(w - g * learning_rate), and the Keras optimizer that replaces it.",
+   "terminology": [
+    {
+     "term": "learning rate",
+     "meaning": "Scalar factor that sets how far the weights move along the negative gradient in one step."
+    }
+   ],
+   "connections": [
+    "p.68: W -= learning_rate * gradient.",
+    "p.80: update_weights implemented by hand and with optimizers.SGD."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "mini_batch",
+   "name": "Mini-batch iteration (BatchGenerator)",
+   "definition": "Handing out consecutive slices of batch_size images and labels, keeping track of the current position with an index.",
+   "intuition": "A cursor moving through the dataset 128 rows at a time.",
+   "technical": "num_batches = ceil(N / batch_size); next() returns data[index:index+batch_size] and advances index.",
+   "significance": "Supplies the batches that one_training_step consumes; replaces fit's built-in batching.",
+   "example": "N = 60000, batch_size = 128: num_batches = ceil(468.75) = 469; the last batch has 96 samples.",
+   "misconception": "BatchGenerator does not shuffle the data; it serves batches in the stored order.",
+   "related": [
+    "sgd",
+    "epoch"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "training_step",
+   "name": "Training step",
+   "definition": "Running the model on one batch, computing the loss, computing the gradient of the loss with regard to the weights, and moving the weights a small amount opposite to the gradient.",
+   "intuition": "Try, measure the error, find which way each knob should turn, turn the knobs a little.",
+   "technical": "Listing 2.9: forward pass -> sparse categorical crossentropy -> gradients wrt model.weights -> update_weights.",
+   "significance": "The atomic unit of learning; fit on p.76 performs 2,345 of them.",
+   "example": "One call of one_training_step on a (128, 784) batch updates all four weight tensors once.",
+   "misconception": "A training step does not process the whole dataset; it uses one batch.",
+   "related": [
+    "sgd",
+    "backpropagation",
+    "loss_function"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "cross_entropy",
+   "name": "Sparse categorical crossentropy",
+   "definition": "Loss comparing predicted class probabilities to integer labels; ops.sparse_categorical_crossentropy returns one value per sample.",
+   "intuition": "Penalizes the model by how little probability it gave to the correct digit.",
+   "technical": "For sample i: L_i = -log p_{i, y_i}. ops.mean averages these over the batch.",
+   "significance": "The loss chosen in compile on p.76, now called explicitly.",
+   "example": "True-class probability 0.8 -> L ≈ 0.223; 0.05 -> L ≈ 3.0.",
+   "misconception": "The function does not return a single number for the batch; it returns a vector of per-sample losses (hence the ops.mean).",
+   "related": [
+    "loss_function",
+    "softmax"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "gradient_descent",
+   "name": "Gradient descent update",
+   "definition": "Moving the weights a small amount in the direction opposite to the gradient of the loss, with the step size set by the learning rate.",
+   "intuition": "Take a small step downhill on the loss surface.",
+   "technical": "w <- w - learning_rate * dL/dw, applied to every tensor in model.weights.",
+   "significance": "The fourth bullet and the update_weights function.",
+   "example": "w = 0.5, gradient 2.0, learning_rate 1e-3 -> w = 0.498.",
+   "misconception": "The update does not jump to the minimum; it moves 'a bit', and many steps are needed.",
+   "related": [
+    "learning_rate",
+    "sgd",
+    "optimizer"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Number of batches in BatchGenerator",
+   "latex": "\\text{num\\_batches} = \\left\\lceil \\frac{\\text{len(images)}}{\\text{batch\\_size}} \\right\\rceil",
+   "source_text": "self.num_batches = math.ceil(len(images) / batch_size)",
+   "variables": [
+    {
+     "symbol": "\\text{len(images)}",
+     "meaning": "Number of samples (60,000 for MNIST training)"
+    },
+    {
+     "symbol": "\\text{batch\\_size}",
+     "meaning": "Samples per batch (default 128)"
+    }
+   ],
+   "operations": "Division then rounding up.",
+   "purpose": "Counts how many calls of next() cover the dataset once, including a final partial batch.",
+   "interpretation": "Equals the number of training steps per epoch.",
+   "intuition": "If the data does not divide evenly, the leftovers still form one more (smaller) batch.",
+   "numerical_example": "ceil(60000 / 128) = ceil(468.75) = 469, matching the 469 updates per epoch stated on p.76.",
+   "source": "book",
+   "book_ref": "p.79"
+  },
+  {
+   "id": "m2",
+   "title": "Per-sample and average loss in listing 2.9",
+   "latex": "\\ell_i = -\\log p_{i,\\,y_i}, \\qquad \\bar{\\ell} = \\frac{1}{B}\\sum_{i=1}^{B} \\ell_i",
+   "source_text": "loss = ops.sparse_categorical_crossentropy(labels_batch, predictions); average_loss = ops.mean(loss)",
+   "variables": [
+    {
+     "symbol": "p_{i,y_i}",
+     "meaning": "Predicted probability (from softmax) of the true label y_i for sample i"
+    },
+    {
+     "symbol": "\\ell_i",
+     "meaning": "Entry i of `loss`, the per-sample crossentropy"
+    },
+    {
+     "symbol": "\\bar{\\ell}",
+     "meaning": "`average_loss`, the mean over the batch"
+    },
+    {
+     "symbol": "B",
+     "meaning": "Number of samples in the batch"
+    }
+   ],
+   "operations": "Index the probability of the true class, take -log, average.",
+   "purpose": "Makes explicit what the two loss lines of the listing compute; the formula itself is not printed in the book.",
+   "interpretation": "A low average loss means the model assigns high probability to the correct digits on this batch.",
+   "intuition": "-log turns 'probability of the right answer' into a penalty that is 0 at certainty and grows sharply as the probability shrinks.",
+   "numerical_example": "Batch of 3 with true-class probabilities 0.9, 0.5, 0.1: losses 0.105, 0.693, 2.303; average 1.034.",
+   "source": "ai_explanation",
+   "book_ref": "p.79"
+  },
+  {
+   "id": "m3",
+   "title": "The update direction",
+   "latex": "w \\leftarrow w - \\eta\\, \\nabla_w L",
+   "source_text": "Move the weights by a small amount in the direction opposite to the gradient",
+   "variables": [
+    {
+     "symbol": "w",
+     "meaning": "Any weight tensor in model.weights"
+    },
+    {
+     "symbol": "\\eta",
+     "meaning": "Learning rate, a small scalar (1e-3 on p.80)"
+    },
+    {
+     "symbol": "\\nabla_w L",
+     "meaning": "Gradient of the loss with respect to w (same shape as w)"
+    }
+   ],
+   "operations": "Scale the gradient and subtract it from the weight.",
+   "purpose": "Formalizes the fourth bullet and the update_weights step.",
+   "interpretation": "Each scalar weight moves against the sign of its partial derivative, proportionally to its magnitude.",
+   "intuition": "Downhill, in small steps.",
+   "numerical_example": "w = [0.2, -0.1], gradient = [0.5, -2.0], eta = 0.01 -> w = [0.195, -0.08].",
+   "source": "book",
+   "book_ref": "p.68"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "BatchGenerator (rest of the class)",
+   "original_code": "        assert len(images) == len(labels)\n        self.index = 0\n        self.images = images\n        self.labels = labels\n        self.batch_size = batch_size\n        self.num_batches = math.ceil(len(images) / batch_size)\n\n    def next(self):\n        images = self.images[self.index : self.index + self.batch_size]\n        labels = self.labels[self.index : self.index + self.batch_size]\n        self.index += self.batch_size\n        return images, labels",
+   "language": "python",
+   "what_it_does": "Completes the BatchGenerator started on p.78: stores images, labels and batch size, computes the number of batches, and returns successive slices on each call to next().",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Guards against mismatched inputs and targets."
+    },
+    {
+     "lines": "2",
+     "explanation": "The cursor starts at the first sample."
+    },
+    {
+     "lines": "3-5",
+     "explanation": "Stores the data and batch size."
+    },
+    {
+     "lines": "6",
+     "explanation": "Number of batches per pass, rounded up so a final partial batch is counted: 469 for MNIST."
+    },
+    {
+     "lines": "8-10",
+     "explanation": "Slices batch_size consecutive images and labels starting at the cursor; NumPy slicing past the end simply returns fewer rows."
+    },
+    {
+     "lines": "11-12",
+     "explanation": "Advances the cursor and returns the (images, labels) pair."
+    }
+   ],
+   "inputs_outputs": "Input: arrays images (N, 784) and labels (N,). next() -> (images_batch, labels_batch).",
+   "algorithm": "Sequential, non-shuffled slicing with a moving index.",
+   "theory_link": "Step 1 of mini-batch SGD (p.68): draw a batch of samples and targets.",
+   "parameters": [
+    {
+     "name": "batch_size",
+     "role": "Rows per batch"
+    },
+    {
+     "name": "index",
+     "role": "Position of the next batch"
+    }
+   ],
+   "pitfalls": [
+    "The index is never reset; a new BatchGenerator must be created for each epoch (the fit function on p.81 does this).",
+    "The data is not shuffled, so every epoch sees batches in the same order (beyond the book: Keras's fit shuffles by default)."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "2.9",
+   "title": "A single step of training",
+   "original_code": "def one_training_step(model, images_batch, labels_batch):\n    predictions = model(images_batch)\n    loss = ops.sparse_categorical_crossentropy(labels_batch, predictions)\n    average_loss = ops.mean(loss)\n    gradients = get_gradients_of_loss_wrt_weights(loss, model.weights)\n    update_weights(gradients, model.weights)\n    return loss",
+   "language": "python",
+   "what_it_does": "Performs one training step on a batch: forward pass, loss computation, gradient computation with respect to all model weights, and weight update.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Takes the mock model and one batch of images and labels."
+    },
+    {
+     "lines": "2",
+     "explanation": "Callout: runs the 'forward pass', giving (batch, 10) probabilities."
+    },
+    {
+     "lines": "3",
+     "explanation": "Per-sample sparse categorical crossentropy between integer labels and predicted probabilities."
+    },
+    {
+     "lines": "4",
+     "explanation": "Averages the per-sample losses over the batch."
+    },
+    {
+     "lines": "5",
+     "explanation": "Callout: computes the gradient of the loss with regard to the weights. The output, gradients, is a list where each entry corresponds to a weight from the model.weights list. We haven't defined this function yet!"
+    },
+    {
+     "lines": "6",
+     "explanation": "Callout: updates the weights using the gradients. We haven't defined this function yet!"
+    },
+    {
+     "lines": "7",
+     "explanation": "Returns the loss so the caller can monitor training."
+    }
+   ],
+   "inputs_outputs": "Inputs: model, images_batch (batch, 784), labels_batch (batch,). Effect: model.weights updated in place. Returns the loss.",
+   "algorithm": "Forward pass, loss, backward pass, gradient-descent update.",
+   "theory_link": "Exactly the four bullets above, i.e. steps 2-5 of mini-batch SGD on p.68.",
+   "parameters": [
+    {
+     "name": "model",
+     "role": "Callable with a weights list (NaiveSequential from p.78)"
+    },
+    {
+     "name": "images_batch / labels_batch",
+     "role": "One batch from BatchGenerator.next()"
+    }
+   ],
+   "pitfalls": [
+    "As printed, average_loss is computed but `loss` (the per-sample vector) is what is passed to the gradient function and returned. A gradient of a vector target is usually taken as the gradient of its sum, which is batch_size times the gradient of the mean, effectively scaling the learning rate. The rewritten version on p.81 fixes this: it calls tape.gradient(average_loss, model.weights) and returns average_loss.",
+    "The function cannot run yet: get_gradients_of_loss_wrt_weights and update_weights are defined on p.80.",
+    "The gradient computation must 'see' the forward pass; with TensorFlow this means running lines 2-4 inside a GradientTape (p.80)."
+   ],
+   "illustrative_code": "# AI-written: what the two missing pieces amount to, using plain SGD\nlearning_rate = 1e-3\n\ndef update_weights(gradients, weights):\n    for g, w in zip(gradients, weights):\n        w.assign(w - g * learning_rate)   # step opposite to the gradient"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Mapping listing 2.9 to the SGD algorithm of p.68",
+   "kind": "breakdown",
+   "body": "| p.68 step | Listing 2.9 / this page |\n|---|---|\n| 1. Draw a batch x, y_true | `BatchGenerator.next()` |\n| 2. Forward pass y_pred = model(x) | `predictions = model(images_batch)` |\n| 3. Loss of y_pred vs y_true | `ops.sparse_categorical_crossentropy(...)`, `ops.mean(loss)` |\n| 4. Backward pass: gradient | `get_gradients_of_loss_wrt_weights(loss, model.weights)` |\n| 5. Move parameters opposite to the gradient | `update_weights(gradients, model.weights)` |",
+   "source": "inference"
+  },
+  {
+   "title": "Why 'difficult'? The gradient is the only non-obvious part",
+   "kind": "step_by_step",
+   "body": "1. Predictions and loss are just compositions of matmul, add, relu, softmax, log and mean, all explained in section 2.3.\n2. The update is one subtraction per tensor.\n3. The gradient requires the derivative of the loss with respect to 407,050 scalars through softmax and two Dense layers. Writing these derivatives by hand is error-prone, which is why p.80 hands this job to automatic differentiation (`tf.GradientTape`), as the chain rule of p.70-p.74 is applied mechanically by the framework.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "One training step (listing 2.9)",
+   "why": "The four bullets of section 2.5.2 and the five lines of one_training_step, including the two functions not yet defined.",
+   "mermaid": "flowchart LR\n  B[BatchGenerator.next: images_batch, labels_batch] --> F[model images_batch: forward pass]\n  F --> P[predictions 128 x 10]\n  P --> L[sparse_categorical_crossentropy vs labels_batch]\n  L --> M[ops.mean: average_loss]\n  L --> G[get_gradients_of_loss_wrt_weights: one gradient per weight]\n  G --> U[update_weights: w moves opposite to gradient]\n  U --> W[(model.weights W1 b1 W2 b2)]\n  W -.used by next forward pass.-> F"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Crossentropy as a function of the predicted probability",
+   "why": "Listing 2.9 computes ops.sparse_categorical_crossentropy; see how the per-sample loss grows as the probability given to the true class falls.",
+   "widget": "loss_functions",
+   "params": {
+    "losses": [
+     "cce"
+    ],
+    "y_true": 1
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The loss returned by ops.sparse_categorical_crossentropy is already a single number for the batch.",
+   "correction": "It is one value per sample; the listing averages it with ops.mean."
+  },
+  {
+   "claim": "Weights should move in the direction of the gradient.",
+   "correction": "The gradient points toward increasing loss; the page says to move the weights in the opposite direction."
+  },
+  {
+   "claim": "BatchGenerator automatically restarts at the beginning after the last batch.",
+   "correction": "Its index only increases; a fresh generator is needed for each epoch."
+  },
+  {
+   "claim": "Listing 2.9 is complete, runnable code.",
+   "correction": "Its callouts state that get_gradients_of_loss_wrt_weights and update_weights have not been defined yet; they come on p.80."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 78,
+    "note": "Start of BatchGenerator, NaiveSequential and model.weights."
+   },
+   {
+    "page": 68,
+    "note": "Mini-batch SGD steps mirrored by the training step."
+   },
+   {
+    "page": 76,
+    "note": "fit performs this step 469 times per epoch."
+   }
+  ],
+  "later": [
+   {
+    "page": 80,
+    "note": "update_weights by hand and with optimizers.SGD; tf.GradientTape for gradients."
+   },
+   {
+    "page": 81,
+    "note": "The full training loop calling one_training_step for every batch and epoch."
+   },
+   {
+    "page": 239,
+    "note": "Chapter 7's custom training loops follow the same steps."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 66,
+    "note": "Gradient of a tensor operation."
+   },
+   {
+    "page": 78,
+    "note": "The mock model whose weights are updated."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 68,
+    "note": "W -= learning_rate * gradient."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 80,
+    "note": "update_weights implementations."
+   },
+   {
+    "page": 81,
+    "note": "fit loop using BatchGenerator."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 75,
+    "note": "Figure 2.26: loss feeds the optimizer, which updates the weights."
+   }
+  ]
+ },
+ "takeaways": [
+  "BatchGenerator serves consecutive slices of 128 samples; num_batches = ceil(60000/128) = 469.",
+  "A training step: predictions, loss, gradient of the loss with regard to the weights, small move opposite to the gradient.",
+  "Listing 2.9 implements this in six lines, with gradient computation and weight update delegated to functions defined on p.80.",
+  "The size of the update is controlled by the learning rate."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Which of the four tasks of a training step is the 'backward pass'?",
+   "options": [
+    "Compute the predictions for the images in the batch",
+    "Compute the loss value given the actual labels",
+    "Compute the gradient of the loss with regard to the model's weights",
+    "Move the weights a small amount opposite to the gradient"
+   ],
+   "answer": "Compute the gradient of the loss with regard to the model's weights",
+   "explanation": "p.68 calls computing the gradient the backward pass. Predictions are the forward pass, the loss is computed from the forward outputs, and moving the weights is the update.",
+   "page_refs": [
+    79,
+    68
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "For a dataset of 1,000 samples and batch_size=128, what is num_batches and how many samples are in the last batch?",
+   "options": [],
+   "answer": "8 batches; the last has 104 samples.",
+   "explanation": "ceil(1000/128) = ceil(7.8125) = 8. Seven full batches cover 896 samples, leaving 104.",
+   "page_refs": [
+    79
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What does get_gradients_of_loss_wrt_weights return, according to the callout?",
+   "options": [],
+   "answer": "A list of gradients in which each entry corresponds to a weight in the model.weights list.",
+   "explanation": "The callout states this explicitly; the list therefore has 4 entries with the shapes of W1, b1, W2, b2.",
+   "page_refs": [
+    79
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "What does the page say determines the magnitude of the weight update?",
+   "options": [
+    "The batch size",
+    "The learning rate",
+    "The number of epochs",
+    "The value of the loss"
+   ],
+   "answer": "The learning rate",
+   "explanation": "The weight update paragraph says the magnitude of the move is determined by the learning rate (completed on p.80). The gradient also scales the step, but batch size and epochs do not set the step magnitude directly.",
+   "page_refs": [
+    79,
+    80
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "math",
+   "question": "A batch of two samples has true-class predicted probabilities 0.5 and 0.25. Compute loss and average_loss from listing 2.9 (natural log).",
+   "options": [],
+   "answer": "loss = [0.693, 1.386]; average_loss ≈ 1.040",
+   "explanation": "-ln 0.5 ≈ 0.693, -ln 0.25 ≈ 1.386; their mean is 1.040.",
+   "page_refs": [
+    79
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Listing 2.9 computes average_loss but passes loss to the gradient function. What difference could this make, and what would you pass instead?",
+   "options": [],
+   "answer": "If the framework treats a vector target as its sum, the gradient is batch_size times the gradient of the mean, which acts like a larger learning rate. Passing average_loss (a scalar) makes the update independent of batch size.",
+   "explanation": "This observation goes beyond the book's text; the printed listing is reproduced verbatim. Gradients are defined for scalar losses (p.80: 'gradient of any scalar value'). The rewritten step on p.81 indeed uses tape.gradient(average_loss, model.weights).",
+   "page_refs": [
+    79,
+    81
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Without looking, write one_training_step and BatchGenerator.next(), and say which line of each corresponds to which step of mini-batch SGD.",
+   "options": [],
+   "answer": "next(): draw a batch. Training step: forward pass, loss, gradients, update.",
+   "explanation": "If you can do this, you understand what fit does for each of its 2,345 steps.",
+   "page_refs": [
+    79,
+    68
+   ]
+  }
+ ]
+}

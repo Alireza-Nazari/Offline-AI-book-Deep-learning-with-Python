@@ -1,0 +1,560 @@
+{
+ "page_id": "page_144",
+ "pdf_page": 144,
+ "printed_page": "120",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:16:29Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction. The first code element is the tail of listing 4.16, which starts on p.143; the body lines and listings 4.17-4.19 match the page image."
+ },
+ "overview": {
+  "title": "Validating the Reuters model: split, fit, plot loss",
+  "chapter": "4 Classification and regression",
+  "section": "4.2 Classifying newswires: A multiclass classification example",
+  "subsection": "4.2.4 Validating your approach",
+  "main_topic": "Finishing the compile step with top-3 accuracy, holding out 1,000 validation samples, training for 20 epochs, and plotting training vs. validation loss",
+  "central_idea": "The Reuters workflow repeats the IMDb validation recipe: set aside part of the training data as a validation set, train while monitoring it with `validation_data`, then plot the `History` curves to find where overfitting begins.",
+  "importance": "This page sets up the experiment whose curves (figures 4.6-4.8 on p.145-146) are used to choose the number of epochs (nine, p.147). It also shows how a custom metric object (`top_3_accuracy`) is plugged into `compile()` next to the plain string metric `\"accuracy\"`.",
+  "learning_objectives": [
+   "Read the complete `compile()` call for the 46-class Reuters model and say what each argument does",
+   "Explain why 1,000 samples are sliced off the training set rather than using the test set for validation",
+   "Describe what `model.fit(..., validation_data=...)` returns and how `history.history` is structured",
+   "Reproduce the Matplotlib code that plots training and validation loss per epoch",
+   "Compute how many gradient updates one epoch performs with 7,982 samples and `batch_size=512`"
+  ],
+  "prerequisites": [
+   "The Reuters data and its one-hot labels (p.141-142)",
+   "The 64-64-46 softmax model of listing 4.15 (p.143)",
+   "The IMDb validation workflow and `History` object (p.135-137)",
+   "Basic NumPy slicing"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the **closing lines of listing 4.16** (begun on p.143). The model is compiled with the `\"adam\"` optimizer, the `\"categorical_crossentropy\"` loss (appropriate because the labels were one-hot encoded on p.142 and the last layer is a 46-way softmax), and two metrics: the built-in string `\"accuracy\"` and the metric object `top_3_accuracy`, a `keras.metrics.TopKCategoricalAccuracy(k=3, name=\"top_3_accuracy\")` instance created at the bottom of p.143. Top-3 accuracy counts a prediction as correct when the true topic is among the model's three highest-probability topics, a gentler measure than plain accuracy for a 46-class problem.\n\n**Section 4.2.4, Validating your approach**, then mirrors what was done for IMDb in section 4.1.4 (p.135):\n\n1. **Listing 4.17** slices the first 1,000 of the 8,982 training samples off as a validation set (`x_val`, `y_val`), leaving 7,982 samples (`partial_x_train`, `partial_y_train`) for actual training. The same slice boundary is used for inputs and labels, so pairs stay aligned.\n2. **Listing 4.18** trains for 20 epochs with mini-batches of 512 and passes `validation_data=(x_val, y_val)`, so Keras evaluates loss and both metrics on the held-out 1,000 samples at the end of every epoch. The returned `History` object is stored in `history`.\n3. **Listing 4.19** pulls `history.history[\"loss\"]` and `history.history[\"val_loss\"]`, builds an x-axis `range(1, len(loss) + 1)` (epochs 1-20), and plots training loss as a red dashed line (`\"r--\"`) and validation loss as a solid blue line (`\"b\"`), with title, axis labels, a tick at every epoch (`plt.xticks(epochs)`) and a legend.\n\nThe text points ahead to figures 4.6 and 4.7 (p.145), which show the resulting loss and accuracy curves; the accuracy plotting code (listing 4.20) and the top-3 accuracy plot follow on p.146. Compared with the IMDb version (10,000 validation samples, p.135), the validation set here is much smaller because the whole Reuters training set has fewer than 9,000 examples.",
+ "paragraphs": [
+  {
+   "ref": "p144_e06",
+   "excerpt": "Let’s set apart 1,000 samples in the training data to use as",
+   "what_it_says": "The authors announce that 1,000 of the training samples will be held out as a validation set.",
+   "what_it_means": "The model will train on the remaining 7,982 samples (8,982 total per p.141, minus 1,000) and be scored, epoch by epoch, on 1,000 samples it never updates its weights on. The test set (2,246 samples) is left untouched for the final evaluation.",
+   "why_it_matters": "Monitoring performance on data not used for gradient updates is the only way to see overfitting during training. As explained on p.135, the test set must not be used for this, because decisions you base on validation scores (such as the number of epochs) leak information into the model.",
+   "technical_idea": "This is simple hold-out validation. With 1,000 samples, a validation accuracy has a standard error of roughly $\\sqrt{0.8\\cdot0.2/1000}\\approx 1.3$ percentage points (beyond the book), which is adequate for choosing an epoch count but explains why the validation curves wobble.",
+   "terminology": [
+    {
+     "term": "validation set",
+     "meaning": "Samples split off from the training data, used to monitor and tune the model but never for gradient updates."
+    }
+   ],
+   "connections": [
+    "p.135: the IMDb example set apart 10,000 validation samples for the same reason.",
+    "p.153: with even less data (house prices), the book switches to K-fold validation instead of a single hold-out split."
+   ]
+  },
+  {
+   "ref": "p144_e09",
+   "excerpt": "Now, let’s train the model for 20 epochs.",
+   "what_it_says": "Training is launched for 20 epochs (listing 4.18).",
+   "what_it_means": "One epoch is one pass over all 7,982 training samples. With `batch_size=512`, each epoch performs $\\lceil 7982/512\\rceil = 16$ gradient updates (15 full batches plus one batch of 302), so 20 epochs means 320 updates in total. Twenty epochs is deliberately generous: the goal is to train long enough to *see* overfitting set in.",
+   "why_it_matters": "The epoch count is a hyperparameter you choose by looking at the validation curves this run produces; the book will read off nine epochs on p.147.",
+   "terminology": [
+    {
+     "term": "epoch",
+     "meaning": "One full iteration over the training data."
+    },
+    {
+     "term": "batch size",
+     "meaning": "Number of samples used to compute each gradient update (here 512)."
+    }
+   ],
+   "connections": [
+    "p.135: IMDb was also trained for 20 epochs in batches of 512."
+   ]
+  },
+  {
+   "ref": "p144_e12",
+   "excerpt": "And finally, let’s display its loss and accuracy curves (see figures 4.6",
+   "what_it_says": "The authors introduce plotting code for the loss and accuracy curves shown in figures 4.6 and 4.7.",
+   "what_it_means": "`model.fit()` returns a `History` object whose `.history` attribute is a dict mapping each monitored quantity to a list with one value per epoch. Here that dict has six keys: `loss`, `accuracy`, `top_3_accuracy` and their `val_` counterparts. Listing 4.19 plots the loss pair; listing 4.20 (p.146) plots accuracy, and listing 4.21 plots top-3 accuracy.",
+   "why_it_matters": "Reading these curves is the core diagnostic skill of this chapter: the training curve keeps improving, while the validation curve reveals the point where the model stops generalizing better.",
+   "terminology": [
+    {
+     "term": "History",
+     "meaning": "Object returned by `fit()`; its `history` dict records per-epoch metric values for training and validation data."
+    }
+   ],
+   "connections": [
+    "p.136: the IMDb `history_dict` had four keys (loss, accuracy, val_loss, val_accuracy).",
+    "p.145: figures 4.6 and 4.7 show the resulting curves."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "validation_set",
+   "name": "Validation set (hold-out)",
+   "definition": "A subset of the training data held out from gradient updates and used to monitor generalization during training and to tune choices such as the number of epochs.",
+   "intuition": "A practice exam you take during studying; the test set is the real exam you take only once.",
+   "technical": "Listing 4.17 builds it by slicing: `x_val = x_train[:1000]`, `partial_x_train = x_train[1000:]`, and the same for labels. Keras evaluates it at the end of each epoch when passed as `validation_data`.",
+   "significance": "Without it, overfitting is invisible, because training loss keeps decreasing regardless.",
+   "example": "Reuters: 8,982 training samples → 7,982 for training and 1,000 for validation; 2,246 test samples kept aside.",
+   "misconception": "That the validation score is an unbiased estimate of final performance. Once you choose hyperparameters using it, it becomes slightly optimistic, which is why a separate test set exists (p.135).",
+   "related": [
+    "overfitting",
+    "k_fold_validation",
+    "data_split"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "top_k_accuracy",
+   "name": "Top-k accuracy",
+   "definition": "The fraction of samples whose true class is among the model's k highest-scoring predicted classes.",
+   "intuition": "A model that ranks the right topic second is better than one that ranks it 40th, but plain accuracy scores both as wrong; top-3 accuracy gives credit to the first.",
+   "technical": "Implemented by `keras.metrics.TopKCategoricalAccuracy(k=3, name=\"top_3_accuracy\")` (p.143), which expects one-hot targets. Passing the object in `metrics=[\"accuracy\", top_3_accuracy]` makes Keras log `top_3_accuracy` and `val_top_3_accuracy`.",
+   "significance": "For many-class problems, top-k accuracy shows whether the model has the right topic \"in the neighbourhood\", which matters for applications that show several suggestions.",
+   "example": "True topic 3; predicted probabilities rank topics 19, 3, 4 first. Accuracy for this sample = 0, top-3 accuracy = 1.",
+   "misconception": "Top-k accuracy is always ≥ top-1 accuracy, so a high top-3 number does not mean the model's single best guess is good.",
+   "related": [
+    "accuracy",
+    "softmax",
+    "cross_entropy"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "cross_entropy",
+   "name": "Categorical crossentropy",
+   "definition": "The loss used here: it measures the distance between the model's predicted probability distribution and the true (one-hot) label distribution.",
+   "intuition": "It punishes the model according to how little probability it put on the correct class.",
+   "technical": "For one-hot $y$ and softmax output $\\hat y$, the loss per sample reduces to $-\\log \\hat y_{c}$ where $c$ is the true class. The string `\"categorical_crossentropy\"` requires one-hot labels like those produced on p.142.",
+   "significance": "Minimizing it pushes the softmax output toward the true label, as the book explains on p.143.",
+   "example": "If the model assigns 0.5 to the true class, loss = 0.69; if 0.05, loss = 3.0.",
+   "misconception": "It is not a different loss from `sparse_categorical_crossentropy`; that variant only takes integer labels instead of one-hot (p.148-149).",
+   "related": [
+    "softmax",
+    "loss_function"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "history_object",
+   "name": "Training History",
+   "definition": "The object returned by `model.fit()`, whose `history` dict stores one list of per-epoch values for each training and validation metric.",
+   "intuition": "A logbook Keras fills in at the end of every epoch.",
+   "technical": "Keys follow the metric names: `loss`, `accuracy`, `top_3_accuracy`, and the same names prefixed with `val_` when validation data is supplied. Each list has length `epochs` (20 here).",
+   "significance": "It is the raw material for the plots in listings 4.19-4.21.",
+   "example": "`len(history.history[\"val_loss\"]) == 20`.",
+   "misconception": "The training metric is an average over the batches of that epoch, computed while the weights were still changing, whereas the validation metric is computed at the end of the epoch, so they are not measured under identical conditions.",
+   "related": [
+    "validation_set",
+    "overfitting"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Categorical crossentropy for one sample (background for the compile call)",
+   "latex": "\\mathcal{L}(y,\\hat y) = -\\sum_{i=0}^{45} y_i \\log \\hat y_i = -\\log \\hat y_{c}",
+   "source_text": "loss=\"categorical_crossentropy\" (the page gives only the name; the formula is not printed)",
+   "variables": [
+    {
+     "symbol": "y",
+     "meaning": "One-hot label vector of length 46 (1 at the true topic index, 0 elsewhere)"
+    },
+    {
+     "symbol": "\\hat y",
+     "meaning": "Softmax output of the model, a probability vector of length 46"
+    },
+    {
+     "symbol": "c",
+     "meaning": "Index of the true class"
+    }
+   ],
+   "operations": "Elementwise product of label and log-probabilities, summed; because only one $y_i$ is 1, the sum collapses to minus the log-probability of the true class.",
+   "purpose": "This is what Keras minimizes for every batch in listing 4.18.",
+   "interpretation": "Loss 0 means the model gave probability 1 to the right topic; the loss of a uniform guess over 46 classes is $\\log 46 \\approx 3.83$.",
+   "intuition": "The first-epoch training loss of about 3.3 in figure 4.6 (p.145) is close to the uniform-guess value of 3.83, as expected for a freshly initialized model.",
+   "numerical_example": "If $\\hat y_c = 0.4$, $\\mathcal{L} = -\\ln 0.4 \\approx 0.92$. A validation loss of about 0.9 (the minimum in figure 4.6) corresponds to a geometric-mean probability of $e^{-0.9}\\approx 0.41$ on the true topic.",
+   "source": "ai_explanation",
+   "book_ref": "p.143"
+  },
+  {
+   "id": "m2",
+   "title": "Top-3 accuracy",
+   "latex": "\\text{top-3 acc} = \\frac{1}{N}\\sum_{n=1}^{N} \\mathbb{1}\\left[c_n \\in \\operatorname{top}_3(\\hat y^{(n)})\\right]",
+   "source_text": "top_3_accuracy (TopKCategoricalAccuracy with k=3; described in words on p.143)",
+   "variables": [
+    {
+     "symbol": "N",
+     "meaning": "Number of samples evaluated"
+    },
+    {
+     "symbol": "c_n",
+     "meaning": "True class of sample n"
+    },
+    {
+     "symbol": "\\operatorname{top}_3(\\hat y^{(n)})",
+     "meaning": "Set of the 3 class indices with the largest predicted probabilities for sample n"
+    },
+    {
+     "symbol": "\\mathbb{1}[\\cdot]",
+     "meaning": "Indicator: 1 if the condition holds, else 0"
+    }
+   ],
+   "operations": "For each sample, rank the 46 probabilities, check membership of the true class in the top three, then average.",
+   "purpose": "Formalizes the metric passed as `top_3_accuracy` in the compile call at the top of the page.",
+   "interpretation": "With k=1 this is ordinary accuracy; increasing k can only raise the score.",
+   "intuition": "Measures whether the right answer is on the model's short list.",
+   "numerical_example": "Four samples whose true class is ranked 1st, 2nd, 5th and 3rd: accuracy = 1/4 = 0.25, top-3 accuracy = 3/4 = 0.75.",
+   "source": "ai_explanation",
+   "book_ref": "p.143"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "4.16",
+   "title": "Compiling the model (end of listing 4.16)",
+   "original_code": ")\nmodel.compile(\n    optimizer=\"adam\",\n    loss=\"categorical_crossentropy\",\n    metrics=[\"accuracy\", top_3_accuracy],\n)",
+   "language": "python",
+   "what_it_does": "Completes listing 4.16, which begins on p.143. The leading `)` closes the `keras.metrics.TopKCategoricalAccuracy(k=3, name=\"top_3_accuracy\"` call started on the previous page; then the model is compiled with Adam, categorical crossentropy, and two metrics.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Closing parenthesis of `top_3_accuracy = keras.metrics.TopKCategoricalAccuracy(k=3, name=\"top_3_accuracy\"` from p.143."
+    },
+    {
+     "lines": "2-3",
+     "explanation": "`compile()` with the Adam optimizer referenced by its string name (default learning rate)."
+    },
+    {
+     "lines": "4",
+     "explanation": "Categorical crossentropy, matching one-hot labels and the 46-way softmax output."
+    },
+    {
+     "lines": "5",
+     "explanation": "Metrics list mixes a string (`\"accuracy\"`, resolved by Keras to categorical accuracy for this loss) and a metric object (`top_3_accuracy`)."
+    }
+   ],
+   "inputs_outputs": "Input: the uncompiled 64-64-46 model from listing 4.15. Output: none returned; the model is configured for training.",
+   "algorithm": "Configuration only; no computation happens until `fit()`.",
+   "theory_link": "Loss = what gradient descent minimizes; metrics = what you monitor but do not optimize directly.",
+   "parameters": [
+    {
+     "name": "optimizer",
+     "role": "Update rule for weights (Adam)."
+    },
+    {
+     "name": "loss",
+     "role": "Differentiable objective (categorical crossentropy)."
+    },
+    {
+     "name": "metrics",
+     "role": "Quantities logged each epoch: accuracy and top-3 accuracy."
+    }
+   ],
+   "pitfalls": [
+    "`TopKCategoricalAccuracy` expects one-hot targets; with integer labels you would need `SparseTopKCategoricalAccuracy`.",
+    "The `name=\"top_3_accuracy\"` argument determines the key in `history.history`, which listing 4.21 relies on (p.146)."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "4.17",
+   "title": "Setting aside a validation set",
+   "original_code": "x_val = x_train[:1000]\npartial_x_train = x_train[1000:]\ny_val = y_train[:1000]\npartial_y_train = y_train[1000:]",
+   "language": "python",
+   "what_it_does": "Splits the encoded inputs and one-hot labels into a 1,000-sample validation set and a 7,982-sample training remainder.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "First 1,000 rows of the (8982, 10000) multi-hot input matrix become `x_val`; rows 1000 onward become `partial_x_train` with shape (7982, 10000)."
+    },
+    {
+     "lines": "3-4",
+     "explanation": "The same split on the (8982, 46) label matrix keeps each label aligned with its input row."
+    }
+   ],
+   "inputs_outputs": "Inputs: `x_train` (8982, 10000), `y_train` (8982, 46). Outputs: `x_val` (1000, 10000), `partial_x_train` (7982, 10000), `y_val` (1000, 46), `partial_y_train` (7982, 46).",
+   "algorithm": "Plain NumPy slicing; no copying of data is required for slices of contiguous arrays (they are views).",
+   "theory_link": "Hold-out validation (p.135).",
+   "parameters": [
+    {
+     "name": "1000",
+     "role": "Size of the validation set."
+    }
+   ],
+   "pitfalls": [
+    "Taking the first 1,000 samples assumes the data is not sorted by class; Reuters is not, but in general you should shuffle before slicing.",
+    "Slicing inputs and labels with different boundaries silently misaligns them."
+   ],
+   "illustrative_code": "# AI-written check, not in the book\nprint(partial_x_train.shape, x_val.shape)   # (7982, 10000) (1000, 10000)\nprint(partial_y_train.shape, y_val.shape)   # (7982, 46) (1000, 46)"
+  },
+  {
+   "id": "c3",
+   "listing": "4.18",
+   "title": "Training the model",
+   "original_code": "history = model.fit(\n    partial_x_train,\n    partial_y_train,\n    epochs=20,\n    batch_size=512,\n    validation_data=(x_val, y_val),\n)",
+   "language": "python",
+   "what_it_does": "Trains for 20 epochs on 7,982 samples in batches of 512, evaluating on the 1,000 validation samples after each epoch, and keeps the per-epoch log in `history`.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "`fit()` returns a `History` object, stored for plotting."
+    },
+    {
+     "lines": "2-3",
+     "explanation": "Training inputs and one-hot targets."
+    },
+    {
+     "lines": "4-5",
+     "explanation": "20 passes over the data; 16 gradient steps per epoch (15×512 + 302)."
+    },
+    {
+     "lines": "6",
+     "explanation": "Validation data evaluated at the end of each epoch; produces `val_loss`, `val_accuracy`, `val_top_3_accuracy`."
+    }
+   ],
+   "inputs_outputs": "Input: the compiled model and arrays from listing 4.17. Output: trained weights (in place) and `history.history` with six lists of 20 floats.",
+   "algorithm": "Mini-batch gradient descent with Adam; the validation pass is forward-only (no weight updates).",
+   "theory_link": "Generalization vs. optimization: training metrics measure fit, validation metrics estimate generalization.",
+   "parameters": [
+    {
+     "name": "epochs",
+     "role": "Number of passes over the training data (20)."
+    },
+    {
+     "name": "batch_size",
+     "role": "Samples per gradient update (512)."
+    },
+    {
+     "name": "validation_data",
+     "role": "Tuple of held-out inputs and targets monitored each epoch."
+    }
+   ],
+   "pitfalls": [
+    "Re-running this cell without rebuilding the model continues training from the current weights, distorting the curves.",
+    "Results vary slightly between runs because of random initialization (noted for IMDb on p.136)."
+   ]
+  },
+  {
+   "id": "c4",
+   "listing": "4.19",
+   "title": "Plotting the training and validation loss",
+   "original_code": "loss = history.history[\"loss\"]\nval_loss = history.history[\"val_loss\"]\nepochs = range(1, len(loss) + 1)\nplt.plot(epochs, loss, \"r--\", label=\"Training loss\")\nplt.plot(epochs, val_loss, \"b\", label=\"Validation loss\")\nplt.title(\"Training and validation loss\")\nplt.xlabel(\"Epochs\")\nplt.xticks(epochs)\nplt.ylabel(\"Loss\")\nplt.legend()\nplt.show()",
+   "language": "python",
+   "what_it_does": "Draws figure 4.6 (p.145): training loss as a red dashed line and validation loss as a solid blue line over epochs 1-20.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "Extract the per-epoch loss lists from the `History` dict."
+    },
+    {
+     "lines": "3",
+     "explanation": "x-axis values 1..20 (epochs counted from 1, not 0)."
+    },
+    {
+     "lines": "4-5",
+     "explanation": "Format strings: `\"r--\"` = red dashed, `\"b\"` = blue solid line; labels feed the legend."
+    },
+    {
+     "lines": "6-9",
+     "explanation": "Title, axis labels, and a tick at every epoch so the overfitting epoch can be read precisely."
+    },
+    {
+     "lines": "10-11",
+     "explanation": "Show legend and render the figure."
+    }
+   ],
+   "inputs_outputs": "Input: `history` from listing 4.18 and `plt` (matplotlib.pyplot, imported earlier in the chapter). Output: a line chart.",
+   "algorithm": "Plotting only.",
+   "theory_link": "The epoch where validation loss is lowest marks the onset of overfitting.",
+   "parameters": [
+    {
+     "name": "\"r--\" / \"b\"",
+     "role": "Line color and style for training vs. validation."
+    }
+   ],
+   "pitfalls": [
+    "The `epochs` variable defined here shadows nothing in Keras but is reused by listings 4.20 and 4.21 on p.146; run this cell first.",
+    "Without `plt.clf()` (used in listing 4.20) a following plot in some environments would draw on the same axes."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Counting the work in listing 4.18",
+   "kind": "numerical",
+   "body": "Beyond the book: with 7,982 training samples and `batch_size=512`, one epoch = 15 full batches (7,680 samples) + 1 batch of 302 = **16 updates**. Twenty epochs = **320 updates**. The model has $10000\\cdot64+64 + 64\\cdot64+64 + 64\\cdot46+46 = 640{,}064 + 4{,}160 + 2{,}990 = 647{,}214$ parameters, almost all in the first layer. Each validation pass costs one forward pass over 1,000 samples, cheap compared with training.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why a 1,000-sample validation set is enough here, but not always",
+   "kind": "breakdown",
+   "body": "Note (not in the book): the uncertainty of an accuracy estimate on $n$ samples is roughly $\\sqrt{p(1-p)/n}$. At $p\\approx0.8$ and $n=1000$ that is about 1.3 points, small enough to distinguish an 80% model from a 71% one (p.149) but too large to reliably tell 80.5% from 81%. When the dataset is smaller still, the book moves to K-fold validation (p.153).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Same recipe, different dataset",
+   "kind": "alternative",
+   "body": "The listings are nearly identical to the IMDb ones on p.135-137 (listings 4.6-4.8). What changed: validation size (10,000 → 1,000), loss (`binary_crossentropy` → `categorical_crossentropy`), and the extra top-3 metric. This repetition is deliberate in the book: the workflow stays the same across problem types; only the last layer, loss and metrics change.",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Reuters data split: 7,982 train / 1,000 validation / 2,246 test",
+   "why": "Listing 4.17 carves 1,000 validation samples out of the 8,982 training samples, while the 2,246 test samples (p.141) stay untouched. The proportions below are of all 11,228 samples.",
+   "widget": "data_split",
+   "params": {
+    "train": 0.711,
+    "val": 0.089,
+    "test": 0.2,
+    "n": 11228
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Tensor shapes through listing 4.17 and the model",
+   "why": "Shows the shapes produced by the slicing in listing 4.17 and consumed by the 64-64-46 model being trained in listing 4.18.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "x_train", "shape": [8982, 10000]},
+     {"op": "slice [1000:]", "shape": [7982, 10000]},
+     {"op": "batch", "shape": [512, 10000]},
+     {"op": "Dense 64", "shape": [512, 64]},
+     {"op": "Dense 64", "shape": [512, 64]},
+     {"op": "Dense 46 softmax", "shape": [512, 46]}
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "You can just use the test set as `validation_data`.",
+   "correction": "Validation scores guide decisions such as the epoch count; doing that with the test set makes the final test score optimistically biased (p.135)."
+  },
+  {
+   "claim": "Adding `top_3_accuracy` to `metrics` changes how the model is trained.",
+   "correction": "Metrics are only monitored. Training minimizes the loss (categorical crossentropy) alone."
+  },
+  {
+   "claim": "`epochs=20` means the model sees 20 batches.",
+   "correction": "An epoch is a full pass over all 7,982 training samples, i.e. 16 batches of up to 512; 20 epochs is 320 batches."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 143, "note": "Listing 4.15 defines the 64-64-46 model and listing 4.16 starts with the TopKCategoricalAccuracy metric."},
+   {"page": 142, "note": "Multi-hot inputs and one-hot labels that are split here."},
+   {"page": 141, "note": "8,982 training and 2,246 test newswires."},
+   {"page": 135, "note": "Same validation recipe for IMDb, with 10,000 held-out samples."}
+  ],
+  "later": [
+   {"page": 145, "note": "Figures 4.6 and 4.7: the loss and accuracy curves produced by this training run."},
+   {"page": 146, "note": "Listings 4.20 and 4.21 plot accuracy and top-3 accuracy."},
+   {"page": 147, "note": "Retraining from scratch for nine epochs and evaluating on the test set."},
+   {"page": 153, "note": "K-fold validation for when a hold-out set would be too small."}
+  ],
+  "prerequisites": [
+   {"page": 136, "note": "The History object and its per-epoch metrics dict."}
+  ],
+  "related_math": [
+   {"page": 143, "note": "Verbal definition of categorical crossentropy and top-k accuracy."}
+  ],
+  "related_code": [
+   {"page": 137, "note": "Listing 4.8, the IMDb loss plot, has the same structure as listing 4.19."},
+   {"page": 275, "note": "Listing 8.16 reuses this plotting pattern for a convnet."}
+  ],
+  "related_figures": [
+   {"page": 145, "note": "Figure 4.6 is the output of listing 4.19."}
+  ]
+ },
+ "takeaways": [
+  "The model is compiled with Adam, categorical crossentropy and two metrics: accuracy and top-3 accuracy.",
+  "1,000 of the 8,982 training samples are held out for validation; 7,982 are used for training.",
+  "`validation_data` makes Keras report `val_` versions of the loss and every metric at the end of each epoch.",
+  "Twenty epochs is chosen on purpose to overshoot, so the curves can show where overfitting starts.",
+  "Listing 4.19 plots `loss` vs. `val_loss` from `history.history`; the result is figure 4.6 on p.145."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "After listing 4.17, what is the shape of `partial_y_train`?",
+   "options": ["(1000, 46)", "(7982, 46)", "(8982, 46)", "(7982, 10000)"],
+   "answer": "(7982, 46)",
+   "explanation": "`y_train` is one-hot with shape (8982, 46); dropping the first 1,000 rows leaves 7,982 rows of 46. (1000, 46) is `y_val`; (8982, 46) is before slicing; (7982, 10000) is `partial_x_train`.",
+   "page_refs": [144, 142, 141]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "How many gradient updates does listing 4.18 perform in total?",
+   "options": [],
+   "answer": "320 (16 per epoch × 20 epochs).",
+   "explanation": "7,982 / 512 = 15.6, so each epoch has 15 full batches plus one partial batch of 302 samples = 16 updates; 16 × 20 = 320.",
+   "page_refs": [144]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "Which keys will `history.history` contain after listing 4.18?",
+   "options": [],
+   "answer": "`loss`, `accuracy`, `top_3_accuracy`, `val_loss`, `val_accuracy`, `val_top_3_accuracy`.",
+   "explanation": "One key per loss/metric for training data, plus a `val_`-prefixed copy for each because `validation_data` was supplied. The top-3 key comes from `name=\"top_3_accuracy\"` given on p.143 and is used in listing 4.21 (p.146).",
+   "page_refs": [144, 146]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why do the authors not pass `(x_test, y_test)` as `validation_data`?",
+   "options": [],
+   "answer": "Because the validation results are used to make decisions (e.g., how many epochs to train), which would tune the model to the test set and make the final test evaluation biased.",
+   "explanation": "The book explains on p.135 that the test set must remain never-before-seen data for an unbiased final evaluation.",
+   "page_refs": [135, 144]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "What does adding `top_3_accuracy` to `metrics` do?",
+   "options": [
+    "It makes the optimizer maximize top-3 accuracy",
+    "It logs, per epoch, how often the true topic is among the model's three most probable topics",
+    "It restricts the softmax to output only three nonzero probabilities",
+    "It replaces plain accuracy in the training log"
+   ],
+   "answer": "It logs, per epoch, how often the true topic is among the model's three most probable topics",
+   "explanation": "Metrics are monitored, not optimized (the loss is), so the first option is wrong; the softmax still outputs 46 probabilities; and plain `\"accuracy\"` is still in the list alongside it.",
+   "page_refs": [143, 144]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "In listing 4.19, what do the format strings `\"r--\"` and `\"b\"` mean, and why is `plt.xticks(epochs)` useful here?",
+   "options": [],
+   "answer": "`\"r--\"` is a red dashed line (training loss) and `\"b\"` a solid blue line (validation loss). `plt.xticks(epochs)` puts a tick at every epoch from 1 to 20, so the epoch where validation loss bottoms out can be read precisely.",
+   "explanation": "Matplotlib's format shorthand combines color and line style. The exact epoch matters because the book uses it to pick the retraining length (nine epochs, p.147).",
+   "page_refs": [144, 145, 147]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Without looking, write the four lines that split the Reuters training data into a 1,000-sample validation set and the rest, and explain why both x and y must use the same index.",
+   "options": [],
+   "answer": "x_val = x_train[:1000]; partial_x_train = x_train[1000:]; y_val = y_train[:1000]; partial_y_train = y_train[1000:]. Row i of x corresponds to label row i, so they must be split identically.",
+   "explanation": "Compare with listing 4.17. Misaligned splits would pair inputs with wrong labels and make training meaningless.",
+   "page_refs": [144]
+  }
+ ]
+}

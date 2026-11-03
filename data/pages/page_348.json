@@ -1,0 +1,441 @@
+{
+  "page_id": "page_348",
+  "pdf_page": 348,
+  "printed_page": "324",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:38:10Z",
+    "confidence": "high",
+    "review_flags": [
+      "Body text says the four candidate masks are 'ranked by decreasing match quality'. In the original SAM design (and, as far as we know, the KerasHub port) mask index 0 comes from a dedicated single-mask output token, while indices 1-3 are the three multimask outputs; the four are not explicitly sorted by the predicted IoU in 'iou_pred'. The book's own later behaviour (p.350: masks 2 and 3 cover both bananas) is consistent with either reading. Worth verifying against KerasHub before relying on the ordering; notes present this as a caveat (inference), not as fact."
+    ],
+    "extraction_quality": "Clean: figure caption, three short body paragraphs and three code blocks extracted correctly; matches the page image."
+  },
+  "overview": {
+    "title": "Prompting SAM with a point and reading its mask outputs",
+    "chapter": "11 Image segmentation",
+    "section": "11.3 Using a pretrained segmentation model",
+    "subsection": "11.3.4 Prompting the model with a target point",
+    "main_topic": "Running Segment Anything (SAM) with a single foreground point prompt, inspecting the shape of the returned masks, and converting one mask into a full-resolution boolean array for display.",
+    "central_idea": "A SAM call takes a batch of images plus a batch of labeled points and returns four 256 × 256 candidate masks (with predicted IoU scores); a small helper picks one mask, upsamples it to the 1024 × 1024 padded image frame and thresholds it at 0 to get a boolean mask.",
+    "importance": "This is the first page where the pretrained segmentation model is actually invoked. It shows the exact input dictionary SAM expects, the batch-axis convention, the structure of the output, and the post-processing needed to go from raw model output (low-resolution logits) to a usable pixel mask. The same pattern is reused for every later prompt in the chapter (banana on p.349-350, box on p.351-352).",
+    "learning_objectives": [
+      "Write the input dictionary (`images`, `points`, `labels`) for a SAM point prompt and explain why each array gets a leading batch axis.",
+      "Interpret the output shape `(1, 4, 256, 256)` axis by axis.",
+      "Explain what the `iou_pred` field contains and how it relates to the IoU metric from p.340.",
+      "Explain each line of `get_mask()`: indexing, adding a channel axis, resizing to the image frame, thresholding at 0.",
+      "Recognise why the mask must be resized with the same `resize_and_pad` function used for the image."
+    ],
+    "prerequisites": [
+      "The SAM architecture: image encoder, prompt encoder, mask decoder (p.344-345)",
+      "The `resize_and_pad` helper that maps the photo to a padded 1024 × 1024 frame (p.346)",
+      "The test point `input_point = [[580, 450]]` with label 1 (p.347)",
+      "Batch axes and `ops.expand_dims` (chapter 2-3 tensor basics)",
+      "Intersection over Union (IoU), defined on p.340"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page opens with **Figure 11.10**, the 1024 × 1024 padded test image (black bars top and bottom from `resize_and_pad`, p.346) with a green star marking the prompt point `(580, 450)` defined on p.347. The point lands on a peach in the fruit bowl.\n\nThe authors then call the pretrained model with `model.predict(...)`, passing a dictionary with three entries: `\"images\"`, `\"points\"` and `\"labels\"`. Each array is wrapped with `ops.expand_dims(..., axis=0)` so that it carries a leading **batch axis** of size 1: SAM, like every Keras model, processes batches, even when the batch holds a single image and a single prompt.\n\nThe returned value `outputs` is a dictionary. Its `\"masks\"` entry holds **four 256 × 256 candidate masks** for the object indicated by the prompt; the book says they are ranked by decreasing match quality, and that the model's own quality estimate for each mask is in the `\"iou_pred\"` field. The shape check `outputs[\"masks\"].shape` prints `(1, 4, 256, 256)`: batch of 1, 4 candidates, 256 × 256 pixels each.\n\nFinally, the page defines a helper `get_mask(sam_outputs, index=0)` that\n\n1. picks the first (only) batch element and the requested candidate,\n2. adds a trailing channel axis so the mask looks like an image `(256, 256, 1)`,\n3. resizes it with `resize_and_pad` to the same `1024 × 1024` frame as the image, and\n4. converts it to NumPy and thresholds it with `> 0.0`, producing a boolean mask.\n\nThe page ends by calling `mask = get_mask(outputs, index=0)`; the resulting overlay (Figure 11.11, \"Segmented peach\") is shown on the next page (p.349).",
+  "paragraphs": [
+    {
+      "ref": "p348_e04",
+      "excerpt": "Let’s prompt SAM with it:",
+      "what_it_says": "A one-line transition: the point shown in Figure 11.10 is now passed to SAM as a prompt, in the code block that follows.",
+      "what_it_means": "Up to now the point was only drawn on the image with `show_points`. Here it becomes an actual model input, together with its label (1 = foreground) and the image itself.",
+      "why_it_matters": "It marks the shift from preparation (p.345-347) to inference. Note that no training happens: `model.predict` runs the pretrained SAM weights downloaded in 11.3.1.",
+      "technical_idea": "`model.predict` accepts a dict of named inputs; the keys must match the model's input names (`images`, `points`, `labels`, and later `boxes`).",
+      "terminology": [
+        {"term": "prompt", "meaning": "Extra input that tells SAM which object to segment: here a labeled point; on p.351 a box."},
+        {"term": "model.predict", "meaning": "Keras inference method: runs the forward pass in batches and returns NumPy-compatible outputs."}
+      ],
+      "connections": [
+        "p.347: input_point = np.array([[580, 450]]) and input_label = np.array([1]) are defined there.",
+        "p.344: the prompt encoder maps points/boxes to embeddings consumed by the mask decoder."
+      ]
+    },
+    {
+      "ref": "p348_e06",
+      "excerpt": "The return value `outputs` has a `\"masks\"` field which contains four",
+      "what_it_says": "The model returns a dictionary. Its `\"masks\"` entry holds four 256 × 256 candidate masks for the target object, ranked (per the book) by decreasing match quality; the predicted quality score of each mask is stored in the `\"iou_pred\"` entry.",
+      "what_it_means": "SAM does not commit to a single answer. A single point is often ambiguous (does a point on a shirt mean the shirt, the person, or a logo on the shirt?), so the decoder proposes several masks plus a self-estimate of how well each one matches the intended object. That self-estimate is a predicted Intersection-over-Union with the (unknown) true mask. The masks are at 256 × 256, a quarter of the 1024 × 1024 input resolution, so they must be upsampled before overlaying.",
+      "why_it_matters": "Knowing that there are several candidates and a score per candidate lets you (a) pick the best one automatically using `iou_pred`, and (b) look at alternatives when the first one is not what you wanted, as the book does with the banana on p.350.",
+      "technical_idea": "Beyond the book: in the SAM paper the mask decoder has separate output tokens for one 'single-mask' prediction and three 'multimask' predictions, and an IoU-prediction head trained to regress the IoU between each predicted mask and the ground truth. The raw mask values are logits, which is why `get_mask` thresholds them at 0. Whether the four candidates are actually sorted by score in KerasHub should be checked against `iou_pred` (see review flag).",
+      "terminology": [
+        {"term": "candidate mask", "meaning": "One of several alternative segmentations the model proposes for the same prompt."},
+        {"term": "iou_pred", "meaning": "Model output with one predicted IoU score per candidate mask (shape (1, 4) here), an estimate of mask quality."},
+        {"term": "IoU", "meaning": "Intersection over Union: area of overlap divided by area of union of two masks; 1 = perfect match, 0 = no overlap."}
+      ],
+      "connections": [
+        "p.340: IoU is introduced as the evaluation metric for the from-scratch segmentation model.",
+        "p.350: the other three candidates are plotted for the banana prompt."
+      ]
+    },
+    {
+      "ref": "p348_e08",
+      "excerpt": "Let’s overlay the first mask on the image (see figure 11.11):",
+      "what_it_says": "The first candidate mask (index 0) will be extracted and overlaid on the image; the result is Figure 11.11.",
+      "what_it_means": "Because the model's mask is lower resolution and in logit form, it cannot be overlaid directly: the helper `get_mask` defined right below does the needed conversion. Figure 11.11 itself appears on the next page.",
+      "why_it_matters": "`get_mask` is reused for every subsequent example in the chapter (banana, alternative masks, mango box), so understanding it once covers all of them.",
+      "terminology": [
+        {"term": "overlay", "meaning": "Drawing the semi-transparent mask (blue, alpha 0.6 in `show_mask`, p.347) on top of the image."}
+      ],
+      "connections": [
+        "p.347: show_mask multiplies the boolean mask by an RGBA color with alpha 0.6.",
+        "p.349: Figure 11.11 shows the segmented peach."
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "segment_anything_model",
+      "name": "Segment Anything Model (SAM)",
+      "definition": "A pretrained promptable segmentation model from Meta AI: given an image and a prompt (point or box), it returns masks for the indicated object.",
+      "intuition": "Instead of being trained for a fixed list of classes, SAM answers the question 'what object is at this spot?' for any image.",
+      "technical": "Image encoder produces an image embedding once; a lightweight prompt encoder embeds points/boxes; a mask decoder combines both to output several mask logits plus predicted IoU scores (p.344-345).",
+      "significance": "It lets you segment arbitrary objects without any training, which the book later notes makes it useful for building annotated datasets quickly (p.352).",
+      "example": "Point (580, 450) with label 1 → a mask covering the peach (Figure 11.11).",
+      "misconception": "SAM does not output class labels: it tells you where an object is, not what it is.",
+      "related": ["image_segmentation", "point_prompt", "iou"],
+      "source": "book"
+    },
+    {
+      "id": "point_prompt",
+      "name": "Point prompt",
+      "definition": "A set of (x, y) pixel coordinates with labels (1 = foreground, 0 = background) that indicates which object SAM should segment.",
+      "intuition": "Like clicking on an object in an image editor's 'magic select' tool.",
+      "technical": "Passed as `points` with shape (batch, num_points, 2) and `labels` with shape (batch, num_points). Here (1, 1, 2) and (1, 1).",
+      "significance": "The cheapest possible annotation: one click per object.",
+      "example": "`input_point = [[580, 450]]`, `input_label = [1]` (p.347), batched with `expand_dims(axis=0)` on this page.",
+      "misconception": "Coordinates are (x, y) = (column, row) in the padded 1024 × 1024 frame, not (row, column) and not in the original photo's pixel grid.",
+      "related": ["segment_anything_model", "box_prompt"],
+      "source": "book"
+    },
+    {
+      "id": "iou",
+      "name": "Intersection over Union (IoU)",
+      "definition": "Overlap between two masks divided by the area covered by either; ranges from 0 to 1.",
+      "intuition": "How much of 'what you drew' and 'what was there' coincide, relative to everything either of them covers.",
+      "technical": "SAM's `iou_pred` is a learned regression of this quantity between each candidate mask and the true mask; at inference there is no ground truth, so it is a self-assessment.",
+      "significance": "Lets you rank or filter candidate masks automatically.",
+      "example": "Predicted mask of 900 px, true mask of 1000 px, overlap 850 px → IoU = 850 / (900+1000-850) = 850/1050 ≈ 0.81.",
+      "misconception": "`iou_pred` is not a measured IoU; it is the model's guess and can be wrong.",
+      "related": ["image_segmentation", "segment_anything_model"],
+      "source": "book"
+    },
+    {
+      "id": "mask_logits_thresholding",
+      "name": "Thresholding mask logits",
+      "definition": "Turning real-valued per-pixel scores into a boolean mask by comparing them to a threshold, here 0.0.",
+      "intuition": "Positive score = 'this pixel belongs to the object', negative = 'it does not'.",
+      "technical": "If the values are logits z, then sigmoid(z) > 0.5 is equivalent to z > 0, so `> 0.0` is the natural decision boundary.",
+      "significance": "Required before the mask can be used for display, area measurement or as a training label.",
+      "example": "Pixel values [-3.1, 0.4, 2.7] → [False, True, True].",
+      "misconception": "Thresholding before resizing would give blocky edges; the book resizes first (bilinear interpolation of the logits) and thresholds afterward.",
+      "related": ["iou", "segment_anything_model"],
+      "source": "ai_explanation"
+    },
+    {
+      "id": "batch_axis",
+      "name": "Batch axis",
+      "definition": "The leading dimension of a model input that indexes independent samples.",
+      "intuition": "Models are built to process stacks of examples, so a single example must be wrapped in a stack of one.",
+      "technical": "`ops.expand_dims(image, axis=0)` turns (1024, 1024, 3) into (1, 1024, 1024, 3); the output masks keep it as the first axis of (1, 4, 256, 256), which is why `get_mask` indexes `[0]`.",
+      "significance": "Shape mismatches here are the most common error when calling a pretrained model on one sample.",
+      "example": "points (1, 2) → (1, 1, 2); labels (1,) → (1, 1).",
+      "misconception": "The batch axis is not optional even for a single image.",
+      "related": ["tensor"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Intersection over Union (what iou_pred estimates)",
+      "latex": "\\operatorname{IoU}(A, B) = \\frac{|A \\cap B|}{|A \\cup B|} = \\frac{|A \\cap B|}{|A| + |B| - |A \\cap B|}",
+      "source_text": "The quality scores of the masks are available under the \"iou_pred\" field (IoU itself defined in words on p.340: intersection area divided by union area)",
+      "variables": [
+        {"symbol": "A", "meaning": "Set of pixels in the predicted mask"},
+        {"symbol": "B", "meaning": "Set of pixels in the ground-truth mask of the intended object"},
+        {"symbol": "|\\cdot|", "meaning": "Number of pixels in a set"}
+      ],
+      "operations": "Count overlapping pixels, count pixels in either mask, divide.",
+      "purpose": "Measures how well a mask matches the target object; SAM's iou_pred head predicts this number for each of its four candidates.",
+      "interpretation": "1 means a perfect match, 0 a complete miss (p.340).",
+      "intuition": "Both missing pixels and extra pixels lower IoU, because extra pixels enlarge the union and missing pixels shrink the intersection.",
+      "numerical_example": "If a candidate mask covers the peach plus part of the neighbouring apple: $|A|=1200$, $|B|=1000$, $|A\\cap B|=980$ → IoU $= 980/(1200+1000-980) = 980/1220 \\approx 0.80$.",
+      "source": "book",
+      "book_ref": "p.340"
+    },
+    {
+      "id": "m2",
+      "title": "Why the threshold is 0.0",
+      "latex": "\\hat m_{ij} = \\mathbb{1}\\left[z_{ij} > 0\\right] \\iff \\sigma(z_{ij}) > 0.5, \\quad \\sigma(z) = \\frac{1}{1+e^{-z}}",
+      "source_text": "return ops.convert_to_numpy(mask) > 0.0",
+      "variables": [
+        {"symbol": "z_{ij}", "meaning": "Mask value (logit) at pixel row i, column j after resizing"},
+        {"symbol": "\\hat m_{ij}", "meaning": "Boolean mask value at that pixel"},
+        {"symbol": "\\sigma", "meaning": "Sigmoid function"}
+      ],
+      "operations": "Elementwise comparison with zero.",
+      "purpose": "Converts continuous logits into a binary mask.",
+      "interpretation": "A pixel is in the mask when the model's implied probability of membership exceeds 50%.",
+      "intuition": "The sigmoid crosses 0.5 exactly at z = 0, so no sigmoid needs to be computed.",
+      "numerical_example": "$z = 0.4 \\Rightarrow \\sigma(z) \\approx 0.60$ → included; $z = -1.2 \\Rightarrow \\sigma(z) \\approx 0.23$ → excluded.",
+      "source": "ai_explanation",
+      "book_ref": "p.348"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Running SAM on the point prompt",
+      "original_code": "outputs = model.predict(\n    {\n        \"images\": ops.expand_dims(image, axis=0),\n        \"points\": ops.expand_dims(input_point, axis=0),\n        \"labels\": ops.expand_dims(input_label, axis=0),\n    }\n)",
+      "language": "python",
+      "what_it_does": "Runs a forward pass of the pretrained SAM on one image with one labeled point and stores the dictionary of outputs.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "`model` is the KerasHub SAM loaded in 11.3.1; `predict` runs inference."},
+        {"lines": "3", "explanation": "The padded 1024 × 1024 × 3 image from `resize_and_pad` (p.346) gets a batch axis → (1, 1024, 1024, 3)."},
+        {"lines": "4", "explanation": "`input_point` of shape (1, 2) (one point, x and y) → (1, 1, 2): batch, number of points, coordinates."},
+        {"lines": "5", "explanation": "`input_label` of shape (1,) → (1, 1): one label per point, 1 = foreground."},
+        {"lines": "2, 6-7", "explanation": "The inputs are passed as a dict keyed by the model's input names."}
+      ],
+      "inputs_outputs": "Inputs: images (1, 1024, 1024, 3), points (1, 1, 2), labels (1, 1). Output: dict containing \"masks\" (1, 4, 256, 256) and \"iou_pred\" (one score per candidate).",
+      "algorithm": "Image encoder → image embedding; prompt encoder → point embedding; mask decoder → 4 mask logits + 4 predicted IoUs.",
+      "theory_link": "Promptable segmentation (p.344-345): the model was trained on (image, prompt, mask) triples where point prompts were random pixels inside a mask.",
+      "parameters": [
+        {"name": "images", "role": "Batch of padded 1024 × 1024 RGB images"},
+        {"name": "points", "role": "Batch of (x, y) prompt coordinates"},
+        {"name": "labels", "role": "Foreground (1) / background (0) flag for each point"}
+      ],
+      "pitfalls": [
+        "Forgetting `expand_dims` gives shape errors: every input needs the batch axis.",
+        "Points must be expressed in the padded 1024 × 1024 frame, not the original photo's resolution.",
+        "Points are (x, y) = (column, row), the Matplotlib convention used by `show_points`."
+      ],
+      "illustrative_code": "# AI-written: pick the candidate SAM itself scores highest\nscores = outputs[\"iou_pred\"][0]          # shape (4,)\nbest = int(np.argmax(scores))\nprint(scores, \"-> best candidate:\", best)\nmask = get_mask(outputs, index=best)"
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Checking the shape of the mask output",
+      "original_code": ">>> outputs[\"masks\"].shape\n(1, 4, 256, 256)",
+      "language": "python",
+      "what_it_does": "Prints the shape of the predicted masks.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Access the \"masks\" entry of the output dict."},
+        {"lines": "2", "explanation": "Batch size 1, 4 candidate masks, each 256 × 256."}
+      ],
+      "inputs_outputs": "Output: tuple (1, 4, 256, 256).",
+      "algorithm": "None (inspection).",
+      "theory_link": "The decoder works on a 4× downsampled grid relative to the 1024 × 1024 input, so masks must be upsampled for display.",
+      "parameters": [],
+      "pitfalls": [
+        "The masks are not at the image resolution; overlaying them directly would mis-align by a factor of 4."
+      ]
+    },
+    {
+      "id": "c3",
+      "listing": null,
+      "title": "get_mask helper and its first use",
+      "original_code": "def get_mask(sam_outputs, index=0):\n    mask = sam_outputs[\"masks\"][0][index]\n    mask = np.expand_dims(mask, axis=-1)\n    mask = resize_and_pad(mask)\n    return ops.convert_to_numpy(mask) > 0.0\n\nmask = get_mask(outputs, index=0)",
+      "language": "python",
+      "what_it_does": "Extracts one candidate mask, upsamples it to the 1024 × 1024 image frame and returns it as a boolean NumPy array; then extracts candidate 0.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "`index` selects which of the four candidates to return (default the first)."},
+        {"lines": "2", "explanation": "`[0]` drops the batch axis, `[index]` picks a candidate → (256, 256)."},
+        {"lines": "3", "explanation": "Adds a channel axis → (256, 256, 1), the image-like layout `ops.image.resize` expects."},
+        {"lines": "4", "explanation": "`resize_and_pad` (p.346) resizes to (1024, 1024, 1). The mask is already square, so no padding is added; it simply aligns with the padded image."},
+        {"lines": "5", "explanation": "Converts the backend tensor to NumPy and thresholds at 0 → boolean array (1024, 1024, 1)."},
+        {"lines": "7", "explanation": "Gets the first candidate for the peach prompt; it is drawn on the next page."}
+      ],
+      "inputs_outputs": "Input: SAM outputs dict and a candidate index. Output: boolean array of shape (1024, 1024, 1), which is the shape `show_mask` (p.347) unpacks as `h, w, _`.",
+      "algorithm": "select → add channel → bilinear resize → threshold.",
+      "theory_link": "Resizing the logits before thresholding gives smoother mask edges than resizing a binary mask.",
+      "parameters": [
+        {"name": "sam_outputs", "role": "Dictionary returned by model.predict"},
+        {"name": "index", "role": "Which of the 4 candidates (0-3) to extract"}
+      ],
+      "pitfalls": [
+        "Only the first batch element is ever returned (`[0]` is hard-coded).",
+        "Reusing `resize_and_pad` works here only because the mask is square and the image was already padded to a square; for a non-square mask the padding would be different.",
+        "The trailing channel axis is required because `show_mask` does `h, w, _ = mask.shape`."
+      ]
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Following the shapes through one SAM call",
+      "kind": "step_by_step",
+      "body": "1. `image`: (1024, 1024, 3) → `expand_dims` → (1, 1024, 1024, 3).\n2. `input_point`: (1, 2) → (1, 1, 2). `input_label`: (1,) → (1, 1).\n3. SAM returns `masks`: (1, 4, 256, 256) and (beyond the shapes printed in the book) `iou_pred`, one score per candidate.\n4. `masks[0][0]`: (256, 256) → `expand_dims(-1)`: (256, 256, 1) → `resize_and_pad`: (1024, 1024, 1) → `> 0.0`: boolean (1024, 1024, 1).\n\nEach stage either adds/removes a size-1 axis or changes resolution; nothing mixes pixels across objects.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Why several masks for one click?",
+      "kind": "analogy",
+      "body": "If someone points at a button on your coat and says 'that', they might mean the button, the coat, or you. SAM is in the same position with a single point, so it returns several plausible answers at different granularities and a confidence for each. The banana example on p.350 shows this: some alternatives cover one banana, others both.",
+      "source": "analogy"
+    },
+    {
+      "title": "Using iou_pred instead of always taking index 0",
+      "kind": "application",
+      "body": "The book always takes the first candidate. In an automatic pipeline (for example, the dataset-building use case mentioned on p.352) you would typically pick `argmax(iou_pred)` or drop masks whose predicted IoU is below a threshold. See the illustrative code on code item c1. Not in the book.",
+      "source": "ai_explanation"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "widget",
+      "title": "Tensor shapes in a SAM point-prompt call",
+      "why": "The page's code adds batch axes, gets back (1, 4, 256, 256), and get_mask selects, adds a channel, resizes and thresholds. This traces those exact shapes.",
+      "widget": "tensor_shapes",
+      "params": {
+        "steps": [
+          {"op": "image", "shape": [1024, 1024, 3]},
+          {"op": "expand_dims(0)", "shape": [1, 1024, 1024, 3]},
+          {"op": "SAM masks", "shape": [1, 4, 256, 256]},
+          {"op": "[0][index]", "shape": [256, 256]},
+          {"op": "expand_dims(-1)", "shape": [256, 256, 1]},
+          {"op": "resize_and_pad", "shape": [1024, 1024, 1]},
+          {"op": "> 0.0 (bool)", "shape": [1024, 1024, 1]}
+        ]
+      }
+    },
+    {
+      "id": "v2",
+      "type": "mermaid",
+      "title": "From point prompt to overlay",
+      "why": "Summarises the data flow on this page: inputs dict → SAM → masks/iou_pred → get_mask → overlay (Figure 11.11).",
+      "mermaid": "flowchart LR\n  I[image 1024x1024x3] --> P[model.predict]\n  PT[\"points [[580,450]]\"] --> P\n  L[\"labels [1]\"] --> P\n  P --> M[\"masks (1,4,256,256)\"]\n  P --> S[\"iou_pred (scores)\"]\n  M --> G[\"get_mask: select, expand, resize, > 0\"]\n  G --> O[\"overlay with show_mask (Fig 11.11)\"]"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "SAM returns one mask the same size as the input image.",
+      "correction": "It returns four candidate masks at 256 × 256, which must be resized to the 1024 × 1024 frame (via resize_and_pad) before overlaying."
+    },
+    {
+      "claim": "`iou_pred` is the true IoU of each mask.",
+      "correction": "It is the model's own prediction of IoU; no ground truth is available at inference."
+    },
+    {
+      "claim": "The mask values are probabilities, so the threshold should be 0.5.",
+      "correction": "The book thresholds at 0.0, which corresponds to treating the values as logits (sigmoid(0) = 0.5)."
+    },
+    {
+      "claim": "A single image and a single point can be passed without a batch axis.",
+      "correction": "Every input needs the leading batch dimension, which is why each array is wrapped in ops.expand_dims(..., axis=0)."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 340, "note": "IoU defined as the evaluation metric for segmentation."},
+      {"page": 344, "note": "SAM's components: image encoder, prompt encoder, mask decoder."},
+      {"page": 346, "note": "resize_and_pad, which produces the 1024 × 1024 padded image and is reused for masks."},
+      {"page": 347, "note": "Display utilities and the prompt point (580, 450) with label 1."}
+    ],
+    "later": [
+      {"page": 349, "note": "Figure 11.11 shows the peach mask; the same code segments a banana."},
+      {"page": 350, "note": "The other three candidate masks are plotted."},
+      {"page": 351, "note": "Box prompts replace points."}
+    ],
+    "prerequisites": [
+      {"page": 345, "note": "How SAM is trained on (image, prompt, mask) triples."}
+    ],
+    "related_math": [
+      {"page": 340, "note": "IoU computation in words."}
+    ],
+    "related_code": [
+      {"page": 346, "note": "resize_and_pad definition."},
+      {"page": 347, "note": "show_image, show_mask, show_points, show_box."}
+    ],
+    "related_figures": [
+      {"page": 349, "note": "Figure 11.11, the result of this page's code."}
+    ]
+  },
+  "takeaways": [
+    "SAM point prompts are passed as a dict with images, points and labels, each with a leading batch axis.",
+    "The output \"masks\" has shape (1, 4, 256, 256): four low-resolution candidate masks per prompt.",
+    "\"iou_pred\" holds the model's predicted IoU for each candidate, a quality estimate you can use to choose among them.",
+    "get_mask selects a candidate, adds a channel axis, resizes it to the padded 1024 × 1024 frame and thresholds at 0.",
+    "Masks must be mapped into the same coordinate frame as the image (same resize_and_pad) to overlay correctly."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "What does the shape (1, 4, 256, 256) of outputs[\"masks\"] mean?",
+      "options": [
+        "1 image, 4 color channels, 256 × 256 pixels",
+        "1 batch element, 4 candidate masks, each 256 × 256",
+        "1 mask with 4 classes at 256 × 256",
+        "4 images in the batch, each with a single 256 × 256 mask"
+      ],
+      "answer": "1 batch element, 4 candidate masks, each 256 × 256",
+      "explanation": "The page states the field contains four 256 × 256 candidate masks; the leading 1 is the batch axis added with expand_dims. There are no color channels in a mask, SAM gives no classes, and only one image was passed.",
+      "page_refs": [348]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "Why is each input wrapped in ops.expand_dims(..., axis=0)?",
+      "options": [],
+      "answer": "To add a batch axis of size 1, because the model processes batches of images and prompts.",
+      "explanation": "image (1024,1024,3) → (1,1024,1024,3); points (1,2) → (1,1,2); labels (1,) → (1,1). The output keeps that batch axis, hence the [0] in get_mask.",
+      "page_refs": [348]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "Why does get_mask call resize_and_pad on the mask instead of overlaying the 256 × 256 mask directly?",
+      "options": [],
+      "answer": "The mask is at a quarter of the input resolution; resizing it to 1024 × 1024 puts it in the same coordinate frame as the padded image so pixel positions line up.",
+      "explanation": "The image shown in the figures is the 1024 × 1024 padded output of resize_and_pad (p.346). A 256 × 256 mask drawn on it would cover only the top-left quarter. Using the same function guarantees identical framing; padding is a no-op because the mask is square.",
+      "page_refs": [346, 348]
+    },
+    {
+      "id": "q4",
+      "type": "math",
+      "question": "A candidate mask has 1,200 pixels, the true object has 1,000 pixels, and they overlap on 900 pixels. What IoU should an ideal iou_pred head report?",
+      "options": [],
+      "answer": "900 / (1200 + 1000 − 900) = 900 / 1300 ≈ 0.69",
+      "explanation": "IoU = intersection / union and union = |A| + |B| − |A∩B| (p.340).",
+      "page_refs": [340, 348]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "Why does get_mask threshold at 0.0?",
+      "options": [
+        "Because mask values are probabilities and 0.0 is the minimum",
+        "Because the values behave like logits, and logit > 0 corresponds to probability > 0.5",
+        "Because resize_and_pad fills padding with 0",
+        "Because Matplotlib cannot display negative values"
+      ],
+      "answer": "Because the values behave like logits, and logit > 0 corresponds to probability > 0.5",
+      "explanation": "With probabilities, thresholding at 0 would include almost every pixel. The padding value and Matplotlib are unrelated to the decision boundary. (The logit interpretation is an explanation beyond the book's text.)",
+      "page_refs": [348]
+    },
+    {
+      "id": "q6",
+      "type": "conceptual",
+      "question": "Why would a promptable segmentation model return several candidate masks rather than one?",
+      "options": [],
+      "answer": "A single point is ambiguous: it can belong to nested objects or parts. Returning several masks with quality scores lets the user or a program pick the intended one.",
+      "explanation": "The book shows this on p.350-351, where alternatives for the banana prompt include both bananas.",
+      "page_refs": [348, 350, 351]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Without looking, can you write get_mask and state the shape after each line?",
+      "options": [],
+      "answer": "(256,256) → (256,256,1) → (1024,1024,1) → boolean (1024,1024,1).",
+      "explanation": "If you can reproduce this, you can adapt SAM's output to any display or downstream use.",
+      "page_refs": [348]
+    }
+  ]
+}

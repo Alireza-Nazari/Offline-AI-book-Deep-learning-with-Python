@@ -1,0 +1,419 @@
+{
+ "page_id": "page_148",
+ "pdf_page": 148,
+ "printed_page": "124",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:16:29Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction; all code snippets and text match the page image. The page holds sections 4.2.5 and the start of 4.2.6."
+ },
+ "overview": {
+  "title": "Predictions on new data; integer labels and sparse loss",
+  "chapter": "4 Classification and regression",
+  "section": "4.2 Classifying newswires: A multiclass classification example",
+  "subsection": "4.2.6 A different way to handle the labels and the loss",
+  "main_topic": "Interpreting `predict()` output as a 46-way probability distribution, and switching from one-hot labels to integer labels with `sparse_categorical_crossentropy`",
+  "central_idea": "For each newswire the model returns 46 probabilities summing to 1, and the predicted topic is their argmax. If you keep the labels as integers instead of one-hot vectors, the only change needed is the loss: `sparse_categorical_crossentropy`.",
+  "importance": "It connects the softmax output to an actual decision (argmax) and clears up a frequent source of shape errors in Keras: matching the loss to the label encoding.",
+  "learning_objectives": [
+   "Predict the shape of `model.predict(x_test)` for the Reuters model",
+   "Explain why each prediction vector sums to 1 and how `np.argmax` turns it into a class",
+   "Choose between `categorical_crossentropy` and `sparse_categorical_crossentropy` from the label format",
+   "State the shapes of one-hot versus integer label tensors for Reuters"
+  ],
+  "prerequisites": [
+   "Softmax output layer (p.143)",
+   "One-hot label encoding and `to_categorical` (p.142)",
+   "The retrained model of listing 4.22 (p.147)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**4.2.5 Generating predictions on new data.** Calling `model.predict(x_test)` on the trained model returns, for every test newswire, \"a class probability distribution over all 46 topics.\" The authors check three properties on the first test sample:\n\n- `predictions[0].shape` is `(46,)`: one score per topic (so `predictions` as a whole has shape `(2246, 46)`).\n- `np.sum(predictions[0])` is `1.0`: the entries form a probability distribution, a consequence of the softmax last layer.\n- `np.argmax(predictions[0])` is `4`: the predicted class is the one with the highest probability, here topic 4.\n\n**4.2.6 A different way to handle the labels and the loss.** On p.142 the authors noted two ways to vectorize the labels. Instead of one-hot encoding, you can leave them as integer tensors: `y_train = train_labels`, `y_test = test_labels`. The text says the only thing this changes is the loss function. `categorical_crossentropy`, used in listing 4.22, expects labels in categorical (one-hot) encoding; with integer labels you should use **`sparse_categorical_crossentropy`**, shown in a `compile()` call with Adam and `metrics=[\"accuracy\"]`. The continuation on p.149 adds that the sparse loss is mathematically the same as categorical crossentropy and only has a different interface.\n\nBeyond the book: integer labels are also lighter in memory, a length-2,246 vector instead of a 2,246 × 46 matrix, which matters for problems with many classes (such as the vocabulary-sized outputs of language models later in the book).",
+ "paragraphs": [
+  {
+   "ref": "p148_e05",
+   "excerpt": "Calling the model’s predict method on new samples returns a class probability",
+   "what_it_says": "`predict()` returns a probability distribution over the 46 topics for each input sample, and the authors run it on the whole test set.",
+   "what_it_means": "The output is a 2-D array of shape (number of samples, 46). Row i holds the model's softmax probabilities for newswire i. Nothing is thresholded or decided yet; the model gives graded beliefs.",
+   "why_it_matters": "In deployment you call `predict()`, not `evaluate()`: there are no labels for new data, only the model's distribution, which you then turn into a decision.",
+   "technical_idea": "`predict` runs the forward pass in batches (default 32) without computing gradients or metrics.",
+   "terminology": [
+    {"term": "predict", "meaning": "Keras method that runs the model on inputs and returns its outputs."},
+    {"term": "class probability distribution", "meaning": "A vector of non-negative values, one per class, summing to 1."}
+   ],
+   "connections": [
+    "p.158: the book contrasts the outputs of predict() for binary, multiclass and regression models."
+   ]
+  },
+  {
+   "ref": "p148_e07",
+   "excerpt": "Each entry in “predictions” is a vector of length 46:",
+   "what_it_says": "Each row of the predictions array has length 46.",
+   "what_it_means": "One probability per topic, matching the `Dense(46, activation=\"softmax\")` last layer.",
+   "why_it_matters": "Checking output shapes is the quickest sanity check that the model is wired as intended.",
+   "terminology": [],
+   "connections": ["p.143: the last layer has 46 units, one per class."]
+  },
+  {
+   "ref": "p148_e09",
+   "excerpt": "The coefficients in this vector sum to 1, as they form a",
+   "what_it_says": "The 46 values sum to 1 because they are a probability distribution.",
+   "what_it_means": "Softmax exponentiates the 46 logits and divides by their sum, so outputs are positive and normalized. In float32 the sum may show as 1.0 or something like 0.99999994.",
+   "why_it_matters": "It allows you to read `predictions[0][k]` as the model's estimated probability of topic k.",
+   "terminology": [{"term": "coefficients", "meaning": "Here, the entries of the prediction vector."}],
+   "connections": []
+  },
+  {
+   "ref": "p148_e11",
+   "excerpt": "The largest entry is the predicted class—the class with the highest probability:",
+   "what_it_says": "The predicted class is the index of the largest probability, found with `np.argmax`; for the first test sample that is class 4.",
+   "what_it_means": "Turning the distribution into a single label is a separate decision step. Accuracy, as measured during training, is computed exactly this way: argmax of the prediction compared with the true label.",
+   "why_it_matters": "It explains why a model can be confident or unsure yet give the same argmax, which is why accuracy is called a crude metric on p.143.",
+   "terminology": [{"term": "argmax", "meaning": "The index of the maximum value in an array."}],
+   "connections": ["p.143: top-k accuracy generalizes this to the k largest entries."]
+  },
+  {
+   "ref": "p148_e15",
+   "excerpt": "We mentioned earlier that another way to encode the labels would be",
+   "what_it_says": "Labels can be kept as integer tensors, simply assigning `y_train = train_labels` and `y_test = test_labels`.",
+   "what_it_means": "Each label is the topic index 0-45 stored directly, so `y_train` has shape (8982,) instead of the (8982, 46) one-hot matrix.",
+   "why_it_matters": "It saves the encoding step and memory, and it is the natural format the dataset already comes in (p.141).",
+   "terminology": [{"term": "integer tensor", "meaning": "A tensor of integer class indices, one per sample."}],
+   "connections": ["p.142: the two label-encoding options were first introduced with listing 4.14."]
+  },
+  {
+   "ref": "p148_e17",
+   "excerpt": "The only thing this approach would change is the choice of the",
+   "what_it_says": "With integer labels, the loss must be switched from `categorical_crossentropy` (which expects one-hot labels) to `sparse_categorical_crossentropy`.",
+   "what_it_means": "Both losses compute $-\\log$ of the predicted probability of the true class; they differ only in whether the true class is given as a one-hot vector or as an index. The model, optimizer and metrics are unchanged.",
+   "why_it_matters": "Mixing the two is a common error: integer labels with `categorical_crossentropy` raise a shape mismatch (or, with shape (N, 1), are silently misinterpreted), and one-hot labels with the sparse loss fail as well.",
+   "technical_idea": "Internally the sparse version gathers the log-probability at the label index instead of doing a dot product with a one-hot vector, which is cheaper when there are many classes.",
+   "terminology": [
+    {"term": "sparse_categorical_crossentropy", "meaning": "Crossentropy loss that takes integer class indices as targets."},
+    {"term": "categorical encoding", "meaning": "Another name for one-hot encoding (p.142)."}
+   ],
+   "connections": [
+    "p.149: the sparse loss is mathematically the same as categorical crossentropy.",
+    "p.150: the wrap-up lists both label/loss pairings."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "softmax",
+   "name": "Softmax output",
+   "definition": "An activation that turns a vector of real scores into a probability distribution: positive entries that sum to 1.",
+   "intuition": "Exaggerates differences between scores, then normalizes them into shares of 100%.",
+   "technical": "$\\operatorname{softmax}(z)_i = e^{z_i}/\\sum_j e^{z_j}$; for Reuters, $z \\in \\mathbb{R}^{46}$.",
+   "significance": "Makes `predictions[0]` interpretable as probabilities and makes crossentropy applicable.",
+   "example": "`np.sum(predictions[0])` → 1.0.",
+   "misconception": "Softmax probabilities are not guaranteed to be well calibrated; a 0.9 does not necessarily mean 90% of such predictions are correct.",
+   "related": ["cross_entropy", "argmax"],
+   "source": "book"
+  },
+  {
+   "id": "argmax",
+   "name": "Argmax decision",
+   "definition": "Choosing the class with the highest predicted probability.",
+   "intuition": "Pick the topic the model believes most.",
+   "technical": "`np.argmax(predictions[0])` → 4; for the whole test set, `np.argmax(predictions, axis=1)` gives 2,246 class indices.",
+   "significance": "This is how probabilities become labels and how accuracy is computed.",
+   "example": "If probabilities for classes 3, 4 and 19 are 0.2, 0.6, 0.1, argmax is 4.",
+   "misconception": "Argmax discards confidence: 0.26 and 0.99 on the winning class give the same decision.",
+   "related": ["softmax", "top_k_accuracy"],
+   "source": "book"
+  },
+  {
+   "id": "sparse_categorical_crossentropy",
+   "name": "Sparse categorical crossentropy",
+   "definition": "The crossentropy loss for integer class labels.",
+   "intuition": "Same penalty as categorical crossentropy, but you say \"the answer is class 3\" rather than handing over a 46-long vector with a 1 at index 3.",
+   "technical": "$\\mathcal{L} = -\\log \\hat y_{c}$ with $c$ the integer label; identical to categorical crossentropy with one-hot $y$.",
+   "significance": "Lets you skip one-hot encoding; standard when the number of classes is large.",
+   "example": "`loss=\"sparse_categorical_crossentropy\"` with `y_train = train_labels`.",
+   "misconception": "That it is a different (e.g., approximate) loss. It is mathematically the same, only the interface differs (p.149).",
+   "related": ["cross_entropy", "one_hot_encoding"],
+   "source": "book"
+  },
+  {
+   "id": "one_hot_encoding",
+   "name": "One-hot (categorical) encoding",
+   "definition": "Representing a class index as an all-zero vector with a 1 at that index.",
+   "intuition": "A row of 46 switches with exactly one turned on.",
+   "technical": "Reuters labels become shape (8982, 46) with `to_categorical` or the custom `one_hot_encode` (p.142).",
+   "significance": "Required by `categorical_crossentropy` and `TopKCategoricalAccuracy`.",
+   "example": "Label 3 → [0, 0, 0, 1, 0, …, 0] (length 46).",
+   "misconception": "One-hot labels do not carry more information than integers; they are just another format.",
+   "related": ["sparse_categorical_crossentropy"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Predicted class from the probability vector",
+   "latex": "\\hat c = \\arg\\max_{i \\in \\{0,\\dots,45\\}} \\hat y_i, \\qquad \\sum_{i=0}^{45} \\hat y_i = 1",
+   "source_text": "np.sum(predictions[0]) → 1.0;  np.argmax(predictions[0]) → 4",
+   "variables": [
+    {"symbol": "\\hat y", "meaning": "Softmax output for one sample, `predictions[0]`, length 46"},
+    {"symbol": "\\hat c", "meaning": "Predicted topic index (4 for the first test sample)"}
+   ],
+   "operations": "Sum of the entries (normalization check) and index of the maximum entry (decision).",
+   "purpose": "Formalizes the three REPL checks of section 4.2.5.",
+   "interpretation": "The predicted topic is the most probable one under the model.",
+   "intuition": "The probabilities are a vote; argmax picks the winner.",
+   "numerical_example": "If $\\hat y_4 = 0.62$, $\\hat y_3 = 0.20$ and the other 44 entries share 0.18, then $\\hat c = 4$ and the sum is 1.",
+   "source": "book",
+   "book_ref": "p.148"
+  },
+  {
+   "id": "m2",
+   "title": "Sparse and categorical crossentropy are the same quantity",
+   "latex": "-\\sum_{i=0}^{45} y_i \\log \\hat y_i \\;=\\; -\\log \\hat y_{c} \\quad \\text{when } y = \\operatorname{onehot}(c)",
+   "source_text": "loss=\"categorical_crossentropy\" (one-hot labels) vs. loss=\"sparse_categorical_crossentropy\" (integer labels)",
+   "variables": [
+    {"symbol": "y", "meaning": "One-hot label vector (used by categorical_crossentropy)"},
+    {"symbol": "c", "meaning": "Integer label (used by sparse_categorical_crossentropy)"},
+    {"symbol": "\\hat y", "meaning": "Softmax output"}
+   ],
+   "operations": "The left side sums over all classes but only one term is nonzero; the right side indexes that term directly.",
+   "purpose": "Shows why the book can say only the loss name changes and (on p.149) that the two losses are mathematically equivalent.",
+   "interpretation": "Same value, same gradients, different label format.",
+   "intuition": "Multiplying by a one-hot vector is just a lookup.",
+   "numerical_example": "$\\hat y_4 = 0.62$, label 4: both losses give $-\\ln 0.62 \\approx 0.478$.",
+   "source": "ai_explanation",
+   "book_ref": "p.149"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Predicting on the test set",
+   "original_code": "predictions = model.predict(x_test)",
+   "language": "python",
+   "what_it_does": "Runs the trained model on all 2,246 test inputs and returns their softmax outputs.",
+   "line_explanations": [{"lines": "1", "explanation": "Output array of shape (2246, 46), float32."}],
+   "inputs_outputs": "Input: `x_test` (2246, 10000). Output: `predictions` (2246, 46).",
+   "algorithm": "Batched forward pass, no gradient computation.",
+   "theory_link": "Inference with a trained classifier.",
+   "parameters": [],
+   "pitfalls": ["`predict` returns probabilities, not class labels; you still need argmax."]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Shape of one prediction",
+   "original_code": ">>> predictions[0].shape\n(46,)",
+   "language": "python",
+   "what_it_does": "Confirms that each prediction is a 46-element vector.",
+   "line_explanations": [{"lines": "1-2", "explanation": "First row of the predictions array has 46 entries, one per topic."}],
+   "inputs_outputs": "Output: `(46,)`.",
+   "algorithm": "Shape inspection.",
+   "theory_link": "Output dimension = number of classes.",
+   "parameters": [],
+   "pitfalls": []
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Probabilities sum to 1",
+   "original_code": ">>> np.sum(predictions[0])\n1.0",
+   "language": "python",
+   "what_it_does": "Checks the softmax normalization for the first sample.",
+   "line_explanations": [{"lines": "1-2", "explanation": "Sum of the 46 probabilities equals 1 (up to float rounding)."}],
+   "inputs_outputs": "Output: `1.0`.",
+   "algorithm": "Reduction (sum).",
+   "theory_link": "Softmax yields a probability distribution.",
+   "parameters": [],
+   "pitfalls": ["In float32 you may see 0.99999994 or 1.0000001; compare with a tolerance (`np.isclose`)."]
+  },
+  {
+   "id": "c4",
+   "listing": null,
+   "title": "Predicted class",
+   "original_code": ">>> np.argmax(predictions[0])\n4",
+   "language": "python",
+   "what_it_does": "Finds the most probable topic for the first test sample: topic 4.",
+   "line_explanations": [{"lines": "1-2", "explanation": "Index of the largest entry."}],
+   "inputs_outputs": "Output: integer 4.",
+   "algorithm": "Argmax.",
+   "theory_link": "Decision rule for single-label classification.",
+   "parameters": [],
+   "pitfalls": ["For the whole array use `np.argmax(predictions, axis=1)`; without `axis` you get an index into the flattened array."],
+   "illustrative_code": "# AI-written, not in the book: accuracy computed from predictions\npred_classes = np.argmax(predictions, axis=1)     # shape (2246,)\nprint((pred_classes == test_labels).mean())        # ≈ the accuracy from evaluate()\ntop3 = np.argsort(predictions, axis=1)[:, -3:]     # three most probable topics per sample"
+  },
+  {
+   "id": "c5",
+   "listing": null,
+   "title": "Keeping labels as integers",
+   "original_code": "y_train = train_labels\ny_test = test_labels",
+   "language": "python",
+   "what_it_does": "Uses the raw integer topic labels as targets instead of one-hot vectors.",
+   "line_explanations": [{"lines": "1-2", "explanation": "Shapes (8982,) and (2246,), values 0-45."}],
+   "inputs_outputs": "Input: `train_labels`, `test_labels` from `reuters.load_data` (p.141).",
+   "algorithm": "Assignment only.",
+   "theory_link": "Alternative label encoding (p.142).",
+   "parameters": [],
+   "pitfalls": ["Any metric that expects one-hot targets (e.g., `TopKCategoricalAccuracy`) must be swapped for its sparse version (`SparseTopKCategoricalAccuracy`)."]
+  },
+  {
+   "id": "c6",
+   "listing": null,
+   "title": "Compiling with the sparse loss",
+   "original_code": "model.compile(\n    optimizer=\"adam\",\n    loss=\"sparse_categorical_crossentropy\",\n    metrics=[\"accuracy\"],\n)",
+   "language": "python",
+   "what_it_does": "Same compile call as listing 4.22 except for the loss, which now accepts integer labels.",
+   "line_explanations": [
+    {"lines": "2", "explanation": "Adam optimizer, unchanged."},
+    {"lines": "3", "explanation": "Sparse crossentropy: targets are class indices."},
+    {"lines": "4", "explanation": "`\"accuracy\"` is resolved by Keras to sparse categorical accuracy for this loss."}
+   ],
+   "inputs_outputs": "Configures the model; no output.",
+   "algorithm": "Configuration.",
+   "theory_link": "Mathematically identical to categorical crossentropy (p.149).",
+   "parameters": [{"name": "loss", "role": "\"sparse_categorical_crossentropy\""}],
+   "pitfalls": ["Using this loss with one-hot labels causes a shape error."]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Matching label format to loss: a quick table",
+   "kind": "breakdown",
+   "body": "| Label format | Shape (Reuters train) | Loss | Accuracy metric Keras uses |\n|---|---|---|---|\n| one-hot | (8982, 46) | `categorical_crossentropy` | categorical accuracy |\n| integer | (8982,) | `sparse_categorical_crossentropy` | sparse categorical accuracy |\n\nNote (not in the book): Keras picks the right accuracy variant automatically when you pass the string `\"accuracy\"`, based on the loss and target shapes.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why sparse labels scale better",
+   "kind": "application",
+   "body": "Beyond the book: one-hot labels for a 50,000-token vocabulary and a batch of 64 sequences of 100 tokens would need $64\\cdot100\\cdot50{,}000 = 320$ million floats, whereas integer labels need 6,400 integers. This is why language models (chapter 15, p.449) are trained with sparse crossentropy.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "From model output to decision, and the two label/loss pairings",
+   "why": "Summarizes section 4.2.5 (predict → sum to 1 → argmax) and section 4.2.6 (integer labels pair with the sparse loss, one-hot labels with the categorical loss).",
+   "mermaid": "flowchart LR\n  X[\"x_test (2246, 10000)\"] --> P[\"model.predict\"]\n  P --> Y[\"predictions (2246, 46)\\nrows sum to 1\"]\n  Y --> A[\"np.argmax per row\\n→ topic, e.g. 4\"]\n  L[\"train_labels (8982,)\\nintegers 0-45\"] --> S[\"sparse_categorical_crossentropy\"]\n  L --> OH[\"to_categorical\\n(8982, 46) one-hot\"] --> C[\"categorical_crossentropy\"]\n  S -. same value .- C"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "`model.predict` returns class labels.",
+   "correction": "It returns the softmax probability vectors; apply `np.argmax(..., axis=1)` to get labels."
+  },
+  {
+   "claim": "Switching to integer labels requires changing the model's last layer.",
+   "correction": "The model is unchanged (still 46 softmax units); only the loss changes."
+  },
+  {
+   "claim": "`sparse_categorical_crossentropy` gives different training results from `categorical_crossentropy`.",
+   "correction": "They compute the same quantity; only the label interface differs (p.149)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 147, "note": "Listing 4.22, the nine-epoch model used for predictions and the categorical loss referenced here."},
+   {"page": 142, "note": "The two label-encoding options and `to_categorical`."},
+   {"page": 143, "note": "Softmax last layer that makes outputs sum to 1."},
+   {"page": 141, "note": "Raw integer labels between 0 and 45."}
+  ],
+  "later": [
+   {"page": 149, "note": "The sparse loss is mathematically the same, only a different interface."},
+   {"page": 150, "note": "Wrap-up lists both label/loss pairings."},
+   {"page": 158, "note": "predict() output for a regression model, for contrast."},
+   {"page": 449, "note": "A language model compiled with a crossentropy loss over a character vocabulary."}
+  ],
+  "prerequisites": [
+   {"page": 143, "note": "Categorical crossentropy as a distance between distributions."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 139, "note": "Generating predictions with the IMDb model."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "`model.predict(x_test)` returns a (2246, 46) array of probabilities.",
+  "Each row sums to 1 because of the softmax output layer.",
+  "The predicted topic is `np.argmax` of the row.",
+  "Integer labels can be used directly if the loss is `sparse_categorical_crossentropy`.",
+  "One-hot labels go with `categorical_crossentropy`; mixing them up causes errors."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What is the shape of `predictions = model.predict(x_test)` for the Reuters model?",
+   "options": ["(46,)", "(2246,)", "(2246, 46)", "(2246, 10000)"],
+   "answer": "(2246, 46)",
+   "explanation": "There are 2,246 test samples and 46 outputs per sample. (46,) is one row, (2246,) would be argmax labels, and (2246, 10000) is the input.",
+   "page_refs": [141, 148]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Why does `np.sum(predictions[0])` return 1.0?",
+   "options": [],
+   "answer": "Because the last layer uses softmax, whose outputs are a probability distribution summing to 1.",
+   "explanation": "The book states the coefficients form a probability distribution (p.148), following from the softmax layer described on p.143.",
+   "page_refs": [143, 148]
+  },
+  {
+   "id": "q3",
+   "type": "mcq",
+   "question": "You set `y_train = train_labels` (integers) but keep `loss=\"categorical_crossentropy\"`. What is the problem?",
+   "options": [
+    "Nothing; Keras converts automatically",
+    "The categorical loss expects one-hot labels, so the targets do not match the (batch, 46) predictions",
+    "The model must have an integer output layer",
+    "Accuracy cannot be computed with integer labels"
+   ],
+   "answer": "The categorical loss expects one-hot labels, so the targets do not match the (batch, 46) predictions",
+   "explanation": "The book says categorical_crossentropy expects categorical encoding; with integers you should use the sparse loss. Keras does not convert automatically, the model is unchanged, and accuracy works fine with integer labels and the sparse loss.",
+   "page_refs": [148]
+  },
+  {
+   "id": "q4",
+   "type": "math",
+   "question": "A prediction vector has 0.55 on topic 4 (the true topic). Compute the loss under both categorical crossentropy (one-hot label) and sparse categorical crossentropy (label 4).",
+   "options": [],
+   "answer": "Both equal −ln 0.55 ≈ 0.598.",
+   "explanation": "With a one-hot label only the true-class term survives the sum, so both losses reduce to −log of the true-class probability.",
+   "page_refs": [148, 149]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "Two models output 0.26 and 0.95 respectively on topic 4 for the same sample (topic 4 being the largest entry in both). How do their accuracies and losses on this sample compare?",
+   "options": [],
+   "answer": "Accuracy is identical (both argmax = 4), but the loss is much higher for the first model (−ln 0.26 ≈ 1.35 vs. −ln 0.95 ≈ 0.05).",
+   "explanation": "Argmax ignores confidence; crossentropy does not. This is why the loss and accuracy curves can behave differently.",
+   "page_refs": [148]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "How would you get the predicted topic for every test sample at once?",
+   "options": [],
+   "answer": "`np.argmax(predictions, axis=1)`, which returns an array of shape (2246,).",
+   "explanation": "The page shows argmax for one row; `axis=1` applies it along the class axis of every row (AI extension).",
+   "page_refs": [148]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Without looking, can you state which loss goes with one-hot labels and which with integer labels, and what shapes those labels have for Reuters training data?",
+   "options": [],
+   "answer": "One-hot (8982, 46) → categorical_crossentropy; integer (8982,) → sparse_categorical_crossentropy.",
+   "explanation": "This pairing is the core of section 4.2.6 and is repeated in the wrap-up on p.150.",
+   "page_refs": [148, 150]
+  }
+ ]
+}

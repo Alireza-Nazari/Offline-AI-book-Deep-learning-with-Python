@@ -1,0 +1,348 @@
+{
+ "page_id": "page_441",
+ "pdf_page": 441,
+ "printed_page": "417",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:12:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Listing 14.28 uses layers.Dense(max_tokens, activation=\"sigmoid\") as the output of a 30,000-way single-label classifier trained with sparse_categorical_crossentropy. The conventional (and mathematically matching) choice is activation=\"softmax\". With probability inputs, Keras's categorical cross-entropy rescales the outputs to sum to 1, so the model still trains, but the sigmoid outputs are not a probability distribution on their own. Possibly an oversight in the book."
+  ],
+  "extraction_quality": "Clean. The first code element (p441_e03) is the continuation of Listing 14.28 from p.440 (hidden_dim, Input, Embedding, GlobalAveragePooling1D are there), followed by the printed model summary. Summary values were checked against the image."
+ },
+ "overview": {
+  "title": "Finishing, compiling and training the CBOW model",
+  "chapter": "14 Text classification",
+  "section": "14.5 Sequence models",
+  "subsection": "14.5.4 Pretraining a word embedding",
+  "main_topic": "The output layer, compilation and summary of the CBOW model (3.87 million parameters), Listing 14.29 training with batch(1024).cache() for 4 epochs, why caching helps when preprocessing is the bottleneck, and the ~12% middle-word accuracy over a 30,000-word vocabulary",
+  "central_idea": "The CBOW model ends with a 30,000-way Dense output and is trained as a word classifier. Because the model is tiny, a large batch is affordable and the CPU preprocessing is the bottleneck, so the batched windows are cached in memory, which makes later epochs more than three times faster. Guessing the exact middle word 12% of the time from eight neighbors is reasonable given 30,000 choices.",
+  "importance": "It completes the pretraining step whose embedding is transferred to the LSTM on p.442, and teaches a general performance lesson: when the input pipeline is slower than the model, cache the preprocessed data.",
+  "learning_objectives": [
+   "Read the rest of Listing 14.28 and the model summary",
+   "Verify the parameter counts 1,920,000 (Embedding) and 1,950,000 (Dense)",
+   "Explain the choice of sparse_categorical_crossentropy and sparse_categorical_accuracy",
+   "Explain why a large batch size is fine for this model",
+   "Explain what cache() does and when preprocessing is the bottleneck",
+   "Interpret 12% accuracy against the 1/30,000 chance level"
+  ],
+  "prerequisites": [
+   "The CBOW dataset and the first half of Listing 14.28 (p.440)",
+   "Softmax and categorical cross-entropy (chapters 3-4)",
+   "tf.data batching",
+   "Counting Dense and Embedding parameters"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page completes **Listing 14.28**. The averaged context vector goes into `layers.Dense(max_tokens, activation=\"sigmoid\")`, one output per vocabulary word, and the model is wrapped as `cbow_model = keras.Model(inputs, outputs)`. It is compiled with `optimizer=\"adam\"`, `loss=\"sparse_categorical_crossentropy\"` (the label is an integer token ID) and `metrics=[\"sparse_categorical_accuracy\"]`.\n\n`cbow_model.summary()` shows:\n\n| Layer | Output shape | Params |\n|---|---|---|\n| InputLayer | (None, 8) | 0 |\n| Embedding | (None, 8, 64) | 1,920,000 |\n| GlobalAveragePooling1D | (None, 64) | 0 |\n| Dense | (None, 30000) | 1,950,000 |\n\nThe total is **3,870,000 parameters (14.76 MB)**, all trainable. The vocabulary size `max_tokens` is therefore 30,000, and the embedding table is $30{,}000 \\times 64$.\n\nBecause the model is so simple, a **large batch size** can be used to speed up training without memory worries. The authors also call **`cache()`** on the batched dataset, so the whole preprocessed dataset is stored in memory instead of being recomputed every epoch. For this very simple model, training is **bottlenecked on preprocessing**: tokenizing text and computing sliding windows on the CPU is slower than updating parameters on the GPU. In such cases, saving preprocessed outputs in memory or on disk is usually a good idea; later epochs run **more than three times faster** than the first thanks to the cache.\n\n**Listing 14.29**: `dataset = dataset.batch(1024).cache()` and `cbow_model.fit(dataset, epochs=4)`.\n\nAt the end of training the model guesses the middle word **about 12% of the time** from the eight neighbors alone. That may sound low, but with **30,000 words to choose from** each time it is a reasonable score. The next step is to use this embedding to improve the LSTM (p.442).",
+ "paragraphs": [
+  {
+   "ref": "p441_e04",
+   "excerpt": "Because our model is so simple, we can use a large batch size",
+   "what_it_says": "Because the model is so simple, a large batch size can be used to speed up training without worrying about memory constraints.",
+   "what_it_means": "Memory use per batch is dominated by activations, which here are small: (1024, 8, 64) embeddings, (1024, 64) averages and (1024, 30,000) outputs. With only 3.87 million parameters (about 15 MB), the model easily fits. A large batch means fewer optimizer steps per epoch and better use of the GPU's parallelism, which matters with millions of windows.",
+   "why_it_matters": "It justifies batch(1024) in Listing 14.29, much larger than the batches typically used for the classifiers.",
+   "technical_idea": "Beyond the book: the largest activation is the (batch, 30,000) output; at batch 1024 in float32 that is about 123 MB, plus its gradient, which is still modest for a GPU.",
+   "terminology": [
+    {"term": "Batch size", "meaning": "Number of examples processed together in one gradient step."}
+   ],
+   "connections": ["p.440: the dataset of (bag, label) pairs that is batched here."]
+  },
+  {
+   "ref": "p441_e05",
+   "excerpt": "We will also call cache() on this batched dataset so that we",
+   "what_it_says": "cache() is called on the batched dataset to store the entire preprocessed dataset in memory instead of recomputing it each epoch. For this very simple model, the bottleneck is preprocessing rather than training: tokenizing text and computing sliding windows on the CPU is slower than updating the model's parameters on the GPU.",
+   "what_it_means": "Without caching, every epoch would re-read all review files, re-tokenize them, and redo all the windowing, even though the result never changes (it does not depend on the weights). The first pass through cache() computes and stores the batches; later epochs read them straight from memory. The GPU work per batch (an embedding lookup, a mean, one 64 x 30,000 matrix product) is cheap, so it would otherwise sit idle waiting for data.",
+   "why_it_matters": "This is a general profiling lesson: identify whether the input pipeline or the model is the bottleneck, and if it is the pipeline, precompute or cache.",
+   "technical_idea": "cache() with no argument stores in memory; cache(filename) stores on disk. Placing it after batch() caches the final batched tensors, so even batching is not repeated.",
+   "terminology": [
+    {"term": "cache()", "meaning": "A tf.data transformation that stores the elements produced on the first pass and replays them on later passes."},
+    {"term": "Bottleneck", "meaning": "The slowest stage of a pipeline, which limits overall throughput."}
+   ],
+   "connections": ["p.426: the sidebar on preprocessing text efficiently, which says text preprocessing must run on the CPU and that you want to keep the GPU busy."]
+  },
+  {
+   "ref": "p441_e05",
+   "excerpt": "In such cases, saving your preprocessed outputs in memory or on disk",
+   "what_it_says": "In such cases, saving preprocessed outputs in memory or on disk is usually a good idea. Later epochs are more than three times faster than the first, thanks to the cache.",
+   "what_it_means": "The 3x speedup is the measured gap between pipeline-bound and compute-bound epochs: epoch 1 pays for preprocessing plus training, later epochs pay only for training plus reading from RAM.",
+   "why_it_matters": "It gives a concrete, observable sign that caching works, which the reader can check in the fit() logs.",
+   "technical_idea": "Beyond the book: caching only helps when the data fits in memory (or disk) and the preprocessing is deterministic; random augmentation must be applied after cache(), or every epoch sees the same augmented data.",
+   "connections": ["p.426: precomputing tokenized input as an option when preprocessing is slow."]
+  },
+  {
+   "ref": "p441_e08",
+   "excerpt": "At the end of training, we are able to guess the middle word",
+   "what_it_says": "After training, the model guesses the middle word about 12% of the time from the eight neighboring words. This may not sound great, but with 30,000 words to guess from every time, it is a reasonable accuracy.",
+   "what_it_means": "Random guessing would be right 1 time in 30,000 (about 0.003%), so 12% is roughly 3,600 times better than chance. The task is also inherently ambiguous: many words fit most contexts (\"boat\" or \"ocean\" on p.439), so even a perfect model could not reach 100%. What matters is not the accuracy but the embedding learned on the way.",
+   "why_it_matters": "It sets the right expectations for pretraining metrics: low exact-match accuracy on a self-supervised task can still mean useful representations.",
+   "terminology": [
+    {"term": "Sparse categorical accuracy", "meaning": "The fraction of examples where the highest-scoring class equals the integer label."}
+   ],
+   "connections": ["p.439: the \"sail, wave, mast\" example where several middle words are plausible."]
+  },
+  {
+   "ref": "p441_e09",
+   "excerpt": "Let’s use this word embedding to improve the performance of our LSTM",
+   "what_it_says": "Next, this word embedding is used to improve the LSTM model.",
+   "what_it_means": "Transition to section 14.5.5: the weights of cbow_embedding will be copied into the LSTM's Embedding layer.",
+   "why_it_matters": "It closes the pretraining step and opens the transfer step.",
+   "connections": ["p.442: Listing 14.31 assigns cbow_embedding.embeddings to lstm_embedding.embeddings."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "cbow",
+   "name": "CBOW as a 30,000-way classifier",
+   "definition": "The CBOW model treats each vocabulary word as a class and predicts the middle word's class from the averaged context embedding.",
+   "intuition": "A multiple-choice question with 30,000 options for every window.",
+   "technical": "(None, 64) -> Dense(30,000) -> per-word scores; trained with sparse categorical cross-entropy on integer labels.",
+   "significance": "Its output layer is discarded after training; only the 1.92 million embedding parameters are reused.",
+   "example": "12% accuracy after 4 epochs.",
+   "misconception": "A low accuracy does not mean the embedding is bad; the task is ambiguous and has 30,000 classes.",
+   "related": ["embedding", "softmax", "cross_entropy"],
+   "source": "book"
+  },
+  {
+   "id": "cross_entropy",
+   "name": "Sparse categorical cross-entropy",
+   "definition": "Cross-entropy loss for single-label multiclass classification where the label is an integer index rather than a one-hot vector.",
+   "intuition": "Penalizes the model by how little probability it gave the correct word.",
+   "technical": "loss = -log p(label); the \"sparse\" version avoids building 30,000-long one-hot targets.",
+   "significance": "The natural loss for predicting a token ID.",
+   "example": "If the model gives the true word probability 0.12, the loss is -ln 0.12 = 2.12.",
+   "misconception": "Sparse vs. non-sparse is about the label format, not the math of the loss.",
+   "related": ["softmax", "loss_function"],
+   "source": "book"
+  },
+  {
+   "id": "dataset_caching",
+   "name": "Caching preprocessed data",
+   "definition": "Storing the output of a deterministic input pipeline after the first epoch so later epochs reuse it.",
+   "intuition": "Cook the meal once and reheat it, instead of cooking from scratch every day.",
+   "technical": "tf.data.Dataset.cache() (memory) or cache(path) (disk), placed after the expensive, deterministic steps.",
+   "significance": "Later CBOW epochs are more than 3x faster.",
+   "example": "dataset.batch(1024).cache()",
+   "misconception": "Caching does not speed up the first epoch; it is usually slightly slower because it also writes the cache.",
+   "related": ["tf_data_pipeline"],
+   "source": "book"
+  },
+  {
+   "id": "input_bottleneck",
+   "name": "Preprocessing-bound training",
+   "definition": "A training run where the CPU input pipeline, not the accelerator, limits speed.",
+   "intuition": "A fast chef waiting for slow ingredient deliveries.",
+   "technical": "Tokenization and windowing run on the CPU; the CBOW step on the GPU is cheap, so the GPU idles without caching.",
+   "significance": "Common for very small models on large raw datasets.",
+   "example": "This CBOW model.",
+   "misconception": "A faster GPU would not help a preprocessing-bound job.",
+   "related": ["dataset_caching"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Parameter counts in the CBOW summary",
+   "latex": "\\begin{aligned} \\text{Embedding} &= V \\cdot d = 30{,}000 \\cdot 64 = 1{,}920{,}000 \\\\ \\text{Dense} &= d \\cdot V + V = 64 \\cdot 30{,}000 + 30{,}000 = 1{,}950{,}000 \\\\ \\text{Total} &= 3{,}870{,}000 \\end{aligned}",
+   "source_text": "embedding_1 (Embedding) (None, 8, 64) 1,920,000; dense_4 (Dense) (None, 30000) 1,950,000; Total params: 3,870,000 (14.76 MB)",
+   "variables": [
+    {"symbol": "V", "meaning": "Vocabulary size max_tokens = 30,000"},
+    {"symbol": "d", "meaning": "Embedding dimension hidden_dim = 64"}
+   ],
+   "operations": "One vector of d numbers per vocabulary word; the Dense layer has a d x V kernel plus V biases.",
+   "purpose": "Checks the summary and shows that the model's size is all vocabulary-related.",
+   "interpretation": "The embedding and the output layer are almost the same size; both scale linearly with the vocabulary.",
+   "intuition": "Two big tables of word vectors: one for reading context words, one for scoring candidate words.",
+   "numerical_example": "Memory: $3{,}870{,}000 \\times 4$ bytes (float32) $= 15{,}480{,}000$ bytes $= 15{,}480{,}000 / 1024^2 \\approx 14.76$ MB, matching the summary.",
+   "source": "book",
+   "book_ref": "p.441"
+  },
+  {
+   "id": "m2",
+   "title": "12% accuracy versus chance",
+   "latex": "\\text{chance} = \\frac{1}{V} = \\frac{1}{30{,}000} \\approx 0.0033\\%, \\qquad \\frac{0.12}{1/30{,}000} = 3{,}600",
+   "source_text": "we are able to guess the middle word around 12% of the time ... we have 30,000 words to guess from each time",
+   "variables": [
+    {"symbol": "V", "meaning": "Number of candidate words (30,000)"}
+   ],
+   "operations": "Compare the measured accuracy with uniform random guessing.",
+   "purpose": "Explains why the authors call 12% reasonable.",
+   "interpretation": "The model is thousands of times better than chance. Beyond the book: a stronger baseline is always guessing the most frequent word (such as \"the\"), which would score several percent.",
+   "intuition": "Hitting the exact word out of 30,000 is hard, especially when several words fit.",
+   "source": "ai_explanation",
+   "book_ref": "p.441"
+  },
+  {
+   "id": "m3",
+   "title": "Sparse categorical cross-entropy for one window",
+   "latex": "\\mathcal{L} = -\\log p_{y}, \\qquad p = \\text{normalized output of } \\operatorname{Dense}(h)",
+   "source_text": "loss=\"sparse_categorical_crossentropy\"",
+   "variables": [
+    {"symbol": "y", "meaning": "Integer token ID of the middle word"},
+    {"symbol": "p_y", "meaning": "Predicted probability of that word"},
+    {"symbol": "h", "meaning": "Averaged 64-d context vector"}
+   ],
+   "operations": "Take the predicted probability of the true class and apply -log.",
+   "purpose": "The training objective that shapes the embedding.",
+   "interpretation": "Note (not in the book): with sigmoid outputs, Keras divides the outputs by their sum before taking the log, so p is a rescaled sigmoid vector rather than a softmax.",
+   "intuition": "Small loss when the true word gets high probability.",
+   "numerical_example": "$p_y = 0.12 \\Rightarrow \\mathcal{L} = -\\ln 0.12 \\approx 2.12$; $p_y = 1/30{,}000 \\Rightarrow \\mathcal{L} \\approx 10.31$ (the loss of a uniform guess).",
+   "source": "ai_explanation",
+   "book_ref": "p.441"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "14.28",
+   "title": "Building a CBOW model (continued) and its summary",
+   "original_code": "outputs = layers.Dense(max_tokens, activation=\"sigmoid\")(x)\ncbow_model = keras.Model(inputs, outputs)\ncbow_model.compile(\n    optimizer=\"adam\",\n    loss=\"sparse_categorical_crossentropy\",\n    metrics=[\"sparse_categorical_accuracy\"],\n)\n>>> cbow_model.summary()\nModel: \"functional_1\"\n┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓\n┃ Layer (type)                      ┃ Output Shape             ┃       Param # ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩\n│ input_layer_4 (InputLayer)        │ (None, 8)                │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ embedding_1 (Embedding)           │ (None, 8, 64)            │     1,920,000 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ global_average_pooling1d_2        │ (None, 64)               │             0 │\n│ (GlobalAveragePooling1D)          │                          │               │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ dense_4 (Dense)                   │ (None, 30000)            │     1,950,000 │\n└───────────────────────────────────┴──────────────────────────┴───────────────┘\n Total params: 3,870,000 (14.76 MB)\n Trainable params: 3,870,000 (14.76 MB)\n Non-trainable params: 0 (0.00 B)",
+   "language": "python",
+   "what_it_does": "Continues Listing 14.28 from p.440 (where hidden_dim = 64, the (8,) input, cbow_embedding and GlobalAveragePooling1D are defined). Adds a 30,000-unit output layer, builds and compiles the model as a multiclass word classifier, and prints its summary.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "One output unit per vocabulary word, applied to the 64-d average. The book uses a sigmoid activation; softmax would be the usual choice for a single-label distribution over words (see review flag)."},
+    {"lines": "2", "explanation": "Wraps the graph from inputs (p.440) to outputs into a Functional model."},
+    {"lines": "3-7", "explanation": "Adam optimizer; sparse categorical cross-entropy because labels are integer token IDs; accuracy measured as argmax == label."},
+    {"lines": "8-9", "explanation": "summary() in the interactive session; Keras auto-named the model \"functional_1\"."},
+    {"lines": "10-22", "explanation": "The layer table: input (None, 8); Embedding (None, 8, 64) with 30,000 x 64 = 1,920,000 weights; average pooling (None, 64) with no weights; Dense (None, 30000) with 64 x 30,000 + 30,000 = 1,950,000 weights."},
+    {"lines": "23-25", "explanation": "3,870,000 parameters in total, all trainable, 14.76 MB in float32."}
+   ],
+   "inputs_outputs": "Input: (batch, 8) context token IDs. Output: (batch, 30,000) scores for the middle word.",
+   "algorithm": "Embedding lookup -> mean -> linear layer over the vocabulary -> cross-entropy against the true middle word.",
+   "theory_link": "This is figure 14.6's shallow network; gradients of the cross-entropy flow back into the eight embedding rows used in each example.",
+   "parameters": [
+    {"name": "max_tokens", "role": "Vocabulary size and number of output classes (30,000)"},
+    {"name": "activation=\"sigmoid\"", "role": "Output nonlinearity as printed (softmax is conventional)"},
+    {"name": "optimizer=\"adam\"", "role": "Adaptive optimizer"},
+    {"name": "loss", "role": "sparse_categorical_crossentropy for integer labels"}
+   ],
+   "pitfalls": [
+    "Using categorical_crossentropy instead would require one-hot labels of length 30,000.",
+    "The 30,000-way Dense layer is as large as the embedding; for much larger vocabularies, word2vec-style tricks (negative sampling) are used to avoid the full output (beyond the book).",
+    "Layer names in the summary (input_layer_4, embedding_1, dense_4) depend on how many layers were created earlier in the session and will differ in your run."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "14.29",
+   "title": "Training the CBOW model",
+   "original_code": "dataset = dataset.batch(1024).cache()\ncbow_model.fit(dataset, epochs=4)",
+   "language": "python",
+   "what_it_does": "Batches the (bag, label) windows 1,024 at a time, caches the batches in memory after the first epoch, and trains for 4 epochs.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "batch(1024): large batches are affordable for this small model. cache(): store the fully preprocessed batches in RAM so tokenization and windowing run only once."},
+    {"lines": "2", "explanation": "Four passes over all windows from the ~50,000 reviews; later epochs are more than 3x faster than the first."}
+   ],
+   "inputs_outputs": "Input: the dataset from p.440. Output: trained cbow_model, with cbow_embedding holding the learned 30,000 x 64 matrix; final accuracy about 12%.",
+   "algorithm": "Minibatch gradient descent with Adam.",
+   "theory_link": "Self-supervised pretraining: no validation set is used because only the embedding matters.",
+   "parameters": [
+    {"name": "batch size 1024", "role": "Examples per gradient step"},
+    {"name": "epochs=4", "role": "Passes over the dataset"}
+   ],
+   "pitfalls": [
+    "cache() in memory requires all batches to fit in RAM; with a bigger corpus use cache(filename) for disk.",
+    "There is no shuffle() before batching, so batches contain windows from only a few reviews at a time (interleave mixes 8); this can make gradients more correlated (observation beyond the book)."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Where the time goes in epoch 1 vs. epoch 2",
+   "kind": "step_by_step",
+   "body": "**Epoch 1**: read ~50,000 text files -> tokenize each on the CPU -> build windows with tf.gather -> split into bag/label -> batch -> write each batch to the cache -> GPU step.\n\n**Epoch 2 onward**: read batch from RAM -> GPU step.\n\nThe GPU step is tiny (an 8-row lookup, a mean, a 64 x 30,000 product per example), so epoch 1 is dominated by CPU work. The book reports later epochs are more than three times faster. (Breakdown is ours; the timing claim is the book's.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the accuracy cannot be high",
+   "kind": "breakdown",
+   "body": "Take the window \"... this movie was really ___ and the acting ...\". \"good\", \"bad\", \"boring\", \"great\", \"fun\" all fit. Even a model that knows English perfectly would put probability on all of them and could be right only a fraction of the time. So CBOW accuracy has a low ceiling. Its usefulness comes from the fact that, to spread probability over the right *set* of words, the embedding must place \"good\", \"great\" and \"fun\" (and \"bad\", \"boring\") in sensible regions of the space. (Example is ours.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "A restaurant kitchen analogy for cache()",
+   "kind": "analogy",
+   "body": "Imagine a chef (the GPU) who can plate a dish in seconds but waits minutes for a prep cook (the CPU) to chop vegetables. If the same vegetables are needed every day, chopping them once and keeping them in the fridge (the cache) lets the chef work at full speed from day two.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Where the CBOW model's 3.87 million parameters are",
+   "why": "Plots the Param # column of the summary printed on this page.",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": ["InputLayer", "Embedding (30,000 x 64)", "GlobalAveragePooling1D", "Dense (30,000 units)"],
+     "datasets": [{"label": "Parameters", "data": [0, 1920000, 0, 1950000]}]
+    },
+    "options": {"plugins": {"legend": {"display": false}}, "scales": {"y": {"title": {"display": true, "text": "parameters"}}}}
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Full CBOW shape flow",
+   "why": "Shows the output shapes from the summary: (None, 8) -> (None, 8, 64) -> (None, 64) -> (None, 30000).",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "input bag", "shape": [null, 8]},
+     {"op": "Embedding", "shape": [null, 8, 64]},
+     {"op": "GlobalAveragePooling1D", "shape": [null, 64]},
+     {"op": "Dense(max_tokens)", "shape": [null, 30000]}
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {"claim": "12% accuracy means CBOW pretraining failed.", "correction": "With 30,000 possible words and ambiguous contexts, 12% is reasonable, as the book says; the goal is the embedding, not the classifier."},
+  {"claim": "cache() speeds up every epoch.", "correction": "It speeds up later epochs (more than 3x here); the first epoch still does all the preprocessing."},
+  {"claim": "A faster GPU would speed up CBOW training the most.", "correction": "The book explains the job is bottlenecked on CPU preprocessing, which is why caching helps."},
+  {"claim": "Most of the CBOW model's parameters are in a hidden layer.", "correction": "There is no hidden layer; the parameters are split almost equally between the Embedding and the output Dense layer."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 440, "note": "The first half of Listing 14.28 and the windowed dataset."},
+   {"page": 439, "note": "Figure 14.6 and the 64-dimensional goal."},
+   {"page": 426, "note": "Sidebar on preprocessing text efficiently: CPU-bound tokenization and keeping the GPU fed."}
+  ],
+  "later": [
+   {"page": 442, "note": "Listing 14.31 copies cbow_embedding.embeddings into the LSTM; test accuracy 0.89139."},
+   {"page": 443, "note": "Comparison with the set-based models."}
+  ],
+  "prerequisites": [
+   {"page": 437, "note": "The LSTM whose 2 million embedding parameters will be primed."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 442, "note": "Reusing the CBOW embedding (Listing 14.31)."}
+  ],
+  "related_figures": [
+   {"page": 439, "note": "Figure 14.6."}
+  ]
+ },
+ "takeaways": [
+  "The CBOW model ends with Dense(max_tokens) over 30,000 words and is compiled with Adam and sparse categorical cross-entropy.",
+  "Its 3,870,000 parameters split into 1,920,000 (Embedding) and 1,950,000 (Dense).",
+  "A small model allows a large batch size (1024).",
+  "When CPU preprocessing is the bottleneck, cache the preprocessed data; later epochs become more than 3x faster.",
+  "Four epochs give about 12% middle-word accuracy, reasonable for 30,000 choices.",
+  "The learned embedding is next used to prime the LSTM."
+ ],
+ "questions": [
+  {"id": "q1", "type": "math", "question": "Verify the Dense layer's parameter count in the summary.", "options": [], "answer": "64 x 30,000 weights + 30,000 biases = 1,920,000 + 30,000 = 1,950,000.", "explanation": "A Dense layer has input_dim x units weights plus one bias per unit; the input is the 64-d average and there are max_tokens = 30,000 units.", "page_refs": [441]},
+  {"id": "q2", "type": "mcq", "question": "Why does calling cache() make later CBOW epochs more than three times faster?", "options": ["It moves the model to the GPU", "It stores the preprocessed batches in memory so tokenization and windowing are not repeated", "It reduces the vocabulary size", "It freezes the embedding layer"], "answer": "It stores the preprocessed batches in memory so tokenization and windowing are not repeated", "explanation": "The book says training is bottlenecked on CPU preprocessing; caching removes that cost after epoch 1. cache() does not move anything to the GPU, change the vocabulary, or freeze weights.", "page_refs": [441]},
+  {"id": "q3", "type": "short", "question": "Why is sparse_categorical_crossentropy used instead of categorical_crossentropy?", "options": [], "answer": "The labels are integer token IDs (the middle word's index), not one-hot vectors of length 30,000.", "explanation": "split_label (p.440) returns label = window[4], an integer.", "page_refs": [440, 441]},
+  {"id": "q4", "type": "conceptual", "question": "Why do the authors call 12% accuracy reasonable?", "options": [], "answer": "There are 30,000 possible words for each guess, so chance is about 0.003%; and several words often fit the same context, so even a perfect model could not be always right.", "explanation": "The page cites the 30,000 choices; the ambiguity point follows from the \"boat or ocean\" example on p.439.", "page_refs": [441, 439]},
+  {"id": "q5", "type": "mcq", "question": "Which statement about the CBOW model's size is correct?", "options": ["Most parameters are in GlobalAveragePooling1D", "The Embedding and Dense layers each hold about half of the 3.87 million parameters", "The model has 15 million parameters", "Only the Dense layer is trainable"], "answer": "The Embedding and Dense layers each hold about half of the 3.87 million parameters", "explanation": "1,920,000 + 1,950,000 = 3,870,000. Pooling has 0 parameters, 15 million was the one-hot LSTM (p.437), and all parameters are trainable.", "page_refs": [441]},
+  {"id": "q6", "type": "conceptual", "question": "Why can this model use a batch size of 1024 without memory problems?", "options": [], "answer": "The model is tiny (3.87M parameters, ~15 MB) and its activations per example are small, so even a large batch fits easily in memory.", "explanation": "The book: because the model is so simple, a large batch size speeds up training without memory constraints.", "page_refs": [441]},
+  {"id": "q7", "type": "self", "question": "Could you diagnose whether your own training run is preprocessing-bound, and what would you do about it?", "options": [], "answer": "Check whether the GPU is idle or epochs speed up when data is precomputed; if so, cache or precompute preprocessed data (in memory or on disk), or parallelize preprocessing.", "explanation": "This generalizes the page's advice on cache().", "page_refs": [441, 426]}
+ ]
+}

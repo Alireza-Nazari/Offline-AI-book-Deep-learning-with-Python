@@ -1,0 +1,399 @@
+{
+  "page_id": "page_302",
+  "pdf_page": 302,
+  "printed_page": "278",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:36:08Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean. Both code snippets and their callouts are extracted; the last body paragraph (p302_e12) is cut mid-sentence by the page break and continues on p.303."
+  },
+  "overview": {
+    "title": "Activation after batch norm, freezing BN when fine-tuning, and separable convolutions",
+    "chapter": "9 ConvNet architecture patterns",
+    "section": "9.4 Depthwise separable convolutions",
+    "subsection": "",
+    "main_topic": "Recommended ordering Conv2D -> BatchNormalization -> ReLU, the fine-tuning quirk of BatchNormalization, and the introduction of depthwise separable convolutions",
+    "central_idea": "Put the activation after batch normalization so the zero-centered output meets ReLU's zero pivot, though the ordering is not critical. Keep BatchNormalization layers frozen when fine-tuning. Then a new pattern: SeparableConv2D, which factors a convolution into independent per-channel spatial convolutions followed by a 1x1 pointwise convolution, under the assumption that spatial locations are highly correlated while channels are fairly independent.",
+    "importance": "The page closes section 9.3 with the two practical rules people most often get wrong about batch normalization, and opens section 9.4 with the core idea behind Xception and the mini Xception-like model built on p.305.",
+    "learning_objectives": [
+      "Write the Conv2D(use_bias=False) -> BatchNormalization -> Activation('relu') pattern and contrast it with Conv2D(activation='relu') -> BatchNormalization",
+      "Explain the authors' intuition for normalizing before the ReLU, and their caveat that the ordering is not critical",
+      "Explain why BatchNormalization layers should stay frozen (trainable=False) during fine-tuning",
+      "Describe what a depthwise separable convolution computes (depthwise spatial conv + pointwise 1x1 conv)",
+      "State the claimed benefits (smaller, leaner, a few percentage points better) and the structural assumption it relies on"
+    ],
+    "prerequisites": [
+      "BatchNormalization and use_bias=False (p.301)",
+      "ReLU activation",
+      "Fine-tuning a pretrained model (pp.288-289)",
+      "Regular Conv2D: kernels span all input channels (chapter 8)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page finishes the sentence started on p.301 (\"So instead of doing\"): rather than\n\n`Conv2D(32, 3, activation=\"relu\")` -> `BatchNormalization()`\n\nthe authors recommend\n\n`Conv2D(32, 3, use_bias=False)` -> `BatchNormalization()` -> `Activation(\"relu\")`,\n\nwith callouts noting the *lack of activation* in the Conv2D and that *the activation is placed after the BatchNormalization layer*. The intuition: batch normalization centers inputs on zero, and ReLU uses zero as its pivot for keeping or dropping values, so normalizing first \"maximizes the utilization of the ReLU\". The authors immediately soften this: the ordering is **not exactly critical**; conv-activation-BN will still train and won't necessarily do worse.\n\nA **NOTE** on batch normalization's quirks: when **fine-tuning** a model containing `BatchNormalization` layers, leave them **frozen** (`trainable = False`). Otherwise they keep updating their internal mean and variance, which can interfere with the very small updates being applied to the surrounding `Conv2D` layers.\n\nSection **9.4 Depthwise separable convolutions** then begins with a pitch: a drop-in replacement for `Conv2D` that makes the model **smaller** (fewer trainable parameters), **leaner** (fewer floating-point operations) and a few percentage points **better**. This is `SeparableConv2D`. It performs a spatial convolution on **each input channel independently**, then mixes channels with a **pointwise (1x1) convolution** (figure 9.4, on p.303). This separates learning spatial features from learning channel-wise features. Just as convolution assumes patterns are not tied to specific locations, separable convolution assumes that **spatial locations in intermediate activations are highly correlated, but different channels are highly independent**. The sentence explaining why that assumption is useful continues on p.303.",
+  "paragraphs": [
+    {
+      "ref": "p302_e06",
+      "excerpt": "The intuitive reason why is that batch normalization will center your inputs",
+      "what_it_says": "Batch normalization centers values on zero, and ReLU uses zero as the pivot for keeping or dropping activations, so normalizing before the activation maximizes the use of the ReLU. But the ordering is not critical: conv-activation-BN still trains and won't necessarily give worse results.",
+      "what_it_means": "If ReLU comes first, its outputs are all non-negative and the subsequent normalization operates on a half-rectified distribution. If BN comes first, the ReLU sees a centered, unit-scale distribution, so roughly half the values fall on each side of the pivot (adjusted by the learned offset beta) and neither all units die (everything negative) nor ReLU becomes the identity (everything positive). The authors label this 'intuitive' and admit it is not decisive, consistent with their p.301 remark that the why of batch normalization is not known.",
+      "why_it_matters": "It gives the Conv -> BN -> ReLU pattern used in the book's later models, together with permission not to agonize over it.",
+      "technical_idea": "With x_hat approximately zero-mean and unit-variance, the fraction of positive values going into ReLU is controlled by the learned shift beta, rather than by whatever the convolution's raw output happened to be.",
+      "terminology": [
+        {"term": "pivot (of ReLU)", "meaning": "The threshold 0 at which ReLU switches between outputting 0 and passing the value through."},
+        {"term": "utilization of the ReLU", "meaning": "The authors' phrase for having inputs that use both regimes of the ReLU rather than being mostly dropped or mostly passed."}
+      ],
+      "connections": [
+        "p.301: the recommendation ('placing the previous layer's activation after the batch normalization layer') that this paragraph justifies",
+        "p.305: the mini Xception-like model applies this ordering"
+      ]
+    },
+    {
+      "ref": "p302_e07",
+      "excerpt": "NOTE Batch normalization has many quirks. One of the main ones relates",
+      "what_it_says": "When fine-tuning a model that contains BatchNormalization layers, keep them frozen (trainable = False); otherwise they keep updating their internal mean and variance, which can interfere with the very small updates applied to the surrounding Conv2D layers.",
+      "what_it_means": "Fine-tuning uses tiny learning rates so that pretrained convolution weights move only slightly. But a trainable BN layer's moving statistics are updated directly from the new dataset's batches, not by small gradient steps, so they can shift substantially and quickly. The pretrained convolutions downstream were calibrated to the old statistics, so this abrupt change can wreck the representations faster than the small weight updates can adapt. Beyond the book: in Keras 3, setting trainable=False on a BatchNormalization layer also makes it run in inference mode (using its moving statistics), which is the behavior you want here.",
+      "why_it_matters": "This is the explanation promised on p.289, where readers were told not to unfreeze BatchNormalization layers in the pretrained convolutional base.",
+      "technical_idea": "Two different kinds of 'updates' happen in a BN layer: gradient updates to gamma/beta, and direct moving-average updates to the mean/variance. Fine-tuning's small learning rate restrains only the former.",
+      "terminology": [
+        {"term": "fine-tuning", "meaning": "Unfreezing some top layers of a pretrained model and training them jointly with a new head at a low learning rate."},
+        {"term": "trainable attribute", "meaning": "Layer flag; False excludes its weights from training updates."}
+      ],
+      "connections": [
+        "p.289: 'you should not unfreeze batch normalization layers', explained here",
+        "p.301: BatchNormalization maintains moving averages of mean and variance"
+      ]
+    },
+    {
+      "ref": "p302_e08",
+      "excerpt": "Now, let’s take a look at the last architecture pattern in our series:",
+      "what_it_says": "Transition: the last architecture pattern of the series is depthwise separable convolutions.",
+      "what_it_means": "After modularity (9.1), residual connections (9.2) and batch normalization (9.3), section 9.4 completes the set of patterns combined in section 9.5.",
+      "why_it_matters": "Orients the reader within the chapter.",
+      "terminology": [],
+      "connections": [
+        "p.304: section 9.5 puts all these patterns together"
+      ]
+    },
+    {
+      "ref": "p302_e11",
+      "excerpt": "What if we told you that there’s a layer you can use as",
+      "what_it_says": "SeparableConv2D is a drop-in replacement for Conv2D that makes models smaller (fewer trainable parameters), leaner (fewer floating-point operations) and a few percentage points better. It convolves each input channel spatially and independently, then mixes channels with a pointwise (1x1) convolution, as in figure 9.4.",
+      "what_it_means": "A regular Conv2D kernel of size k x k spans all C_in input channels for each of C_out filters, so it learns spatial and cross-channel patterns jointly with k*k*C_in*C_out weights. The separable version first applies one k x k filter per input channel (depthwise step, k*k*C_in weights), producing C_in maps, then a 1x1 convolution (pointwise step, C_in*C_out weights) that recombines channels. The 'few percentage points better' is the authors' empirical claim, not a guarantee.",
+      "why_it_matters": "It sets up the parameter-count comparison on p.303 (36,864 vs. 4,672 for 3x3, 64->64) and the Xception-like model on p.305.",
+      "technical_idea": "Factorization: a full 4D kernel is replaced by the composition of a channel-wise spatial filter and a 1x1 channel-mixing matrix, a low-rank-like restriction on the kernel.",
+      "terminology": [
+        {"term": "depthwise convolution", "meaning": "A spatial convolution applied separately to each input channel."},
+        {"term": "pointwise convolution", "meaning": "A 1x1 convolution that mixes channels at each spatial location."},
+        {"term": "SeparableConv2D", "meaning": "Keras layer implementing depthwise followed by pointwise convolution."},
+        {"term": "drop-in replacement", "meaning": "Usable in the same place with the same arguments (filters, kernel_size, ...) as the original layer."}
+      ],
+      "connections": [
+        "p.303: figure 9.4 and the parameter comparison",
+        "p.300: 1x1 convolutions also appeared as residual projections in the model summary"
+      ]
+    },
+    {
+      "ref": "p302_e12",
+      "excerpt": "This is equivalent to separating the learning of spatial features and the",
+      "what_it_says": "Separable convolution separates spatial-feature learning from channel-wise-feature learning. As convolution assumes patterns are not tied to locations, separable convolution assumes spatial locations in intermediate activations are highly correlated but channels are highly independent. The sentence about why this assumption holds for deep image representations continues on p.303.",
+      "what_it_means": "Each architecture embeds a prior. Convolution's prior is translation invariance (shared weights across positions). The separable prior is that you lose little by not modeling spatial and cross-channel structure jointly: neighboring positions within a channel carry related information (worth a spatial filter), while channels are different, relatively independent features (worth only a linear mix). On p.303 the authors add that accurate priors help models use training data more efficiently.",
+      "why_it_matters": "It explains *why* fewer parameters need not mean less performance: the removed parameters model interactions that the assumption says are not important.",
+      "terminology": [
+        {"term": "prior / inductive bias", "meaning": "Built-in assumption of an architecture about the structure of the data."},
+        {"term": "intermediate activations", "meaning": "Feature maps produced inside the network, not the raw input image."}
+      ],
+      "connections": [
+        "p.303: continuation: the assumption is a useful prior, 'as long as the priors are accurate'",
+        "p.257: convolution's own priors (translation invariance, spatial hierarchies) from chapter 8"
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "batch_normalization",
+      "name": "Batch normalization (ordering and fine-tuning)",
+      "definition": "Per-channel normalization layer; here, the recommended placement before the activation and the rule to freeze it when fine-tuning.",
+      "intuition": "Normalize, then let ReLU decide what to keep; and do not let a pretrained model's statistics drift while you make delicate weight changes.",
+      "technical": "Conv2D(use_bias=False) -> BatchNormalization() -> Activation('relu'); for fine-tuning set bn_layer.trainable = False.",
+      "significance": "These are the two most common practical decisions about batch normalization.",
+      "example": "The second code snippet on the page.",
+      "misconception": "That the wrong ordering breaks training. The authors say conv-activation-BN still trains and won't necessarily be worse.",
+      "related": ["relu", "fine_tuning", "transfer_learning"],
+      "source": "book"
+    },
+    {
+      "id": "fine_tuning",
+      "name": "Fine-tuning",
+      "definition": "Jointly training a new head and some unfrozen top layers of a pretrained model with very small updates.",
+      "intuition": "Gently adjust learned features to the new task without destroying them.",
+      "technical": "BatchNormalization layers in the pretrained base should remain frozen, because their mean/variance updates are not throttled by the small learning rate.",
+      "significance": "Explains the instruction given in chapter 8 (p.289).",
+      "example": "Unfreezing the top layers of a conv base but leaving BN layers with trainable=False.",
+      "misconception": "That a low learning rate protects every part of the model; BN statistics are not learned by gradient descent.",
+      "related": ["transfer_learning", "batch_normalization"],
+      "source": "book"
+    },
+    {
+      "id": "depthwise_separable_convolution",
+      "name": "Depthwise separable convolution",
+      "definition": "A convolution factored into a per-channel spatial (depthwise) convolution followed by a 1x1 pointwise convolution that mixes channels (SeparableConv2D in Keras).",
+      "intuition": "First look for spatial patterns within each feature map separately, then decide how to combine the feature maps.",
+      "technical": "Weights: k*k*C_in (depthwise) + C_in*C_out (pointwise) versus k*k*C_in*C_out for Conv2D (biases aside).",
+      "significance": "Smaller, leaner, and per the authors often a few points better; the basis of Xception (p.303).",
+      "example": "3x3, 64->64: 4,672 vs. 36,864 weights (p.303).",
+      "misconception": "That it is just a cheaper approximation that must hurt accuracy. When its prior (independent channels) is accurate, it can help.",
+      "related": ["convolution", "pointwise_convolution", "xception"],
+      "source": "book"
+    },
+    {
+      "id": "pointwise_convolution",
+      "name": "Pointwise (1x1) convolution",
+      "definition": "A convolution with a 1x1 window: at every spatial position, a linear map from the input channels to the output channels.",
+      "intuition": "A Dense layer applied independently at each pixel.",
+      "technical": "C_in*C_out weights (+ C_out biases).",
+      "significance": "The channel-mixing half of a separable convolution; also used for residual projections (p.300).",
+      "example": "conv2d_14 on p.300: 1x1, 64->128, 8,320 parameters.",
+      "misconception": "That a 1x1 convolution does nothing because it sees one pixel; it mixes all channels at that pixel.",
+      "related": ["depthwise_separable_convolution", "residual_connection"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Parameter count: regular vs. depthwise separable convolution",
+      "latex": "\\begin{aligned} P_{\\text{Conv2D}} &= k^2\\, C_{\\text{in}}\\, C_{\\text{out}} \\\\ P_{\\text{Separable}} &= k^2\\, C_{\\text{in}} + C_{\\text{in}}\\, C_{\\text{out}} \\\\ \\frac{P_{\\text{Separable}}}{P_{\\text{Conv2D}}} &= \\frac{1}{C_{\\text{out}}} + \\frac{1}{k^2} \\end{aligned}",
+      "source_text": "Described in words on this page (spatial convolution on each channel, then a 1 x 1 pointwise convolution); the numbers 3 × 3 × 64 × 64 = 36,864 and 3 × 3 × 64 + 64 × 64 = 4,672 appear on p.303.",
+      "variables": [
+        {"symbol": "k", "meaning": "Kernel (window) size"},
+        {"symbol": "C_{\\text{in}}", "meaning": "Number of input channels"},
+        {"symbol": "C_{\\text{out}}", "meaning": "Number of output channels (filters)"}
+      ],
+      "operations": "Count weights of each stage; biases ignored.",
+      "purpose": "Quantifies 'smaller' and 'leaner' in the page's pitch.",
+      "interpretation": "For large C_out the ratio approaches 1/k^2, about 1/9 for 3x3 windows.",
+      "intuition": "Separating 'where' from 'which channel' replaces a product of factors with a sum.",
+      "numerical_example": "$k=3$, $C_{\\text{in}}=C_{\\text{out}}=64$: Conv2D $= 9\\cdot64\\cdot64 = 36{,}864$; separable $= 9\\cdot64 + 64\\cdot64 = 576 + 4096 = 4{,}672$; ratio $\\approx 0.127 = 1/64 + 1/9$.",
+      "source": "ai_explanation",
+      "book_ref": "p.303"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Ordering to avoid: activation inside Conv2D, then BatchNormalization",
+      "original_code": "x = layers.Conv2D(32, 3, activation=\"relu\")(x)\nx = layers.BatchNormalization()(x)",
+      "language": "python",
+      "what_it_does": "Applies a ReLU-activated convolution (with bias) and then normalizes the rectified output. This is the 'instead of doing' case from the sentence that begins on p.301.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Conv2D with 32 3x3 filters, a bias, and ReLU applied inside the layer."},
+        {"lines": "2", "explanation": "BatchNormalization of the non-negative ReLU outputs."}
+      ],
+      "inputs_outputs": "Same shapes as the recommended version; only the order of operations differs.",
+      "algorithm": "conv -> bias -> ReLU -> BN.",
+      "theory_link": "The ReLU sees un-normalized values, so its zero pivot is not aligned with the data's center.",
+      "parameters": [
+        {"name": "activation=\"relu\"", "role": "Applies the nonlinearity before normalization"}
+      ],
+      "pitfalls": [
+        "Not wrong per se: the authors say this still trains and won't necessarily be worse.",
+        "Here the bias is not cancelled by BN (the ReLU sits in between), so keeping it is reasonable."
+      ]
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Recommended ordering: Conv2D (no bias, no activation) -> BatchNormalization -> ReLU",
+      "original_code": "x = layers.Conv2D(32, 3, use_bias=False)(x)\nx = layers.BatchNormalization()(x)\nx = layers.Activation(\"relu\")(x)",
+      "language": "python",
+      "what_it_does": "Convolves without bias or activation, normalizes per channel, then applies ReLU as a separate layer.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Callout: note the lack of activation here. use_bias=False because BN will cancel any bias (p.301)."},
+        {"lines": "2", "explanation": "BatchNormalization centers and scales each channel."},
+        {"lines": "3", "explanation": "Callout: we place the activation after the BatchNormalization layer. layers.Activation('relu') is a parameter-free layer."}
+      ],
+      "inputs_outputs": "Input: (batch, H, W, C); output: (batch, H-2, W-2, 32).",
+      "algorithm": "conv -> BN -> ReLU, the standard block of modern ConvNets such as ResNet.",
+      "theory_link": "Zero-centered normalized values meet ReLU's zero pivot, 'maximizing the utilization of the ReLU'.",
+      "parameters": [
+        {"name": "use_bias=False", "role": "Removes the redundant bias"},
+        {"name": "Activation(\"relu\")", "role": "Applies ReLU after normalization"}
+      ],
+      "pitfalls": [
+        "Forgetting to remove activation= from the Conv2D gives two nonlinearities or the wrong order.",
+        "When this block is part of a pretrained base being fine-tuned, freeze the BatchNormalization layer."
+      ],
+      "illustrative_code": "# Beyond the book: freezing BatchNormalization layers before fine-tuning\nfor layer in conv_base.layers:\n    if isinstance(layer, keras.layers.BatchNormalization):\n        layer.trainable = False"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why BN statistics are dangerous during fine-tuning",
+      "kind": "step_by_step",
+      "body": "Beyond the book, expanding the NOTE:\n\n1. Fine-tuning uses a small learning rate (for example 1e-5) so pretrained convolution kernels move by tiny amounts each step.\n2. A trainable BatchNormalization layer in training mode normalizes with the *new* dataset's batch statistics and updates its moving mean/variance toward them, independently of the learning rate.\n3. If the new data's statistics differ from those of the pretraining data (ImageNet vs. dogs-and-cats, say), every layer after this BN suddenly receives inputs shifted and rescaled compared to what it was trained on.\n4. The downstream convolutions can only adapt slowly (small learning rate), so the features degrade and the loss may spike.\n\nFreezing BN keeps the pretrained statistics fixed, so the only changes are the small, controlled weight updates.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Separable convolution as a two-stage workshop",
+      "kind": "analogy",
+      "body": "A regular convolution is like one craftsman who, for each product, examines every material (channel) in every neighboring location at once. A separable convolution splits the work: first, one specialist per material looks at local spatial structure in that material only; then an assembler at each location decides how to combine the specialists' reports. If materials really are mostly independent, the split loses little and needs far fewer tools.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "The two orderings compared on the page",
+      "why": "The page contrasts conv-activation-BN with the recommended conv-BN-activation.",
+      "mermaid": "flowchart LR\n subgraph A[Instead of]\n A1[Conv2D 32, 3x3, relu] --> A2[BatchNormalization]\n end\n subgraph B[Recommended]\n B1[Conv2D 32, 3x3, use_bias=False] --> B2[BatchNormalization] --> B3[Activation relu]\n end"
+    },
+    {
+      "id": "v2",
+      "type": "mermaid",
+      "title": "Depthwise separable convolution",
+      "why": "The page describes a spatial convolution on each channel independently followed by a pointwise 1x1 convolution (figure 9.4 is on p.303).",
+      "mermaid": "flowchart LR\n I[Input: C_in channels] --> S[Split channels]\n S --> D1[3x3 conv, channel 1]\n S --> D2[3x3 conv, channel 2]\n S --> D3[3x3 conv, channel C_in]\n D1 --> Cc[Concatenate: C_in maps]\n D2 --> Cc\n D3 --> Cc\n Cc --> P[Pointwise 1x1 conv: C_out channels]"
+    },
+    {
+      "id": "v3",
+      "type": "widget",
+      "title": "ReLU and its zero pivot",
+      "why": "The authors justify normalizing before the activation by ReLU's use of zero as a pivot; see where values centered on zero fall.",
+      "widget": "activation_functions",
+      "params": {"functions": ["relu"], "show_derivative": true}
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "Putting batch normalization after the activation will make the model fail to train.",
+      "correction": "The authors say the ordering is not exactly critical; conv-activation-BN still trains and won't necessarily give worse results."
+    },
+    {
+      "claim": "A low fine-tuning learning rate protects BatchNormalization layers.",
+      "correction": "Their moving mean and variance are updated directly from batch data, not by gradient steps, so they should be frozen with trainable=False."
+    },
+    {
+      "claim": "Depthwise separable convolutions are only a speed trick that costs accuracy.",
+      "correction": "The page claims they are smaller, leaner and can perform a few percentage points better, because their structural assumption matches image representations."
+    },
+    {
+      "claim": "In a separable convolution, channels are never mixed.",
+      "correction": "Channels are processed independently only in the depthwise step; the pointwise 1x1 convolution then mixes them."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 301, "note": "BatchNormalization, use_bias=False and the start of the 'activation after BN' recommendation"},
+      {"page": 289, "note": "Instruction not to unfreeze BatchNormalization layers during fine-tuning, explained here"},
+      {"page": 300, "note": "1x1 convolutions used as residual projections"}
+    ],
+    "later": [
+      {"page": 303, "note": "Figure 9.4, the separable-convolution parameter count (36,864 vs. 4,672) and the Xception paper"},
+      {"page": 305, "note": "Mini Xception-like model combining SeparableConv2D, batch normalization and residual connections"},
+      {"page": 627, "note": "Conclusion: batch normalization and residual connections in very deep ConvNets"}
+    ],
+    "prerequisites": [
+      {"page": 288, "note": "Fine-tuning a pretrained model"},
+      {"page": 257, "note": "Regular convolutions and their priors"}
+    ],
+    "related_math": [
+      {"page": 303, "note": "Parameter-count comparison"}
+    ],
+    "related_code": [
+      {"page": 301, "note": "Conv2D(use_bias=False) + BatchNormalization snippet"},
+      {"page": 305, "note": "Mini Xception-like model code"}
+    ],
+    "related_figures": [
+      {"page": 303, "note": "Figure 9.4: depthwise convolution followed by pointwise convolution"}
+    ]
+  },
+  "takeaways": [
+    "Recommended block: Conv2D(use_bias=False) -> BatchNormalization() -> Activation('relu').",
+    "Reason: BN centers values on zero, ReLU's pivot, which maximizes the ReLU's utilization; but the ordering is not critical.",
+    "Keep BatchNormalization layers frozen when fine-tuning, or their changing statistics will disrupt the small updates to nearby Conv2D layers.",
+    "SeparableConv2D = per-channel spatial convolution + 1x1 pointwise convolution; smaller, leaner, often a bit better.",
+    "Its prior: spatial locations are highly correlated, channels highly independent."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "Which code reflects the authors' recommended ordering?",
+      "options": [
+        "Conv2D(32, 3, use_bias=False) -> BatchNormalization() -> Activation(\"relu\")",
+        "Conv2D(32, 3, activation=\"relu\") -> BatchNormalization()",
+        "BatchNormalization() -> Conv2D(32, 3, activation=\"relu\")",
+        "Conv2D(32, 3) -> Activation(\"relu\") -> BatchNormalization() -> Activation(\"relu\")"
+      ],
+      "answer": "Conv2D(32, 3, use_bias=False) -> BatchNormalization() -> Activation(\"relu\")",
+      "explanation": "The second snippet on the page puts the activation after BN and drops the bias. The second option is the 'instead of' case; the others are not discussed and the last applies ReLU twice.",
+      "page_refs": [302]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "What intuitive reason do the authors give for normalizing before the ReLU?",
+      "options": [],
+      "answer": "BN centers inputs on zero, and ReLU uses zero as the pivot for keeping or dropping values, so normalizing first maximizes the utilization of the ReLU.",
+      "explanation": "They also note the ordering is not critical.",
+      "page_refs": [302]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "Why should BatchNormalization layers be kept frozen when fine-tuning, even though the learning rate is small?",
+      "options": [],
+      "answer": "Because otherwise they keep updating their internal mean and variance from the new data, and these statistic updates are not limited by the learning rate; the resulting shifts interfere with the very small updates applied to the surrounding Conv2D layers.",
+      "explanation": "The NOTE on the page; it is the explanation promised on p.289.",
+      "page_refs": [302, 289]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "What does a depthwise separable convolution do?",
+      "options": [
+        "A spatial convolution on each input channel independently, then a 1x1 pointwise convolution to mix channels",
+        "A 1x1 convolution followed by max pooling",
+        "Two regular 3x3 convolutions in sequence",
+        "A convolution that ignores spatial structure entirely"
+      ],
+      "answer": "A spatial convolution on each input channel independently, then a 1x1 pointwise convolution to mix channels",
+      "explanation": "This is the page's definition (figure 9.4 on p.303). It does not involve pooling, is not two full convolutions, and the depthwise stage does capture spatial structure.",
+      "page_refs": [302, 303]
+    },
+    {
+      "id": "q5",
+      "type": "math",
+      "question": "Compute the number of weights (no biases) of a regular 3x3 Conv2D and of a 3x3 SeparableConv2D, both mapping 32 to 64 channels.",
+      "options": [],
+      "answer": "Conv2D: 3*3*32*64 = 18,432. Separable: 3*3*32 + 32*64 = 288 + 2,048 = 2,336 (about 7.9 times fewer).",
+      "explanation": "Depthwise stage: one 3x3 filter per input channel; pointwise stage: a 32x64 channel-mixing matrix.",
+      "page_refs": [302, 303]
+    },
+    {
+      "id": "q6",
+      "type": "conceptual",
+      "question": "What assumption about intermediate activations does depthwise separable convolution rely on, and what analogous assumption does regular convolution make?",
+      "options": [],
+      "answer": "Separable: spatial locations are highly correlated but different channels are highly independent. Regular convolution: patterns in images are not tied to specific locations.",
+      "explanation": "Both are priors built into the architecture; the page draws the parallel explicitly.",
+      "page_refs": [302]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Could you explain to someone why use_bias=False is fine in the recommended snippet but not obviously so in the 'instead of' snippet?",
+      "options": [],
+      "answer": "In the recommended snippet, BN directly follows the convolution and subtracts the mean, cancelling any bias. In the other snippet, a ReLU sits between the bias and BN, so the bias changes which values ReLU keeps and is not cancelled.",
+      "explanation": "Connects the NOTE on p.301 with the ordering on this page.",
+      "page_refs": [301, 302]
+    }
+  ]
+}

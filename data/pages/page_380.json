@@ -1,0 +1,342 @@
+{
+ "page_id": "page_380", "pdf_page": 380, "printed_page": "356", "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:58:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Row-count inconsistency in the book: the printed split sizes 210,225 + 105,112 + 105,114 = 420,451, which matches int(0.5 * 420451) = 210,225, while p.377 states 420,551 lines (int(0.5 * 420551) would be 210,275). One of the two numbers is a typo, most likely the 420,551 on p.377."
+  ],
+  "extraction_quality": "Clean. The first code element is the end of Listing 13.5 (begun on p.379): three print calls and their output. The sidebar 'Understanding timeseries_dataset_from_array()' starts here and continues on p.381."
+ },
+ "overview": {
+  "title": "Normalizing the data and planning the dataset",
+  "chapter": "13 Timeseries forecasting",
+  "section": "13.2 A temperature forecasting example",
+  "subsection": "13.2.1 Preparing the data",
+  "main_topic": "The split sizes, the exact forecasting problem (five days of hourly data to predict the temperature 24 hours later), per-feature normalization with training-set statistics, and the plan to generate overlapping windows on the fly with timeseries_dataset_from_array().",
+  "central_idea": "Each of the 14 feature series is standardized with the mean and standard deviation of the first 210,225 timesteps only. Training samples are overlapping windows of the series, so they are generated lazily from raw_data and temperature instead of being materialized.",
+  "importance": "Normalization with training-only statistics avoids leaking information from validation and test data, and the windowing strategy defines exactly what a 'sample' is for every model in the chapter.",
+  "learning_objectives": [
+   "State the exact problem formulation used in chapter 13.",
+   "Explain why features with different scales (about 1,000 mbar versus about 3 mmol/mol) must be normalized.",
+   "Read Listing 13.6 and explain why the mean and std are computed on the training slice only.",
+   "Explain why consecutive samples are redundant and why they are generated on the fly.",
+   "Describe the basic idea of timeseries_dataset_from_array(): windows (sequences) extracted from a data array."
+  ],
+  "prerequisites": [
+   "Listing 13.5 (p.379): num_train_samples",
+   "Feature-wise normalization (introduced for the housing-price regression example earlier in the book)",
+   "NumPy axis-wise reductions and broadcasting"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the end of **Listing 13.5**: printing the split sizes gives `num_train_samples: 210225`, `num_val_samples: 105112` and `num_test_samples: 105114`.\n\n**Section 13.2.1** states the exact problem: *given data covering the previous five days and sampled once per hour, can we predict the temperature in 24 hours?*\n\nPreprocessing is simple because the data is already numerical, so no vectorization is needed. But the 14 series have very different scales. Atmospheric pressure, in mbar, is around 1,000, while H2OC, in millimoles per mole, is around 3. Each series is therefore **normalized independently** so that all of them take small values on a similar scale. Since the first 210,225 timesteps are the training data, the **mean and standard deviation are computed only on that fraction**. **Listing 13.6** does this in place: `mean = raw_data[:num_train_samples].mean(axis=0)`, subtract it, then compute `std` on the same slice and divide by it. `axis=0` gives one statistic per column (feature). Note that only `raw_data` is normalized; the `temperature` target array stays in degrees Celsius, so errors later on (MAE) are measured in degrees.\n\nNext, the book plans a `Dataset` that yields batches of five-day windows with a target temperature 24 hours in the future. Samples are **highly redundant**: sample `N` and sample `N + 1` share most of their timesteps. Allocating every sample explicitly would waste memory, so samples are generated **on the fly**, and only `raw_data` and `temperature` are kept in memory. You could write a Python generator for this, but Keras has a built-in utility, `timeseries_dataset_from_array()`, that can be used for any timeseries forecasting task.\n\nThe sidebar **\"Understanding timeseries_dataset_from_array()\"** begins: you provide an array of timeseries data (the `data` argument) and the function returns windows extracted from it, called \"sequences\". The worked example is on p.381.",
+ "paragraphs": [
+  {
+   "ref": "p380_e05",
+   "excerpt": "The exact formulation of the problem will be as follows: given data covering",
+   "what_it_says": "The task is: given the previous five days of data, sampled once per hour, predict the temperature 24 hours later.",
+   "what_it_means": "Each input is a window of 5 x 24 = 120 hourly records, each with 14 features. The raw data is recorded every 10 minutes, so every sixth record is kept (sampling_rate = 6, p.381). The target is a single number: the temperature 24 hours after the end of the window.",
+   "why_it_matters": "This defines the input shape (120, 14) and the scalar regression target for every model in the chapter: the dense model, the 1D convnet and the RNNs.",
+   "terminology": [
+    {"term": "lookback", "meaning": "How far into the past the input window reaches (five days here)."},
+    {"term": "horizon", "meaning": "How far ahead the target lies (24 hours)."}
+   ],
+   "connections": [
+    "p.381: sequence_length = 120, sampling_rate = 6 and delay = sampling_rate * (sequence_length + 24 - 1) implement this formulation.",
+    "p.376: the chapter-wide goal of predicting the temperature 24 hours in the future."
+   ]
+  },
+  {
+   "ref": "p380_e06",
+   "excerpt": "First, let’s preprocess the data to a format a neural network can ingest.",
+   "what_it_says": "The data is already numerical, so no vectorization is needed. But the series are on very different scales (pressure about 1,000 mbar, H2OC about 3 mmol/mol), so each series is normalized independently to small, similar values. The mean and std are computed only on the first 210,225 timesteps, the training data.",
+   "what_it_means": "Without normalization, features with large magnitudes would dominate the weighted sums inside the network and the gradient updates, making optimization slow and unstable. Standardizing each column to roughly zero mean and unit variance puts pressure, humidity, wind and so on on equal footing. Using training-only statistics follows the rule that nothing from the validation or test data may affect the model or its preprocessing.",
+   "why_it_matters": "Computing the mean and std on the whole series would leak information about the future (for example, a warmer final period would shift the mean). The effect is small here, but the principle is the same as with the chronological split on p.379.",
+   "technical_idea": "For each feature $j$: $x'_{t,j} = (x_{t,j} - \\mu_j)/\\sigma_j$, where $\\mu_j$ and $\\sigma_j$ come from $t < 210{,}225$ only.",
+   "terminology": [
+    {"term": "vectorization", "meaning": "Turning raw data such as text or categories into numeric tensors. Not needed here."},
+    {"term": "normalization (standardization)", "meaning": "Subtracting the mean and dividing by the standard deviation, per feature."},
+    {"term": "H2OC", "meaning": "Water vapour concentration in millimoles per mole, one of the 14 columns (p.377)."}
+   ],
+   "connections": [
+    "p.379: the training block is the first 50% of the timeline (210,225 timesteps).",
+    "p.377: the header lists the 14 quantities and their units."
+   ]
+  },
+  {
+   "ref": "p380_e09",
+   "excerpt": "Next, let’s create a Dataset object that yields batches of data from",
+   "what_it_says": "A Dataset will yield batches of five-day windows paired with the temperature 24 hours later. Samples are highly redundant (sample N and sample N + 1 share most timesteps), so rather than allocating memory for each sample, they are generated on the fly while only raw_data and temperature are kept in memory.",
+   "what_it_means": "If every one of the roughly 210,000 possible training windows were stored as its own (120, 14) array, memory would grow about 120-fold compared with the original series, because each raw record would be copied into up to 120 windows. Generating windows lazily by indexing into the original arrays costs almost no extra memory.",
+   "why_it_matters": "This pattern is standard for timeseries and sequence data: the model sees many overlapping samples while the data stays stored once.",
+   "technical_idea": "Beyond the book: materializing all windows in float32 would take roughly 210,000 x 120 x 14 x 4 bytes, about 1.4 GB for training alone, compared with about 47 MB for the whole float64 raw_data array.",
+   "terminology": [
+    {"term": "on the fly", "meaning": "Computed when needed during iteration rather than precomputed and stored."},
+    {"term": "Dataset", "meaning": "A tf.data.Dataset (as returned by Keras utilities) that yields batches for model.fit."}
+   ],
+   "connections": [
+    "p.381: the three datasets for training, validation and test.",
+    "p.379: the split boundaries used to restrict each dataset to its time block."
+   ]
+  },
+  {
+   "ref": "p380_e10",
+   "excerpt": "We could easily write a Python generator to do this, but there’s a",
+   "what_it_says": "A Python generator would work, but Keras provides timeseries_dataset_from_array(), which does this and can be used for any kind of timeseries forecasting task.",
+   "what_it_means": "The utility handles window extraction, subsampling (sampling_rate), target alignment, shuffling of windows, start/end index limits and batching, all without copying the data up front.",
+   "why_it_matters": "It saves boilerplate and avoids off-by-one errors in aligning inputs and targets, which are easy to make by hand.",
+   "terminology": [
+    {"term": "Python generator", "meaning": "A function using yield to produce items one at a time."}
+   ],
+   "connections": [
+    "p.381: the dummy example with np.arange(10) shows the exact alignment of sequences and targets."
+   ]
+  },
+  {
+   "ref": "p380_e12",
+   "excerpt": "To understand what timeseries_dataset_from_array() does, let’s take a look at a",
+   "what_it_says": "Sidebar: you provide an array of timeseries data (the data argument), and timeseries_dataset_from_array returns windows extracted from the original series, called 'sequences'.",
+   "what_it_means": "A 'sequence' in this chapter is one sliding window: a contiguous (possibly subsampled) run of rows of data. The function slides the window along the series, one step at a time by default.",
+   "why_it_matters": "This vocabulary ('sequences', sequence_length) is used in the rest of the chapter for both the dataset and the RNN inputs.",
+   "terminology": [
+    {"term": "sequence", "meaning": "A window extracted from the timeseries; one input sample."}
+   ],
+   "connections": [
+    "p.381: with data = [0 1 2 3 4 5 6] and sequence_length=3, the sequences are [0 1 2], [1 2 3], ..., [4 5 6]."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "feature_normalization",
+   "name": "Feature-wise normalization",
+   "definition": "Rescaling each input feature independently, usually to zero mean and unit standard deviation.",
+   "intuition": "Expressing every sensor reading as 'how many standard deviations above or below its usual value'.",
+   "technical": "mean and std are vectors of shape (14,) computed with axis=0 over the training rows; broadcasting applies them to every row of raw_data.",
+   "significance": "Makes gradient-based optimization well-conditioned when features have very different magnitudes (about 1,000 vs about 3).",
+   "example": "Pressure around 990 mbar with std 8 becomes values near 0, in the range of about plus or minus 3.",
+   "misconception": "Normalization statistics may be computed on all data. They must come from the training data only.",
+   "related": ["information_leak", "temporal_split"],
+   "source": "book"
+  },
+  {
+   "id": "information_leak",
+   "name": "Information leak",
+   "definition": "Any way in which evaluation data influences training or preprocessing.",
+   "intuition": "Peeking at the exam before studying.",
+   "technical": "Here prevented by computing mean/std on raw_data[:num_train_samples] only.",
+   "significance": "Leaks make validation and test scores over-optimistic.",
+   "example": "A global mean that includes warmer test years would subtly encode future information.",
+   "misconception": "Only labels can leak. Preprocessing statistics can leak too.",
+   "related": ["feature_normalization", "validation_set"],
+   "source": "inference"
+  },
+  {
+   "id": "sliding_window",
+   "name": "Sliding-window samples",
+   "definition": "Turning one long series into many training samples by extracting fixed-length windows at successive offsets.",
+   "intuition": "Moving a fixed-size frame along a film strip one frame at a time.",
+   "technical": "Sample N covers rows N ... N + L - 1 (with subsampling); sample N + 1 shares all but one of these rows.",
+   "significance": "Creates many samples from one series. They are highly redundant, which motivates generating them lazily.",
+   "example": "Five-day hourly windows over the Jena series.",
+   "misconception": "Each window is an independent sample. Neighbouring windows are almost identical.",
+   "related": ["timeseries", "timeseries_dataset_from_array"],
+   "source": "book"
+  },
+  {
+   "id": "timeseries_dataset_from_array",
+   "name": "keras.utils.timeseries_dataset_from_array",
+   "definition": "A Keras utility that builds a Dataset of windows (sequences) and optional targets from an array, on the fly.",
+   "intuition": "A window factory over your array.",
+   "technical": "Main arguments (p.381): data, targets, sequence_length, sampling_rate, shuffle, batch_size, start_index, end_index.",
+   "significance": "Used to build the training, validation and test datasets for all chapter-13 models.",
+   "example": "Introduced in the sidebar on this page; worked example on p.381.",
+   "misconception": "It copies all windows into memory. It generates them lazily.",
+   "related": ["sliding_window"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Per-feature standardization with training statistics",
+   "latex": "\\mu_j = \\frac{1}{T}\\sum_{t=0}^{T-1} x_{t,j}, \\quad \\sigma_j = \\sqrt{\\frac{1}{T}\\sum_{t=0}^{T-1} (x_{t,j}-\\mu_j)^2}, \\quad x'_{t,j} = \\frac{x_{t,j}-\\mu_j}{\\sigma_j}",
+   "source_text": "mean = raw_data[:num_train_samples].mean(axis=0); raw_data -= mean; std = raw_data[:num_train_samples].std(axis=0); raw_data /= std",
+   "variables": [
+    {"symbol": "x_{t,j}", "meaning": "Raw value of feature j at timestep t (row t, column j of raw_data)"},
+    {"symbol": "T", "meaning": "num_train_samples = 210,225, the number of training timesteps"},
+    {"symbol": "\\mu_j", "meaning": "Training mean of feature j (one entry of mean, shape (14,))"},
+    {"symbol": "\\sigma_j", "meaning": "Training standard deviation of feature j (NumPy's default population std, ddof=0)"},
+    {"symbol": "x'_{t,j}", "meaning": "Normalized value, applied to all timesteps including validation and test"}
+   ],
+   "operations": "Column-wise mean and standard deviation over the training rows, then broadcast subtraction and division over every row.",
+   "purpose": "Brings all 14 features to a comparable scale without using non-training data.",
+   "interpretation": "On the training block each feature has mean 0 and std 1; on validation and test data they are close to, but not exactly, 0 and 1.",
+   "intuition": "Measure each sensor in units of its own typical variation.",
+   "numerical_example": "Illustrative values (not from the book): if training pressure has $\\mu = 989$ mbar and $\\sigma = 8.4$ mbar, a reading of 1,000 mbar becomes $(1000-989)/8.4 \\approx 1.31$. An H2OC reading of 3.5 with $\\mu = 9.6$, $\\sigma = 4.2$ becomes $\\approx -1.45$. Both now lie in a similar range. In Listing 13.6, std is computed after subtracting the mean; this does not change it, because the standard deviation is shift-invariant.",
+   "source": "book",
+   "book_ref": "p.380"
+  },
+  {
+   "id": "m2",
+   "title": "Split sizes printed by Listing 13.5",
+   "latex": "210{,}225 + 105{,}112 + 105{,}114 = 420{,}451",
+   "source_text": "num_train_samples: 210225 / num_val_samples: 105112 / num_test_samples: 105114",
+   "variables": [
+    {"symbol": "210{,}225", "meaning": "Training timesteps (first 50%)"},
+    {"symbol": "105{,}112", "meaning": "Validation timesteps (next 25%)"},
+    {"symbol": "105{,}114", "meaning": "Test timesteps (the remainder)"}
+   ],
+   "operations": "Sum of the three counts.",
+   "purpose": "Checks the split against the total number of rows.",
+   "interpretation": "The total is 420,451, which implies len(raw_data) = 420,451. This conflicts with the 420,551 lines stated on p.377 (see review flag).",
+   "intuition": "The three blocks must tile the timeline exactly.",
+   "source": "book",
+   "book_ref": "p.380"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "13.5",
+   "title": "Computing the number of samples for each data split (end of listing)",
+   "original_code": ">>> print(\"num_train_samples:\", num_train_samples)\n>>> print(\"num_val_samples:\", num_val_samples)\n>>> print(\"num_test_samples:\", num_test_samples)\nnum_train_samples: 210225\nnum_val_samples: 105112\nnum_test_samples: 105114",
+   "language": "python",
+   "what_it_does": "Prints the three split sizes computed by the first three lines of Listing 13.5 on p.379.",
+   "line_explanations": [
+    {"lines": "1-3", "explanation": "Interactive print calls for each count."},
+    {"lines": "4-6", "explanation": "Output: 210,225 training, 105,112 validation and 105,114 test timesteps."}
+   ],
+   "inputs_outputs": "Input: the three integers from p.379. Output: printed counts.",
+   "algorithm": "None; this is reporting only.",
+   "theory_link": "Confirms the chronological 50/25/25 split.",
+   "parameters": [],
+   "pitfalls": [
+    "The counts are timesteps, not samples: each dataset yields fewer windows than this, because each window needs history and a 24-hour target offset."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "13.6",
+   "title": "Normalizing the data",
+   "original_code": "mean = raw_data[:num_train_samples].mean(axis=0)\nraw_data -= mean\nstd = raw_data[:num_train_samples].std(axis=0)\nraw_data /= std",
+   "language": "python",
+   "what_it_does": "Standardizes each of the 14 feature columns of raw_data in place, using the mean and standard deviation of the training rows only.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Mean over the first 210,225 rows, along axis 0 (time), giving a (14,) vector: one mean per feature."},
+    {"lines": "2", "explanation": "Broadcast subtraction of the (14,) vector from every row of the (N, 14) array, in place."},
+    {"lines": "3", "explanation": "Standard deviation per feature over the (already centered) training rows. Centering does not change the std."},
+    {"lines": "4", "explanation": "In-place division, so every feature has unit variance on the training block."}
+   ],
+   "inputs_outputs": "Input: raw_data (N, 14) in physical units and num_train_samples. Output: raw_data overwritten with standardized values; mean and std vectors of shape (14,). The temperature array is not modified.",
+   "algorithm": "Z-score standardization with statistics fitted on the training split.",
+   "theory_link": "Puts features on a similar scale for gradient descent; training-only statistics avoid leakage.",
+   "parameters": [
+    {"name": "axis=0", "role": "Reduce over time, keeping one statistic per feature column."},
+    {"name": "num_train_samples", "role": "Restricts the statistics to the training block."}
+   ],
+   "pitfalls": [
+    "Running the cell twice normalizes already normalized data again. The second run is nearly a no-op on the training block but still changes values slightly elsewhere; it is safer to keep the raw copy.",
+    "Only the inputs are normalized. The targets come from the separate temperature array, still in degC, which is why MAEs later are in degrees.",
+    "Because the operations are in place, the original physical values are lost unless you keep mean and std to invert the transform."
+   ],
+   "illustrative_code": "# AI-written check (not from the book)\nprint(raw_data[:num_train_samples].mean(axis=0).round(6))  # ~0 for every feature\nprint(raw_data[:num_train_samples].std(axis=0).round(6))   # ~1 for every feature\nprint(raw_data[num_train_samples:].mean(axis=0).round(2))  # close to, not exactly, 0"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why scale matters for a dense or recurrent layer",
+   "kind": "breakdown",
+   "body": "A unit computes $w_1 x_1 + \\dots + w_{14} x_{14} + b$. With raw pressure around 1,000 and H2OC around 3, the same weight change moves the output about 300 times more through the pressure term than through the H2OC term. Gradients with respect to the weights are also proportional to the inputs, so the pressure weight gets huge updates while the others barely move. A single learning rate then cannot suit every weight. After standardization, all inputs are of order 1 and the optimization is much better conditioned.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Memory cost of materialized windows",
+   "kind": "numerical",
+   "body": "Training windows: about 210,000. Each window: 120 hourly steps x 14 features. In float32 that is $210{,}000 \\times 120 \\times 14 \\times 4 \\approx 1.41$ GB, and validation plus test would roughly double it. The original raw_data is $420{,}451 \\times 14 \\times 8 \\approx 47$ MB in float64. Generating windows on the fly, as the book does, costs about 30 times less memory. That is why the sample redundancy matters.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Analogy: overlapping windows",
+   "kind": "analogy",
+   "body": "Think of photographing a long mural through a frame that you slide a little each time. Printing every photo would mostly reproduce the same patch of wall again and again. It is cheaper to keep the mural and just remember where to put the frame. timeseries_dataset_from_array keeps the 'mural' (raw_data) and computes each 'photo' (window) when asked.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Shapes in normalization and windowing",
+   "why": "Listing 13.6 reduces the (N, 14) array over axis 0 to (14,) statistics; the dataset then yields batches of five-day hourly windows of shape (batch, 120, 14).",
+   "widget": "tensor_shapes",
+   "params": {"steps": [
+    {"op": "raw_data", "shape": [420451, 14]},
+    {"op": "train slice", "shape": [210225, 14]},
+    {"op": "mean/std (axis=0)", "shape": [14]},
+    {"op": "normalized raw_data", "shape": [420451, 14]},
+    {"op": "window batch", "shape": [null, 120, 14]}
+   ]}
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Broadcasting the (14,) mean over (N, 14) rows",
+   "why": "raw_data -= mean subtracts a 14-vector from every row: the broadcasting rule in action.",
+   "widget": "broadcasting",
+   "params": {"a_shape": [210225, 14], "b_shape": [14]}
+  },
+  {
+   "id": "v3",
+   "type": "mermaid",
+   "title": "Data preparation pipeline",
+   "why": "Summarizes the steps on pp.379-381 that this page covers.",
+   "mermaid": "flowchart LR\n A[\"raw_data (N,14), physical units\"] --> B[\"mean, std on first 210,225 rows\"]\n B --> C[\"standardize all rows\"]\n C --> D[\"timeseries_dataset_from_array: 120-hour windows, generated on the fly\"]\n T[\"temperature (N,), degC, not normalized\"] --> D\n D --> E[\"batches of (inputs, target 24 h later)\"]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "Normalize using the mean and std of the whole dataset; it's just preprocessing.", "correction": "The book computes them on the first 210,225 timesteps only, because validation and test data must not influence the model or its preprocessing."},
+  {"claim": "Listing 13.6 also normalizes the target temperatures.", "correction": "Only raw_data is modified. The temperature array used as targets stays in degC (although its copy in column 1 of raw_data is normalized as an input)."},
+  {"claim": "Computing std after subtracting the mean gives a different value than computing it before.", "correction": "The standard deviation is shift-invariant, so the order in Listing 13.6 does not matter."},
+  {"claim": "Each training sample needs its own stored array.", "correction": "Samples overlap heavily, so they are generated on the fly from raw_data and temperature."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 379, "note": "The chronological 50/25/25 split and the first lines of Listing 13.5."},
+   {"page": 377, "note": "Header with the units of each column (p in mbar, H2OC in mmol/mol)."},
+   {"page": 378, "note": "raw_data and temperature are created by Listing 13.2."}
+  ],
+  "later": [
+   {"page": 381, "note": "Worked example of timeseries_dataset_from_array and the parameters sampling_rate, sequence_length and delay."},
+   {"page": 382, "note": "Instantiating the training, validation and test datasets."},
+   {"page": 383, "note": "Commonsense baseline evaluated in degrees (it un-normalizes the temperature column)."}
+  ],
+  "prerequisites": [
+   {"page": 379, "note": "num_train_samples is defined in Listing 13.5."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 381, "note": "The dummy dataset built with np.arange(10)."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "The split sizes are 210,225 / 105,112 / 105,114 timesteps.",
+  "Problem: from five days of hourly data, predict the temperature 24 hours later.",
+  "Each of the 14 features is standardized independently, with the mean and std computed only on the training timesteps.",
+  "Listing 13.6 normalizes raw_data in place; the temperature target array stays in degC.",
+  "Overlapping windows are generated on the fly with keras.utils.timeseries_dataset_from_array instead of being stored."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "Why are the mean and standard deviation computed only on raw_data[:num_train_samples]?", "options": ["To save computation time", "So that validation and test data do not influence preprocessing (no information leak)", "Because the later data contains missing values", "Because Keras requires it"], "answer": "So that validation and test data do not influence preprocessing (no information leak)", "explanation": "The book ties the choice to using the first 210,225 timesteps as training data. Speed, missing values and Keras requirements are not the reason.", "page_refs": [380]},
+  {"id": "q2", "type": "short", "question": "What is the shape of mean in Listing 13.6, and what does axis=0 mean here?", "options": [], "answer": "(14,): one mean per feature; axis=0 averages over the time axis (rows).", "explanation": "raw_data has shape (N, 14); reducing over axis 0 leaves the feature axis.", "page_refs": [380]},
+  {"id": "q3", "type": "math", "question": "A training feature has mean 989 and std 8.4. What normalized value does a reading of 1,006 get? (Illustrative numbers.)", "options": [], "answer": "(1006 - 989) / 8.4, about 2.02.", "explanation": "Apply x' = (x - mu) / sigma from Listing 13.6.", "page_refs": [380]},
+  {"id": "q4", "type": "conceptual", "question": "Why does the book generate samples on the fly instead of building an array of all windows?", "options": [], "answer": "Consecutive samples (N and N + 1) share most of their timesteps, so storing every window would duplicate the data many times. Generating them from raw_data and temperature avoids that memory cost.", "explanation": "This is the book's stated motivation for timeseries_dataset_from_array.", "page_refs": [380]},
+  {"id": "q5", "type": "mcq", "question": "Which statement about Listing 13.6 is true?", "options": ["It normalizes the temperature target array", "It computes one mean for all features combined", "It modifies raw_data in place, using per-feature training statistics", "It normalizes each row (timestep) to unit norm"], "answer": "It modifies raw_data in place, using per-feature training statistics", "explanation": "-= and /= are in place, and axis=0 gives per-feature statistics. The temperature array is untouched, and the statistics are per column, not global or per row.", "page_refs": [380]},
+  {"id": "q6", "type": "short", "question": "State the exact problem formulation of section 13.2.1.", "options": [], "answer": "Given data covering the previous five days, sampled once per hour, predict the temperature 24 hours later.", "explanation": "This is quoted from the first paragraph of 13.2.1.", "page_refs": [380]},
+  {"id": "q7", "type": "self", "question": "Could you explain to a colleague why pressure around 1,000 and H2OC around 3 is a problem for a neural network, without using the word 'normalization'?", "options": [], "answer": "Open-ended: the large-valued input dominates weighted sums and gradient sizes, so learning is unbalanced and unstable.", "explanation": "Self-check on the motivation given in the second paragraph.", "page_refs": [380]}
+ ]
+}

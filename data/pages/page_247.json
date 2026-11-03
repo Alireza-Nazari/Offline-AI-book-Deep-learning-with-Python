@@ -1,0 +1,267 @@
+{
+ "page_id": "page_247",
+ "pdf_page": 247,
+ "printed_page": "223",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:29:50Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction of bullets, the subsubsection heading, Listing 7.21 and all callouts; verified against the page image."
+ },
+ "overview": {
+  "title": "Overriding train_step(): the recipe and the TensorFlow version (Listing 7.21)",
+  "chapter": "7 A deep dive on Keras",
+  "section": "7.4 Writing your own training and evaluation loops",
+  "subsection": "7.4.4 Using fit() with a custom training loop",
+  "main_topic": "The remaining steps for customizing fit() via train_step(), two important notes, and a complete TensorFlow implementation with a loss-tracking metric exposed through the metrics property.",
+  "central_idea": "A custom train_step() contains the same forward pass / GradientTape / optimizer.apply logic as a hand-written step, and returns a dict of metric values. Listing metric objects in the model's metrics property lets fit() reset them automatically each epoch and at the start of evaluate().",
+  "importance": "Listing 7.21 is the template for most custom training algorithms in Keras with TensorFlow: it shows the exact contract between your step and fit() (input data, returned logs, metrics property).",
+  "learning_objectives": [
+   "List the three steps of the recipe: subclass keras.Model, override train_step(), return a dict of metric names to values.",
+   "Explain why the pattern is compatible with Sequential, Functional and subclassed models.",
+   "Explain why no @tf.function or @jax.jit decorator is needed on train_step().",
+   "Read Listing 7.21 line by line: unpacking data, GradientTape, self(inputs, training=True), tape.gradient, self.optimizer.apply, loss_tracker.",
+   "Explain the role of the metrics property in automatic reset_state() calls.",
+   "Know why compile() only receives an optimizer in this example."
+  ],
+  "prerequisites": [
+   "The motivation for overriding train_step() (p.246).",
+   "The TensorFlow training step function with GradientTape (p.240-241).",
+   "keras.metrics.Mean and reset_state() (p.245-246).",
+   "Subclassing keras.Model (p.226)."
+  ],
+  "page_kind": "content"
+ },
+ "summary": "This page completes the recipe begun on p.246 for **customizing what `fit()` does**. After subclassing `keras.Model`, you (2) **override `train_step()`**, whose body is nearly identical to the training step functions written in section 7.4.2, and (3) **return a dictionary** mapping metric names, including the loss, to their current values.\n\nTwo notes follow. First, the pattern does **not** prevent you from using the Functional API: it works whether you build Sequential, Functional or subclassed models, because you only subclass `Model` to swap one method. Second, you **don't need `@tf.function` or `@jax.jit`** on your `train_step()`, since the framework compiles it for you.\n\nUnder the heading *Customizing fit() with TensorFlow*, **Listing 7.21** defines a module-level `loss_fn = keras.losses.SparseCategoricalCrossentropy()` and `loss_tracker = keras.metrics.Mean(name=\"loss\")`, then a `CustomModel` whose `train_step(self, data)` unpacks `inputs, targets`, runs `self(inputs, training=True)` inside a `tf.GradientTape`, computes the loss, takes `tape.gradient(loss, self.trainable_weights)`, applies them with `self.optimizer.apply(...)`, updates the loss tracker, and returns `{\"loss\": loss_tracker.result()}`. The callouts explain that `self(...)` is used instead of `model(...)` because the model is the class itself, and that listing `loss_tracker` in the **`metrics` property** makes the model call `reset_state()` on it at the start of each epoch and of each `evaluate()` call, so you don't reset by hand.\n\nThe final paragraph says that we can now instantiate, compile **with only an optimizer** (the loss is defined outside the model), and train with `fit()` as usual; the code for that is on p.248.",
+ "paragraphs": [
+  {
+   "ref": "p247_e03",
+   "excerpt": "Override the train_step() method. Its contents are nearly identical to what",
+   "what_it_says": "Second step of the recipe: override train_step(); its body is nearly the same as the training step written in the previous section.",
+   "what_it_means": "You are not learning new training mechanics. The forward pass, loss, gradient and update logic from 7.4.2 moves into a method, and inputs come from the data argument fit() passes in.",
+   "why_it_matters": "It shows that from-scratch steps and fit()-integrated steps differ mostly in packaging, so knowledge transfers directly.",
+   "terminology": [{"term": "train_step(self, data)", "meaning": "Method called by fit() for each batch; data is whatever the dataset yields, typically (inputs, targets)."}],
+   "connections": ["p.240: the custom training step functions of section 7.4.2.", "p.246: the first step of the recipe, subclassing keras.Model."]
+  },
+  {
+   "ref": "p247_e04",
+   "excerpt": "Return a dictionary mapping metric names (including the loss) to their current",
+   "what_it_says": "Third step: return a dict mapping metric names, including the loss, to their current values.",
+   "what_it_means": "The returned dict is what fit() shows in the progress bar, passes to callbacks as logs, and records in the History object. The keys become the names you see, such as 'loss'.",
+   "why_it_matters": "Callbacks like EarlyStopping or ModelCheckpoint monitor these names (e.g. monitor='loss'), so what you return determines what can be monitored.",
+   "connections": ["p.232: callbacks consume the logs produced during fit()."]
+  },
+  {
+   "ref": "p247_e06",
+   "excerpt": "This pattern does not prevent you from building models with the Functional",
+   "what_it_says": "Overriding train_step() is compatible with Sequential, Functional and subclassed models.",
+   "what_it_means": "The subclass only adds a training method. Its constructor still accepts inputs and outputs, so you can call CustomModel(inputs, outputs) with a Functional graph, exactly as done on p.248.",
+   "why_it_matters": "You do not have to give up the Functional API's benefits (shape checking, plotting, layer access) to get custom training.",
+   "connections": ["p.219: the Functional API.", "p.228: mixing and matching different components.", "p.248: get_custom_model() builds a Functional graph and passes it to CustomModel."]
+  },
+  {
+   "ref": "p247_e07",
+   "excerpt": "You don’t need to use a @tf.function or @jax.jit decorator when",
+   "what_it_says": "No compilation decorator is needed on an overridden train_step(); the framework handles it.",
+   "what_it_means": "fit() wraps train_step() in the backend's compilation mechanism (tf.function graph tracing or jax.jit) according to the model's compile settings.",
+   "why_it_matters": "You keep the performance benefits of compilation without writing compilation code, one of the advantages of staying inside fit() listed on p.246.",
+   "technical_idea": "Beyond the book: compilation can be turned off with model.compile(..., run_eagerly=True), useful when debugging a train_step with print statements.",
+   "terminology": [{"term": "@tf.function", "meaning": "TensorFlow decorator that traces a Python function into a compiled graph."}, {"term": "@jax.jit", "meaning": "JAX decorator that traces and compiles a function with XLA."}],
+   "connections": ["p.241: tf.function was used to speed up the TensorFlow step function."]
+  },
+  {
+   "ref": "p247_e09",
+   "excerpt": "Let’s start by coding a custom TensorFlow train step.",
+   "what_it_says": "Introduces the TensorFlow version, Listing 7.21.",
+   "what_it_means": "The three backends are covered in turn: TensorFlow here, PyTorch on p.248, JAX on p.249.",
+   "why_it_matters": "Sets up the comparison between backend-specific gradient mechanisms inside the same Keras contract.",
+   "connections": ["p.248: PyTorch version.", "p.249: JAX version."]
+  },
+  {
+   "ref": "p247_e12",
+   "excerpt": "We can now instantiate our custom model, compile it (we only pass",
+   "what_it_says": "The model can be instantiated, compiled with only an optimizer (the loss lives outside the model), and trained with fit().",
+   "what_it_means": "compile() normally receives loss and metrics so that the default train_step can use them. Since our train_step uses the module-level loss_fn and loss_tracker, compile() only needs to provide self.optimizer.",
+   "why_it_matters": "Clarifies the division of responsibilities: compile() configures what the default step needs; a custom step may need less.",
+   "connections": ["p.248: get_custom_model() calls model.compile(optimizer=keras.optimizers.Adam()) and then fit()."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "custom_train_step",
+   "name": "Overriding train_step()",
+   "definition": "Subclassing keras.Model and redefining train_step(), which fit() calls per batch, to run a custom learning algorithm under fit().",
+   "intuition": "fit() is the loop; train_step() is the loop body you are allowed to rewrite.",
+   "technical": "train_step(self, data) unpacks the batch, computes predictions with self(inputs, training=True), computes a loss, gets gradients with the backend's mechanism, applies them with self.optimizer, updates metrics and returns a logs dict.",
+   "significance": "Keeps callbacks, progress bars, compilation and distribution while allowing arbitrary per-batch logic.",
+   "example": "Listing 7.21 for TensorFlow.",
+   "misconception": "That train_step() must be decorated with @tf.function; fit() compiles it for you.",
+   "related": ["gradient_tape", "keras_model", "functional_api"],
+   "source": "book"
+  },
+  {
+   "id": "metrics_property",
+   "name": "The model.metrics property",
+   "definition": "A property listing the metric objects the model owns; fit() and evaluate() call reset_state() on each of them at the start of every epoch and evaluation.",
+   "intuition": "Registering your counters with the framework so it can zero them at the right moments.",
+   "technical": "Overridden with @property def metrics(self): return [loss_tracker]. Any metric you want reset across epochs should be listed.",
+   "significance": "Removes the manual reset_state() bookkeeping that a from-scratch loop requires (p.246).",
+   "example": "Without it, the 'loss' shown in epoch 3 would be the average over epochs 1 to 3.",
+   "misconception": "That metrics are reset automatically just because they are used in train_step(); they must be listed in metrics.",
+   "related": ["mean_metric", "keras_metric"],
+   "source": "book"
+  },
+  {
+   "id": "gradient_tape",
+   "name": "tf.GradientTape",
+   "definition": "TensorFlow context manager that records operations so gradients can be computed afterwards with tape.gradient().",
+   "intuition": "A recorder that watches the forward pass so it can replay it backward.",
+   "technical": "Operations on watched variables inside the with-block are recorded; tape.gradient(loss, self.trainable_weights) returns a list of gradients, one per weight.",
+   "significance": "The TensorFlow mechanism for the backward pass inside the custom train_step.",
+   "example": "with tf.GradientTape() as tape: predictions = self(inputs, training=True)",
+   "misconception": "That operations outside the with-block are recorded; the loss must be computed inside it.",
+   "related": ["autodiff", "custom_train_step"],
+   "source": "book"
+  },
+  {
+   "id": "mean_metric",
+   "name": "Mean metric as loss tracker",
+   "definition": "keras.metrics.Mean(name=\"loss\") accumulates per-batch losses and reports their running average.",
+   "intuition": "Smooths the noisy per-batch loss into an epoch-level average.",
+   "technical": "update_state(loss) each batch; result() in the returned dict; reset by fit() because it is listed in metrics.",
+   "significance": "Produces the same kind of 'loss' number the default fit() displays.",
+   "example": "return {\"loss\": loss_tracker.result()}",
+   "misconception": "That the progress-bar loss is the current batch's loss; it is the average so far in the epoch.",
+   "related": ["metrics_property", "keras_metric"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Gradient update performed inside train_step()",
+   "latex": "W \\leftarrow \\operatorname{update}\\left(W, \\nabla_W \\, L\\big(y, f_W(x)\\big)\\right)",
+   "source_text": "Not printed as a formula; expressed by gradients = tape.gradient(loss, self.trainable_weights) followed by self.optimizer.apply(gradients, self.trainable_weights).",
+   "variables": [
+    {"symbol": "W", "meaning": "The model's trainable weights (self.trainable_weights)"},
+    {"symbol": "f_W(x)", "meaning": "Predictions self(inputs, training=True)"},
+    {"symbol": "L", "meaning": "loss_fn, sparse categorical crossentropy"},
+    {"symbol": "\\operatorname{update}", "meaning": "The optimizer's rule (Adam in the example on p.248)"}
+   ],
+   "operations": "Forward pass, loss, gradient via the tape, optimizer step.",
+   "purpose": "Summarizes what one call of train_step does mathematically.",
+   "interpretation": "Each batch nudges the weights in a direction that lowers the batch loss.",
+   "intuition": "Same three steps as any training loop (p.239), now inside a method.",
+   "source": "ai_explanation",
+   "book_ref": "p.239"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "7.21",
+   "title": "Customizing fit(): TensorFlow version",
+   "original_code": "import keras\nfrom keras import layers\n\nloss_fn = keras.losses.SparseCategoricalCrossentropy()\nloss_tracker = keras.metrics.Mean(name=\"loss\")\n\nclass CustomModel(keras.Model):\n    def train_step(self, data):\n        inputs, targets = data\n        with tf.GradientTape() as tape:\n            predictions = self(inputs, training=True)\n            loss = loss_fn(targets, predictions)\n        gradients = tape.gradient(loss, self.trainable_weights)\n        self.optimizer.apply(gradients, self.trainable_weights)\n\n        loss_tracker.update_state(loss)\n        return {\"loss\": loss_tracker.result()}\n\n    @property\n    def metrics(self):\n        return [loss_tracker]",
+   "language": "python",
+   "what_it_does": "Defines a Model subclass whose per-batch training logic is written by hand with TensorFlow's GradientTape, while still being driven by fit().",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Imports Keras and the layers module (layers is used later in get_custom_model() on p.248)."},
+    {"lines": "4", "explanation": "Loss function object defined outside the model; this is why compile() later receives only an optimizer."},
+    {"lines": "5", "explanation": "Callout: this metric object will be used to track the average of per-batch losses during training and evaluation. name=\"loss\" sets the key's display name."},
+    {"lines": "7-8", "explanation": "Callout: overrides the train_step() method. CustomModel inherits everything else (call, fit, evaluate) from keras.Model."},
+    {"lines": "9", "explanation": "fit() passes each batch as data; here it is a tuple (inputs, targets)."},
+    {"lines": "10-12", "explanation": "Forward pass under the tape. Callout: we use self(inputs, training=True) instead of model(inputs, training=True) since our model is the class itself. training=True activates dropout."},
+    {"lines": "13", "explanation": "Gradients of the loss with respect to every trainable weight."},
+    {"lines": "14", "explanation": "self.optimizer is the optimizer given to compile(); apply() updates the weights."},
+    {"lines": "16", "explanation": "Callout: updates the loss tracker metric that tracks the average of the loss."},
+    {"lines": "17", "explanation": "Callout: returns the average loss so far by querying the loss tracker metric. This dict becomes fit()'s logs."},
+    {"lines": "19-21", "explanation": "Callout: listing the loss tracker in the model.metrics property lets the model automatically call reset_state() on it at the start of each epoch and at the start of evaluate(), so you don't do it by hand. Any metric you want reset across epochs should be listed here."}
+   ],
+   "inputs_outputs": "Input to train_step: one batch (inputs, targets). Output: {\"loss\": running mean loss}. Side effect: weights updated.",
+   "algorithm": "Per batch: forward pass -> loss -> gradients -> optimizer update -> metric update -> logs.",
+   "theory_link": "Implements the three-step training loop (p.239) as the body of fit().",
+   "parameters": [
+    {"name": "data", "role": "The batch yielded by the dataset passed to fit()."},
+    {"name": "training=True", "role": "Puts layers like Dropout in training mode."},
+    {"name": "self.trainable_weights", "role": "Variables that receive gradients and updates."}
+   ],
+   "pitfalls": [
+    "The listing uses tf but only imports keras; it assumes `import tensorflow as tf` was run earlier (and that the TensorFlow backend is active).",
+    "Forgetting the metrics property means the loss average never resets between epochs.",
+    "Computing the loss outside the GradientTape block would yield None gradients."
+   ],
+   "illustrative_code": "# AI-written: debugging a custom train_step eagerly\nmodel = get_custom_model()\nmodel.compile(optimizer=keras.optimizers.Adam(), run_eagerly=True)\nmodel.fit(train_images, train_labels, epochs=1)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "What fit() does around your train_step",
+   "kind": "step_by_step",
+   "body": "Beyond the book, a simplified picture of the outer loop:\n\n1. At the start of each epoch, call `reset_state()` on every metric in `model.metrics`.\n2. For each batch: call the (compiled) `train_step(batch)`, get the logs dict.\n3. Pass the logs to callbacks (`on_train_batch_end`) and update the progress bar.\n4. At epoch end, optionally run validation, call `on_epoch_end` callbacks, append logs to `History`.\n\nYour override only replaces step 2's body; steps 1, 3 and 4 still happen.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the loss is defined outside the class",
+   "kind": "alternative",
+   "body": "Listing 7.21 keeps `loss_fn` and `loss_tracker` as module-level globals for brevity. Beyond the book: a common alternative is to create them in `__init__` (e.g. `self.loss_tracker = keras.metrics.Mean(name=\"loss\")`) so that several model instances don't share one tracker. With the global version, two `CustomModel` instances trained in the same session would update the same metric object.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Data flow inside Listing 7.21's train_step",
+   "why": "Shows the sequence the listing implements and how the returned dict and metrics property connect back to fit().",
+   "mermaid": "flowchart TD\n  D[\"data = (inputs, targets)\"] --> FP[\"self(inputs, training=True)<br/>inside GradientTape\"]\n  FP --> L[\"loss_fn(targets, predictions)\"]\n  L --> G[\"tape.gradient(loss, trainable_weights)\"]\n  G --> O[\"self.optimizer.apply(...)\"]\n  L --> T[\"loss_tracker.update_state(loss)\"]\n  T --> R[\"return {'loss': loss_tracker.result()}\"]\n  R --> FIT[\"fit(): progress bar, callbacks, History\"]\n  MP[\"metrics property -> [loss_tracker]\"] -. reset_state each epoch .-> T"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "Overriding train_step() means you must define your model by subclassing.", "correction": "The pattern works with Sequential, Functional and subclassed models; p.248 passes a Functional graph to CustomModel(inputs, outputs)."},
+  {"claim": "You need to decorate train_step() with @tf.function for speed.", "correction": "The framework compiles it for you."},
+  {"claim": "Metrics used in train_step() are automatically reset each epoch.", "correction": "Only metrics listed in the metrics property are reset automatically."},
+  {"claim": "compile() always needs a loss.", "correction": "With a custom train_step that computes its own loss, compile() only needs an optimizer."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 246, "note": "Motivation for overriding train_step() and the first recipe step."},
+   {"page": 240, "note": "From-scratch training step functions whose contents train_step reuses."},
+   {"page": 245, "note": "Low-level usage of metrics."},
+   {"page": 219, "note": "The Functional API, still usable with this pattern."}
+  ],
+  "later": [
+   {"page": 248, "note": "get_custom_model(), training with fit(), and the PyTorch version."},
+   {"page": 249, "note": "Customizing fit() with JAX."},
+   {"page": 250, "note": "Handling metrics in a custom train_step()."}
+  ],
+  "prerequisites": [
+   {"page": 226, "note": "Subclassing the Model class."},
+   {"page": 239, "note": "The steps of a training loop."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 248, "note": "PyTorch version of the same CustomModel."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "Recipe: subclass keras.Model, override train_step(), return a dict of metric values including the loss.",
+  "Works with Sequential, Functional and subclassed models.",
+  "No @tf.function / @jax.jit needed; fit() compiles train_step for you.",
+  "Inside train_step use self(inputs, training=True), because the model is the class itself.",
+  "List metrics in the metrics property so fit() and evaluate() reset them automatically.",
+  "With the loss defined outside the model, compile() only needs an optimizer."
+ ],
+ "questions": [
+  {"id": "q1", "type": "short", "question": "What are the three steps for customizing fit() described across pp.246-247?", "options": [], "answer": "Subclass keras.Model; override train_step(); return a dictionary mapping metric names (including the loss) to their current values.", "explanation": "The first bullet is on p.246, the other two at the top of p.247.", "page_refs": [246, 247]},
+  {"id": "q2", "type": "mcq", "question": "Why does Listing 7.21 override the metrics property?", "options": ["So that compile() can find the loss function", "So the model automatically calls reset_state() on loss_tracker at the start of each epoch and of evaluate()", "So that gradients are computed for the metric", "So that the metric is saved with the model weights"], "answer": "So the model automatically calls reset_state() on loss_tracker at the start of each epoch and of evaluate()", "explanation": "The callout states this purpose. The loss function is global, not a metric; metrics are not differentiated; saving is unrelated.", "page_refs": [247]},
+  {"id": "q3", "type": "conceptual", "question": "Why does the listing call self(inputs, training=True) rather than model(inputs, training=True)?", "options": [], "answer": "Because train_step is a method of the model class itself; self is the model instance being trained, there is no separate model variable.", "explanation": "Stated in the callout. training=True also ensures Dropout behaves in training mode.", "page_refs": [247]},
+  {"id": "q4", "type": "mcq", "question": "Why does compile() in this example receive only an optimizer?", "options": ["Because Adam computes the loss internally", "Because the loss is already defined outside the model and used directly in train_step()", "Because Keras infers the loss from the output activation", "Because losses are not allowed with subclassed models"], "answer": "Because the loss is already defined outside the model and used directly in train_step()", "explanation": "The last paragraph says exactly this. Optimizers never compute losses; Keras does not infer losses from activations; subclassed models can use compiled losses.", "page_refs": [247]},
+  {"id": "q5", "type": "conceptual", "question": "Do you need @tf.function on an overridden train_step()? What does this tell you about the trade-off between custom loops and fit()?", "options": [], "answer": "No; the framework compiles it for you. Staying inside fit() gives you performance optimizations for free, which you'd have to add yourself in a from-scratch loop.", "explanation": "See the second note on p.247 and the list of fit() features on p.246.", "page_refs": [246, 247]},
+  {"id": "q6", "type": "short", "question": "What would the 'loss' value reported in epoch 3 represent if the metrics property were removed?", "options": [], "answer": "The average loss over all batches of epochs 1, 2 and 3, because loss_tracker would never be reset.", "explanation": "Without being listed, the tracker is not reset by fit(), so it keeps accumulating.", "page_refs": [247, 246]},
+  {"id": "q7", "type": "self", "question": "Can you rewrite Listing 7.21 from memory and point out which lines would change for PyTorch?", "options": [], "answer": "The GradientTape block and tape.gradient call would be replaced by loss.backward() and reading v.value.grad, and the optimizer update wrapped in torch.no_grad() (p.248).", "explanation": "Compare with p.248 to check yourself.", "page_refs": [247, 248]}
+ ]
+}

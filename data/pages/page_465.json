@@ -1,0 +1,400 @@
+{
+ "page_id": "page_465",
+ "pdf_page": 465,
+ "printed_page": "441",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:12:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Layout noise: the paragraph \"We can also adopt a slightly different naming...\" wraps around figure 15.5 and was split into alternating body/caption fragments (e06, e08, e10, e12 and e05, e07, e09, e11); it is treated as one paragraph. The grey levels of the figure 15.5 heatmap were read from the page image and are described approximately. p465_e03 is the end of dot_product_attention begun on p.464; p465_e14 is the start of the parameterized attention code, which continues on p.466."
+ },
+ "overview": {
+  "title": "Attention matrix, learned projections, query/key/value",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "15.3.1 Dot-product attention",
+  "main_topic": "Completing dot_product_attention with the weighted sum, visualizing the full attention matrix (figure 15.5), making attention richer with Dense projections, and renaming the inputs query, key and value.",
+  "central_idea": "The weighted sum \"bts,bsd->btd\" completes dot-product attention. Adding Dense projections of target and source lets the model learn a shared space in which useful source vectors land close to the target, and the general form sum(score(query, key) * value) borrows its vocabulary from search: a query is matched against keys to retrieve values.",
+  "importance": "This page introduces the query/key/value terminology used everywhere in Transformer literature and code, and the idea that attention needs its own trainable parameters (the four Dense layers).",
+  "learning_objectives": [
+   "Read the return line np.einsum(\"bts,bsd->btd\", scores, source) and its output shape.",
+   "Interpret the attention score matrix of figure 15.5.",
+   "Explain why projecting target and source with Dense layers enlarges the attention mechanism's hypothesis space.",
+   "Map target/source onto query, key and value, and explain the search-engine analogy.",
+   "Explain why the three-argument form is more general than the two-argument form."
+  ],
+  "prerequisites": [
+   "dot_product_attention's scoring step (p.464).",
+   "Dense layers as learned linear projections.",
+   "The notion of a hypothesis space."
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the last line of `dot_product_attention`: `return np.einsum(\"bts,bsd->btd\", scores, source)`, which, as the callout says, **computes a weighted sum of all source vectors for each target vector**, followed by the call `dot_product_attention(target, source)`.\n\n**Figure 15.5** displays the attention scores as a 2-D matrix when both target and source are sequences. Columns are the English words \"I\", \"will\", \"bring\", \"the\", \"bag\", \"to\", \"you\"; rows are the Spanish tokens being predicted (in green) \"Te\", \"traeré\", \"la\", \"bolsa\", \"[end]\", plus two empty rows. Darker cells are higher scores: \"Te\" is darkest at \"you\", \"traeré\" at \"I\", \"will\" and \"bring\", \"la\" at \"the\", \"bolsa\" at \"bag\", while \"[end]\" spreads mid-grey over the last words.\n\nNext, the authors make attention richer by **giving it parameters**. Projecting both source and target vectors with `Dense` layers lets the model find a **shared space** where source vectors are close to target vectors when that helps prediction. The source vectors should also be projected into a separate space before they are combined, and the result projected once more after the summation.\n\nThey then adopt the standard names. What they wrote is roughly `sum(score(target, source) * source)`; equivalently, `sum(score(query, key) * value)`. The three-argument version is more general, since in rare cases the vector used to score a source input may differ from the vector that gets summed. The terms come from **search engines and recommender systems**: in a photo search, the query is the search term, the keys are photo tags matched against it, and the values are the photos themselves (figure 15.6, p.466). The page ends by starting the parameterized pseudocode, creating four layers: `query_dense`, `key_dense`, `value_dense` and `output_dense`, each `layers.Dense(dim)`. The function that uses them is on p.466.",
+ "paragraphs": [
+  {
+   "ref": "p465_e04",
+   "excerpt": "We can make the hypothesis space of this attention mechanism much richer if we",
+   "what_it_says": "The hypothesis space of attention becomes richer if the model has parameters to control the score. Projecting both source and target vectors with Dense layers lets the model find a shared space where source vectors are close to target vectors when that improves prediction. The source vectors should also be projected into a separate space before being combined, and once again after the summation.",
+   "what_it_means": "Plain dot-product attention can only use similarities that already exist in the GRU outputs. With learned projections $W_q$ and $W_k$, the score becomes $(W_q t)\\cdot(W_k s)$, so the model can learn what \"relevant\" means for the task, for example making a Spanish verb's vector align with its English subject even if their raw vectors are dissimilar. A third projection $W_v$ chooses what information each source token contributes, and an output projection mixes the combined result.",
+   "why_it_matters": "These four projections are exactly the query, key, value and output Dense layers that appear in the code at the bottom of the page and in every Transformer attention layer.",
+   "technical_idea": "Beyond the book: $(W_q t)^\\top (W_k s) = t^\\top (W_q^\\top W_k) s$, so learning two projections amounts to learning a (low-rank, if the projection dimension is small) bilinear similarity $t^\\top M s$ instead of the fixed identity $t^\\top s$.",
+   "terminology": [
+    {"term": "Hypothesis space", "meaning": "The set of functions a model can represent; more learnable parameters in the score enlarge it."},
+    {"term": "Shared space", "meaning": "A learned common representation space into which both target and source vectors are projected before comparing them."}
+   ],
+   "connections": [
+    "p.464: the unparameterized dot-product score",
+    "p.466: parameterized_attention applies the four Dense layers"
+   ]
+  },
+  {
+   "ref": "p465_e06",
+   "excerpt": "We can also adopt a slightly dif",
+   "what_it_says": "A different naming has become standard. What was written is roughly sum(score(target, source) * source); it will be written equivalently as sum(score(query, key) * value). This three-argument version is more general: in rare cases you might not want to use the same vector to score source inputs as you use to sum them.",
+   "what_it_means": "The source plays two roles in the formula: it is compared with the target (key role) and it is what gets blended (value role). Naming them separately allows them to differ. In the translation case query = target and key = value = source, which is how the function is called on p.466.",
+   "why_it_matters": "Query, key and value are the names used by the Keras MultiHeadAttention layer (p.468) and by virtually all Transformer code and papers.",
+   "technical_idea": "In matrix form: $\\operatorname{Attention}(Q, K, V) = \\operatorname{softmax}(QK^\\top)V$, where the rows of $Q$ are queries and the rows of $K$ and $V$ are keys and values for the same positions.",
+   "terminology": [
+    {"term": "Query", "meaning": "The vector doing the looking (here, the target)."},
+    {"term": "Key", "meaning": "The vector each position offers to be matched against the query."},
+    {"term": "Value", "meaning": "The vector each position contributes to the weighted sum."}
+   ],
+   "connections": [
+    "p.466: parameterized_attention(query=target, key=source, value=source)",
+    "p.468: self-attention uses query = key = value = source"
+   ]
+  },
+  {
+   "ref": "p465_e13",
+   "excerpt": "The terminology comes from search engines and recommender systems.",
+   "what_it_says": "The terminology comes from search engines and recommender systems. In a photo search tool, the query is your search term, the keys are the photo tags matched against the query, and the values are the photos themselves (figure 15.6). The attention mechanism is roughly analogous to this lookup.",
+   "what_it_means": "A search engine scores how well each key matches the query and returns the corresponding values, ranked. Attention does a soft version: it scores every key against the query, normalizes the scores with softmax, and returns a weighted blend of all values rather than a ranked list.",
+   "why_it_matters": "The analogy makes the separate roles intuitive: you match on tags (keys) but you want the photos (values).",
+   "technical_idea": "Beyond the book: attention is sometimes called a \"differentiable dictionary lookup\": a hard lookup returns the value whose key equals the query; attention returns $\\sum_j \\operatorname{softmax}_j(q\\cdot k_j)\\,v_j$, which is differentiable in the query, keys and values.",
+   "terminology": [
+    {"term": "Recommender system", "meaning": "A system that ranks items for a user by matching user and item representations."}
+   ],
+   "connections": [
+    "p.466: figure 15.6, retrieving images from a database by matching a query to keys",
+    "p.462: the selective, contextual reading analogy"
+   ]
+  },
+  {
+   "ref": "p465_e13",
+   "excerpt": "Let’s update our pseudocode, so we have a parameterized attention using our new terminology:",
+   "what_it_says": "The pseudocode is updated to a parameterized attention using the new terminology, starting with the creation of four Dense layers.",
+   "what_it_means": "The layers are created once, outside the function, so that the same trainable weights are reused every time the attention function is called.",
+   "why_it_matters": "This is the step from a fixed operation to a trainable layer.",
+   "technical_idea": "",
+   "terminology": [],
+   "connections": [
+    "p.466: the parameterized_attention function"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "query_key_value",
+   "name": "Query, key and value",
+   "definition": "The three inputs of attention: queries are scored against keys, and the scores weight a sum of values: sum(score(query, key) * value).",
+   "intuition": "A photo search: the search term (query) is matched against tags (keys), and you get the photos (values).",
+   "technical": "$\\operatorname{softmax}(QK^\\top)V$; in translation, query = target, key = value = source.",
+   "significance": "Standard terminology in all Transformer work; the Keras MultiHeadAttention layer takes query, key and value arguments.",
+   "example": "Query \"dogs on the beach\" matches the key tags Beach + Dog best (figure 15.6).",
+   "misconception": "Keys and values are not always different tensors; in most uses they come from the same sequence, projected differently.",
+   "related": ["dot_product_attention", "attention", "self_attention"],
+   "source": "book"
+  },
+  {
+   "id": "parameterized_attention",
+   "name": "Parameterized attention",
+   "definition": "Attention with learned Dense projections of the query, key and value inputs and of the output.",
+   "intuition": "Let the model learn what to compare and what to retrieve, rather than relying on raw vector similarity.",
+   "technical": "$\\text{out} = W_o\\big(\\operatorname{softmax}((QW_q)(KW_k)^\\top)\\, VW_v\\big)$ (biases omitted).",
+   "significance": "It enlarges the hypothesis space of attention.",
+   "example": "Four layers.Dense(dim) layers: query_dense, key_dense, value_dense, output_dense.",
+   "misconception": "",
+   "related": ["query_key_value", "dense_layer"],
+   "source": "book"
+  },
+  {
+   "id": "attention_score_matrix",
+   "name": "Attention score matrix",
+   "definition": "With target and source sequences, a 2-D matrix in which each row shows the scores for the target word being predicted.",
+   "intuition": "A heatmap of which input word each output word looked at.",
+   "technical": "Shape (t, s) per example; rows sum to 1 after softmax.",
+   "significance": "It makes attention interpretable (figure 15.5).",
+   "example": "Row \"la\" is darkest at \"the\"; row \"bolsa\" at \"bag\".",
+   "misconception": "",
+   "related": ["dot_product_attention"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Weighted sum of values (return line)",
+   "latex": "\\text{output}_{btd} = \\sum_{s} \\text{scores}_{bts}\\, \\text{source}_{bsd}",
+   "source_text": "return np.einsum(\"bts,bsd->btd\", scores, source)",
+   "variables": [
+    {"symbol": "\\text{scores}_{bts}", "meaning": "Softmax-normalized weight of source position s for target position t in batch element b"},
+    {"symbol": "\\text{source}_{bsd}", "meaning": "Feature d of source vector s"},
+    {"symbol": "s", "meaning": "Source position, summed over"}
+   ],
+   "operations": "Batched matrix product of the (t, s) weight matrix with the (s, d) source matrix.",
+   "purpose": "Computes a weighted sum of all source vectors for each target vector.",
+   "interpretation": "Each output row is a blend of source vectors, one per target position.",
+   "intuition": "Rows of the attention matrix are recipes; this applies each recipe to the source vectors.",
+   "numerical_example": "Scores (32, 5, 7) and source (32, 7, 256) give output (32, 5, 256): one 256-d vector per target position.",
+   "source": "book",
+   "book_ref": "p.465"
+  },
+  {
+   "id": "m2",
+   "title": "Query-key-value form",
+   "latex": "\\text{output} = \\sum_{j} \\operatorname{score}(q, k_j)\\, v_j \\quad\\longrightarrow\\quad \\operatorname{Attention}(Q, K, V) = \\operatorname{softmax}\\!\\left(QK^\\top\\right) V",
+   "source_text": "sum(score(target, source) * source) ... sum(score(query, key) * value)",
+   "variables": [
+    {"symbol": "q, Q", "meaning": "Query vector / matrix of queries (target positions)"},
+    {"symbol": "k_j, K", "meaning": "Key vectors, used for scoring"},
+    {"symbol": "v_j, V", "meaning": "Value vectors, used in the sum"}
+   ],
+   "operations": "Score queries against keys, softmax along the key axis, weighted sum of values.",
+   "purpose": "Generalizes target/source attention to three separate roles.",
+   "interpretation": "The score uses keys; the content comes from values. With key = value = source it reduces to the earlier formula.",
+   "intuition": "Match on tags, retrieve photos.",
+   "numerical_example": "Keys $k_1 = (1,0)$, $k_2 = (0,1)$, values $v_1 = 10$, $v_2 = 20$, query $q = (2, 0)$: scores (2, 0), weights $\\approx (0.88, 0.12)$, output $\\approx 0.88\\cdot10 + 0.12\\cdot20 = 11.2$.",
+   "source": "book",
+   "book_ref": "p.465"
+  },
+  {
+   "id": "m3",
+   "title": "Score with learned projections",
+   "latex": "\\operatorname{score}(t, s) = (W_q t + b_q)\\cdot(W_k s + b_k)",
+   "source_text": "If we project both source and target vectors with Dense layers, the model can find a good shared space ...",
+   "variables": [
+    {"symbol": "W_q, b_q", "meaning": "Kernel and bias of query_dense"},
+    {"symbol": "W_k, b_k", "meaning": "Kernel and bias of key_dense"}
+   ],
+   "operations": "Two affine projections, then a dot product.",
+   "purpose": "Lets the model learn what counts as relevant.",
+   "interpretation": "The comparison happens in a learned shared space.",
+   "intuition": "Translate both vectors into a common language before comparing them.",
+   "numerical_example": "",
+   "source": "inference",
+   "book_ref": "p.465"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "dot_product_attention (end) and call",
+   "original_code": "    return np.einsum(\"bts,bsd->btd\", scores, source)\ndot_product_attention(target, source)",
+   "language": "python",
+   "what_it_does": "Finishes the function begun on p.464 (def line, scoring einsum and softmax) by returning the weighted sum of source vectors for each target vector, then calls it.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Callout: computes a weighted sum of all source vectors for each target vector. s is shared and dropped, so it is summed; output shape (b, t, d)."},
+    {"lines": "2", "explanation": "Calls the function on the decoder outputs (target) and encoder outputs (source)."}
+   ],
+   "inputs_outputs": "scores (b, t, s) and source (b, s, d) give output (b, t, d).",
+   "algorithm": "Batched matrix product of attention weights and source vectors.",
+   "theory_link": "Vectorized version of combined = np.sum(scores * sources) from p.464.",
+   "parameters": [],
+   "pitfalls": [
+    "This uses source both for scoring and summing; the three-argument version separates these roles."
+   ],
+   "illustrative_code": "# AI-written: the complete function (p.464 + p.465) in runnable NumPy\nimport numpy as np\n\ndef softmax(x, axis=-1):\n    e = np.exp(x - x.max(axis=axis, keepdims=True))\n    return e / e.sum(axis=axis, keepdims=True)\n\ndef dot_product_attention(target, source):\n    scores = np.einsum(\"btd,bsd->bts\", target, source)\n    scores = softmax(scores, axis=-1)\n    return np.einsum(\"bts,bsd->btd\", scores, source)\n\nout = dot_product_attention(np.random.rand(2, 5, 16), np.random.rand(2, 7, 16))\nprint(out.shape)  # (2, 5, 16)"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Dense projections for parameterized attention",
+   "original_code": "query_dense = layers.Dense(dim)\nkey_dense = layers.Dense(dim)\nvalue_dense = layers.Dense(dim)\noutput_dense = layers.Dense(dim)",
+   "language": "python",
+   "what_it_does": "Creates the four trainable projections of parameterized attention. The function that applies them, parameterized_attention, follows on p.466.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Projects the query (target) into the shared scoring space."},
+    {"lines": "2", "explanation": "Projects the keys (source) into the same space, so query-key dot products are meaningful."},
+    {"lines": "3", "explanation": "Projects the values (source) into a separate space before they are combined."},
+    {"lines": "4", "explanation": "Projects the combined result once again after the summation."}
+   ],
+   "inputs_outputs": "Each Dense(dim) maps the last axis of its input to size dim.",
+   "algorithm": "Learned affine maps applied to every position independently.",
+   "theory_link": "Implements the paragraph on enlarging the hypothesis space with Dense projections.",
+   "parameters": [
+    {"name": "dim", "role": "Output size of each projection; query and key projections must share it for the dot product."}
+   ],
+   "pitfalls": [
+    "The layers must be created once and reused; creating them inside the function would give new random weights on every call.",
+    "dim is not defined in the snippet; it is pseudocode."
+   ],
+   "illustrative_code": ""
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Reading figure 15.5 row by row",
+   "kind": "breakdown",
+   "body": "Approximate reading of the heatmap (darker = higher score):\n\n- **\"Te\"** (to you): darkest at \"you\", with a dark cell at \"I\". \"Te\" is the object pronoun for \"you\".\n- **\"traeré\"** (I will bring): dark at \"I\", \"will\" and \"bring\", the three words it translates.\n- **\"la\"** (the): black at \"the\".\n- **\"bolsa\"** (bag): darkest at \"bag\".\n- **\"[end]\"**: mid-grey spread over \"the\", \"bag\", \"to\", \"you\", the end of the sentence.\n\nNote (not in the book): Spanish word order differs from English (\"Te traeré la bolsa\" vs. \"I will bring the bag to you\"), so the bright cells are not on a diagonal; attention lets the model reorder freely. The two empty rows at the bottom are not explained on the page; they plausibly correspond to padded target positions with no prediction.",
+   "source": "inference"
+  },
+  {
+   "title": "Why separate keys from values?",
+   "kind": "analogy",
+   "body": "In the photo-search analogy, matching a query against the pixels of every photo would be hard; matching against short tags is easy. But you want the photo, not its tags. Keys are optimized for matching and values for content. In attention, separate key and value projections let one source token advertise itself with one vector (\"I am a subject pronoun\") while contributing another (its meaning and features).",
+   "source": "analogy"
+  },
+  {
+   "title": "Counting parameters",
+   "kind": "numerical",
+   "body": "Beyond the book: if the input vectors have size $d_{in}$ and each Dense has `dim` units with bias, the query, key and value layers each have $d_{in}\\cdot\\text{dim} + \\text{dim}$ parameters, and output_dense has $\\text{dim}\\cdot\\text{dim} + \\text{dim}$. For $d_{in} = \\text{dim} = 256$: $4 \\times (65{,}536 + 256) = 263{,}168$ parameters, all in the projections, since the score itself has none.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Data flow of parameterized attention",
+   "why": "The page lists four Dense projections: query and key into a shared scoring space, value before combining, and output after the summation.",
+   "mermaid": "flowchart LR\n  T[target] --> Q[query_dense]\n  S[source] --> K[key_dense]\n  S --> V[value_dense]\n  Q --> SC[\"scores = einsum btd,bsd->bts\"]\n  K --> SC\n  SC --> SM[softmax axis=-1]\n  SM --> WS[\"weighted sum einsum bts,bsd->btd\"]\n  V --> WS\n  WS --> O[output_dense]\n  O --> OUT[output]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Query, key and value on the source sentence",
+   "why": "Click a token to see query-key scores, softmax weights and the weighted sum of values, the generalized sum(score(query, key) * value). The vectors are random, not the trained ones behind figure 15.5.",
+   "widget": "attention",
+   "params": {"tokens": ["I", "will", "bring", "the", "bag", "to", "you"], "dim": 4, "seed": 2}
+  },
+  {
+   "id": "v3",
+   "type": "mermaid",
+   "title": "The search-engine analogy",
+   "why": "The page explains query, key and value with a photo search; this maps each term to its role in attention.",
+   "mermaid": "flowchart LR\n  q[\"Query: search term<br/>(target vector)\"] -->|match| k[\"Keys: photo tags<br/>(projected source)\"]\n  k -->|scores| w[softmax weights]\n  w -->|weight| v[\"Values: photos<br/>(projected source)\"]\n  v --> r[\"Result: weighted blend\"]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Query, key and value must be three different sequences.",
+   "correction": "In the translation case, key and value are both the source; in self-attention (p.468) all three are the same sequence. The three-argument form just allows them to differ."
+  },
+  {
+   "claim": "Adding Dense layers changes how the scores are normalized.",
+   "correction": "The softmax and weighted sum are unchanged; the projections only change which vectors are compared and summed."
+  },
+  {
+   "claim": "Figure 15.5's matrix is symmetric.",
+   "correction": "Rows are target (Spanish) words and columns are source (English) words; the matrix is not even square."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 464, "note": "Start of dot_product_attention and the softmax-weighted sum"},
+   {"page": 463, "note": "Einsum notation"},
+   {"page": 462, "note": "General concept of attention"}
+  ],
+  "later": [
+   {"page": 466, "note": "parameterized_attention, figure 15.6, and the scaling factor"},
+   {"page": 467, "note": "Multi-head attention"},
+   {"page": 468, "note": "Keras MultiHeadAttention and self-attention"}
+  ],
+  "prerequisites": [
+   {"page": 464, "note": "Dot-product scores and softmax"}
+  ],
+  "related_math": [
+   {"page": 466, "note": "Scaling the scores by the square root of the vector size"}
+  ],
+  "related_code": [
+   {"page": 464, "note": "First half of dot_product_attention"},
+   {"page": 466, "note": "parameterized_attention uses the four Dense layers"}
+  ],
+  "related_figures": [
+   {"page": 464, "note": "Figure 15.4 is a single row of figure 15.5 (\"traeré\")"},
+   {"page": 466, "note": "Figure 15.6: query, keys and values in an image search"}
+  ]
+ },
+ "takeaways": [
+  "np.einsum(\"bts,bsd->btd\", scores, source) computes a weighted sum of source vectors for each target vector.",
+  "With target and source sequences, attention scores form a 2-D matrix, one row per predicted word (figure 15.5).",
+  "Dense projections of target and source give attention parameters and a richer hypothesis space.",
+  "sum(score(target, source) * source) is generalized to sum(score(query, key) * value).",
+  "The terms come from search: the query is matched to keys to retrieve values."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In np.einsum(\"bts,bsd->btd\", scores, source), which axis is summed over?",
+   "options": ["b (batch)", "t (target)", "s (source)", "d (vector size)"],
+   "answer": "s (source)",
+   "explanation": "s appears in both inputs but not in the output, so it is multiplied and summed: a weighted sum over source positions. b, t and d all survive in btd.",
+   "page_refs": [465, 463]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "In the photo-search analogy, what are the query, the keys and the values?",
+   "options": [],
+   "answer": "The query is the search term, the keys are the photo tags matched against the query, and the values are the photos themselves.",
+   "explanation": "Stated in the paragraph on terminology (and drawn in figure 15.6).",
+   "page_refs": [465, 466]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why does projecting the target and source vectors with Dense layers make attention more expressive?",
+   "options": [],
+   "answer": "Without projections, the score can only use whatever similarity already exists between the raw vectors. With learned projections, the model can find a shared space where source vectors that help prediction are close to the target, learning what \"relevant\" means.",
+   "explanation": "The book calls this making the hypothesis space richer.",
+   "page_refs": [465]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "Why is the three-argument form sum(score(query, key) * value) more general than sum(score(target, source) * source)?",
+   "options": [
+    "It allows the vector used for scoring to differ from the vector that is summed",
+    "It removes the need for softmax",
+    "It makes attention run over a loop",
+    "It allows several targets to share one score"
+   ],
+   "answer": "It allows the vector used for scoring to differ from the vector that is summed",
+   "explanation": "The book says in rare cases you might not want to use the same vector to score as to sum. Softmax is still used, there are no loops, and per-target scores remain.",
+   "page_refs": [465]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "In figure 15.5, which English word does the row for \"la\" attend to most, and why does that make sense?",
+   "options": [],
+   "answer": "\"the\": \"la\" is the Spanish feminine article that translates \"the\".",
+   "explanation": "The cell (\"la\", \"the\") is the darkest in that row. Similarly \"bolsa\" attends most to \"bag\".",
+   "page_refs": [465]
+  },
+  {
+   "id": "q6",
+   "type": "math",
+   "question": "If scores has shape (16, 9, 12) and source has shape (16, 12, 128), what shape does the return line produce, and what does each output vector represent?",
+   "options": [],
+   "answer": "(16, 9, 128): for each of 16 examples and each of 9 target positions, a 128-d weighted sum of the 12 source vectors.",
+   "explanation": "s = 12 is summed out; b, t and d remain.",
+   "page_refs": [465]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you name the role of each of the four Dense layers created at the bottom of the page?",
+   "options": [],
+   "answer": "query_dense projects the target for scoring; key_dense projects the source for scoring; value_dense projects the source before it is combined; output_dense projects the result after the summation.",
+   "explanation": "These map directly onto the sentence \"project the source vectors into an entirely separate space before they are combined and once again after the summation\".",
+   "page_refs": [465, 466]
+  }
+ ]
+}

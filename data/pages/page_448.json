@@ -1,0 +1,546 @@
+{
+ "page_id": "page_448",
+ "pdf_page": 448,
+ "printed_page": "424",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:53:30Z",
+  "confidence": "high",
+  "review_flags": [
+   "The text says 'We need only 67 characters to handle the full source text', but TextVectorization.vocabulary_size() includes the padding token '' (index 0) and the OOV token '[UNK]' (index 1), so the vocabulary is 65 actual characters plus 2 special tokens. The notes explain this as an AI clarification.",
+   "The pipeline `dataset.shuffle(10_000).batch(64).cache()` caches after shuffling. tf.data then replays the first epoch's shuffled order in every later epoch, so the data is effectively shuffled only once. The usual idiom is cache() before shuffle(). Noted as a pitfall; the book's code still trains correctly."
+  ],
+  "extraction_quality": "Clean. The last element (p448_e12) merges two printed paragraphs ('To build our simple language model...' and 'We will use only a single recurrent layer...'); each has its own note."
+ },
+ "overview": {
+  "title": "Character-level vocabulary and choosing a GRU language model",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.1 The language model",
+  "subsection": "15.1.1 Training a Shakespeare language model",
+  "main_topic": "Tokenizing the Shakespeare chunks into integers with a character-level TextVectorization layer (vocabulary of 67), building the batched training dataset, and motivating an Embedding + single-GRU architecture for next-character prediction.",
+  "central_idea": "Setting split='character' and standardize=None in TextVectorization gives a 67-entry vocabulary that preserves case and punctuation. Mapping features and labels through it, then shuffling, batching (64) and caching, produces the training data. An RNN is the natural model because its recurrent state carries information about past characters, exactly what p(char | past chars) needs.",
+  "importance": "It completes the data pipeline for the first generative model in the book and justifies the architecture. The causal, left-to-right nature of the RNN is what makes the shifted-label setup valid (p.452).",
+  "learning_objectives": [
+   "Configure TextVectorization for character-level tokenization without standardization.",
+   "Explain what adapt() does and why it is called only on the text features.",
+   "Interpret the vocabulary size of 67, including the reserved padding and OOV entries.",
+   "Explain the dataset.map / shuffle / batch / cache pipeline and the effect of the order of shuffle and cache.",
+   "Explain why an RNN with an Embedding suits next-character prediction and why a GRU is chosen over an LSTM."
+  ],
+  "prerequisites": [
+   "TextVectorization from Chapter 14 (p.408-418)",
+   "The shifted (features, labels) dataset built on p.447",
+   "Embedding layers (p.435)",
+   "Recurrent layers: LSTM and GRU (section 14.5.1 and the timeseries chapters)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The (features, labels) pairs from p.447 are still byte strings. To turn them into integer sequences the authors reuse **`TextVectorization`** from Chapter 14 with two changes: `split=\"character\"` instead of the default `\"whitespace\"`, so the vocabulary is learned over characters, and **no standardization** (`standardize=None`), so case and punctuation pass through unchanged. `output_sequence_length=sequence_length` fixes every output at 100 integers (**Listing 15.3**). `tokenizer.adapt(...)` learns the vocabulary from the feature strings only (`dataset.map(lambda text, labels: text)`).\n\nThe resulting `vocabulary_size` is **67**: \"We need only 67 characters to handle the full source text.\" (Beyond the book: two of those entries are TextVectorization's reserved padding `\"\"` and `[UNK]` tokens.)\n\nThe tokenizer is then mapped over both features and labels (`num_parallel_calls=8` for parallelism), and the dataset is **shuffled** with a 10,000-element buffer, **batched** in 64s and **cached** \"so we don't need to recompute it every epoch.\" With that, the data is ready.\n\nThe page then motivates the model. We want **the probability of a character given all past characters**. Of the models seen so far, an **RNN** fits most naturally: its recurrent state carries information about past characters while it predicts the label at the current character. An **`Embedding`** (as in Chapter 14) maps each input character to a unique **256-dimensional** vector. To keep the model small and easy to train there will be just **one recurrent layer**. Any recurrent layer would work, but a **`GRU`** is chosen because it is fast and has a simpler internal state than an `LSTM`. The model itself is built in Listing 15.4 on p.449.",
+ "paragraphs": [
+  {
+   "ref": "p448_e03",
+   "excerpt": "To map this input to a sequence of integers, we can again use the TextVectorization layer",
+   "what_it_says": "The TextVectorization layer from Chapter 14 converts the text to integers. Changing split from the default 'whitespace' to 'character' gives a character-level vocabulary, and standardization is turned off to preserve case and punctuation.",
+   "what_it_means": "The same layer that produced word IDs for IMDb can produce character IDs simply through configuration. Without standardization, 'A' and 'a' are distinct tokens and ',', '.', ':' and '\\n' are tokens too, so the model can learn to reproduce capitalization, punctuation and the play's line layout.",
+   "why_it_matters": "For generation, standardization would be destructive: a model trained on lowercased, punctuation-stripped text could only generate lowercased, punctuation-stripped text. Classification can afford to throw that information away; generation cannot.",
+   "technical_idea": "Beyond the book: with a character tokenizer and no standardization, detokenization is an exact inverse (join the characters), which makes the output readable on p.451.",
+   "terminology": [
+    {
+     "term": "split='character'",
+     "meaning": "TextVectorization option that treats each character as a token."
+    },
+    {
+     "term": "standardize=None",
+     "meaning": "Disables the default lowercasing and punctuation stripping."
+    }
+   ],
+   "connections": [
+    "p.408: the standardize / split / index steps of tokenization in Chapter 14.",
+    "p.447: the chunks that are tokenized here."
+   ]
+  },
+  {
+   "ref": "p448_e08",
+   "excerpt": "We need only 67 characters to handle the full source text.",
+   "what_it_says": "The learned vocabulary has 67 entries, enough to cover the whole corpus.",
+   "what_it_means": "The softmax output layer will have only 67 units, compared with 20,000 for a word-level model (p.446). Note (not in the book): TextVectorization reserves index 0 for padding and index 1 for out-of-vocabulary '[UNK]', so 65 entries are actual characters.",
+   "why_it_matters": "A tiny output layer keeps the model cheap. The Dense layer on p.449 has only 68,675 parameters.",
+   "terminology": [
+    {
+     "term": "vocabulary_size()",
+     "meaning": "Number of entries in the learned vocabulary, including reserved tokens."
+    }
+   ],
+   "connections": [
+    "p.449: Dense(vocabulary_size) gives an output shape of (None, 100, 67)."
+   ]
+  },
+  {
+   "ref": "p448_e09",
+   "excerpt": "Next, we can apply our tokenization layer to our input text. And finally, we can shuffle,",
+   "what_it_says": "The tokenizer is applied to the inputs, and then the dataset is shuffled, batched and cached so it need not be recomputed every epoch.",
+   "what_it_means": "map() runs the tokenizer on both features and labels, giving pairs of int64 tensors of shape (100,). shuffle(10_000) randomizes order using a 10,000-element buffer, batch(64) gives tensors of shape (64, 100), and cache() stores the result in memory after the first pass.",
+   "why_it_matters": "Precomputing tokenization once (cache) removes it from the per-epoch cost. Labels are tokenized with the same vocabulary, so the target IDs match the softmax indices.",
+   "technical_idea": "Pitfall (not in the book): because cache() comes after shuffle(), the cached data has the first epoch's order, and later epochs replay the same batches in the same order. Writing `dataset.cache().shuffle(10_000).batch(64)` caches the tokenized data and still reshuffles every epoch.",
+   "terminology": [
+    {
+     "term": "num_parallel_calls",
+     "meaning": "How many elements map() processes in parallel."
+    },
+    {
+     "term": "cache()",
+     "meaning": "tf.data transformation that stores elements after the first iteration so later epochs read them from memory."
+    }
+   ],
+   "connections": [
+    "p.449: the model's input shape (sequence_length,) matches these 100-integer sequences."
+   ]
+  },
+  {
+   "ref": "p448_e12",
+   "excerpt": "To build our simple language model, we want to predict the probability of a character",
+   "what_it_says": "The goal is p(character | all past characters). An RNN fits most naturally because each cell's recurrent state propagates information about past characters when predicting the current label. An Embedding maps each character to a unique 256-dimensional vector.",
+   "what_it_means": "An RNN reads the chunk left to right; at step t its state summarizes x_0..x_t, and the output at t predicts y_t, the next character. This matches the conditional p(token | past tokens) exactly, since the state never contains future characters. The 256-d embedding replaces one-hot character IDs with learned dense vectors.",
+   "why_it_matters": "It explains why the architecture respects the causal constraint without extra work, the property p.452 shows breaks with a Bidirectional GRU. Later, the Transformer decoder needs an explicit causal mask to get the same property.",
+   "technical_idea": "With return_sequences=True (p.449) the GRU outputs a hidden vector at every timestep, which lets one forward pass produce all 100 next-character predictions of a chunk.",
+   "terminology": [
+    {
+     "term": "recurrent state",
+     "meaning": "The hidden vector an RNN carries from one timestep to the next, summarizing the input seen so far."
+    },
+    {
+     "term": "Embedding",
+     "meaning": "Lookup from token ID to a trainable dense vector, here 256-dimensional."
+    }
+   ],
+   "connections": [
+    "p.435: the Embedding layer as a dictionary of vectors.",
+    "p.452: a bidirectional GRU lets future characters leak in and makes training trivially easy."
+   ]
+  },
+  {
+   "ref": "p448_e12",
+   "excerpt": "We will use only a single recurrent layer to keep this model small and easy to train.",
+   "what_it_says": "Only one recurrent layer is used, to keep the model small and easy to train. Any recurrent layer would do, but a GRU is used because it is fast and has a simpler internal state than an LSTM.",
+   "what_it_means": "A GRU has a single hidden state vector and three gate-like transformations. An LSTM has a hidden state plus a separate cell state and four transformations. For the same number of units the GRU therefore has about 3/4 of the LSTM's parameters and computation, and only one state tensor to pass around.",
+   "why_it_matters": "The simpler state matters on p.450, where the GRU's state must be handled explicitly during step-by-step generation; one state tensor is easier to propagate than LSTM's pair.",
+   "terminology": [
+    {
+     "term": "GRU",
+     "meaning": "Gated recurrent unit: a gated RNN with one state vector, using update and reset gates."
+    },
+    {
+     "term": "LSTM",
+     "meaning": "Long short-term memory: a gated RNN with both a hidden state and a cell state."
+    }
+   ],
+   "connections": [
+    "p.449: GRU(1024) has 3,938,304 parameters.",
+    "p.450: a single-step model passes the GRU state explicitly."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "tokenization",
+   "name": "Character-level TextVectorization",
+   "definition": "Using Keras's TextVectorization layer with split='character' to map each character to an integer ID from a vocabulary learned with adapt().",
+   "intuition": "Build a dictionary of every distinct symbol in the text and number them.",
+   "technical": "adapt() scans the data and sorts tokens by frequency; index 0 is padding and index 1 is [UNK]. output_sequence_length pads or truncates outputs to a fixed length.",
+   "significance": "Reusing one preprocessing layer for word and character tokenization keeps pipelines uniform.",
+   "example": "'All:' becomes four IDs, one each for 'A', 'l', 'l', ':'.",
+   "misconception": "That 67 means 67 distinct characters; two entries are reserved tokens.",
+   "related": [
+    "language_model",
+    "embedding"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "rnn",
+   "name": "RNN as a causal sequence model",
+   "definition": "A recurrent network processes a sequence step by step, carrying a state that summarizes past inputs.",
+   "intuition": "Reading left to right while keeping notes of what you have read so far.",
+   "technical": "h_t = f(x_t, h_{t-1}); with return_sequences=True, h_t is emitted at every step and a Dense softmax maps it to p(next char).",
+   "significance": "Its forward-only flow matches p(token | past tokens) by construction.",
+   "example": "At step 3 of 'First', the state has seen 'Firs' and predicts 't'.",
+   "misconception": "That any RNN variant fits; a bidirectional RNN sees the future and breaks the language-model setup (p.452).",
+   "related": [
+    "gru",
+    "lstm",
+    "language_model"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "gru",
+   "name": "GRU (gated recurrent unit)",
+   "definition": "A gated recurrent layer with a single hidden state; the book calls it fast and simpler than an LSTM.",
+   "intuition": "An LSTM with the cell state and hidden state merged into one.",
+   "technical": "Update gate z, reset gate r and a candidate state. Parameter count (Keras, reset_after=True) is 3(d_in·u + u² + 2u).",
+   "significance": "Chosen for speed and for its simpler state, which eases generation on p.450.",
+   "example": "GRU(1024) on 256-d inputs: 3(256·1024 + 1024² + 2·1024) = 3,938,304 parameters (p.449).",
+   "misconception": "That a GRU is always worse than an LSTM; the two are often comparable in practice.",
+   "related": [
+    "rnn",
+    "lstm"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "embedding",
+   "name": "Character embedding",
+   "definition": "An Embedding layer giving each of the 67 character IDs its own 256-dimensional trainable vector.",
+   "intuition": "Each character gets coordinates that training arranges usefully, e.g. vowels near each other.",
+   "technical": "A weight matrix of shape (67, 256) = 17,152 parameters (p.449).",
+   "significance": "A dense input representation for the GRU.",
+   "example": "ID for 'e' maps to row 'e' of the matrix.",
+   "misconception": "That embeddings are only for words; they work for any discrete token.",
+   "related": [
+    "tokenization",
+    "rnn"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "15.3",
+   "title": "Learning a character-level vocabulary with the TextVectorization layer",
+   "original_code": "from keras import layers\n\ntokenizer = layers.TextVectorization(\n    standardize=None,\n    split=\"character\",\n    output_sequence_length=sequence_length,\n)\ntokenizer.adapt(dataset.map(lambda text, labels: text))",
+   "language": "python",
+   "what_it_does": "Creates a character-level tokenizer that keeps case and punctuation and outputs fixed-length (100) integer sequences, then learns its vocabulary from the feature strings.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Imports Keras layers."
+    },
+    {
+     "lines": "3-7",
+     "explanation": "standardize=None disables lowercasing and punctuation stripping; split='character' makes each character a token; output_sequence_length=100 pads (with 0) or truncates every output to 100 IDs."
+    },
+    {
+     "lines": "8",
+     "explanation": "adapt() iterates over a dataset of feature strings only (the lambda drops the labels) and builds the vocabulary from character frequencies."
+    }
+   ],
+   "inputs_outputs": "Input: dataset of (text, label) string pairs. Output: an adapted tokenizer layer.",
+   "algorithm": "Frequency-based vocabulary construction over characters.",
+   "theory_link": "The indexing step of tokenization (p.408) at character granularity; the vocabulary size sets the softmax width on p.449.",
+   "parameters": [
+    {
+     "name": "standardize",
+     "role": "None preserves the raw text."
+    },
+    {
+     "name": "split",
+     "role": "'character' gives character tokens."
+    },
+    {
+     "name": "output_sequence_length",
+     "role": "Fixed output length; pads the shorter final chunk."
+    }
+   ],
+   "pitfalls": [
+    "Adapting on features only is fine because labels contain the same characters, but a character appearing only as the very first character of the corpus would be missing; a non-issue for real data.",
+    "Padding uses ID 0; the final padded chunk includes some 'predict padding' targets. This is harmless for one chunk out of thousands."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Inspecting the vocabulary size",
+   "original_code": ">>> vocabulary_size = tokenizer.vocabulary_size()\n>>> vocabulary_size\n67",
+   "language": "python",
+   "what_it_does": "Reads the number of vocabulary entries learned by adapt().",
+   "line_explanations": [
+    {
+     "lines": "1-3",
+     "explanation": "vocabulary_size() returns 67, including the reserved '' (padding) and '[UNK]' entries."
+    }
+   ],
+   "inputs_outputs": "Output: the integer 67, stored for use in the Embedding and Dense layers.",
+   "algorithm": "Lookup.",
+   "theory_link": "Sets the number of classes of the per-position classification problem.",
+   "parameters": [],
+   "pitfalls": [
+    "Use tokenizer.get_vocabulary() to see the actual entries; the first two are '' and '[UNK]'."
+   ],
+   "illustrative_code": "# AI-written (not from the book)\nvocab = tokenizer.get_vocabulary()\nprint(vocab[:12])  # ['', '[UNK]', ' ', 'e', ...] frequency-ordered"
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Tokenizing, shuffling, batching and caching the dataset",
+   "original_code": "dataset = dataset.map(\n    lambda features, labels: (tokenizer(features), tokenizer(labels)),\n    num_parallel_calls=8,\n)\ntraining_data = dataset.shuffle(10_000).batch(64).cache()",
+   "language": "python",
+   "what_it_does": "Converts both feature and label strings into 100-integer sequences, then builds shuffled batches of 64 and caches them in memory.",
+   "line_explanations": [
+    {
+     "lines": "1-4",
+     "explanation": "Applies the tokenizer to features and labels in parallel (8 calls at a time); each element becomes a pair of int tensors of shape (100,)."
+    },
+    {
+     "lines": "5",
+     "explanation": "shuffle with a 10,000-element buffer, batch into (64, 100) tensors, and cache the batches after the first pass."
+    }
+   ],
+   "inputs_outputs": "Input: string-pair dataset. Output: training_data yielding (int[64,100], int[64,100]) batches.",
+   "algorithm": "tf.data pipeline: map, then shuffle, batch, cache.",
+   "theory_link": "Integer labels match sparse_categorical_crossentropy, compiled on p.449.",
+   "parameters": [
+    {
+     "name": "10_000",
+     "role": "Shuffle buffer size."
+    },
+    {
+     "name": "64",
+     "role": "Batch size: 64 x 100 = 6,400 labels per batch (p.449)."
+    },
+    {
+     "name": "num_parallel_calls=8",
+     "role": "Parallelism of the map step."
+    }
+   ],
+   "pitfalls": [
+    "cache() after shuffle() freezes the first epoch's order, so every epoch sees identical batches in identical order. Use dataset.cache().shuffle(10_000).batch(64) to cache the tokenized data and still reshuffle every epoch.",
+    "The variable name `dataset` is reused (overwritten) for the tokenized version."
+   ],
+   "illustrative_code": "# AI-written alternative ordering (not from the book)\ntraining_data = dataset.cache().shuffle(10_000).batch(64).prefetch(tf.data.AUTOTUNE)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why no standardization for generation",
+   "kind": "breakdown",
+   "body": "In Chapter 14, lowercasing and stripping punctuation reduced vocabulary size and helped a classifier generalize; the sentiment label doesn't depend on capitalization. A generator, however, can only produce tokens in its vocabulary. Strip ':' and '\\n' and the model can never write 'First Citizen:' followed by a line break. Preserving everything costs little at the character level: the vocabulary is still only 67.",
+   "source": "inference"
+  },
+  {
+   "title": "What the GRU's 'simpler internal state' means",
+   "kind": "step_by_step",
+   "body": "GRU update (Keras-style, beyond the book):\n\n$$z_t=\\sigma(W_z x_t+U_z h_{t-1}+b_z),\\quad r_t=\\sigma(W_r x_t+U_r h_{t-1}+b_r)$$\n$$\\tilde h_t=\\tanh(W_h x_t + r_t\\odot(U_h h_{t-1}) + b_h),\\quad h_t=z_t\\odot h_{t-1}+(1-z_t)\\odot\\tilde h_t$$\n\nThere is a single state $h_t$. An LSTM keeps two, $h_t$ and $c_t$, and has four gate/candidate transforms instead of three. During generation (p.450) only one state tensor has to be fed back into the model.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Shapes through the data pipeline",
+   "why": "The page turns 100-character strings into integer sequences and batches of 64; follow the shapes.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "string chunk",
+      "shape": [
+       1
+      ]
+     },
+     {
+      "op": "tokenizer (char)",
+      "shape": [
+       100
+      ]
+     },
+     {
+      "op": "batch(64)",
+      "shape": [
+       64,
+       100
+      ]
+     },
+     {
+      "op": "Embedding(67, 256)",
+      "shape": [
+       64,
+       100,
+       256
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "An RNN reading characters left to right",
+   "why": "The page argues an RNN fits because its recurrent state carries information about past characters; step through an unrolled GRU.",
+   "widget": "rnn_unroll",
+   "params": {
+    "timesteps": 5,
+    "cell": "gru"
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Standardization should always be applied to text.",
+   "correction": "For generation the authors deliberately skip it, preserving case and punctuation so the model can reproduce them."
+  },
+  {
+   "claim": "The vocabulary of 67 means 67 distinct characters in the text.",
+   "correction": "It includes TextVectorization's padding and [UNK] entries; there are 65 actual characters (AI clarification)."
+  },
+  {
+   "claim": "Any sequence model would work for this language model.",
+   "correction": "The model must use only past characters. A forward RNN does; a bidirectional one does not (p.452)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 447,
+    "note": "Construction of the shifted (features, labels) string pairs."
+   },
+   {
+    "page": 408,
+    "note": "TextVectorization and the standardize/split/index pipeline."
+   },
+   {
+    "page": 435,
+    "note": "Embedding layer."
+   },
+   {
+    "page": 430,
+    "note": "Training a recurrent (LSTM) model in Chapter 14."
+   }
+  ],
+  "later": [
+   {
+    "page": 449,
+    "note": "Listing 15.4 builds the Embedding, GRU(1024), Dropout and Dense(67) model."
+   },
+   {
+    "page": 450,
+    "note": "A single-step model with explicit GRU state for generation."
+   },
+   {
+    "page": 452,
+    "note": "Why a Bidirectional GRU breaks the setup."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 447,
+    "note": "Dataset of chunked strings."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 447,
+    "note": "Listing 15.2 produces the dataset mapped here."
+   },
+   {
+    "page": 449,
+    "note": "The model consumes training_data."
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "TextVectorization with split='character' and standardize=None gives a case- and punctuation-preserving character tokenizer.",
+  "The vocabulary has 67 entries, so the output softmax is tiny.",
+  "Features and labels are both tokenized; the data is shuffled, batched in 64s and cached (cache after shuffle freezes the order).",
+  "An RNN fits p(char | past chars) naturally because its state carries only past information.",
+  "The model will use a 256-d Embedding and a single GRU, chosen for speed and its simpler state."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Which TextVectorization settings make the Shakespeare tokenizer character-level and preserve case and punctuation?",
+   "options": [
+    "split='whitespace', standardize='lower_and_strip_punctuation'",
+    "split='character', standardize=None",
+    "split='character', standardize='lower'",
+    "output_mode='multi_hot', split=None"
+   ],
+   "answer": "split='character', standardize=None",
+   "explanation": "Listing 15.3 uses exactly these. Whitespace splitting gives words; any standardization would alter case or punctuation; multi_hot produces bag-of-tokens vectors, not sequences.",
+   "page_refs": [
+    448
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "conceptual",
+   "question": "Why does generation benefit from skipping standardization, when classification in Chapter 14 used it?",
+   "options": [],
+   "answer": "A generator can only output tokens in its vocabulary. Removing case or punctuation would make the model unable to produce them, whereas a classifier's label does not depend on them.",
+   "explanation": "The page says case and punctuation are preserved and passed through unaltered.",
+   "page_refs": [
+    448
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What shape does each batch from training_data have?",
+   "options": [],
+   "answer": "A pair of integer tensors (features, labels), each of shape (64, 100).",
+   "explanation": "Each sequence is padded or truncated to 100 IDs by output_sequence_length and batched in 64s.",
+   "page_refs": [
+    448,
+    449
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why is an RNN described as the most natural fit for this language model?",
+   "options": [],
+   "answer": "Its recurrent state propagates information about past characters as it reads, so the prediction at each position depends only on the past, matching p(char | past chars).",
+   "explanation": "Stated on the page; the causal property is what p.452 shows a bidirectional GRU would violate.",
+   "page_refs": [
+    448,
+    452
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Why do the authors choose a GRU rather than an LSTM?",
+   "options": [
+    "GRUs are bidirectional by default",
+    "It is fast and has a simpler internal state",
+    "LSTMs cannot process characters",
+    "GRUs do not need an Embedding layer"
+   ],
+   "answer": "It is fast and has a simpler internal state",
+   "explanation": "The page says 'Any recurrent layer would do here', so LSTMs could process characters. GRUs are not bidirectional by default, and the Embedding is used either way.",
+   "page_refs": [
+    448
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "What happens to data ordering across epochs with dataset.shuffle(10_000).batch(64).cache(), and how would you change it?",
+   "options": [],
+   "answer": "The first epoch's shuffled batches are cached and replayed in the same order every epoch. Put cache() before shuffle(): dataset.cache().shuffle(10_000).batch(64).",
+   "explanation": "This is a tf.data detail, not discussed in the book; cache() stores whatever it receives during the first full iteration.",
+   "page_refs": [
+    448
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you explain where the numbers 67, 256 and 100 on this page will appear in the model of Listing 15.4?",
+   "options": [],
+   "answer": "67 is the Embedding input dimension and the Dense output width, 256 is the embedding dimension, and 100 is the input sequence length (shape (None, 100)).",
+   "explanation": "Check against the model summary on p.449.",
+   "page_refs": [
+    448,
+    449
+   ]
+  }
+ ]
+}

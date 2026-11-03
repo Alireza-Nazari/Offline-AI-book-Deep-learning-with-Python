@@ -1,0 +1,487 @@
+{
+ "page_id": "page_566",
+ "pdf_page": 566,
+ "printed_page": "542",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T10:00:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "The search_space_summary() output on this page reports units (Int) with min_value 128, max_value 1024, step 128, but the model-building function in listing 18.1 (p.564) and the HyperModel in listing 18.2 (p.565) both define hp.Int(name=\"units\", min_value=16, max_value=64, step=16). The printed output does not match the code the reader ran; with the book's code the summary would show 16, 64 and 16."
+  ],
+  "extraction_quality": "Good. Two code elements (tuner construction and search_space_summary output) plus one body paragraph, a one-line transition, and the start of the 'Objective maximization and minimization' sidebar. The sidebar's code example is on p.567. Callout text next to the first listing was extracted as broken fragments; it was rebuilt from the page image."
+ },
+ "overview": {
+  "title": "Instantiating a BayesianOptimization tuner",
+  "chapter": "18 Best practices for the real world",
+  "section": "18.1 Getting the most out of your models",
+  "subsection": "18.1.1 Hyperparameter optimization",
+  "main_topic": "Creating a KerasTuner tuner (BayesianOptimization), inspecting its search space, and how the optimization direction of the objective is set",
+  "central_idea": "A KerasTuner tuner combines a model-building function, an objective (a validation metric), a trial budget and a storage directory. BayesianOptimization uses the results of earlier trials to choose which hyperparameter values to try next.",
+  "importance": "This is where the abstract 'tuner as a for loop' from p.565 becomes concrete. Each constructor argument controls the cost, reliability or reproducibility of the search, and choosing the objective wrongly (for example a training metric) defeats the purpose of tuning.",
+  "learning_objectives": [
+   "Name the three built-in KerasTuner tuners and explain what makes BayesianOptimization different from RandomSearch",
+   "Explain the role of each argument of kt.BayesianOptimization: hypermodel, objective, max_trials, executions_per_trial, directory, overwrite",
+   "Explain why the objective should be a validation metric",
+   "Read the output of search_space_summary() and connect it to the hp.Int / hp.Choice calls in the model-building function",
+   "Know when KerasTuner can infer the optimization direction and when you must specify it"
+  ],
+  "prerequisites": [
+   "The KerasTuner model-building function and HyperModel (listings 18.1 and 18.2, p.564-565)",
+   "Training/validation/test splits and why the validation set guides model selection (p.173)",
+   "Keras metrics such as accuracy and val_accuracy in fit() logs"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page continues the KerasTuner walkthrough of section 18.1.1. After defining a search space with a model-building function (listing 18.1, p.564) or a `HyperModel` subclass (listing 18.2, p.565), you need a **tuner**: the object that runs the search loop. KerasTuner provides three built-in tuners: `RandomSearch`, `BayesianOptimization` and `Hyperband`. The authors pick `BayesianOptimization`, which tries to *predict* which new hyperparameter values are likely to perform best given the outcomes of the previous trials, instead of sampling blindly.\n\nThe constructor call shows the main settings of a search:\n\n- `build_model`: the model-building function (or a hypermodel instance) that turns sampled hyperparameters into a compiled model;\n- `objective=\"val_accuracy\"`: the metric to optimize. The callout insists on **validation** metrics, because the goal of the search is models that generalize;\n- `max_trials=20`: the number of different configurations (\"trials\") to try before stopping;\n- `executions_per_trial=2`: each configuration is trained twice and the results averaged, to reduce the variance of the metric;\n- `directory=\"mnist_kt_test\"`: where the search logs are written;\n- `overwrite=True`: start a fresh search (use `False` to resume one with an unchanged model-building function).\n\n`tuner.search_space_summary()` then prints the search space: two hyperparameters, an `Int` called `units` and a `Choice` called `optimizer` with values `rmsprop` and `adam` (default `rmsprop`). The printed range for `units` (128 to 1024, step 128) does **not** match the 16 to 64, step 16 range defined in the book's listings; see the review flag.\n\nA sidebar, \"Objective maximization and minimization\", begins at the bottom: for built-in metrics such as accuracy, KerasTuner infers whether to maximize or minimize, but for a custom metric you must state the direction yourself. The example code is on the next page (p.567).",
+ "paragraphs": [
+  {
+   "ref": "p566_e03",
+   "excerpt": "KerasTuner has several built-in tuners available—RandomSearch, BayesianOptimization, and Hyperband.",
+   "what_it_says": "KerasTuner ships three tuners: RandomSearch, BayesianOptimization and Hyperband. The example uses BayesianOptimization, which tries to predict which new hyperparameter values are likely to perform best, based on the outcomes of earlier choices.",
+   "what_it_means": "On p.565 a tuner was described as a loop: pick hyperparameter values, build a model, train it and record the metrics. The tuners differ in the first step, how the next values are picked. RandomSearch samples them independently of past results. BayesianOptimization fits a statistical model of 'hyperparameters → validation score' to the trials so far and uses it to choose promising, still-uncertain points. Hyperband changes the budget instead: it starts many configurations with few epochs and keeps training only the best ones.",
+   "why_it_matters": "Each trial costs a full training run (p.564), so using past results to choose the next point can save a lot of compute compared with blind sampling. The book only names the tuners; which one to use depends on the budget and on the size of the search space.",
+   "technical_idea": "Beyond the book: KerasTuner's BayesianOptimization uses a Gaussian-process surrogate model and an upper-confidence-bound style acquisition function. It starts with a few random trials, then picks each new point to balance exploitation (high predicted score) and exploration (high uncertainty). Hyperband is a bandit-style method built on successive halving.",
+   "terminology": [
+    {
+     "term": "Tuner",
+     "meaning": "The KerasTuner object that runs the search loop: it samples hyperparameters, builds and trains models, and records results."
+    },
+    {
+     "term": "Bayesian optimization",
+     "meaning": "A gradient-free optimization method that keeps a probabilistic model of the objective and uses it to pick the next point to evaluate."
+    },
+    {
+     "term": "Hyperband",
+     "meaning": "A tuner that allocates training epochs adaptively, discarding poor configurations early."
+    }
+   ],
+   "connections": [
+    "p.565: the tuner is introduced schematically as a for loop (pick values → build model → train and record metrics)",
+    "p.564: Bayesian optimization, genetic algorithms and random search are listed as possible search algorithms; hyperparameter spaces are discrete and non-differentiable, so gradient-free methods are needed"
+   ]
+  },
+  {
+   "ref": "p566_e05",
+   "excerpt": "You can display an overview of the search space via search_space_summary():",
+   "what_it_says": "The tuner method search_space_summary() prints an overview of the search space.",
+   "what_it_means": "When the tuner is constructed, it calls the model-building function once to register the hyperparameters it uses. search_space_summary() lists each registered hyperparameter with its type and settings. It is a cheap sanity check before starting an expensive search.",
+   "why_it_matters": "Typos in ranges or forgotten hyperparameters are easy to catch here, before hours of compute are spent. In this case the printed output itself does not match the book's listing (see the code note).",
+   "terminology": [
+    {
+     "term": "Search space",
+     "meaning": "The set of all hyperparameter configurations the tuner may try, defined by the hp.* calls in the model-building function (p.564)."
+    }
+   ],
+   "connections": [
+    "p.564: the search space is defined as the set of choices (hp.Int, hp.Choice, ...) in a model"
+   ]
+  },
+  {
+   "ref": "p566_e08",
+   "excerpt": "For built-in metrics (like accuracy, in our case), the direction of the metric",
+   "what_it_says": "Sidebar 'Objective maximization and minimization': for built-in metrics such as accuracy, KerasTuner infers whether the metric should be maximized (accuracy) or minimized (a loss). For a custom metric, you must specify the direction yourself; the example follows on p.567.",
+   "what_it_means": "The tuner ranks trials by the objective, so it must know whether bigger is better. For names it recognizes ('accuracy', 'val_accuracy', 'loss', 'val_loss', ...) it applies the right direction automatically. A metric with a custom name could go either way (an error rate should be minimized, an F1 score maximized), so it cannot guess. You then pass a kt.Objective(name=..., direction=\"min\"|\"max\") object, shown at the top of p.567.",
+   "why_it_matters": "With the wrong direction, the tuner would actively search for the *worst* configurations without raising any error. This is a silent bug.",
+   "terminology": [
+    {
+     "term": "Objective direction",
+     "meaning": "Whether the tuner should maximize ('max') or minimize ('min') the objective metric."
+    },
+    {
+     "term": "Custom metric",
+     "meaning": "A user-defined Keras metric (p.232), whose name KerasTuner does not know how to interpret."
+    }
+   ],
+   "connections": [
+    "p.567: the kt.Objective(name=\"val_accuracy\", direction=\"max\") example that completes this sidebar",
+    "p.232: writing and using custom metrics in Keras"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "hyperparameter_tuning",
+   "name": "Hyperparameter tuning (automated)",
+   "definition": "Searching automatically over architecture and training choices (the hyperparameters) for the configuration with the best validation performance.",
+   "intuition": "A program does the 'tweak, retrain, compare' loop that engineers otherwise do by hand.",
+   "technical": "Each trial samples a configuration from the search space, builds and trains a model, and reports the objective. A search algorithm uses past trials to choose the next configuration. The process is gradient-free because the space is discrete and the feedback is expensive and noisy (p.564).",
+   "significance": "It is described as necessary for reaching state-of-the-art results (p.569).",
+   "example": "Tuning `units` and `optimizer` for an MNIST MLP over 20 trials.",
+   "misconception": "That tuning replaces architecture know-how; the book stresses that search spaces must still be designed carefully (p.569).",
+   "related": [
+    "validation_set",
+    "bayesian_optimization",
+    "search_space"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "bayesian_optimization",
+   "name": "Bayesian optimization",
+   "definition": "A tuning strategy that predicts which new hyperparameter values are likely to perform best, given the outcomes of earlier trials.",
+   "intuition": "Instead of throwing darts at random, you sketch a map of where good scores seem to be (with uncertainty) and aim at the most promising unexplored spot.",
+   "technical": "Beyond the book: a surrogate model (often a Gaussian process) is fitted to the (configuration, score) pairs observed so far. An acquisition function, such as an upper confidence bound $\\mu(x) + \\kappa\\,\\sigma(x)$, trades off a high predicted mean against high uncertainty to pick the next trial.",
+   "significance": "It usually reaches good configurations in fewer trials than random search, which matters when every trial is a full training run.",
+   "example": "After a few trials show that 512 units with adam does well, the tuner is likely to try 384 or 640 units with adam next, and occasionally an untested region.",
+   "misconception": "That it is guaranteed to find the global optimum. With a small budget (20 trials) and noisy scores it is a heuristic.",
+   "related": [
+    "hyperparameter_tuning",
+    "random_search"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "search_space",
+   "name": "Search space",
+   "definition": "The set of all hyperparameter choices defined in a model-building function via hp.Int, hp.Float, hp.Boolean and hp.Choice.",
+   "intuition": "The menu the tuner is allowed to order from.",
+   "technical": "Here: `units` (Int) and `optimizer` (Choice of 'rmsprop', 'adam'). The space size grows multiplicatively: with 8 values of units (128..1024 step 128) and 2 optimizers there are 16 configurations; with the book's code (16..64 step 16) there are only 4 × 2 = 8.",
+   "significance": "Its design largely determines whether tuning succeeds and how much it costs (p.569).",
+   "example": "`search_space_summary()` reports 'Default search space size: 2', meaning two hyperparameters (not two configurations).",
+   "misconception": "'search space size: 2' is the number of hyperparameters, not the number of possible configurations.",
+   "related": [
+    "hyperparameter_tuning"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "validation_set",
+   "name": "Validation metric as tuning objective",
+   "definition": "The tuner should optimize a metric computed on held-out validation data, such as val_accuracy.",
+   "intuition": "You want the configuration that does best on data it was not trained on, not the one that memorizes best.",
+   "technical": "Training accuracy rewards capacity and overfitting; validation accuracy estimates generalization. Because the tuner repeatedly selects on validation scores, information leaks into the hyperparameters, so a separate test set is still needed (p.173, p.569).",
+   "significance": "The callout says it plainly: 'the goal of the search process is to find models that generalize!'",
+   "example": "objective=\"val_accuracy\" rather than \"accuracy\".",
+   "misconception": "That a high val_accuracy after tuning is an unbiased estimate of real-world accuracy. It is optimistically biased by the selection.",
+   "related": [
+    "overfitting",
+    "hyperparameter_tuning"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Creating a BayesianOptimization tuner",
+   "original_code": "tuner = kt.BayesianOptimization(\n    build_model,\n    objective=\"val_accuracy\",\n    max_trials=20,\n    executions_per_trial=2,\n    directory=\"mnist_kt_test\",\n    overwrite=True,\n)",
+   "language": "python",
+   "what_it_does": "Constructs a KerasTuner `BayesianOptimization` tuner that will try up to 20 configurations of the `build_model` search space, training each one twice and maximizing validation accuracy, with logs stored in `mnist_kt_test/`. Constructing the tuner does not train anything yet; that happens in `tuner.search(...)` on p.567.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "`kt` is `keras_tuner` (imported as `import keras_tuner as kt`, p.565). `BayesianOptimization` is one of the three built-in tuners."
+    },
+    {
+     "lines": "2",
+     "explanation": "`build_model`: the model-building function from listing 18.1 (p.564), which takes an `hp` object and returns a compiled model. A `HyperModel` instance such as `SimpleMLP(num_classes=10)` (p.565) could be passed instead."
+    },
+    {
+     "lines": "3",
+     "explanation": "`objective=\"val_accuracy\"`: the metric to optimize, as named in the `fit()` logs. It is a validation metric because the goal is generalization; the direction (maximize) is inferred because accuracy is a built-in metric."
+    },
+    {
+     "lines": "4",
+     "explanation": "`max_trials=20`: the maximum number of distinct configurations (trials) before the search ends."
+    },
+    {
+     "lines": "5",
+     "explanation": "`executions_per_trial=2`: each configuration is trained twice from scratch and the metric averaged, reducing the noise from random initialization and data order."
+    },
+    {
+     "lines": "6",
+     "explanation": "`directory=\"mnist_kt_test\"`: where trial logs, checkpoints and the oracle state are saved."
+    },
+    {
+     "lines": "7",
+     "explanation": "`overwrite=True`: discard any previous search in that directory. Use `False` to resume an interrupted search with the same model-building function (p.567)."
+    }
+   ],
+   "inputs_outputs": "Input: a hypermodel and search settings. Output: a tuner object exposing `search()`, `search_space_summary()`, `get_best_hyperparameters()` and `get_best_models()`.",
+   "algorithm": "Bayesian optimization loop (run later by `search`): initial random trials → fit surrogate model to (hp, val_accuracy) pairs → choose next hp via acquisition function → build/train/evaluate (2 executions, averaged) → repeat until 20 trials.",
+   "theory_link": "Gradient-free optimization in a discrete, non-differentiable, noisy hyperparameter space (p.564). Averaging over executions reduces the variance of the noisy feedback signal described on p.564.",
+   "parameters": [
+    {
+     "name": "hypermodel (build_model)",
+     "role": "Turns a set of hyperparameter values into a compiled model."
+    },
+    {
+     "name": "objective",
+     "role": "Metric used to rank trials; string or kt.Objective."
+    },
+    {
+     "name": "max_trials",
+     "role": "Search budget in configurations."
+    },
+    {
+     "name": "executions_per_trial",
+     "role": "Repetitions per configuration, for variance reduction; multiplies compute cost."
+    },
+    {
+     "name": "directory",
+     "role": "Location of search logs, used for resuming."
+    },
+    {
+     "name": "overwrite",
+     "role": "True: start fresh; False: resume from logs."
+    }
+   ],
+   "pitfalls": [
+    "Total training runs = max_trials × executions_per_trial (up to 40 here), so compute cost scales with both.",
+    "Using a training metric (\"accuracy\") as objective rewards overfitting.",
+    "Leaving overwrite=False after changing build_model can resume a search with stale, incompatible trials.",
+    "A custom metric name without a kt.Objective direction cannot be interpreted by the tuner (see the sidebar)."
+   ],
+   "illustrative_code": "# AI-written: the other two built-in tuners take similar arguments\nrs_tuner = kt.RandomSearch(build_model, objective=\"val_accuracy\",\n                           max_trials=20, directory=\"rs_test\", overwrite=True)\nhb_tuner = kt.Hyperband(build_model, objective=\"val_accuracy\",\n                        max_epochs=30, factor=3, directory=\"hb_test\", overwrite=True)"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Output of tuner.search_space_summary()",
+   "original_code": ">>> tuner.search_space_summary()\nSearch space summary\nDefault search space size: 2\nunits (Int)\n{\"default\": None,\n \"conditions\": [],\n \"min_value\": 128,\n \"max_value\": 1024,\n \"step\": 128,\n \"sampling\": None}\noptimizer (Choice)\n{\"default\": \"rmsprop\",\n \"conditions\": [],\n \"values\": [\"rmsprop\", \"adam\"],\n \"ordered\": False}",
+   "language": "text",
+   "what_it_does": "Prints the hyperparameters registered by the model-building function: an integer `units` and a categorical `optimizer` with values `rmsprop` and `adam`.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Calls the summary method at the interactive prompt."
+    },
+    {
+     "lines": "3",
+     "explanation": "'Default search space size: 2' means two hyperparameters are defined, not two configurations."
+    },
+    {
+     "lines": "4-10",
+     "explanation": "`units` is an `Int` hyperparameter: no default, no conditions, a range with min_value, max_value and step, and default (linear) sampling. The printed range 128-1024 step 128 does not match the book's hp.Int(name=\"units\", min_value=16, max_value=64, step=16) (p.564-565)."
+    },
+    {
+     "lines": "11-15",
+     "explanation": "`optimizer` is a `Choice` with values ['rmsprop', 'adam']. The default is the first value, 'rmsprop', and 'ordered': False means the values have no meaningful order (unlike numeric choices)."
+    }
+   ],
+   "inputs_outputs": "Input: none (uses the tuner's registered hyperparameters). Output: printed description of the search space.",
+   "algorithm": "N/A: introspection.",
+   "theory_link": "The search space defined on p.564; its size drives search cost (p.569).",
+   "parameters": [
+    {
+     "name": "conditions",
+     "role": "Conditional-activation rules (a hyperparameter only active when another takes certain values); empty here."
+    },
+    {
+     "name": "sampling",
+     "role": "How Int/Float values are sampled (linear, log, reverse_log); None means default linear."
+    },
+    {
+     "name": "ordered",
+     "role": "Whether the Choice values have a natural order the search can exploit."
+    }
+   ],
+   "pitfalls": [
+    "Mismatch between printed and defined ranges, as on this page, may mean the summary came from a different version of build_model. Always check it against your own code.",
+    "For learning-rate-like parameters, log sampling (sampling=\"log\") is usually more appropriate than linear."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Counting the cost of this search",
+   "kind": "numerical",
+   "body": "With `max_trials=20` and `executions_per_trial=2`, the tuner performs up to **40 training runs**. On p.567 each run uses `epochs=100` with early stopping (patience 5), so a run typically ends well before 100 epochs. On MNIST with a small MLP this takes minutes, as the book says. For an ImageNet-scale model the same settings could take days, which is why `executions_per_trial` is often 1 in practice and the budget is kept small.\n\nNote (not in the book): the search space defined in the book's code (units ∈ {16, 32, 48, 64} × optimizer ∈ {rmsprop, adam}) has only **8** configurations, fewer than `max_trials=20`. The tuner will stop once it has exhausted the space. With the printed range (128..1024 step 128) there would be 8 × 2 = 16 configurations, also fewer than 20.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Random search vs Bayesian optimization, intuitively",
+   "kind": "analogy",
+   "body": "Imagine looking for the best restaurant in a city with 20 dinners. **Random search** picks 20 restaurants at random. **Bayesian optimization** keeps notes: after a few great meals in one neighborhood, it is more likely to try that neighborhood again, but sometimes visits an unexplored one in case something better is there. **Hyperband** books 30-minute tastings at many places and only stays for a full dinner at the most promising ones.",
+   "source": "analogy"
+  },
+  {
+   "title": "Why average executions?",
+   "kind": "step_by_step",
+   "body": "1. Training is stochastic: weight initialization, data shuffling and dropout all vary between runs.\n2. So `val_accuracy` for one configuration is a random variable with some spread $\\sigma$.\n3. Averaging $k$ independent runs reduces the standard deviation of the estimate to about $\\sigma/\\sqrt{k}$. With `executions_per_trial=2` that is about 0.71σ.\n4. When two configurations differ by less than the noise (the book's p.564 example of a 0.2% difference), averaging lowers the chance that the tuner chases noise.\n\n(Steps 3–4 are an AI explanation; the book's callout just says it reduces metric variance.)",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "What the BayesianOptimization tuner will do",
+   "why": "Shows how the constructor arguments on this page (build_model, objective, max_trials, executions_per_trial) drive the tuner loop described on p.565.",
+   "mermaid": "flowchart TD\n  S[Search space from build_model\\nunits: Int, optimizer: Choice] --> P[Propose hp values\\nBayesian: use past trials]\n  P --> B[build_model hp → compiled model]\n  B --> T[Train executions_per_trial = 2 times\\naverage val_accuracy]\n  T --> R[Record result in directory\\nmnist_kt_test]\n  R --> C{trials < max_trials = 20?}\n  C -- yes --> P\n  C -- no --> D[Done: query best hps / models]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "'Default search space size: 2' means there are only two possible models.",
+   "correction": "It counts hyperparameters (units and optimizer). The number of configurations is the product of their cardinalities."
+  },
+  {
+   "claim": "The objective can be any metric, including training accuracy.",
+   "correction": "Use a validation metric. Optimizing training accuracy would favour models that overfit, and the goal is generalization."
+  },
+  {
+   "claim": "KerasTuner always knows whether to maximize or minimize the objective.",
+   "correction": "Only for built-in metrics. For custom metrics you must pass kt.Objective(name, direction) (p.567)."
+  },
+  {
+   "claim": "Creating the tuner starts the search.",
+   "correction": "The constructor only configures the search; models are trained when tuner.search() is called (p.567)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 565,
+    "note": "Listing 18.2 (HyperModel) and the schematic description of a tuner as a for loop."
+   },
+   {
+    "page": 564,
+    "note": "Listing 18.1, the build_model function with hp.Int(\"units\", 16..64, step 16) and hp.Choice(\"optimizer\"), and why hyperparameter search must be gradient-free."
+   },
+   {
+    "page": 563,
+    "note": "Definition of hyperparameters versus parameters and motivation for automated tuning."
+   }
+  ],
+  "later": [
+   {
+    "page": 567,
+    "note": "Completes the sidebar with kt.Objective and launches tuner.search() on MNIST."
+   },
+   {
+    "page": 568,
+    "note": "Querying the best hyperparameters with get_best_hyperparameters (listing 18.3)."
+   },
+   {
+    "page": 569,
+    "note": "Validation-set overfitting warning and how to design a search space."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 173,
+    "note": "Why tuning on validation data leaks information and why a separate test set is needed."
+   },
+   {
+    "page": 233,
+    "note": "Callbacks such as EarlyStopping, used during the search on p.567."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 232,
+    "note": "Custom Keras metrics, the case where the objective direction must be specified."
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "KerasTuner offers RandomSearch, BayesianOptimization and Hyperband. BayesianOptimization uses past results to choose the next trial.",
+  "The tuner takes a model-building function or hypermodel, an objective, a trial budget (max_trials), a repetition count (executions_per_trial), a log directory and an overwrite flag.",
+  "Always optimize a validation metric: the purpose is to find models that generalize.",
+  "executions_per_trial averages several training runs to reduce metric variance, multiplying compute cost.",
+  "search_space_summary() is a cheap check of the hyperparameters before an expensive search. Here its printed range disagrees with the book's listing.",
+  "The optimization direction is inferred for built-in metrics but must be set explicitly for custom metrics."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What distinguishes BayesianOptimization from RandomSearch in KerasTuner, according to the page?",
+   "options": [
+    "It trains each model with Bayesian neural networks",
+    "It predicts which new hyperparameter values are likely to perform best given previous outcomes",
+    "It uses gradient descent on the hyperparameters",
+    "It trains many models briefly and keeps only the best ones"
+   ],
+   "answer": "It predicts which new hyperparameter values are likely to perform best given previous outcomes",
+   "explanation": "The book describes BayesianOptimization as making smart predictions from the outcomes of previous choices. It does not change the models themselves (option 1). Hyperparameter spaces are not differentiable, so gradient descent is not used (option 3, p.564). Option 4 describes Hyperband.",
+   "page_refs": [
+    566,
+    564
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "With max_trials=20 and executions_per_trial=2, what is the maximum number of model training runs the search performs, and why does executions_per_trial exist?",
+   "options": [],
+   "answer": "Up to 40 runs (20 × 2). Repeated executions are averaged to reduce the variance of the metric.",
+   "explanation": "Each trial trains the same configuration executions_per_trial times from scratch, and the tuner averages the results, as the callout explains.",
+   "page_refs": [
+    566
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why does the callout insist on using a validation metric such as val_accuracy as the objective?",
+   "options": [],
+   "answer": "The search should find configurations that generalize. Training metrics reward capacity and memorization, so a tuner optimizing them would pick overfitting models.",
+   "explanation": "The callout says: 'Always specify validation metrics since the goal of the search process is to find models that generalize!' This links back to the train/validation/test discussion on p.173.",
+   "page_refs": [
+    566,
+    173
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "In the search_space_summary() output, what does 'Default search space size: 2' refer to?",
+   "options": [
+    "The number of trials already run",
+    "The number of hyperparameters defined (units and optimizer)",
+    "The number of possible model configurations",
+    "The number of executions per trial"
+   ],
+   "answer": "The number of hyperparameters defined (units and optimizer)",
+   "explanation": "Two hyperparameters are listed below the header. The number of configurations is the product of their possible values, much more than 2. Trials and executions are unrelated to this summary.",
+   "page_refs": [
+    566
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "When should you set overwrite=False on the tuner?",
+   "options": [],
+   "answer": "When you want to resume a previously started search (for example after a crash) with the same model-building function, reusing the logs in the directory.",
+   "explanation": "The callout says to set overwrite to True if the model-building function changed (start fresh) and to False to resume. p.567 repeats this for crashed searches.",
+   "page_refs": [
+    566,
+    567
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Why can KerasTuner infer the direction for 'val_accuracy' but not for a custom metric?",
+   "options": [],
+   "answer": "It knows the semantics of built-in metric names (accuracy up, loss down). An arbitrary custom metric could be either 'higher is better' or 'lower is better', so you must declare it with kt.Objective.",
+   "explanation": "This is the content of the 'Objective maximization and minimization' sidebar; the explicit form appears on p.567.",
+   "page_refs": [
+    566,
+    567
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Compare the units range printed by search_space_summary() with the one in listing 18.1. Do they agree? What would you expect to see if you ran the book's code?",
+   "options": [],
+   "answer": "They disagree: the summary shows 128-1024 step 128, the listing defines 16-64 step 16. Running the book's code would print min_value 16, max_value 64, step 16.",
+   "explanation": "The summary is a direct readout of the hp.Int call. The difference suggests the printed output came from a different version of the code.",
+   "page_refs": [
+    566,
+    564
+   ]
+  }
+ ]
+}

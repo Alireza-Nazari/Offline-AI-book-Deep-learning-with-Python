@@ -1,0 +1,359 @@
+{
+  "page_id": "page_283",
+  "pdf_page": 283,
+  "printed_page": "259",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:30:24Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean; both listings extracted completely and match the page image."
+  },
+  "overview": {
+    "title": "Two feature-extraction strategies; extracting features",
+    "chapter": "8 Image classification",
+    "section": "8.3 Using a pretrained model",
+    "subsection": "8.3.1 Feature extraction with a pretrained model",
+    "main_topic": "Creating the Xception-matched image preprocessor, comparing the two ways of doing feature extraction, and implementing the fast one by precomputing backbone features as NumPy arrays.",
+    "central_idea": "You can either (1) run the frozen convolutional base once over the data and train a small classifier on the stored features (fast, no data augmentation), or (2) stack new Dense layers on the base and train end to end (allows augmentation, far more expensive). Listing 8.25 implements option 1 with `conv_base.predict()`.",
+    "importance": "The trade-off between precomputing features and end-to-end training is a fundamental engineering decision in transfer learning: compute cost versus the ability to augment data. This page frames both and starts the cheaper path.",
+    "learning_objectives": [
+      "Instantiate a KerasHub `ImageConverter` that rescales and resizes images for a given preset.",
+      "Compare precomputed-feature extraction with end-to-end extraction in terms of cost and data augmentation.",
+      "Explain why precomputing features prevents data augmentation.",
+      "Read and explain `get_features_and_labels()`, which applies preprocessing and `conv_base.predict()` batch by batch."
+    ],
+    "prerequisites": [
+      "The Xception backbone `conv_base` and the role of ImageConverter (p.282)",
+      "The dogs-vs-cats datasets `train_dataset`, `validation_dataset`, `test_dataset` (section 8.2, p.266-275)",
+      "Data augmentation (p.276)",
+      "Dense classifiers from chapters 4 and 5"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "**Listing 8.24** completes the setup from p.282 by creating the preprocessing that matches the checkpoint: `keras_hub.layers.ImageConverter.from_preset(\"xception_41_imagenet\", image_size=(180, 180))`. It rescales pixel values to the range Xception was pretrained on and resizes images to 180 x 180, the size used for the dogs-vs-cats data.\n\nThe authors then present **two ways to proceed**:\n\n1. **Precompute features.** Run the convolutional base over the dataset once, save its output as NumPy arrays, and train a standalone densely connected classifier (as in chapters 4 and 5) on those arrays. This is fast and cheap because the expensive convolutional base runs only once per image. For the same reason it **cannot use data augmentation**: each image is seen by the base exactly once, so there are no new random variants.\n2. **End-to-end.** Add `Dense` layers on top of `conv_base` and train the whole thing on the raw inputs. Augmentation works because every image passes through the base every time it is seen, but this is far more expensive.\n\nBoth will be covered; this page starts the first one, under the heading **\"Fast feature extraction without data augmentation\"**. **Listing 8.25** defines `get_features_and_labels(dataset)`, which loops over `(images, labels)` batches, applies `preprocessor`, calls `conv_base.predict(..., verbose=0)` to get features, collects features and labels in lists, and concatenates them with `np.concatenate`. It is called on the training, validation and test datasets, producing `train_features`/`train_labels`, `val_features`/`val_labels` and `test_features`/`test_labels`. The next page explains why labels are split off (`predict()` only accepts images) and gives the feature shape `(samples, 6, 6, 2048)`.",
+  "paragraphs": [
+    {
+      "ref": "p283_e05",
+      "excerpt": "At this point, there are two ways you could proceed:",
+      "what_it_says": "Introduces the choice between two feature-extraction workflows, detailed in the two bullets that follow.",
+      "what_it_means": "With a pretrained base and matching preprocessing in hand, the open question is how to connect them to a new classifier and how often to run the base.",
+      "why_it_matters": "Frames the section's structure: both options are implemented in the following pages (p.283-287).",
+      "terminology": [],
+      "connections": ["p.286: the second technique, feature extraction together with data augmentation, is covered there."]
+    },
+    {
+      "ref": "p283_e06",
+      "excerpt": "Running the convolutional base over your dataset, recording its output to a NumPy array",
+      "what_it_says": "Option 1: run the convolutional base over your data, record the outputs as a NumPy array, and use it as input to a standalone dense classifier like those of chapters 4 and 5. It is fast and cheap because the base, by far the most expensive part, runs only once per image. For the same reason, it does not allow data augmentation.",
+      "what_it_means": "The base becomes a one-time preprocessing step that turns each image into a fixed feature tensor. Training then only touches a tiny dense network, so each epoch costs almost nothing. But augmentation creates *new random versions* of images on every epoch; if features were computed once from the unaugmented images, there is nothing to re-randomize.",
+      "why_it_matters": "This is the classic speed-versus-regularization trade-off. On a small dataset, losing augmentation means the dense classifier can overfit quickly, which the results on p.284-285 will show.",
+      "technical_idea": "Caching the outputs of a frozen sub-network. Cost: one forward pass of the base per image total, instead of one per image per epoch.",
+      "terminology": [
+        {"term": "standalone densely connected classifier", "meaning": "A separate small model made of Dense layers that takes precomputed features as input."},
+        {"term": "data augmentation", "meaning": "Random transformations (flips, rotations, zooms) applied to training images each time they are seen (p.276)."}
+      ],
+      "connections": [
+        "p.276: section 8.2.5 introduced data augmentation for the from-scratch model.",
+        "p.284: the dense classifier for the precomputed features is defined and trained."
+      ]
+    },
+    {
+      "ref": "p283_e07",
+      "excerpt": "Extending the model you have (conv_base) by adding Dense layers on top",
+      "what_it_says": "Option 2: add `Dense` layers on top of `conv_base` and run the whole model end to end on the input data. This enables data augmentation because each image passes through the base every time it is seen, but for the same reason is far more expensive.",
+      "what_it_means": "Here the base is part of the training graph. Augmented images are generated fresh each epoch and then featurized, so the classifier sees varied features. The cost is a full forward pass through 41-layer Xception (and, unless frozen, a backward pass) for every image in every epoch.",
+      "why_it_matters": "Gives stronger regularization and typically better accuracy at the expense of compute; this is the variant that requires freezing the base (p.286) and that sets up fine-tuning (p.288).",
+      "terminology": [
+        {"term": "end to end", "meaning": "Training on raw inputs through the whole model, rather than on intermediate cached representations."}
+      ],
+      "connections": [
+        "p.286: the convolutional base is frozen before training end to end.",
+        "p.288: section 8.3.2 goes further and fine-tunes part of the base."
+      ]
+    },
+    {
+      "ref": "p283_e08",
+      "excerpt": "We’ll cover both techniques. Let’s walk through the code required to set up the first",
+      "what_it_says": "Both techniques will be covered, starting with the first: recording `conv_base` outputs on the data and using them as inputs to a new model.",
+      "what_it_means": "The reader will see the cheap variant first, get a baseline, then compare with the augmented end-to-end variant.",
+      "why_it_matters": "Ordering from cheap to expensive is a good practical habit: establish a fast baseline before investing heavy compute.",
+      "terminology": [],
+      "connections": []
+    },
+    {
+      "ref": "p283_e10",
+      "excerpt": "We’ll start by extracting features as NumPy arrays, by calling the predict() method",
+      "what_it_says": "Features are extracted as NumPy arrays by calling `conv_base.predict()` on the training, validation and test datasets, iterating over each dataset.",
+      "what_it_means": "`predict()` runs the model in inference mode and returns NumPy arrays. Iterating manually lets us separately keep the labels that correspond to each batch of features, so that features and labels stay aligned.",
+      "why_it_matters": "All three splits must be featurized identically so that the classifier trained on train features can be validated and tested on comparable features.",
+      "terminology": [
+        {"term": "predict()", "meaning": "Keras model method that runs a forward pass in inference mode and returns outputs as NumPy arrays."}
+      ],
+      "connections": ["p.284: explains that predict() expects only images, not labels, which is why the loop separates them."]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "image_converter",
+      "name": "Matching input preprocessing (ImageConverter)",
+      "definition": "A KerasHub layer that resizes and rescales images to what a pretrained checkpoint expects.",
+      "intuition": "An adapter plug making your images fit the socket the pretrained network was built for.",
+      "technical": "`ImageConverter.from_preset(\"xception_41_imagenet\", image_size=(180, 180))` reads the checkpoint's expected value range from the preset and resizes to the requested size.",
+      "significance": "Prevents the silent accuracy loss caused by mismatched input ranges.",
+      "example": "`preprocessor(images)` inside Listing 8.25.",
+      "misconception": "That `image_size` must equal the original ImageNet training size; here it is set to 180 x 180 to match the dataset.",
+      "related": ["backbone", "model_preset"],
+      "source": "book"
+    },
+    {
+      "id": "feature_caching",
+      "name": "Precomputed (cached) feature extraction",
+      "definition": "Running a frozen pretrained base once over a dataset and storing its outputs to train a separate classifier.",
+      "intuition": "Translate the whole book into notes once, then study only the notes.",
+      "technical": "Cost of the base is $O(N)$ forward passes total rather than $O(N \\times \\text{epochs})$; training touches only the small head.",
+      "significance": "Makes transfer learning feasible on a CPU, but excludes data augmentation.",
+      "example": "Listing 8.25 producing `train_features`, `val_features`, `test_features`.",
+      "misconception": "That you can still apply augmentation afterwards; augmentation must happen on images before the base, so cached features cannot be augmented.",
+      "related": ["transfer_learning", "data_augmentation"],
+      "source": "book"
+    },
+    {
+      "id": "data_augmentation",
+      "name": "Data augmentation",
+      "definition": "Generating random plausible variants of training images each time they are seen.",
+      "intuition": "Showing the model the same cat slightly rotated or flipped so it learns invariances instead of memorizing.",
+      "technical": "Requires the transformation to occur in the pipeline on every pass; incompatible with features computed once.",
+      "significance": "Main regularizer for small image datasets; the reason option 2 exists.",
+      "example": "Random flips/rotations/zooms from section 8.2.5 (p.276).",
+      "misconception": "That augmentation is free; when combined with a large base it multiplies the cost of every epoch.",
+      "related": ["feature_caching", "overfitting"],
+      "source": "book"
+    },
+    {
+      "id": "transfer_learning",
+      "name": "Transfer learning (feature extraction)",
+      "definition": "Reusing a pretrained model's representations for a new task.",
+      "intuition": "Borrowing a trained eye and teaching it a new decision.",
+      "technical": "Two variants on this page: cached features + standalone head, or base + head trained end to end.",
+      "significance": "Lets small datasets benefit from ImageNet-scale learning.",
+      "example": "Xception features for dogs vs. cats.",
+      "misconception": "That there is one way to do it; the choice depends on compute and need for augmentation.",
+      "related": ["backbone", "feature_caching"],
+      "source": "book"
+    }
+  ],
+  "math": [],
+  "code": [
+    {
+      "id": "c1",
+      "listing": "8.24",
+      "title": "Instantiating the preprocessing paired with the Xception model",
+      "original_code": "preprocessor = keras_hub.layers.ImageConverter.from_preset(\n    \"xception_41_imagenet\",\n    image_size=(180, 180),\n)",
+      "language": "python",
+      "what_it_does": "Creates a preprocessing layer configured for the `xception_41_imagenet` checkpoint that rescales pixel values to Xception's pretraining range and resizes images to 180 x 180.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Uses the same `from_preset()` constructor as the backbone, but on `keras_hub.layers.ImageConverter`."},
+        {"lines": "2", "explanation": "Same preset name as in Listing 8.23, guaranteeing the preprocessing matches the loaded weights."},
+        {"lines": "3", "explanation": "`image_size=(180, 180)` sets the output spatial size, matching the 180 x 180 images used for dogs vs. cats in section 8.2."}
+      ],
+      "inputs_outputs": "Returns a callable layer. Called on a batch of images of shape `(batch, H, W, 3)` it returns rescaled images of shape `(batch, 180, 180, 3)`.",
+      "algorithm": "Resize to `image_size`, then apply the checkpoint's value rescaling (e.g. to `[-1, 1]` or `[0, 1]`).",
+      "theory_link": "Ensures inputs match the distribution seen during pretraining (p.282).",
+      "parameters": [
+        {"name": "\"xception_41_imagenet\"", "role": "Which checkpoint's preprocessing to replicate."},
+        {"name": "image_size", "role": "Target height and width of the output images."}
+      ],
+      "pitfalls": [
+        "Using a different preset name than the backbone would silently apply the wrong rescaling.",
+        "Applying your own extra `Rescaling(1./255)` on top would double-scale the images."
+      ]
+    },
+    {
+      "id": "c2",
+      "listing": "8.25",
+      "title": "Extracting the image features and corresponding labels",
+      "original_code": "def get_features_and_labels(dataset):\n    all_features = []\n    all_labels = []\n    for images, labels in dataset:\n        preprocessed_images = preprocessor(images)\n        features = conv_base.predict(preprocessed_images, verbose=0)\n        all_features.append(features)\n        all_labels.append(labels)\n    return np.concatenate(all_features), np.concatenate(all_labels)\n\ntrain_features, train_labels = get_features_and_labels(train_dataset)\nval_features, val_labels = get_features_and_labels(validation_dataset)\ntest_features, test_labels = get_features_and_labels(test_dataset)",
+      "language": "python",
+      "what_it_does": "Runs every batch of each dataset through the matching preprocessor and the pretrained Xception backbone, and returns all features and labels as two aligned NumPy arrays; applied to train, validation and test sets.",
+      "line_explanations": [
+        {"lines": "1-3", "explanation": "Defines the helper and two Python lists to accumulate per-batch results."},
+        {"lines": "4", "explanation": "Iterates over the dataset, which yields `(images, labels)` batches."},
+        {"lines": "5", "explanation": "Applies the Xception-specific rescaling/resizing from Listing 8.24."},
+        {"lines": "6", "explanation": "`conv_base.predict(..., verbose=0)` computes backbone feature maps for the batch as a NumPy array, without printing a progress bar for every batch."},
+        {"lines": "7-8", "explanation": "Stores this batch's features and its labels, keeping them in the same order."},
+        {"lines": "9", "explanation": "`np.concatenate` joins the per-batch arrays along the first (sample) axis into single arrays."},
+        {"lines": "11-13", "explanation": "Extracts features for the three splits; each pass runs the expensive base exactly once per image."}
+      ],
+      "inputs_outputs": "Input: a dataset of `(images, labels)` batches. Output: `(features, labels)` where features have shape `(samples, 6, 6, 2048)` (stated on p.284) and labels have shape `(samples,)`.",
+      "algorithm": "For each batch: preprocess -> forward through frozen backbone -> append; finally concatenate. A one-time featurization pass.",
+      "theory_link": "Implements option 1 (fast feature extraction without data augmentation): the base runs once per image, so later training only involves the dense head.",
+      "parameters": [
+        {"name": "dataset", "role": "A batched dataset yielding (images, labels) pairs, e.g. `train_dataset`."},
+        {"name": "verbose=0", "role": "Silences predict()'s per-call progress output."}
+      ],
+      "pitfalls": [
+        "Do not pass an augmented or shuffled-each-epoch dataset expecting augmentation benefits; features are computed only once.",
+        "If the dataset reshuffles on each iteration, features and labels are still aligned because both come from the same batch.",
+        "Memory: all features for a split are held in RAM; 6*6*2048 floats per image is about 295 KB in float32 (beyond the book)."
+      ],
+      "illustrative_code": "# AI-written: optionally save features to disk, as the bullet suggests\nnp.save(\"train_features.npy\", train_features)\nnp.save(\"train_labels.npy\", train_labels)\nprint(train_features.shape)  # expected (samples, 6, 6, 2048)"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "How much compute does caching save?",
+      "kind": "numerical",
+      "body": "Beyond the book: let $N$ be the number of training images and $E$ the number of epochs. With cached features, the backbone runs $N$ forward passes once. End to end, it runs $N \\times E$ forward passes (plus backward passes through the head, and through the base if it is not frozen). With $E = 20$ epochs, end-to-end extraction costs roughly 20x more backbone compute. Since the dense head is tiny in comparison, total training time is dominated by that factor, which is why the authors call option 1 'fast and cheap'.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Why caching rules out augmentation",
+      "kind": "step_by_step",
+      "body": "1. Augmentation transforms *images* (flip, rotate, zoom), so it must happen before the backbone.\n2. Its value comes from producing a *different* random variant each epoch.\n3. Caching runs the backbone once and freezes the resulting features.\n4. Therefore every epoch sees exactly the same features; any augmentation applied during caching would just give one fixed variant per image.\n\n(Inference: you could cache several augmented copies per image, but that multiplies storage and is not what the book does.)",
+      "source": "inference"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "widget",
+      "title": "Shape flow in fast feature extraction",
+      "why": "Listing 8.25 sends 180x180 RGB batches through the preprocessor and the Xception backbone, yielding (samples, 6, 6, 2048) features (shape stated on p.284).",
+      "widget": "tensor_shapes",
+      "params": {
+        "steps": [
+          {"op": "image batch", "shape": [null, 180, 180, 3]},
+          {"op": "ImageConverter", "shape": [null, 180, 180, 3]},
+          {"op": "conv_base.predict", "shape": [null, 6, 6, 2048]},
+          {"op": "np.concatenate", "shape": [null, 6, 6, 2048]}
+        ]
+      }
+    },
+    {
+      "id": "v2",
+      "type": "mermaid",
+      "title": "The two feature-extraction options",
+      "why": "The two bullets on this page contrast precomputed features with end-to-end training.",
+      "mermaid": "flowchart TB\n  subgraph O1[Option 1: fast, no augmentation]\n    A1[Images] --> P1[preprocessor] --> B1[conv_base.predict once] --> F1[(NumPy features)] --> D1[Dense classifier trained many epochs]\n  end\n  subgraph O2[Option 2: end to end, augmentation possible]\n    A2[Images] --> G2[Random augmentation each epoch] --> P2[preprocessor] --> B2[conv_base every step] --> D2[Dense layers]\n  end"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "Precomputed features can be combined with data augmentation for free.",
+      "correction": "Because the base runs only once per image, there is no chance to show new random variants; the page explicitly says this technique won't allow data augmentation."
+    },
+    {
+      "claim": "End-to-end feature extraction is just as cheap because the base is not being trained.",
+      "correction": "Even frozen, the base must perform a forward pass for every image every epoch, which makes this approach far more expensive."
+    },
+    {
+      "claim": "`conv_base.predict(dataset)` can be called directly on the (images, labels) dataset.",
+      "correction": "The loop separates images and labels because `predict()` expects only images (p.284), and the images must first go through `preprocessor`."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 282, "note": "Loads `conv_base` (Listing 8.23) and motivates ImageConverter."},
+      {"page": 276, "note": "Data augmentation introduced for the from-scratch model."},
+      {"page": 266, "note": "Downloading and organizing the dogs-vs-cats data used as train/validation/test datasets."}
+    ],
+    "later": [
+      {"page": 284, "note": "Feature shape (samples, 6, 6, 2048) and Listing 8.26: training the dense classifier on extracted features."},
+      {"page": 286, "note": "Second technique: frozen base plus augmentation, trained end to end."},
+      {"page": 288, "note": "Fine-tuning a pretrained model."}
+    ],
+    "prerequisites": [
+      {"page": 282, "note": "KerasHub, backbone and from_preset()."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 282, "note": "Listing 8.23 creates `conv_base` used here."},
+      {"page": 284, "note": "Listing 8.26 consumes `train_features` and `val_features`."}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "Listing 8.24 pairs the backbone with `ImageConverter.from_preset(\"xception_41_imagenet\", image_size=(180, 180))`.",
+    "Option 1 (cache features, train a standalone dense classifier) is fast and cheap but forbids data augmentation.",
+    "Option 2 (Dense layers on top of `conv_base`, end to end) allows augmentation but is far more expensive.",
+    "Listing 8.25 preprocesses each batch, calls `conv_base.predict(..., verbose=0)`, and concatenates features and labels for train, validation and test."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "Why does the fast feature-extraction technique not allow data augmentation?",
+      "options": [
+        "Because NumPy arrays cannot store image data",
+        "Because the convolutional base is run only once per input image, so no new random variants are seen",
+        "Because the Xception backbone rejects augmented images",
+        "Because Dense layers cannot be trained on augmented data"
+      ],
+      "answer": "Because the convolutional base is run only once per input image, so no new random variants are seen",
+      "explanation": "The page says the technique is cheap because the base runs once per image, 'but for the same reason' it won't allow augmentation. The other options are false: NumPy stores features fine, Xception accepts any properly preprocessed image, and Dense layers can be trained on any features.",
+      "page_refs": [283]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "What two arguments are passed to `ImageConverter.from_preset()` in Listing 8.24 and what does each control?",
+      "options": [],
+      "answer": "The preset name `\"xception_41_imagenet\"`, which selects the rescaling that matches Xception's pretraining, and `image_size=(180, 180)`, which sets the output image size.",
+      "explanation": "Taken directly from Listing 8.24; the preset must be the same one used for the backbone.",
+      "page_refs": [282, 283]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "Why is end-to-end feature extraction 'far more expensive' even when the convolutional base is not being updated?",
+      "options": [],
+      "answer": "Because every input image goes through the large convolutional base every time it is seen, i.e., once per epoch, instead of once in total.",
+      "explanation": "The page states this is the same reason it allows augmentation; the base is by far the most expensive part of the pipeline.",
+      "page_refs": [283]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "In Listing 8.25, what does `np.concatenate(all_features)` do?",
+      "options": [
+        "Averages features across batches",
+        "Joins the list of per-batch feature arrays into one array along the sample axis",
+        "Flattens each feature map into a vector",
+        "Concatenates features with labels"
+      ],
+      "answer": "Joins the list of per-batch feature arrays into one array along the sample axis",
+      "explanation": "`np.concatenate` joins along axis 0 by default, stacking batches into one array of all samples. It does not average, flatten, or combine with labels (labels are concatenated separately).",
+      "page_refs": [283]
+    },
+    {
+      "id": "q5",
+      "type": "math",
+      "question": "If the backbone forward pass dominates cost and you train the classifier for 30 epochs, roughly how many times more backbone forward passes does end-to-end feature extraction require than cached feature extraction?",
+      "options": [],
+      "answer": "About 30 times more (N x 30 versus N).",
+      "explanation": "Cached extraction runs the base once per image; end-to-end runs it once per image per epoch. This is an AI-derived estimate consistent with the page's qualitative statement.",
+      "page_refs": [283]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "Why does `get_features_and_labels` call `preprocessor(images)` before `conv_base.predict`?",
+      "options": [],
+      "answer": "To rescale and resize the images exactly as Xception's pretraining expects; otherwise the pretrained features would not apply.",
+      "explanation": "Follows from p.282: inputs must match the checkpoint's input range, which ImageConverter enforces.",
+      "page_refs": [282, 283]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you explain to someone, in two sentences each, the pros and cons of the two feature-extraction options on this page?",
+      "options": [],
+      "answer": "Option 1: cheap and fast because the base runs once; no augmentation. Option 2: supports augmentation because images pass through the base each time; far more expensive.",
+      "explanation": "Self-check on the central comparison of the page.",
+      "page_refs": [283]
+    }
+  ]
+}

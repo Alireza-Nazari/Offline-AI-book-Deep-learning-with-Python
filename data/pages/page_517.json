@@ -1,0 +1,442 @@
+{
+  "page_id": "page_517",
+  "pdf_page": 517,
+  "printed_page": "493",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T08:06:00Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Good. The summary table, the body text and listing 16.14 were extracted cleanly. Figure 16.5 is an image with no extracted labels; I read its legend and bars from the page image (it is schematic, so square counts are approximate)."
+  },
+  "overview": {
+    "title": "LoRA's memory savings and fine-tuning Gemma",
+    "chapter": "16 Text generation",
+    "section": "16.3 Using a pretrained LLM",
+    "subsection": "16.3.3 Low-Rank Adaptation (LoRA)",
+    "main_topic": "The post-LoRA model summary (1,304,576 trainable out of 1,001,190,528 parameters), Figure 16.5 on where training memory goes, and listing 16.14, which instruction-tunes Gemma for one epoch and reaches 55% next-token accuracy.",
+    "central_idea": "After enabling LoRA, only about 5 MB of Gemma's 3.7 GB of weights are trainable, so gradients and optimizer state shrink from gigabytes to megabytes and the 1B-parameter model can be fine-tuned with an ordinary `compile()`/`fit()` call.",
+    "importance": "This is the payoff of the whole LoRA subsection: it shows the numbers that prove the memory problem from p.514 is solved, and it runs the actual instruction fine-tuning set up in 16.3.2.",
+    "learning_objectives": [
+      "Read a Keras summary and separate total, trainable and non-trainable parameters and their memory.",
+      "Explain, using Figure 16.5, which parts of training memory LoRA reduces and which it does not.",
+      "Explain each argument of listing 16.14: `from_logits=True`, the small Adam learning rate, `weighted_metrics`, and one epoch.",
+      "Interpret the 55% vs 35% next-token accuracy comparison."
+    ],
+    "prerequisites": [
+      "LoRA decomposition (p.515–516)",
+      "Adam optimizer state and the memory analysis on p.514",
+      "Logits and `SparseCategoricalCrossentropy(from_logits=True)` (p.502)",
+      "The instruction dataset and sample weights built on p.512–514"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page completes the `gemma_lm.summary()` output started on p.516. The model has two inputs (`padding_mask` and `token_ids`, both `(None, None)`), the `gemma3_backbone` producing `(None, None, 1152)` hidden states with 1,001,190,… parameters (truncated in the table), and a `token_embedding` layer of type `ReversibleEmbedding` with output `(None, None, 262144)` and 301,989,888 parameters, which projects hidden states back to vocabulary logits. The totals are what matter: **Total params: 1,001,190,528 (3.73 GB)**, **Trainable params: 1,304,576 (4.98 MB)**, **Non-trainable params: 999,885,952 (3.72 GB)**.\n\nThe authors stress that the weights still occupy 3.7 GB, but the trainable part is only 5 MB, which they call 'a thousandfold decrease'. Because gradients and optimizer variables are needed only for trainable parameters, optimizer state drops 'from many gigabytes to just megabytes'. **Figure 16.5** illustrates this with a bar of memory blocks, `Total memory = parameters + gradients + optimizer state + forward pass`: in the *Normal* row, gradients and especially optimizer state take up most of the bar; in the *LoRA* row, parameters are unchanged, but gradients and optimizer state nearly vanish, leaving much of the bar free.\n\nWith memory under control, **listing 16.14** fine-tunes the model: `compile()` with `SparseCategoricalCrossentropy(from_logits=True)`, `Adam(5e-5)`, and `weighted_metrics=[SparseCategoricalAccuracy()]`, then `fit(train_ds, validation_data=val_ds, epochs=1)`. After training, the model guesses the next word of the response correctly 55% of the time, versus 35% for the mini-GPT trained from scratch earlier in the chapter, which the authors attribute to a larger model and more extensive pretraining.",
+  "paragraphs": [
+    {
+      "ref": "p517_e03",
+      "excerpt": "┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓",
+      "what_it_says": "The continued summary lists the inputs, the Gemma3 backbone (output width 1152) and the ReversibleEmbedding (output width 262,144, 301,989,888 parameters), and the totals: 1,001,190,528 total, 1,304,576 trainable, 999,885,952 non-trainable parameters.",
+      "what_it_means": "Enabling LoRA (listing 16.13, p.515) left the model's size unchanged but made only 0.13% of the parameters trainable. The token embedding count is exactly 262,144 × 1,152, so it is the vocabulary embedding matrix; 'Reversible' means the same matrix is reused (transposed) to turn hidden states back into vocabulary logits, hence the 262,144-wide output. Its parameters are already counted inside the backbone's ~1B, which is why the table's rows do not sum to the total.",
+      "why_it_matters": "These numbers are the evidence that the out-of-memory problem described on p.514 is gone.",
+      "technical_idea": "Memory figures use 4 bytes per float32 parameter and binary units: 1,304,576 × 4 B = 5,218,304 B ≈ 4.98 MiB; 1,001,190,528 × 4 B ≈ 3.73 GiB.",
+      "terminology": [
+        {"term": "ReversibleEmbedding", "meaning": "A KerasHub embedding layer that can also be called in reverse to project hidden vectors onto the vocabulary using the transposed embedding matrix (weight tying)."},
+        {"term": "Trainable params", "meaning": "Parameters that receive gradient updates; here, only the LoRA matrices."},
+        {"term": "Non-trainable params", "meaning": "Frozen parameters; stored in memory but with no gradients or optimizer state."}
+      ],
+      "connections": [
+        "p.516: the beginning of this summary (preprocessor with the 262,144-token Gemma3 tokenizer).",
+        "p.514: the 3.7 GB figure for the model weights, now confirmed as 3.73 GB.",
+        "p.515: listing 16.13, which produced this trainable count."
+      ]
+    },
+    {
+      "ref": "p517_e04",
+      "excerpt": "Although our model parameters still occupy 3.7 GB of space, our trainable parameters",
+      "what_it_says": "Parameters still need 3.7 GB, but trainable parameters now use only 5 MB, a 'thousandfold decrease', taking optimizer state from many gigabytes to megabytes (figure 16.5).",
+      "what_it_means": "On p.514 the authors estimated 15 GB for weights plus Adam state (three extra floats per parameter: gradient, momentum, velocity). With LoRA, those three extra floats are needed for only 1.3M parameters: about 3 × 5.2 MB ≈ 16 MB instead of ~11 GB. The total training footprint becomes roughly 3.7 GB of frozen weights + ~20 MB for trainable weights, gradients and optimizer state, + forward-pass activations.",
+      "why_it_matters": "It shows that in LLM fine-tuning, the dominant memory cost of full training is not the weights themselves but the per-trainable-parameter gradient and optimizer buffers.",
+      "technical_idea": "Ratio: 1,001,190,528 / 1,304,576 ≈ 767, so 'thousandfold' is an order-of-magnitude rounding (it is about 770×).",
+      "terminology": [
+        {"term": "optimizer state", "meaning": "Per-parameter variables an optimizer keeps between steps; for Adam, the running first and second moment estimates."}
+      ],
+      "connections": [
+        "p.514: Adam needs three extra floats per parameter; 15 GB total without LoRA."
+      ]
+    },
+    {
+      "ref": "p517_e05",
+      "excerpt": "Figure 16.5 LoRA greatly reduces the memory we need for gradients and optimizer states.",
+      "what_it_says": "The figure shows two bars of memory blocks under the legend 'Total memory = parameters + gradients + optimizer state + forward pass'. The 'Normal' row is almost full, with roughly equal blue (parameters) and yellow (gradients) segments, a long pink (optimizer state) segment, and a teal (forward pass) segment. The 'LoRA' row keeps the same blue segment but has only about one yellow and two pink blocks, a teal segment, and many empty blocks.",
+      "what_it_means": "LoRA leaves the parameter memory unchanged (the frozen weights still have to be loaded) and the forward-pass memory roughly unchanged (activations must still be computed through the whole network), but almost eliminates gradient and optimizer memory. The figure is schematic: in reality the LoRA gradient and optimizer segments would be far smaller than one block.",
+      "why_it_matters": "It clarifies what LoRA does and does not save, which helps you predict memory for other setups (e.g. longer sequences increase the forward-pass part, which LoRA does not reduce).",
+      "terminology": [
+        {"term": "forward pass memory", "meaning": "Intermediate activations stored during the forward pass so that backpropagation can compute gradients."}
+      ],
+      "connections": [
+        "p.514: the text's breakdown of memory into weights, optimizer state and 'intermediate values in the forward pass'."
+      ]
+    },
+    {
+      "ref": "p517_e06",
+      "excerpt": "With this optimization in place, we are at last ready to instruction-tune our",
+      "what_it_says": "With LoRA enabled, the authors are ready to instruction-tune Gemma.",
+      "what_it_means": "The data pipeline (instruction/response prompts, preprocessor with sample weights) was built on p.512–514; the only remaining obstacle was memory.",
+      "why_it_matters": "Marks the transition from setup to the actual fine-tuning run.",
+      "connections": [
+        "p.512: definition of instruction fine-tuning.",
+        "p.513: `train_ds` and `val_ds` built from the Databricks dataset."
+      ]
+    },
+    {
+      "ref": "p517_e09",
+      "excerpt": "After training, we get to 55% accuracy when guessing the next word in",
+      "what_it_says": "After training, the model reaches 55% accuracy at predicting the next word of the response, versus 35% for the mini-GPT; the authors attribute the gain to a larger model and more extensive pretraining.",
+      "what_it_means": "Because the metric is passed through `weighted_metrics` and the preprocessor's `sample_weight` is nonzero only for response tokens (p.514), the 55% is measured on response tokens only, not on the prompt or padding. Note (beyond the book): the two numbers are not a perfectly controlled comparison; the mini-GPT was evaluated on its own pretraining text with its own tokenizer, so the comparison is indicative rather than exact.",
+      "why_it_matters": "It quantifies the value of starting from a strong pretrained model rather than training from scratch, the central argument of section 16.3.",
+      "terminology": [
+        {"term": "next-word accuracy", "meaning": "The fraction of positions where the model's highest-probability token equals the true next token."}
+      ],
+      "connections": [
+        "p.501: the mini-GPT pretraining run on 1 billion tokens.",
+        "p.518: qualitative check that the fine-tuned model now answers questions."
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "lora",
+      "name": "Low-Rank Adaptation (LoRA)",
+      "definition": "Fine-tuning by freezing pretrained weights and training only small low-rank update matrices.",
+      "intuition": "Keep the encyclopedia, write a few sticky notes.",
+      "technical": "Here it leaves 1,304,576 trainable parameters (4.98 MB) in a 1,001,190,528-parameter model.",
+      "significance": "It cuts gradient and optimizer memory by roughly three orders of magnitude, making 1B-parameter fine-tuning fit in 16 GB.",
+      "example": "Gemma3-1B with rank-8 LoRA on two attention projections in each of its decoder blocks.",
+      "misconception": "LoRA does not reduce parameter memory or forward-pass memory (Figure 16.5).",
+      "related": ["fine_tuning", "optimizer", "adam", "low_rank_matrix"],
+      "source": "book"
+    },
+    {
+      "id": "training_memory_budget",
+      "name": "Training memory budget",
+      "definition": "The accelerator memory needed for training: parameters + gradients + optimizer state + forward-pass activations.",
+      "intuition": "Weights are the furniture; gradients and optimizer state are the moving crew that must stand next to every piece you plan to move.",
+      "technical": "With float32 and Adam (book's count: 3 extra floats per trainable parameter), memory ≈ 4·N_total + 12·N_trainable bytes + activations.",
+      "significance": "On LLMs this budget, not compute speed, is the main bottleneck (p.514).",
+      "example": "Full fine-tuning: 4 × 1.0e9 + 12 × 1.0e9 ≈ 16e9 bytes ≈ 15 GiB. LoRA: 4 × 1.0e9 + 12 × 1.3e6 ≈ 3.75 GiB.",
+      "misconception": "Freezing weights saves memory for gradients and optimizer state, but not for storing the weights themselves.",
+      "related": ["optimizer", "adam", "lora"],
+      "source": "book"
+    },
+    {
+      "id": "weighted_metrics",
+      "name": "Weighted metrics with sample weights",
+      "definition": "Metrics passed via `weighted_metrics` in `compile()` are computed using the `sample_weight` supplied with each batch.",
+      "intuition": "Only grade the part of the answer that the student was supposed to write.",
+      "technical": "The Gemma preprocessor returns `(x, y, sample_weight)`; positions with weight 0 (prompt and padding) are ignored by both loss and weighted metrics.",
+      "significance": "Makes the reported 55% accuracy reflect response tokens only.",
+      "example": "A 512-token sequence with a 20-token response: accuracy is averaged over those 20 positions.",
+      "misconception": "Plain `metrics=[...]` in Keras ignores sample weights, so it would count prompt and padding tokens.",
+      "related": ["sparse_categorical_accuracy", "loss_function"],
+      "source": "inference"
+    },
+    {
+      "id": "cross_entropy",
+      "name": "Sparse categorical crossentropy from logits",
+      "definition": "Crossentropy between integer token labels and the model's unnormalized scores, with softmax applied inside the loss.",
+      "intuition": "Penalizes low probability on the true next token.",
+      "technical": "`from_logits=True` because Gemma's ReversibleEmbedding outputs raw scores over 262,144 tokens; applying softmax inside the loss is more numerically stable.",
+      "significance": "It is the same 'guess the next word' loss used for pretraining (p.512).",
+      "example": "Logits for 262,144 classes at each of 512 positions per sample.",
+      "misconception": "Passing logits without `from_logits=True` would treat them as probabilities and produce a wrong loss.",
+      "related": ["softmax", "language_model"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Memory of the parameter groups in the summary",
+      "latex": "\\text{bytes} = 4 \\times N, \\qquad 4 \\times 1{,}304{,}576 = 5{,}218{,}304\\ \\text{B} \\approx 4.98\\ \\text{MiB}, \\qquad 4 \\times 1{,}001{,}190{,}528 \\approx 3.73\\ \\text{GiB}",
+      "source_text": "Total params: 1,001,190,528 (3.73 GB) / Trainable params: 1,304,576 (4.98 MB) / Non-trainable params: 999,885,952 (3.72 GB)",
+      "variables": [
+        {"symbol": "N", "meaning": "Number of parameters"},
+        {"symbol": "4", "meaning": "Bytes per float32 value"}
+      ],
+      "operations": "Multiply the count by 4 bytes and divide by 2^20 (MiB) or 2^30 (GiB).",
+      "purpose": "Shows where the summary's memory figures come from.",
+      "interpretation": "Keras prints binary units labelled GB/MB.",
+      "intuition": "Every float32 parameter costs 4 bytes.",
+      "numerical_example": "$5{,}218{,}304 / 2^{20} = 4.977$; $4{,}004{,}762{,}112 / 2^{30} = 3.730$.",
+      "source": "ai_explanation",
+      "book_ref": "p.517"
+    },
+    {
+      "id": "m2",
+      "title": "Reduction factor of trainable parameters",
+      "latex": "\\frac{N_{\\text{total}}}{N_{\\text{trainable}}} = \\frac{1{,}001{,}190{,}528}{1{,}304{,}576} \\approx 767",
+      "source_text": "our trainable parameters now use only 5 MB of data—a thousandfold decrease!",
+      "variables": [
+        {"symbol": "N_{\\text{total}}", "meaning": "All parameters of the CausalLM"},
+        {"symbol": "N_{\\text{trainable}}", "meaning": "LoRA parameters"}
+      ],
+      "operations": "Ratio of counts (equivalently of memory: 3.73 GB / 4.98 MB).",
+      "purpose": "Quantifies the 'thousandfold' claim.",
+      "interpretation": "About 770×, i.e. roughly three orders of magnitude; 'thousandfold' is a rounded figure.",
+      "intuition": "Only about 1 in 770 parameters is updated.",
+      "source": "ai_explanation",
+      "book_ref": "p.517"
+    },
+    {
+      "id": "m3",
+      "title": "Optimizer + gradient memory with and without LoRA",
+      "latex": "M_{\\text{extra}} = 3 \\times 4\\ \\text{B} \\times N_{\\text{trainable}}",
+      "source_text": "The Adam optimizer ... will need to track three extra floating-point numbers for each parameter (p.514); This can take our optimizer state from many gigabytes to just megabytes on the GPU",
+      "variables": [
+        {"symbol": "M_{\\text{extra}}", "meaning": "Memory for gradients and Adam's two moment estimates"},
+        {"symbol": "N_{\\text{trainable}}", "meaning": "Trainable parameter count"}
+      ],
+      "operations": "Three float32 values per trainable parameter.",
+      "purpose": "Shows why trainable-parameter count drives training memory.",
+      "interpretation": "Full fine-tuning: ≈ 11.2 GiB; LoRA: ≈ 15 MiB.",
+      "intuition": "Frozen weights cost only storage; trainable weights cost storage plus three times more.",
+      "numerical_example": "Full: $12 \\times 1{,}001{,}190{,}528 \\approx 1.2\\times10^{10}$ B ≈ 11.2 GiB; plus 3.73 GiB weights ≈ 15 GB (p.514). LoRA: $12 \\times 1{,}304{,}576 = 15{,}654{,}912$ B ≈ 14.9 MiB.",
+      "source": "inference",
+      "book_ref": "p.514, p.517"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Model summary after enabling LoRA (continued from p.516)",
+      "original_code": "┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓\n┃ Layer (type)          ┃ Output Shape      ┃     Param # ┃ Connected to       ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩\n│ padding_mask          │ (None, None)      │           0 │ -                  │\n│ (InputLayer)          │                   │             │                    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ token_ids             │ (None, None)      │           0 │ -                  │\n│ (InputLayer)          │                   │             │                    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ gemma3_backbone       │ (None, None,      │ 1,001,190,… │ padding_mask[0][0… │\n│ (Gemma3Backbone)      │ 1152)             │             │ token_ids[0][0]    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ token_embedding       │ (None, None,      │ 301,989,888 │ gemma3_backbone[0… │\n│ (ReversibleEmbedding) │ 262144)           │             │                    │\n└───────────────────────┴───────────────────┴─────────────┴────────────────────┘\n Total params: 1,001,190,528 (3.73 GB)\n Trainable params: 1,304,576 (4.98 MB)\n Non-trainable params: 999,885,952 (3.72 GB)",
+      "language": "text",
+      "what_it_does": "Shows the CausalLM's functional graph and the parameter totals after `backbone.enable_lora(rank=8)`. The header lines (`>>> gemma_lm.summary()`, the preprocessor table and `Model: \"gemma3_causal_lm\"`) are on p.516.",
+      "line_explanations": [
+        {"lines": "4-8", "explanation": "Two symbolic inputs with shape (batch, sequence) of unknown sizes: the padding mask and the token IDs."},
+        {"lines": "10-11", "explanation": "The backbone outputs a 1152-dimensional vector per token; its parameter count is truncated in the table but includes the token embedding."},
+        {"lines": "13-14", "explanation": "The ReversibleEmbedding reused in reverse maps 1152-d hidden states to 262,144 vocabulary logits; 301,989,888 = 262,144 × 1,152. It is shared with the backbone, so it is not double-counted in the total."},
+        {"lines": "16-18", "explanation": "Totals: only 1,304,576 parameters (the LoRA matrices) are trainable."}
+      ],
+      "inputs_outputs": "Printed text only.",
+      "algorithm": "n/a",
+      "theory_link": "Verifies the memory analysis of p.514 and the LoRA parameter arithmetic of p.515–516.",
+      "parameters": [],
+      "pitfalls": [
+        "The Param # column is truncated (`1,001,190,…`); rely on the totals line.",
+        "Row parameter counts do not add up to the total because the embedding matrix is shared between the backbone and the reverse projection."
+      ]
+    },
+    {
+      "id": "c2",
+      "listing": "16.14",
+      "title": "Fine-tuning a pretrained LLM",
+      "original_code": "gemma_lm.compile(\n    loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),\n    optimizer=keras.optimizers.Adam(5e-5),\n    weighted_metrics=[keras.metrics.SparseCategoricalAccuracy()],\n)\ngemma_lm.fit(train_ds, validation_data=val_ds, epochs=1)",
+      "language": "python",
+      "what_it_does": "Compiles the LoRA-enabled Gemma CausalLM with a next-token crossentropy loss, a small Adam learning rate and a sample-weighted accuracy metric, then trains for one epoch on the instruction dataset with validation.",
+      "line_explanations": [
+        {"lines": "1-2", "explanation": "`SparseCategoricalCrossentropy(from_logits=True)`: integer token labels, raw logits from the model."},
+        {"lines": "3", "explanation": "`Adam(5e-5)`: a small learning rate, appropriate for nudging a pretrained model rather than training from scratch."},
+        {"lines": "4", "explanation": "`weighted_metrics`: accuracy computed with the preprocessor's `sample_weight`, i.e. on response tokens only."},
+        {"lines": "6", "explanation": "One pass over `train_ds`, evaluating on the 100 held-out batches of `val_ds` (p.513). The CausalLM's built-in preprocessor tokenizes and pads raw strings automatically inside `fit()`."}
+      ],
+      "inputs_outputs": "Inputs: `train_ds`/`val_ds`, datasets of dicts with `prompts` and `responses` strings, batched by 2 (p.513). Output: training history; the LoRA weights are updated in place.",
+      "algorithm": "Standard supervised next-token training: forward pass through frozen weights + LoRA updates, masked crossentropy, backprop into LoRA matrices only, Adam step.",
+      "theory_link": "Instruction fine-tuning (p.512) using the 'guess the next word' loss, made affordable by LoRA.",
+      "parameters": [
+        {"name": "from_logits=True", "role": "Tells the loss to apply softmax internally."},
+        {"name": "Adam(5e-5)", "role": "Learning rate 5 × 10⁻⁵."},
+        {"name": "weighted_metrics", "role": "Metrics that respect sample weights."},
+        {"name": "epochs=1", "role": "A single pass over the instruction data."}
+      ],
+      "pitfalls": [
+        "Using `metrics=` instead of `weighted_metrics=` would include prompt and padding positions in the accuracy.",
+        "A large learning rate can quickly damage the pretrained behaviour; fine-tuning rates are typically 10–100× smaller than pretraining rates.",
+        "Without the earlier `enable_lora` call, this `fit()` would run out of memory on a 16 GB GPU (p.514).",
+        "The preprocessor's `sequence_length` was set to 512 on p.513; longer sequences increase forward-pass memory, which LoRA does not reduce."
+      ],
+      "illustrative_code": "# AI-written: quick sanity checks before fitting\ntrainable = sum(int(np.prod(w.shape)) for w in gemma_lm.trainable_weights)\nprint(trainable)  # expect 1,304,576\nprint(trainable * 4 * 3 / 2**20, \"MiB for grads + Adam state\")"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Where the 1,304,576 comes from",
+      "kind": "numerical",
+      "body": "Beyond the book (config values from the Gemma3-1B model, not stated on the page): 26 decoder blocks, hidden size 1152, 4 query heads and 1 key/value head of dimension 256. For Keras `EinsumDense` projections LoRA creates matrices of shape (heads, 1152, 8) and (8, 256).\n\n- Query: 4·1152·8 + 8·256 = 38,912\n- Second projection (key or value; same shape): 1·1152·8 + 8·256 = 11,264\n\n(38,912 + 11,264) × 26 = **1,304,576**, matching the summary exactly.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Reading Figure 16.5 as a budget",
+      "kind": "breakdown",
+      "body": "Figure 16.5's legend is an equation: total memory = parameters + gradients + optimizer state + forward pass.\n\n1. **Parameters** — the same in both rows: all 1B weights must be on the GPU to compute the forward pass.\n2. **Gradients** — one float per trainable parameter: shrinks ~770×.\n3. **Optimizer state** — two floats per trainable parameter for Adam: shrinks ~770×.\n4. **Forward pass** — activations of every layer are still needed to backpropagate into the LoRA matrices of all blocks, so this stays roughly the same.\n\nThe drawing keeps one yellow and two pink squares in the LoRA row for visibility; in true proportion they would be invisible.",
+      "source": "inference"
+    },
+    {
+      "title": "Why the 55% vs 35% comparison is suggestive, not exact",
+      "kind": "alternative",
+      "body": "Beyond the book: the mini-GPT's 35% was measured on its own validation text, with a different tokenizer and vocabulary; Gemma's 55% is measured on response tokens of instruction data, with a 262,144-token vocabulary. Larger vocabularies make each prediction harder in one sense (more classes) but each token carries more text. The comparison still supports the authors' point: a large, heavily pretrained model predicts text much better than a small model trained on a fraction of the data.",
+      "source": "ai_explanation"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "chart",
+      "title": "Training memory estimate: full fine-tuning vs LoRA (Gemma3-1B, float32, Adam)",
+      "why": "Turns Figure 16.5's schematic into actual numbers using the page's parameter counts and p.514's three-extra-floats-per-parameter rule (forward-pass memory omitted because the book gives no number).",
+      "chart": {
+        "type": "bar",
+        "data": {
+          "labels": ["Full fine-tuning", "LoRA (rank 8)"],
+          "datasets": [
+            {"label": "parameters (GiB)", "data": [3.73, 3.73]},
+            {"label": "gradients (GiB)", "data": [3.73, 0.0049]},
+            {"label": "optimizer state (GiB)", "data": [7.46, 0.0097]}
+          ]
+        },
+        "options": {
+          "scales": {"x": {"stacked": true}, "y": {"stacked": true, "title": {"display": true, "text": "GiB"}}},
+          "plugins": {"title": {"display": true, "text": "16 GB GPU: full fine-tuning leaves almost nothing for activations"}}
+        }
+      }
+    },
+    {
+      "id": "v2",
+      "type": "mermaid",
+      "title": "From LoRA to the fine-tuned model",
+      "why": "Summarizes the flow of this page: summary check, compile, fit, result.",
+      "mermaid": "flowchart LR\n A[enable_lora rank=8<br/>listing 16.13] --> B[summary:<br/>1,304,576 trainable<br/>4.98 MB]\n B --> C[compile<br/>SCCE from_logits<br/>Adam 5e-5<br/>weighted accuracy]\n C --> D[fit train_ds<br/>epochs=1]\n D --> E[55% next-token accuracy<br/>on response tokens]"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "LoRA reduced the model's memory from 3.7 GB to 5 MB.",
+      "correction": "The weights still take 3.73 GB; only the trainable part is 4.98 MB. The savings are in gradients and optimizer state."
+    },
+    {
+      "claim": "LoRA also removes the need to store forward-pass activations.",
+      "correction": "Figure 16.5 shows the forward-pass segment remains; gradients must still flow back through all layers to reach the LoRA matrices."
+    },
+    {
+      "claim": "The 55% accuracy counts every token in the 512-token sequence.",
+      "correction": "With `weighted_metrics` and the preprocessor's sample weights, only response tokens are counted (p.514)."
+    },
+    {
+      "claim": "The reduction is exactly 1000×.",
+      "correction": "It is about 767× (1,001,190,528 / 1,304,576); 'thousandfold' is rounded."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 514, "note": "The memory problem: 3.7 GB weights + Adam state ≈ 15 GB; sample weights restrict loss to response tokens."},
+      {"page": 515, "note": "LoRA idea and listing 16.13."},
+      {"page": 516, "note": "Figure 16.4 and the beginning of this summary."},
+      {"page": 513, "note": "Construction of `train_ds` and `val_ds` and the preprocessor."},
+      {"page": 501, "note": "Mini-GPT pretraining, the baseline for the 35% figure."}
+    ],
+    "later": [
+      {"page": 518, "note": "Prompting the fine-tuned model and discussing hallucinations."},
+      {"page": 519, "note": "16.4.1 RLHF, a more advanced form of instruction tuning."},
+      {"page": 531, "note": "Chapter summary on accelerator memory and LoRA."}
+    ],
+    "prerequisites": [
+      {"page": 502, "note": "Logits and `from_logits=True`."},
+      {"page": 512, "note": "Instruction fine-tuning uses the same next-word loss as pretraining."}
+    ],
+    "related_math": [
+      {"page": 514, "note": "Three extra floats per parameter for Adam."}
+    ],
+    "related_code": [
+      {"page": 501, "note": "The mini-GPT's compile/fit call with `SparseCategoricalCrossentropy(from_logits=True)`."}
+    ],
+    "related_figures": [
+      {"page": 516, "note": "Figure 16.4, LoRA decomposition."}
+    ]
+  },
+  "takeaways": [
+    "After LoRA: 1,001,190,528 total parameters (3.73 GB), only 1,304,576 trainable (4.98 MB).",
+    "LoRA reduces gradient and optimizer memory, not parameter or activation memory (Figure 16.5).",
+    "Listing 16.14 uses next-token crossentropy from logits, `Adam(5e-5)`, sample-weighted accuracy and one epoch.",
+    "`weighted_metrics` makes the metric respect the response-only sample weights.",
+    "Fine-tuned Gemma reaches 55% next-token accuracy on responses vs 35% for the from-scratch mini-GPT."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "math",
+      "question": "Using the book's rule that Adam needs three extra floats per parameter, estimate gradient + optimizer memory for full fine-tuning and for LoRA on this model (float32).",
+      "options": [],
+      "answer": "Full: 12 B × 1,001,190,528 ≈ 11.2 GiB. LoRA: 12 B × 1,304,576 ≈ 15.7 MB (≈ 14.9 MiB).",
+      "explanation": "Each float32 is 4 bytes; three per trainable parameter is 12 bytes. Only trainable parameters need these buffers.",
+      "page_refs": [514, 517]
+    },
+    {
+      "id": "q2",
+      "type": "mcq",
+      "question": "According to Figure 16.5, which component of training memory does LoRA leave unchanged?",
+      "options": [
+        "Parameters",
+        "Gradients",
+        "Optimizer state",
+        "None; it reduces all of them equally"
+      ],
+      "answer": "Parameters",
+      "explanation": "The blue parameters segment is the same length in both rows. Gradients and optimizer state shrink dramatically; the forward-pass segment stays roughly the same as well, so the last option is wrong.",
+      "page_refs": [517]
+    },
+    {
+      "id": "q3",
+      "type": "short",
+      "question": "Why does listing 16.14 pass `from_logits=True` to the loss?",
+      "options": [],
+      "answer": "Because the model outputs unnormalized scores (logits) over the 262,144-token vocabulary, not probabilities; the loss applies softmax internally.",
+      "explanation": "The ReversibleEmbedding produces raw scores; p.502 explained logits and this flag.",
+      "page_refs": [502, 517]
+    },
+    {
+      "id": "q4",
+      "type": "conceptual",
+      "question": "What would change in the reported accuracy if `metrics=[SparseCategoricalAccuracy()]` were used instead of `weighted_metrics`?",
+      "options": [],
+      "answer": "Sample weights would be ignored, so prompt and padding positions would also be counted, giving a number that does not measure response quality.",
+      "explanation": "The preprocessor's `sample_weight` masks everything except response tokens (p.514); only weighted metrics use it.",
+      "page_refs": [514, 517]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "Why do the rows of the summary not add up to the total parameter count?",
+      "options": [
+        "The token embedding matrix is shared between the backbone and the output projection.",
+        "LoRA parameters are not shown in summaries.",
+        "Input layers hold hidden parameters.",
+        "Keras rounds every row to the nearest million."
+      ],
+      "answer": "The token embedding matrix is shared between the backbone and the output projection.",
+      "explanation": "ReversibleEmbedding reuses the backbone's 262,144 × 1152 embedding to produce logits, so its 301,989,888 parameters are already in the backbone's count. LoRA parameters are included in the trainable total; input layers have 0 parameters; rows are not rounded (one is truncated).",
+      "page_refs": [517]
+    },
+    {
+      "id": "q6",
+      "type": "math",
+      "question": "Verify the 'thousandfold' claim: what is the ratio of total to trainable parameters?",
+      "options": [],
+      "answer": "1,001,190,528 / 1,304,576 ≈ 767, i.e. roughly three orders of magnitude.",
+      "explanation": "Direct division; the memory ratio 3.73 GB / 4.98 MB gives the same ≈ 767.",
+      "page_refs": [517]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you explain to someone why a 1B-parameter model that runs inference fine on a 16 GB GPU crashes on its first training step, and how LoRA fixes it?",
+      "options": [],
+      "answer": "Inference needs only weights and activations (~3.7 GB+); training also needs gradients and Adam state for every trainable parameter (~11 GB more), leaving no room for activations. LoRA makes only ~1.3M parameters trainable, so those extra buffers drop to megabytes.",
+      "explanation": "Combines p.514's diagnosis with this page's numbers and Figure 16.5.",
+      "page_refs": [514, 517]
+    }
+  ]
+}

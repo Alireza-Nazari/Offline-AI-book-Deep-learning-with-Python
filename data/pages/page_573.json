@@ -1,0 +1,543 @@
+{
+ "page_id": "page_573",
+ "pdf_page": 573,
+ "printed_page": "549",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:10:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. e03 finishes the sentence begun on p.572. The final sentence (e14) continues on p.574, where the parameter count of the second layer (about 512 million) is given. Parameter counts were checked arithmetically."
+ },
+ "overview": {
+  "title": "Data parallelism in detail; a model too big for one GPU",
+  "chapter": "18 Best practices for the real world",
+  "section": "18.2 Scaling up model training with multiple devices",
+  "subsection": "18.2.1 Multi-GPU training",
+  "main_topic": "How data-parallel inference and synchronous data-parallel training work, their limitation, and the motivation for model parallelism",
+  "central_idea": "Data parallelism gives each device a full copy of the model and a slice of each batch. Predictions are concatenated, and gradients are averaged so all replicas stay identical (synchronous training). It cannot help when the model itself does not fit on one device, which is where model parallelism comes in, illustrated with a roughly 1.5-billion-parameter dense model (Listing 18.4).",
+  "importance": "It explains the gradient-averaging trick that makes multi-GPU training equivalent to large-batch single-device training, and it introduces the running example (Listing 18.4) used for sharding on p.574 and p.578.",
+  "learning_objectives": [
+   "Describe how a global batch is split into N sub-batches across replicas.",
+   "Explain how results are merged at inference time (concatenation) and at training time (gradient averaging).",
+   "Explain why averaged sub-batch gradients reproduce the full-batch gradient (synchronous training).",
+   "State the main limitation of data parallelism: the model must fit on one device.",
+   "Compute the parameter counts of the layers in Listing 18.4."
+  ],
+  "prerequisites": [
+   "Mini-batch gradient descent (chapter 2)",
+   "Dense layer parameter count: inputs x units + units",
+   "Keras Sequential API (chapter 7)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes the hybrid example from p.572: a model split across 4 devices can be replicated twice, for **2 * 4 = 8 devices**.\n\n**Data parallelism** is the most common form of distributed training and works by divide and conquer. Each GPU holds a full copy of the model, called a **replica**. Each incoming batch is split into *N* sub-batches, one per replica, processed in parallel. For example, with two GPUs a batch of 128 becomes two sub-batches of 64. Then:\n\n- **Inference**: the per-sub-batch predictions are **concatenated** to form the predictions for the full batch.\n- **Training**: the per-sub-batch **gradients are averaged** and every replica is updated with that average. The model ends up exactly as if it had been trained on the full batch of 128. This is **synchronous training**: all replicas have the same weights at all times. Asynchronous alternatives exist but are less efficient and no longer used in practice.\n\nData parallelism is simple and scales well: with more devices you increase the batch size and throughput rises to match. Its one limitation is that **the model must fit on one device**. Today's foundation models with tens of billions of parameters do not.\n\n**Model parallelism** handles that case by splitting the *model* into submodels on different devices instead of splitting the *data*. **Listing 18.4** gives an example: a `Sequential` model with a 16,000-feature input, a `Dense(64000, relu)` layer and a `Dense(8000, sigmoid)` output for 8,000 potentially overlapping (multi-label) categories. The first layer alone has about **1 billion** parameters (16,000 x 64,000 + 64,000 = 1,024,064,000). The sentence continues on p.574 with the second layer's roughly 512 million.",
+ "paragraphs": [
+  {
+   "ref": "p573_e03",
+   "excerpt": "replicated across multiple groups of devices (e.g., twice, for a total of 2 * 4",
+   "what_it_says": "This completes the sentence from p.572: the model split over 4 devices is replicated across groups of devices, for example twice, which uses 2 * 4 = 8 devices. The next line ('Let's see how that works in detail') introduces the detailed subsections.",
+   "what_it_means": "The total device count is the product of the model-parallel degree (4) and the data-parallel degree (2). This product structure is exactly what a 2-D device mesh encodes (p.576).",
+   "why_it_matters": "It sets up the 8-device configuration used in figure 18.2 and in the DeviceMesh(shape=(2, 4)) example.",
+   "connections": [
+    "p.572: start of this sentence",
+    "p.575: figure 18.2 draws this layout",
+    "p.576: DeviceMesh(shape=(2, 4))"
+   ]
+  },
+  {
+   "ref": "p573_e06",
+   "excerpt": "Data parallelism is the most common form of distributed training. It operates on a",
+   "what_it_says": "Data parallelism is the most common form of distributed training and follows divide and conquer. Each GPU gets a full copy of the model, called a replica. Each batch is split into N sub-batches, one per replica, processed in parallel. The name comes from processing different samples in parallel. With two GPUs, a batch of 128 becomes two sub-batches of 64.",
+   "what_it_means": "The *global* batch (128) is what the optimizer sees per step. The *local* batch (64) is what each device actually computes on. The two terms appear explicitly on p.576 and in figure 18.2.",
+   "why_it_matters": "It defines the vocabulary (replica, sub-batch) used in the rest of the section.",
+   "technical_idea": "Global batch = N x local batch. Splitting happens along axis 0, the batch axis (p.50).",
+   "terminology": [
+    {
+     "term": "Replica",
+     "meaning": "A full copy of the model living on one device."
+    },
+    {
+     "term": "Sub-batch (local batch)",
+     "meaning": "The slice of a global batch processed by one replica."
+    }
+   ],
+   "connections": [
+    "p.50: axis 0 is the batch axis",
+    "p.576: local vs global batch size and GPU utilization"
+   ]
+  },
+  {
+   "ref": "p573_e07",
+   "excerpt": "In inference—We would retrieve the predictions for each sub-batch and concatenate them",
+   "what_it_says": "At inference time, the predictions for each sub-batch are collected and concatenated to give the predictions for the full batch.",
+   "what_it_means": "Samples are independent at inference, so no other combination is needed. Concatenating along the batch axis restores the original order. The replicas need no communication until the results are gathered.",
+   "why_it_matters": "It shows that data-parallel inference is the easy case: no state has to be kept consistent.",
+   "connections": [
+    "p.574: concatenation also appears as the merge step for vertical partitioning, but along the feature axis there"
+   ]
+  },
+  {
+   "ref": "p573_e08",
+   "excerpt": "In training—We would retrieve the gradients for each sub-batch, average them, and update",
+   "what_it_says": "During training, the gradients from each sub-batch are averaged and every replica is updated with that average. The model state is then the same as if trained on the full batch of 128. This is synchronous training: replicas stay in sync, with identical weights at all times. Asynchronous alternatives exist but are less efficient and are not used in practice any more.",
+   "what_it_means": "The loss is a mean over samples and differentiation is linear, so the gradient of the full-batch mean loss equals the average of the sub-batch mean-loss gradients (for equal-size sub-batches). Every replica applies the same update to the same weights, so they stay identical without ever copying weights.",
+   "why_it_matters": "This is why data-parallel training does not change the maths of training. It is large-batch SGD computed on several devices.",
+   "technical_idea": "Beyond the book: the averaging is done with an all-reduce collective (e.g., NCCL ring all-reduce on NVIDIA GPUs). Layers whose computation depends on the batch, such as BatchNormalization, compute their statistics per replica unless synchronized, so they are a known exception to 'exactly the same'.",
+   "terminology": [
+    {
+     "term": "Synchronous training",
+     "meaning": "All replicas apply the same averaged update each step, so their weights are always equal."
+    },
+    {
+     "term": "Asynchronous training",
+     "meaning": "Replicas push updates independently (e.g., to a parameter server) without waiting for each other. Faster per step but with stale gradients; the book says it is no longer used."
+    }
+   ],
+   "connections": [
+    "p.576: merging the updates is the main source of overhead (7.3x speedup on 8 GPUs)"
+   ]
+  },
+  {
+   "ref": "p573_e09",
+   "excerpt": "Data parallelism is a simple and highly scalable way to train your models faster.",
+   "what_it_says": "Data parallelism is simple and highly scalable: with more devices, increase the batch size and throughput rises accordingly. Its limitation is that the model must fit on one device, and foundation models with tens of billions of parameters do not fit on any single GPU.",
+   "what_it_means": "Scaling here means weak scaling: keep the local batch fixed and grow the global batch with N. The memory limit includes more than the weights: gradients, optimizer state (two extra copies for Adam) and activations all live on each replica.",
+   "why_it_matters": "It marks where data parallelism stops working and motivates the rest of the section.",
+   "technical_idea": "Beyond the book: a 10-billion-parameter model in float32 needs 40 GB just for weights, and about 160 GB with gradients and Adam moments, beyond a single 80 GB GPU.",
+   "terminology": [
+    {
+     "term": "Foundation model",
+     "meaning": "A very large model pretrained on broad data, then adapted to many tasks (e.g., the LLMs of chapters 15-16)."
+    }
+   ],
+   "connections": [
+    "p.580: when scaling batch size (e.g., on TPU) raise the learning rate accordingly"
+   ]
+  },
+  {
+   "ref": "p573_e11",
+   "excerpt": "That’s where model parallelism comes in. While data parallelism works by splitting your batches",
+   "what_it_says": "Model parallelism handles models too large for one device. Data parallelism splits batches into sub-batches. Model parallelism splits the model into submodels, each running on a different device in parallel. The model in Listing 18.4 is given as an example.",
+   "what_it_means": "This is the duality: in data parallelism the data is split and the weights are replicated, and in model parallelism the weights are split and the data is (at least partly) replicated.",
+   "why_it_matters": "It introduces the running example used for sharding on this page and the next ones.",
+   "connections": [
+    "p.574: horizontal vs vertical partitioning of this model",
+    "p.578: variable paths and LayoutMap for this model"
+   ]
+  },
+  {
+   "ref": "p573_e14",
+   "excerpt": "Each sample has 16,000 features and gets classified into 8,000 potentially overlapping categories by",
+   "what_it_says": "Each sample has 16,000 features and is classified into 8,000 potentially overlapping categories by two Dense layers. They are large: the first has about 1 billion parameters (the sentence continues on p.574 with about 512 million for the last).",
+   "what_it_means": "'Potentially overlapping' means multi-label classification, which is why the output uses sigmoid (one independent probability per category) and not softmax. Parameter count of a Dense layer = input_dim x units + units: 16,000 x 64,000 + 64,000 = 1,024,064,000.",
+   "why_it_matters": "These numbers make the memory problem concrete: about 1.5 billion parameters is about 6 GB in float32 for weights alone, before gradients and optimizer state.",
+   "terminology": [
+    {
+     "term": "Multi-label classification",
+     "meaning": "Each sample can belong to several classes at once; uses independent sigmoid outputs and binary crossentropy."
+    }
+   ],
+   "connections": [
+    "p.574: about 512 million parameters in the last layer"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "data_parallelism",
+   "name": "Data parallelism",
+   "definition": "Each device holds a full model replica and processes a different sub-batch; results are merged.",
+   "intuition": "Divide and conquer the samples.",
+   "technical": "Global batch B split into N local batches of B/N. Inference concatenates outputs, training averages gradients across replicas before one shared update.",
+   "significance": "Most common, simplest, highly scalable form of distributed training.",
+   "example": "2 GPUs, batch 128 -> two sub-batches of 64.",
+   "misconception": "That replicas drift apart and need periodic weight syncing. In synchronous training they apply identical updates and never diverge.",
+   "related": [
+    "synchronous_training",
+    "model_parallelism"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "synchronous_training",
+   "name": "Synchronous training",
+   "definition": "Data-parallel training in which gradients from all replicas are averaged and applied identically, keeping weights equal at all times.",
+   "intuition": "Everyone waits for everyone else at the end of each step, agrees on one update, and applies it.",
+   "technical": "Equivalent to single-device training on the full global batch (modulo per-replica batch statistics and floating-point summation order).",
+   "significance": "Gives the maths of large-batch SGD on several devices.",
+   "example": "Training on 2 x 64 sub-batches equals training on one 128 batch.",
+   "misconception": "That asynchronous training is the modern faster alternative. The book says asynchronous variants are less efficient and no longer used.",
+   "related": [
+    "data_parallelism"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "model_parallelism",
+   "name": "Model parallelism",
+   "definition": "Splitting a model into submodels placed on different devices that run in parallel.",
+   "intuition": "When one desk cannot hold the whole blueprint, spread it across several desks.",
+   "technical": "Needed when parameters + gradients + optimizer state + activations exceed one device's memory.",
+   "significance": "Enables training foundation models with tens of billions of parameters.",
+   "example": "Listing 18.4 on two small devices.",
+   "misconception": "That it replaces data parallelism. The two are usually combined.",
+   "related": [
+    "data_parallelism",
+    "sharding"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "dense_layer",
+   "name": "Dense layer parameter count",
+   "definition": "A Dense layer with d inputs and u units has a (d, u) kernel and a (u,) bias: d*u + u parameters.",
+   "intuition": "Every input connects to every unit, plus one bias per unit.",
+   "technical": "For Listing 18.4: 16000*64000+64000 = 1,024,064,000 and 64000*8000+8000 = 512,008,000.",
+   "significance": "Width multiplies quickly: two wide layers already need about 1.5 B parameters.",
+   "example": "See math m2.",
+   "misconception": "Forgetting that parameter memory is multiplied by gradients and optimizer state during training.",
+   "related": [
+    "model_parallelism"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Averaged sub-batch gradients equal the full-batch gradient",
+   "latex": "\\nabla_W \\mathcal{L}_{\\text{batch}} = \\nabla_W \\frac{1}{B}\\sum_{i=1}^{B}\\ell_i = \\frac{1}{N}\\sum_{k=1}^{N}\\nabla_W \\Big(\\frac{1}{B/N}\\sum_{i\\in S_k}\\ell_i\\Big) = \\frac{1}{N}\\sum_{k=1}^{N} g_k",
+   "source_text": "We would retrieve the gradients for each sub-batch, average them, and update all model replicas based on the gradient average. The state of the model would then be the same as if you had trained it on the full batch of 128 samples.",
+   "variables": [
+    {
+     "symbol": "B",
+     "meaning": "global batch size (128 in the example)"
+    },
+    {
+     "symbol": "N",
+     "meaning": "number of replicas/devices (2)"
+    },
+    {
+     "symbol": "S_k",
+     "meaning": "indices of the samples in sub-batch k (size B/N = 64)"
+    },
+    {
+     "symbol": "\\ell_i",
+     "meaning": "loss on sample i"
+    },
+    {
+     "symbol": "g_k",
+     "meaning": "gradient computed by replica k on its sub-batch's mean loss"
+    },
+    {
+     "symbol": "W",
+     "meaning": "model weights, identical on every replica"
+    }
+   ],
+   "operations": "Split the batch sum into N equal partial sums, then use linearity of the gradient.",
+   "purpose": "Shows why synchronous data parallelism reproduces full-batch training exactly.",
+   "interpretation": "Each replica computes the gradient of its own mean loss; averaging those N gradients gives the gradient of the global mean loss.",
+   "intuition": "An average of averages of equal-size groups equals the overall average.",
+   "numerical_example": "Batch of 4 per-sample gradients [1, 3, 5, 7] split over 2 replicas: replica means are 2 and 6, and their average is 4, the full-batch mean.",
+   "source": "ai_explanation",
+   "book_ref": "p.573"
+  },
+  {
+   "id": "m2",
+   "title": "Parameter counts of Listing 18.4",
+   "latex": "\\begin{aligned} P_1 &= 16000 \\times 64000 + 64000 = 1{,}024{,}064{,}000 \\approx 10^9 \\\\ P_2 &= 64000 \\times 8000 + 8000 = 512{,}008{,}000 \\approx 5.12\\times 10^8 \\end{aligned}",
+   "source_text": "the first one has about 1 billion parameters, and the last one has about 512 million parameters",
+   "variables": [
+    {
+     "symbol": "P_1",
+     "meaning": "parameters of Dense(64000): kernel (16000, 64000) plus bias (64000,)"
+    },
+    {
+     "symbol": "P_2",
+     "meaning": "parameters of Dense(8000): kernel (64000, 8000) plus bias (8000,)"
+    }
+   ],
+   "operations": "Kernel size (inputs x units) plus bias size (units).",
+   "purpose": "Quantifies why the model does not fit on a small device.",
+   "interpretation": "About 1.54 billion parameters in total, about 6.1 GB in float32 for weights, about 24.6 GB with gradients and two Adam moment buffers (activations not included).",
+   "intuition": "Wide dense layers grow as the product of their widths.",
+   "numerical_example": "1,536,072,000 params x 4 bytes = 6.14 GB; x 4 copies (weights, gradients, Adam m, Adam v) = 24.6 GB.",
+   "source": "book",
+   "book_ref": "p.573-574"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "18.4",
+   "title": "A large densely connected model",
+   "original_code": "model = keras.Sequential(\n    [\n        keras.layers.Input(shape=(16000,)),\n        keras.layers.Dense(64000, activation=\"relu\"),\n        keras.layers.Dense(8000, activation=\"sigmoid\"),\n    ]\n)",
+   "language": "python",
+   "what_it_does": "Defines a two-layer multi-label classifier: 16,000 input features -> 64,000 ReLU units -> 8,000 independent sigmoid outputs.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "A Sequential model built from a list of layers."
+    },
+    {
+     "lines": "3",
+     "explanation": "Input of 16,000 features per sample; the batch axis is implicit, so the shape is (None, 16000)."
+    },
+    {
+     "lines": "4",
+     "explanation": "Dense(64000, relu): kernel (16000, 64000) and bias (64000,), about 1.02 B parameters. This is the layer the book splits in half on p.574."
+    },
+    {
+     "lines": "5",
+     "explanation": "Dense(8000, sigmoid): kernel (64000, 8000), about 512 M parameters. Sigmoid because categories can overlap (multi-label)."
+    },
+    {
+     "lines": "6-7",
+     "explanation": "Close the list and the constructor."
+    }
+   ],
+   "inputs_outputs": "Input (batch, 16000) float features -> output (batch, 8000) probabilities in [0, 1].",
+   "algorithm": "Two affine transforms with nonlinearities: sigmoid(relu(x W1 + b1) W2 + b2).",
+   "theory_link": "Too large for small devices, so it motivates sharding its kernels (vertical partitioning, p.574; LayoutMap, p.577-578).",
+   "parameters": [
+    {
+     "name": "64000",
+     "role": "width of the hidden layer; dominates parameter count"
+    },
+    {
+     "name": "8000",
+     "role": "number of output categories"
+    },
+    {
+     "name": "activation=\"sigmoid\"",
+     "role": "independent per-class probabilities for multi-label output"
+    }
+   ],
+   "pitfalls": [
+    "Instantiating this on a small GPU without a distribution set will run out of memory.",
+    "With overlapping categories use binary crossentropy, not categorical crossentropy.",
+    "With the JAX distribution API, the distribution must be set *before* the model is built so variables are created sharded (p.575, p.578)."
+   ],
+   "illustrative_code": "# AI-written: verify the parameter count without allocating the weights\nd_in, h, d_out = 16000, 64000, 8000\np1 = d_in * h + h\np2 = h * d_out + d_out\nprint(p1, p2, p1 + p2)            # 1024064000 512008000 1536072000\nprint((p1 + p2) * 4 / 1e9, 'GB in float32')"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why asynchronous training fell out of use",
+   "kind": "breakdown",
+   "body": "Beyond the book. In asynchronous data parallelism (e.g., early parameter-server systems), each worker reads possibly stale weights, computes a gradient and pushes it without waiting. No worker idles, but gradients are computed on old weights (*staleness*), which hurts convergence and needs smaller learning rates or tricks. Fast interconnects (NVLink, TPU ICI) and efficient all-reduce algorithms made synchronous averaging cheap, so the cleaner maths of synchronous training won. This matches the book's statement that asynchronous alternatives are 'less efficient and aren't used anymore'.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Memory budget of Listing 18.4",
+   "kind": "numerical",
+   "body": "Beyond the book. Weights: about 1.536 B x 4 bytes = **6.1 GB**. Training with Adam adds gradients (6.1 GB) and two moment buffers (12.3 GB), about **24.6 GB**. Activations for a batch of 128 add 128 x (64000 + 8000) x 4 bytes = about 37 MB (small here). A '16 GB' device cannot train this model with data parallelism alone, but two such devices each holding half of every kernel (p.574) can hold the roughly 12.3 GB per device.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Listing 18.4: layer shapes and parameter counts",
+   "why": "Click the layers of the exact model in Listing 18.4 to see the roughly 1 billion and 512 million parameter counts the text quotes.",
+   "widget": "nn_architecture",
+   "params": {
+    "layers": [
+     {
+      "name": "input",
+      "type": "input",
+      "shape": "(None, 16000)"
+     },
+     {
+      "name": "dense",
+      "type": "dense",
+      "units": 64000,
+      "activation": "relu"
+     },
+     {
+      "name": "dense_1",
+      "type": "output",
+      "units": 8000,
+      "activation": "sigmoid"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "Synchronous data-parallel training step (2 GPUs, batch 128)",
+   "why": "Shows the training bullet: split, compute per-replica gradients, average, apply the same update everywhere.",
+   "mermaid": "flowchart LR\n  B[Global batch of 128] --> S0[Sub-batch 64]\n  B --> S1[Sub-batch 64]\n  S0 --> R0[Replica on GPU 0: gradient g0]\n  S1 --> R1[Replica on GPU 1: gradient g1]\n  R0 --> A[\"Average g = (g0 + g1) / 2\"]\n  R1 --> A\n  A --> U0[Update replica 0 with g]\n  A --> U1[Update replica 1 with g]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Data-parallel training gives a different (approximate) result from training on the full batch.",
+   "correction": "With synchronous gradient averaging the update equals the full-batch update; the book says the model state is the same as training on all 128 samples (apart from batch-statistic layers and floating-point order)."
+  },
+  {
+   "claim": "Data parallelism lets you train models that do not fit in one GPU.",
+   "correction": "Each replica holds the whole model, so the model must fit on one device. That is the stated limitation."
+  },
+  {
+   "claim": "The sigmoid output in Listing 18.4 is a mistake; classifiers use softmax.",
+   "correction": "The categories are 'potentially overlapping' (multi-label), so independent sigmoids are correct."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 572,
+    "note": "Definitions of data and model parallelism; start of the 2 * 4 sentence."
+   },
+   {
+    "page": 50,
+    "note": "The batch axis that data parallelism splits."
+   }
+  ],
+  "later": [
+   {
+    "page": 574,
+    "note": "Horizontal vs vertical partitioning of Listing 18.4; the half-kernel code."
+   },
+   {
+    "page": 576,
+    "note": "Speedups from data parallelism and the DeviceMesh API."
+   },
+   {
+    "page": 578,
+    "note": "Variable paths and sharding layout for Listing 18.4."
+   },
+   {
+    "page": 587,
+    "note": "Chapter summary: data parallelism when the model fits, model parallelism for larger models."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 49,
+    "note": "Data batches."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 574,
+    "note": "Half-kernel shapes (16000, 32000) for vertical partitioning."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 575,
+    "note": "DataParallel distribution one-liner."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 575,
+    "note": "Figure 18.2: global batch split into local batches across two replicas."
+   }
+  ]
+ },
+ "takeaways": [
+  "In data parallelism each GPU holds a full replica and processes 1/N of each batch.",
+  "Inference concatenates per-replica predictions; training averages per-replica gradients.",
+  "Synchronous training keeps all replicas identical and reproduces full-batch training; asynchronous variants are obsolete.",
+  "More devices means a bigger global batch and proportionally more throughput, as long as the model fits on one device.",
+  "Listing 18.4 has about 1.0 B + 0.5 B parameters, too large for small devices, which motivates model parallelism."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "With 4 GPUs and a global batch of 256 under data parallelism, what does each replica process per step?",
+   "options": [
+    "The full batch of 256",
+    "A sub-batch of 64",
+    "A quarter of the model's layers",
+    "A sub-batch of 1024"
+   ],
+   "answer": "A sub-batch of 64",
+   "explanation": "The batch is split into N = 4 sub-batches of 256 / 4 = 64. Processing the full batch would duplicate work. Splitting layers is model parallelism. 1024 confuses splitting with multiplying.",
+   "page_refs": [
+    573
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "How are results merged in data-parallel inference versus training?",
+   "options": [],
+   "answer": "Inference: concatenate the per-sub-batch predictions. Training: average the per-sub-batch gradients and apply that average to every replica.",
+   "explanation": "These are the two bullets on the page.",
+   "page_refs": [
+    573
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "math",
+   "question": "Compute the number of parameters in the second Dense layer of Listing 18.4.",
+   "options": [],
+   "answer": "64,000 x 8,000 + 8,000 = 512,008,000, about 512 million.",
+   "explanation": "Kernel (64000, 8000) plus bias (8000,), consistent with the 'about 512 million' on p.574.",
+   "page_refs": [
+    573,
+    574
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why is synchronous data-parallel training equivalent to training on the full batch?",
+   "options": [],
+   "answer": "The loss is a mean over samples and gradients are linear, so averaging the gradients of equal-size sub-batch mean losses gives exactly the gradient of the full-batch mean loss. All replicas apply this same update to the same weights, so they stay identical.",
+   "explanation": "See math m1. The book states the equivalence; the derivation is added here.",
+   "page_refs": [
+    573
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "What is the stated limitation of data parallelism?",
+   "options": [
+    "It cannot be used for inference",
+    "It requires the model to fit on a single device",
+    "It only works with two GPUs",
+    "Replicas drift apart over time"
+   ],
+   "answer": "It requires the model to fit on a single device",
+   "explanation": "The book names exactly this. Inference works by concatenation, it scales beyond two GPUs, and synchronous training keeps replicas in sync.",
+   "page_refs": [
+    573
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Why does Listing 18.4 use a sigmoid output instead of softmax?",
+   "options": [],
+   "answer": "The 8,000 categories are 'potentially overlapping' (multi-label), so each needs an independent probability. Softmax would force the outputs to compete and sum to 1.",
+   "explanation": "Follows from the text in e14 and the activation in the listing.",
+   "page_refs": [
+    573
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you explain to a colleague, without notes, the difference between a replica, a sub-batch, and the global batch?",
+   "options": [],
+   "answer": "Replica = full model copy on one device; sub-batch = slice of data one replica processes; global batch = all sub-batches together, i.e., what one optimizer step sees.",
+   "explanation": "If any of these was unclear, reread the first paragraph of the data parallelism subsection.",
+   "page_refs": [
+    573
+   ]
+  }
+ ]
+}

@@ -1,0 +1,544 @@
+{
+ "page_id": "page_399",
+ "pdf_page": 399,
+ "printed_page": "375",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:12:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Typo in the sidebar: 'which more or less forces you stick to what NVIDIA happens to provide' is missing 'to' ('forces you to stick to').",
+   "Footnote 6 credits the GRU to Cho et al., 'On the Properties of Neural Machine Translation: Encoder-Decoder Approaches' (arXiv 1409.1259). The GRU is more usually credited to Cho et al.'s other 2014 paper, 'Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation' (arXiv 1406.1078); the cited paper uses a related gated recursive unit. Worth checking.",
+   "The sidebar says unrolling is only viable for sequences of 'around 100 steps or fewer', but its example passes sequence_length, which is 120 in this chapter (p.382). Not a contradiction (the guidance is approximate), but readers may want to note the tension.",
+   "The extractor merged three printed paragraphs of 13.3.5 ('Increasing network capacity...', 'To stack recurrent layers...', 'In the following example...') into p399_e07, and two sidebar paragraphs into p399_e03; each printed paragraph has its own note."
+  ],
+  "extraction_quality": "Clean. Code callouts read from the image: 'sequence_length cannot be None.' points at the Input line; 'Passes unroll=True to enable unrolling' points at the LSTM line."
+ },
+ "overview": {
+  "title": "cuDNN fallback and RNN unrolling; 13.3.5 Stacking recurrent layers and the GRU",
+  "chapter": "13 Timeseries forecasting",
+  "section": "13.3 Recurrent neural networks",
+  "subsection": "13.3.5 Stacking recurrent layers",
+  "main_topic": "End of the RNN runtime sidebar (recurrent dropout disables the cuDNN kernel, a 2-5x slowdown on GPU; unrolling as a speed-up for short, fixed-length sequences) and the start of section 13.3.5: increase capacity once overfitting is under control, stack recurrent layers with return_sequences=True, and switch to GRU layers",
+  "central_idea": "Using non-default options like recurrent dropout pushes Keras off the cuDNN fast path; unrolling the RNN loop can recover speed at the cost of memory, but only for short sequences of known length. With overfitting fixed by dropout, the next step in the universal workflow is to add capacity, classically by stacking recurrent layers, each intermediate one returning its full sequence.",
+  "importance": "It gives the practical cost of the recurrent dropout just adopted and a remedy, then applies the universal workflow's 'increase capacity until overfitting becomes the obstacle' rule. It also introduces the GRU, one of the two essential Keras RNN layers.",
+  "learning_objectives": [
+   "Explain why adding recurrent_dropout slows an LSTM/GRU on GPU, and by roughly how much.",
+   "Define unrolling and state its benefit, its memory cost, and its two requirements (short sequences, known number of timesteps).",
+   "Write an LSTM layer with unroll=True and explain why the Input shape must not contain None.",
+   "Apply the universal workflow rule: once not overfitting, increase capacity.",
+   "Explain why intermediate recurrent layers in a stack need return_sequences=True and what tensor rank they output.",
+   "Describe the GRU relative to the LSTM and its origin."
+  ],
+  "prerequisites": [
+   "The cuDNN kernel discussion on p.398",
+   "The RNN as a for loop over timesteps (p.389-391)",
+   "return_sequences and rank-3 vs rank-2 outputs (p.392-393)",
+   "Recurrent dropout and its results (p.397-398)",
+   "The universal workflow: capacity vs overfitting (chapter 6)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Sidebar, continued: cuDNN and unrolling.** The 'dramatic slowdown' from p.398 'more or less forces you [to] stick to what NVIDIA happens to provide'. Example: **recurrent dropout is not supported by the LSTM and GRU cuDNN kernels**, so adding it forces a fallback to the regular TensorFlow implementation, **generally two to five times slower on GPU**, even though the computational cost is the same. One way to speed up an RNN that can't use cuDNN is **unrolling**: removing the `for` loop and in-lining its body N times. For an RNN, this can help TensorFlow optimize the computation graph, but it considerably increases memory consumption, so it is only viable for relatively small sequences (around 100 steps or fewer), and only when the number of timesteps is known in advance (an `Input()` shape with no `None` entries). Example: `layers.LSTM(32, recurrent_dropout=0.2, unroll=True)` on `keras.Input(shape=(sequence_length, num_features))`.\n\n**13.3.5 Stacking recurrent layers.** The model is no longer overfitting but seems to have hit a performance bottleneck, so it is time to increase capacity. Recall the universal workflow: increase capacity until overfitting becomes the primary obstacle (assuming basic mitigation such as dropout is in place); 'as long as you aren't overfitting too badly, you're likely under capacity'.\n\nCapacity is typically increased by adding units or adding layers. **Recurrent layer stacking** is a classic way to build more powerful RNNs; not long ago Google Translate was powered by a stack of **seven large LSTM layers**. To stack recurrent layers in Keras, all intermediate layers must return their **full sequence of outputs (a rank-3 tensor)** rather than only the last timestep, via `return_sequences=True`.\n\nThe next example uses a stack of two dropout-regularized recurrent layers, and for a change uses **GRU** layers. The Gated Recurrent Unit is very similar to an LSTM, a 'slightly simpler, streamlined version'. It was introduced in 2014 by Cho et al. (footnote 6), just as recurrent networks were regaining interest in a then-tiny research community. The listing (13.23) is on p.400.",
+ "paragraphs": [
+  {
+   "ref": "p399_e03",
+   "excerpt": "slowdown, which more or less forces you stick to what NVIDIA happens to provide.",
+   "what_it_says": "Completing the sentence from p.398: doing anything the cuDNN kernel does not support causes a dramatic slowdown, which more or less forces you to stick to what NVIDIA provides. For instance, recurrent dropout is not supported by the LSTM and GRU cuDNN kernels, so using it makes the runtime fall back to the regular TensorFlow implementation, generally two to five times slower on GPU, even though the computational cost is the same.",
+   "what_it_means": "The number of floating-point operations does not change; what changes is how well they are executed. The fused cuDNN kernel runs the whole recurrence inside one optimized GPU routine. The fallback expresses each timestep as separate generic operations inside a loop, with many small kernel launches and memory round-trips. So the dropout-regularized LSTM of Listing 13.22 is slower to train on GPU than the unregularized one of Listing 13.12 by much more than its doubled size alone would explain.",
+   "why_it_matters": "It is a concrete trade-off between regularization and training speed that practitioners hit constantly; it also explains the earlier remark that small RNNs may be faster on CPU (p.398).",
+   "technical_idea": "Beyond the book: the book's Keras is multi-backend; 'the regular TensorFlow implementation' corresponds to the generic, non-cuDNN code path. With the JAX or PyTorch backends, similar fast paths exist and similar restrictions apply.",
+   "terminology": [
+    {
+     "term": "fallback implementation",
+     "meaning": "The generic code path Keras uses when the layer configuration is not supported by the specialized cuDNN kernel."
+    }
+   ],
+   "connections": [
+    "p.398: the start of the sidebar: small RNNs are faster on CPU; cuDNN kernels are fast but inflexible.",
+    "p.397: Listing 13.22 uses recurrent_dropout=0.25, which triggers this fallback on GPU."
+   ]
+  },
+  {
+   "ref": "p399_e03",
+   "excerpt": "As a way to speed up your RNN layer when you can’t use cuDNN,",
+   "what_it_says": "To speed up an RNN that cannot use cuDNN, you can unroll it: remove the for loop and in-line its content N times. For an RNN, this helps TensorFlow optimize the computation graph. But it considerably increases memory use, so it is only viable for relatively small sequences (around 100 steps or fewer), and only if the number of timesteps is known in advance (no None in the Input() shape). The code example follows.",
+   "what_it_means": "A loop is a control-flow construct the compiler must execute step by step. Unrolled, the computation becomes one long straight-line graph of 120 copies of the cell, which the graph compiler can optimize globally (fusing operations, scheduling them better, avoiding loop overhead). The price: every copy's intermediate activations are separate nodes stored in memory, and the graph itself grows linearly with sequence length. The length has to be fixed because the graph is built with exactly N copies.",
+   "why_it_matters": "It is the main knob for recovering speed when you need a non-cuDNN feature such as recurrent dropout, and it explains why p.392 recommended specifying a complete input shape (it 'can unlock some performance optimizations').",
+   "technical_idea": "Beyond the book: with a symbolic loop, memory for backpropagation through time also grows with the sequence length, since activations must be kept for the backward pass; unrolling adds graph-size overhead and removes some of the memory reuse a loop can achieve. The '100 steps' guideline reflects that trade-off, not a hard limit.",
+   "terminology": [
+    {
+     "term": "unrolling",
+     "meaning": "Replacing a loop with N explicit copies of its body; in Keras, the unroll=True argument of recurrent layers."
+    },
+    {
+     "term": "computation graph",
+     "meaning": "The dataflow graph of operations the framework compiles and executes."
+    }
+   ],
+   "connections": [
+    "p.392: specifying a complete input shape unlocks performance optimizations (this sidebar is the one referred to there).",
+    "p.390: the RNN pseudocode as an explicit for loop over timesteps."
+   ]
+  },
+  {
+   "ref": "p399_e06",
+   "excerpt": "Because you’re no longer overfitting, but seem to have hit a performance bottleneck,",
+   "what_it_says": "Since the model no longer overfits but seems to have hit a performance bottleneck, you should increase the network's capacity and expressive power. Per the universal machine learning workflow, increase capacity until overfitting becomes the primary obstacle (with basic mitigation such as dropout in place). As long as you aren't overfitting too badly, you're likely under capacity.",
+   "what_it_means": "Figure 13.11 shows a flat validation MAE around 2.3 with no overfitting: the regularized model has spare 'room'. The workflow says this means the model is capacity-limited, not data-limited, so a bigger model should do better until it starts to overfit, at which point regularization or more data become the levers again.",
+   "why_it_matters": "This is the decision logic of the entire section in one paragraph: regularize first, then grow. It also tells you how to read curves: no overfitting plus a plateau means try more capacity.",
+   "terminology": [
+    {
+     "term": "capacity",
+     "meaning": "How complex a set of functions a model can represent, roughly controlled by number of units and layers."
+    },
+    {
+     "term": "under capacity (underfitting)",
+     "meaning": "The model is too small to capture the patterns available in the data."
+    },
+    {
+     "term": "universal machine learning workflow",
+     "meaning": "The book's step-by-step method for approaching ML problems (chapter 6): baseline, model that overfits, then regularize and tune."
+    }
+   ],
+   "connections": [
+    "p.398: Figure 13.11, the flat validation curve behind 'no longer overfitting'.",
+    "p.404: summary: stacked RNNs give more representational power but are expensive."
+   ]
+  },
+  {
+   "ref": "p399_e07",
+   "excerpt": "Increasing network capacity is typically done by increasing the number of units in",
+   "what_it_says": "Capacity is typically increased by adding units per layer or adding layers. Stacking recurrent layers is a classic way to build more powerful RNNs; not long ago, Google Translate was powered by a stack of seven large LSTM layers.",
+   "what_it_means": "Width (units) and depth (layers) are the two capacity dials. Depth in RNNs means a hierarchy over time: the first layer turns raw features into a sequence of representations, the second layer processes that representation sequence, and so on, which can capture patterns at multiple levels of abstraction.",
+   "why_it_matters": "The Google Translate example shows that deep RNN stacks were the state of the art for hard sequence problems before Transformers (chapter 15).",
+   "technical_idea": "Beyond the book: the Google system referred to is generally identified as GNMT (2016), with deep LSTM stacks in its encoder and decoder plus residual connections between layers; the exact configuration is not described in the book.",
+   "terminology": [
+    {
+     "term": "stacked RNN",
+     "meaning": "Recurrent layers placed one above another, each consuming the full output sequence of the layer below."
+    }
+   ],
+   "connections": [
+    "p.461: RNN sequence-to-sequence models and their limitations, which led to the Transformer.",
+    "p.404: stacked RNNs give clear gains on complex problems such as machine translation."
+   ]
+  },
+  {
+   "ref": "p399_e07",
+   "excerpt": "To stack recurrent layers on top of each other in Keras, all intermediate",
+   "what_it_says": "To stack recurrent layers in Keras, all intermediate layers must return their full sequence of outputs (a rank-3 tensor) rather than only the output at the last timestep, by specifying return_sequences=True.",
+   "what_it_means": "A recurrent layer expects a sequence as input: shape (batch, timesteps, features). If the first layer returned only its last output, shape (batch, units), the second layer would have no sequence to iterate over. With return_sequences=True, the first GRU outputs (batch, 120, 32), one vector per timestep, which the second GRU consumes; the last layer of the stack can return only its final output for the Dense head.",
+   "why_it_matters": "This is the single API detail that makes stacking work, and forgetting it produces a shape error.",
+   "terminology": [
+    {
+     "term": "return_sequences",
+     "meaning": "Constructor argument of Keras recurrent layers: True returns (batch, timesteps, units), False (the default) returns (batch, units)."
+    },
+    {
+     "term": "rank-3 tensor",
+     "meaning": "A tensor with three axes, here (batch_size, timesteps, output_features)."
+    }
+   ],
+   "connections": [
+    "p.392: the two output modes of recurrent layers.",
+    "p.393: Listing 13.19, stacking RNN layers.",
+    "p.628: the chapter 20 review restates the rule."
+   ]
+  },
+  {
+   "ref": "p399_e07",
+   "excerpt": "In the following example, we’ll try a stack of two dropout-regularized recurrent layers.",
+   "what_it_says": "The next example uses two stacked, dropout-regularized recurrent layers, and switches to GRU layers. The GRU is very similar to an LSTM, a slightly simpler, streamlined version; it was introduced in 2014 by Cho et al., just as recurrent networks were regaining interest in the then-tiny research community.",
+   "what_it_means": "The GRU merges the LSTM's carry and state into a single state and uses fewer gates, so it has fewer parameters per unit and is cheaper to run, while usually performing comparably. Switching to it here also shows that the techniques (recurrent dropout, stacking) apply to any Keras recurrent layer.",
+   "why_it_matters": "GRU and LSTM are the two essential Keras RNN layers (p.404, p.628), and the stacked GRU sets the best result so far (test MAE 2.39 on p.400).",
+   "technical_idea": "Beyond the book: a GRU has an update gate z_t and a reset gate r_t; the new state is h_t = (1 - z_t) * h_{t-1} + z_t * h~_t, where h~_t is computed from x_t and r_t * h_{t-1}. Per unit it has three weight sets versus the LSTM's four, so about 3/4 of the parameters.",
+   "terminology": [
+    {
+     "term": "GRU (Gated Recurrent Unit)",
+     "meaning": "A recurrent layer similar to the LSTM but simpler: one state vector and fewer gates."
+    }
+   ],
+   "connections": [
+    "p.400: Listing 13.23, the stacked GRU model, and its results.",
+    "p.448: a GRU is used for the character language model because it is fast and simpler than an LSTM.",
+    "p.628: 'think of GRU as a simpler, cheaper alternative' to LSTM."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "cudnn_kernel",
+   "name": "cuDNN kernel",
+   "definition": "NVIDIA's optimized low-level implementation of LSTM/GRU used by Keras on GPU with default arguments.",
+   "intuition": "A specialized express lane: very fast, but only for vehicles of the approved type.",
+   "technical": "Not used when recurrent dropout is set; the fallback is generally 2-5x slower on GPU at the same computational cost.",
+   "significance": "Determines the real-world training speed of RNNs on GPU.",
+   "example": "LSTM(32) uses cuDNN; LSTM(32, recurrent_dropout=0.25) does not.",
+   "misconception": "That the slowdown comes from extra computation; the page says the computational cost is the same.",
+   "related": [
+    "recurrent_dropout",
+    "rnn_unrolling",
+    "lstm",
+    "gru"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "rnn_unrolling",
+   "name": "Unrolling an RNN",
+   "definition": "Removing the RNN's for loop over timesteps and in-lining its content N times (unroll=True in Keras).",
+   "intuition": "Instead of a recipe saying 'repeat step 3 120 times', you write out step 3 120 times, which lets the cook plan the whole process at once.",
+   "technical": "Helps the framework optimize the computation graph; costs considerably more memory; viable for about 100 steps or fewer; requires a fully specified input shape.",
+   "significance": "A way to speed up non-cuDNN RNNs, e.g. those with recurrent dropout.",
+   "example": "layers.LSTM(32, recurrent_dropout=0.2, unroll=True)",
+   "misconception": "That unrolling changes what the model computes; the outputs are the same, only the execution differs.",
+   "related": [
+    "cudnn_kernel",
+    "rnn"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "stacked_rnn",
+   "name": "Stacked recurrent layers",
+   "definition": "Several recurrent layers in sequence, each intermediate one returning its full output sequence (return_sequences=True).",
+   "intuition": "Layers of interpretation: the bottom layer summarizes raw readings over time; the next reads those summaries over time.",
+   "technical": "Intermediate outputs are rank-3 tensors (batch, timesteps, units); only the top layer may return just its final output.",
+   "significance": "A classic way to increase capacity; Google Translate once used seven large stacked LSTM layers.",
+   "example": "GRU(32, return_sequences=True) followed by GRU(32) in Listing 13.23 (p.400).",
+   "misconception": "That you can stack recurrent layers without return_sequences=True; the second layer would receive no sequence.",
+   "related": [
+    "rnn",
+    "gru",
+    "lstm",
+    "capacity"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "gru",
+   "name": "GRU (Gated Recurrent Unit)",
+   "definition": "A recurrent layer very similar to the LSTM, a slightly simpler, streamlined version, introduced in 2014 by Cho et al.",
+   "intuition": "An LSTM with fewer moving parts: one memory instead of two, fewer gates.",
+   "technical": "Not detailed on this page; see the technical_idea in the paragraph notes for the standard update/reset gate equations.",
+   "significance": "One of the two essential Keras RNN layers; cheaper than LSTM.",
+   "example": "layers.GRU(32, recurrent_dropout=0.5, return_sequences=True) (p.400).",
+   "misconception": "That GRU is strictly worse than LSTM; it is simpler and cheaper, and often performs comparably.",
+   "related": [
+    "lstm",
+    "rnn",
+    "stacked_rnn"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "capacity",
+   "name": "Model capacity",
+   "definition": "The representational power of a model, increased by more units per layer or more layers.",
+   "intuition": "The size of the toolbox: more tools let you build more complex things but also make it easier to build nonsense from noise.",
+   "technical": "Workflow rule from this page: increase capacity until overfitting becomes the primary obstacle; if not overfitting badly, you are likely under capacity.",
+   "significance": "Drives the move from one LSTM to two stacked GRUs.",
+   "example": "Going from one 32-unit recurrent layer to two.",
+   "misconception": "That a model which is not overfitting is 'done'; it may simply be too small.",
+   "related": [
+    "overfitting",
+    "regularization",
+    "stacked_rnn"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Unrolling an LSTM layer",
+   "original_code": "inputs = keras.Input(shape=(sequence_length, num_features))\nx = layers.LSTM(32, recurrent_dropout=0.2, unroll=True)(inputs)",
+   "language": "python",
+   "what_it_does": "Defines an input with a fully specified number of timesteps and an LSTM with recurrent dropout (so cuDNN is unavailable) that is unrolled to recover speed.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Callout: 'sequence_length cannot be None.' Unrolling needs the number of timesteps at graph-construction time to make that many copies of the cell."
+    },
+    {
+     "lines": "2",
+     "explanation": "Callout: 'Passes unroll=True to enable unrolling.' recurrent_dropout=0.2 is the kind of option that rules out cuDNN, which is why unrolling is relevant here."
+    }
+   ],
+   "inputs_outputs": "Input: (batch, sequence_length, num_features). Output: (batch, 32), the last output of the LSTM.",
+   "algorithm": "Same LSTM recurrence; the loop over timesteps is expanded into a straight-line graph.",
+   "theory_link": "Trading memory for speed when the cuDNN fast path is not available.",
+   "parameters": [
+    {
+     "name": "unroll=True",
+     "role": "Replace the symbolic loop with N in-lined copies of the cell."
+    },
+    {
+     "name": "recurrent_dropout=0.2",
+     "role": "Recurrent dropout rate; makes the layer ineligible for the cuDNN kernel."
+    },
+    {
+     "name": "sequence_length",
+     "role": "Number of timesteps; must be a concrete integer, not None."
+    }
+   ],
+   "pitfalls": [
+    "Using None for the time axis (variable-length input) is incompatible with unroll=True.",
+    "Memory grows considerably; the page suggests unrolling only for about 100 steps or fewer, while this chapter's sequence_length is 120 (p.382), so measure before relying on it.",
+    "num_features here is not defined in earlier listings, which use raw_data.shape[-1] (14 for the Jena data)."
+   ],
+   "illustrative_code": "# AI-written: compare training-step time with and without unrolling (GPU or CPU)\nimport time, keras\nfrom keras import layers\n\ndef make(unroll):\n    inputs = keras.Input(shape=(120, 14))\n    x = layers.LSTM(32, recurrent_dropout=0.2, unroll=unroll)(inputs)\n    model = keras.Model(inputs, layers.Dense(1)(x))\n    model.compile(optimizer=\"adam\", loss=\"mse\")\n    return model\n\nfor unroll in (False, True):\n    m = make(unroll)\n    m.fit(train_dataset.take(5), verbose=0)       # warm-up / compilation\n    t = time.time(); m.fit(train_dataset.take(50), verbose=0)\n    print(\"unroll=\", unroll, f\"{time.time() - t:.1f}s\")"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "What unrolling does, step by step",
+   "kind": "step_by_step",
+   "body": "Using the RNN pseudocode from p.390:\n\n```\nstate_t = 0\nfor input_t in input_sequence:\n    output_t = f(input_t, state_t)\n    state_t = output_t\n```\n\nUnrolled for N = 3 (beyond the book's text, but exactly what 'in-lining its content N times' means):\n\n```\ns0 = 0\ns1 = f(x1, s0)\ns2 = f(x2, s1)\ns3 = f(x3, s2)\n```\n\nThe arithmetic is identical. The difference is that the compiler now sees three concrete operations it can fuse and schedule, rather than a loop whose trip count is decided at runtime. For N = 120, the graph has 120 copies of the cell, which is why memory and compilation time grow, and why N must be known in advance.",
+  "source": "ai_explanation"
+  },
+  {
+   "title": "Reading the decision logic of section 13.3",
+   "kind": "breakdown",
+   "body": "Inference from pp.396-400:\n\n1. **LSTM(16)** beats the baseline but overfits early (p.388, p.397). Diagnosis: overfitting, so add regularization.\n2. **LSTM(32) + recurrent dropout** no longer overfits, plateaus at val MAE about 2.27-2.3 (p.398). Diagnosis: likely under capacity, so add capacity.\n3. **Two stacked GRUs + recurrent dropout** reach test MAE 2.39 (p.400), a small gain. Diagnosis: diminishing returns from capacity.\n4. Next lever: a different way of presenting the data, **bidirectional RNNs** (p.401).\n\nEach step is chosen by reading the training/validation curves, as the universal workflow prescribes.",
+  "source": "inference"
+  },
+  {
+   "title": "Analogy: the express checkout lane",
+   "kind": "analogy",
+   "body": "cuDNN is the express lane: very fast, but only for shoppers with a standard basket (default arguments). Bring something unusual, such as recurrent dropout, and you are sent to the regular checkout, which handles anything but is two to five times slower, even though you are buying the same number of items (the same computational cost). Unrolling is like pre-scanning your items in a known order: the regular checkout goes faster, but you need a bigger cart (memory), and it only works if you know in advance how many items you have.",
+  "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "An unrolled recurrence",
+   "why": "The sidebar defines unrolling as in-lining the RNN loop N times; this widget shows the LSTM recurrence drawn as N explicit copies of the cell.",
+   "widget": "rnn_unroll",
+   "params": {
+    "timesteps": 5,
+    "cell": "lstm"
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Why intermediate layers need return_sequences=True",
+   "why": "The page says intermediate recurrent layers must return the full sequence (rank-3) for stacking; these are the shapes of the two-GRU stack introduced here (Listing 13.23, p.400).",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "input",
+      "shape": [null, 120, 14]
+     },
+     {
+      "op": "GRU(32, return_sequences=True)",
+      "shape": [null, 120, 32]
+     },
+     {
+      "op": "GRU(32)",
+      "shape": [null, 32]
+     },
+     {
+      "op": "Dropout(0.5)",
+      "shape": [null, 32]
+     },
+     {
+      "op": "Dense(1)",
+      "shape": [null, 1]
+     }
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Recurrent dropout makes RNNs slower on GPU because it adds a lot of computation.",
+   "correction": "The page says the computational cost is the same; the slowdown (2-5x) comes from falling back from the cuDNN kernel to the regular implementation."
+  },
+  {
+   "claim": "unroll=True is always a good idea for speed.",
+   "correction": "It considerably increases memory consumption, is only viable for relatively small sequences (about 100 steps or fewer), and requires a known number of timesteps."
+  },
+  {
+   "claim": "If a model isn't overfitting, it is as good as it can be.",
+   "correction": "The universal workflow says that if you aren't overfitting too badly you are likely under capacity; increase capacity until overfitting becomes the main obstacle."
+  },
+  {
+   "claim": "Every layer in a recurrent stack should use return_sequences=True.",
+   "correction": "Only intermediate layers must; the last recurrent layer can return just its final output when feeding a Dense head."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 398,
+    "note": "Start of the 'On RNN runtime performance' sidebar; Figure 13.11 showing no overfitting."
+   },
+   {
+    "page": 397,
+    "note": "Recurrent dropout and Listing 13.22."
+   },
+   {
+    "page": 392,
+    "note": "return_sequences and the recommendation to specify a complete input shape, which refers to this sidebar."
+   },
+   {
+    "page": 393,
+    "note": "Listing 13.19, stacking RNN layers; LSTM and GRU introduced."
+   },
+   {
+    "page": 382,
+    "note": "sequence_length = 120."
+   }
+  ],
+  "later": [
+   {
+    "page": 400,
+    "note": "Listing 13.23, the stacked GRU model; test MAE 2.39 (8.8% better than the baseline)."
+   },
+   {
+    "page": 401,
+    "note": "13.3.6 Using bidirectional RNNs."
+   },
+   {
+    "page": 404,
+    "note": "Summary on stacked RNNs and recurrent dropout."
+   },
+   {
+    "page": 448,
+    "note": "A GRU is used for the character language model."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 389,
+    "note": "RNNs as loops over timesteps."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 400,
+    "note": "Listing 13.23."
+   },
+   {
+    "page": 393,
+    "note": "Listing 13.19, an earlier stack of SimpleRNN layers."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 400,
+    "note": "Figure 13.12, stacked GRU training curves."
+   }
+  ]
+ },
+ "takeaways": [
+  "Recurrent dropout is not supported by the LSTM/GRU cuDNN kernels; the fallback is generally 2-5x slower on GPU at the same computational cost.",
+  "Unrolling (unroll=True) in-lines the RNN loop N times, which can speed it up but costs considerable memory; use it only for short sequences (about 100 steps or fewer) of known length.",
+  "Once a model no longer overfits but plateaus, increase capacity; if you're not overfitting too badly, you're likely under capacity.",
+  "Capacity comes from more units or more layers; stacking recurrent layers is the classic RNN approach (e.g. seven large LSTM layers in Google Translate).",
+  "Intermediate recurrent layers must use return_sequences=True to output rank-3 sequences.",
+  "The GRU, introduced by Cho et al. in 2014, is a slightly simpler, streamlined LSTM."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why does adding recurrent_dropout to a Keras LSTM make it slower on GPU?",
+   "options": [
+    "It doubles the number of parameters",
+    "It is not supported by the cuDNN kernel, so the layer falls back to a regular implementation that is generally 2-5x slower",
+    "It forces the model to run on CPU",
+    "It requires unroll=True"
+   ],
+   "answer": "It is not supported by the cuDNN kernel, so the layer falls back to a regular implementation that is generally 2-5x slower",
+   "explanation": "The page states this directly and notes that the computational cost is the same. Parameter count is unchanged, the model still runs on GPU, and unrolling is optional.",
+   "page_refs": [
+    399
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Give the two conditions under which unrolling an RNN is viable, according to the sidebar.",
+   "options": [],
+   "answer": "The sequences must be relatively small (around 100 steps or fewer), because unrolling considerably increases memory consumption; and the number of timesteps must be known in advance (the Input() shape has no None entries).",
+   "explanation": "Both are stated in the second sidebar paragraph; the code callout repeats the second ('sequence_length cannot be None').",
+   "page_refs": [
+    399
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "The dropout-regularized LSTM no longer overfits and its validation MAE has plateaued. What does the universal workflow recommend, and why?",
+   "options": [],
+   "answer": "Increase capacity (more units or more layers, e.g. stacking recurrent layers), because if you aren't overfitting too badly you're likely under capacity; keep increasing until overfitting becomes the primary obstacle.",
+   "explanation": "This is the reasoning of the first paragraph of 13.3.5.",
+   "page_refs": [
+    399
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "A first GRU layer receives input of shape (batch, 120, 14) and is followed by a second GRU layer. What must the first layer output?",
+   "options": [
+    "(batch, 32), using return_sequences=False",
+    "(batch, 120, 32), using return_sequences=True",
+    "(batch, 14), the last input timestep",
+    "(120, 32), dropping the batch axis"
+   ],
+   "answer": "(batch, 120, 32), using return_sequences=True",
+   "explanation": "Intermediate layers must return their full output sequence, a rank-3 tensor, so the next recurrent layer has a sequence to process. A rank-2 output would give it nothing to iterate over; the other options are not valid layer outputs.",
+   "page_refs": [
+    392,
+    399
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "Why does unrolling require that the number of timesteps be known in advance?",
+   "options": [],
+   "answer": "Because unrolling builds the computation as N explicit copies of the cell; N must be fixed when the graph is constructed, so the time axis of the Input shape cannot be None.",
+   "explanation": "Unrolling is 'removing the loop and simply in-lining its content N times'; a variable N cannot be in-lined.",
+   "page_refs": [
+    399
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "How does the page describe the GRU relative to the LSTM, and who introduced it?",
+   "options": [],
+   "answer": "As very similar to an LSTM, a slightly simpler, streamlined version of the LSTM architecture, introduced in 2014 by Cho et al.",
+   "explanation": "Stated in the last paragraph and footnote 6.",
+   "page_refs": [
+    399
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you explain to someone why a 120-step LSTM with recurrent dropout might train faster on a CPU than on a GPU, and what you could try to speed it up on the GPU?",
+   "options": [],
+   "answer": "Small matrix products and a sequential loop leave the GPU underused, and recurrent dropout rules out cuDNN (2-5x slower fallback). Options: run on CPU, drop recurrent dropout to regain cuDNN, or try unroll=True (memory permitting, since 120 steps is above the suggested ~100).",
+   "explanation": "Combines the two halves of the sidebar (pp.398-399).",
+   "page_refs": [
+    398,
+    399
+   ]
+  }
+ ]
+}

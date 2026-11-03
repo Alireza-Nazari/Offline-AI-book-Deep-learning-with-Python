@@ -1,0 +1,391 @@
+{
+  "page_id": "page_282",
+  "pdf_page": 282,
+  "printed_page": "258",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:30:24Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean extraction; two body elements (e04, e09) each merge several printed paragraphs, which are given separate notes. The split constructor name `from_` / `preset()` is a line-wrap artifact for `from_preset()`."
+  },
+  "overview": {
+    "title": "Loading the Xception backbone with KerasHub",
+    "chapter": "8 Image classification",
+    "section": "8.3 Using a pretrained model",
+    "subsection": "8.3.1 Feature extraction with a pretrained model",
+    "main_topic": "Choosing which part of a pretrained model to reuse, and instantiating the ImageNet-trained Xception convolutional base (backbone) plus its matching preprocessing via KerasHub.",
+    "central_idea": "For dogs vs. cats the authors deliberately reuse only the convolutional base of an ImageNet-trained Xception model, loaded with `keras_hub.models.Backbone.from_preset(\"xception_41_imagenet\")`; to use it correctly, input images must be rescaled exactly as during pretraining, which KerasHub's `ImageConverter` handles.",
+    "importance": "This is the moment the chapter switches from training a small ConvNet from scratch to standing on the shoulders of a large pretrained network. It introduces KerasHub, the library used for every pretrained model in the rest of the book, and the vocabulary (backbone, preset, image converter) that recurs in chapters 10, 11, 15 and beyond.",
+    "learning_objectives": [
+      "Explain why the authors reuse only the convolutional base even though ImageNet contains dog and cat classes.",
+      "Describe what KerasHub is and what it provides (architectures + downloadable pretrained weights).",
+      "Instantiate a pretrained backbone with `Backbone.from_preset()` and interpret the preset name `xception_41_imagenet`.",
+      "Explain why input preprocessing must match the pretraining checkpoint and how `ImageConverter` solves this."
+    ],
+    "prerequisites": [
+      "Convolutional base vs. densely connected classifier (p.280-281)",
+      "Generality of early vs. late convolutional features (p.281)",
+      "The dogs-vs-cats dataset and the from-scratch baseline (p.266-279)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page finishes the argument begun on p.281 about *which* part of a pretrained network to reuse, then moves to practice.\n\n- **Depth of reuse.** If a new dataset differs a lot from the original one, you might reuse only the first few layers (the most generic features) rather than the whole convolutional base.\n- **Why not reuse the classifier here?** ImageNet already contains many dog and cat classes, so the original dense layers would probably help. The authors *choose not to* use them, in order to demonstrate the more general case where the new task's classes do not overlap the original ones. The plan: run cat and dog images through the pretrained **convolutional base**, then train a new dogs-versus-cats classifier on the resulting features.\n- **KerasHub.** All pretrained models in the book come from KerasHub, a separate package (`pip install keras-hub`, preinstalled on Colab/Kaggle) containing Keras implementations of popular architectures (Xception, ResNet, EfficientNet, MobileNet, and larger generative models) together with downloadable pretrained weights.\n- **Listing 8.23** loads the base with `keras_hub.models.Backbone.from_preset(\"xception_41_imagenet\")`. KerasHub calls the feature extractor without its classification head a **backbone**; `from_preset()` downloads both configuration and weights.\n- **The \"41\"** in the preset name is the model's depth: 41 trainable layers (conv and dense), by far the deepest model in the book so far.\n- **Preprocessing must match.** Every pretrained ConvNet was trained on images rescaled and resized in a particular way (some expect pixels in `[0, 1]`, others in `[-1, 1]`). Feeding a different range would force the network to relearn its features. KerasHub's `ImageConverter` layer, also created with `from_preset()`, applies the correct rescaling for a given checkpoint (shown on the next page, Listing 8.24).",
+  "paragraphs": [
+    {
+      "ref": "p282_e03",
+      "excerpt": "only the first few layers of the model to do feature extraction",
+      "what_it_says": "This sentence completes the thought from p.281: if your new dataset differs a lot from the dataset the original model was trained on, you may be better off reusing only the first few layers for feature extraction rather than the entire convolutional base.",
+      "what_it_means": "Early layers encode local, generic patterns (edges, colors, textures) that transfer to almost any image domain; deeper layers encode increasingly task-specific concepts (\"cat ear\", \"dog eye\"). When the target domain is far from ImageNet (e.g. medical scans, satellite imagery), the deep, specialized features may be irrelevant or misleading, so you cut the network lower.",
+      "why_it_matters": "It shows that transfer learning has a tunable 'cut point', not just a binary choice between reusing everything or nothing. Choosing the cut point is a practical design decision driven by domain similarity.",
+      "technical_idea": "Truncating a pretrained network at an intermediate layer and using that layer's activations as features; the lower the cut, the more generic (and usually higher-resolution, lower-level) the features.",
+      "terminology": [
+        {"term": "feature extraction", "meaning": "Running new data through (part of) a pretrained network and using its activations as inputs to a newly trained model."}
+      ],
+      "connections": [
+        "p.281: preceding sentence explains that earlier layers extract local, highly generic feature maps while higher layers extract more abstract concepts."
+      ]
+    },
+    {
+      "ref": "p282_e04",
+      "excerpt": "In this case, because the ImageNet class set contains multiple dog and cat classes",
+      "what_it_says": "Since ImageNet includes several dog and cat classes, reusing the original model's densely connected layers would probably be beneficial. The authors nonetheless choose not to, so that the example covers the general case in which the new task's classes do not overlap the original class set. They will use the pretrained convolutional base to extract features from cat and dog images and train a new dogs-vs-cats classifier on top.",
+      "what_it_means": "This is a pedagogical choice, not a technical necessity. For this particular problem, ImageNet's classifier head already 'knows' about many dog breeds and cat types, so its outputs would be informative. But most real transfer-learning problems (furniture, defects, X-rays) have no matching classes, and then only the convolutional base is useful.",
+      "why_it_matters": "It prevents a misreading: the book is not claiming the dense head is useless for dogs vs. cats, only that the general recipe is 'reuse the base, replace the head'. Readers should remember that when class sets overlap, reusing more of the model is a legitimate option.",
+      "technical_idea": "Swapping the classification head: keep the pretrained convolutional base fixed (as a feature extractor) and train a new randomly initialized classifier for the new label set.",
+      "terminology": [
+        {"term": "class set", "meaning": "The set of labels a classifier was trained to predict (1,000 classes for ImageNet)."},
+        {"term": "densely connected layers", "meaning": "The fully connected (Dense) layers at the top of the original model that map features to class probabilities."}
+      ],
+      "connections": [
+        "p.281: figure 8.12 shows swapping classifiers while keeping the same convolutional base.",
+        "p.280: ImageNet has 1.4 million labeled images and 1,000 classes."
+      ]
+    },
+    {
+      "ref": "p282_e04",
+      "excerpt": "We will use the KerasHub library to create all pretrained models used in this book.",
+      "what_it_says": "KerasHub is introduced as the library for every pretrained model in the book. It provides Keras implementations of popular architectures together with pretrained weights you can download, including ConvNets such as Xception, ResNet, EfficientNet and MobileNet, and larger generative models used in later chapters. The next step is to instantiate Xception trained on ImageNet.",
+      "what_it_means": "Instead of re-implementing a complex architecture layer by layer and then somehow obtaining weights that match it exactly, you ask KerasHub for a named checkpoint. The library guarantees the architecture code and the weights fit together.",
+      "why_it_matters": "Using a pretrained model requires three things to match exactly: the architecture, the weights, and the preprocessing. KerasHub packages all three, which is why the book relies on it from here on (Xception again in chapter 10, SAM in chapter 11, RoBERTa in chapter 15).",
+      "terminology": [
+        {"term": "KerasHub", "meaning": "A Keras library of pretrained model architectures and weights (vision, text, generative)."},
+        {"term": "Xception", "meaning": "A ConvNet architecture built mainly from depthwise separable convolutions with residual connections, trained here on ImageNet."}
+      ],
+      "connections": [
+        "p.316: chapter 10 instantiates the same Xception backbone with KerasHub 'exactly as we did in chapter 8'.",
+        "p.480: chapter 15 uses KerasHub's from_preset() to load the RoBERTa tokenizer and model.",
+        "p.343: chapter 11 loads the Segment Anything Model through KerasHub."
+      ]
+    },
+    {
+      "ref": "p282_e05",
+      "excerpt": "NOTE KerasHub comes as a separate package from Keras. This package is preinstalled",
+      "what_it_says": "KerasHub is distributed separately from Keras. It is preinstalled on Colab and Kaggle notebooks; elsewhere you install it with `pip install keras-hub`.",
+      "what_it_means": "`import keras` alone does not give you `keras_hub`; running Listing 8.23 on a local machine without installing the package raises a `ModuleNotFoundError`.",
+      "why_it_matters": "A practical setup detail that avoids the most common first error when following along outside hosted notebooks.",
+      "terminology": [
+        {"term": "pip install keras-hub", "meaning": "Command to install the KerasHub package (note the hyphen in the pip name versus the underscore in `import keras_hub`)."}
+      ],
+      "connections": []
+    },
+    {
+      "ref": "p282_e08",
+      "excerpt": "You’ll note a couple of things. First, KerasHub uses the term backbone",
+      "what_it_says": "KerasHub calls the feature-extractor network without its classification head a *backbone* (easier to type than 'convolutional base'). It also uses a special constructor, `from_preset()`, that downloads the configuration and the weights for the Xception model.",
+      "what_it_means": "'Backbone' and 'convolutional base' are synonyms in this context. A *preset* is a named bundle: architecture hyperparameters (configuration) plus trained weights. `from_preset()` builds the model from that configuration and then loads the weights into it.",
+      "why_it_matters": "The backbone/head vocabulary is standard across modern deep learning libraries and will be used throughout the book. Knowing that `from_preset()` fetches both config and weights explains why the first call is slow (download) and later calls are fast (cache).",
+      "technical_idea": "Separation of a model into a reusable backbone (representation learning) and a task-specific head (prediction) is the structural basis of transfer learning.",
+      "terminology": [
+        {"term": "backbone", "meaning": "The feature-extraction part of a network, without the classification head; same as the convolutional base."},
+        {"term": "classification head", "meaning": "The final layers mapping features to class predictions."},
+        {"term": "from_preset()", "meaning": "KerasHub constructor that downloads a named model's configuration and pretrained weights and returns a ready model."}
+      ],
+      "connections": [
+        "p.280: the first part of a ConvNet is called the convolutional base or backbone.",
+        "p.324: for Grad-CAM, chapter 10 needs the whole Xception model including the classification head, via KerasHub's task API."
+      ]
+    },
+    {
+      "ref": "p282_e09",
+      "excerpt": "What’s that “41” in the name of the model we are using?",
+      "what_it_says": "Pretrained ConvNets are conventionally named by depth. The 41 in `xception_41_imagenet` means the model has 41 trainable layers (conv and dense) stacked on top of each other, making it by far the deepest model used in the book so far.",
+      "what_it_means": "Depth here counts only layers with trainable weights (convolutions and dense layers), not pooling, activation, normalization-free reshaping, etc. A preset name thus encodes architecture family (`xception`), depth (`41`) and training dataset (`imagenet`).",
+      "why_it_matters": "Reading preset names lets you choose models knowingly (compare ResNet-50 vs. ResNet-152, or `sam_huge_sa1b` on p.343). It also emphasizes the jump in capacity relative to the small from-scratch ConvNet of section 8.2.",
+      "terminology": [
+        {"term": "depth", "meaning": "Number of stacked trainable layers in a network."}
+      ],
+      "connections": [
+        "p.269: the from-scratch dogs-vs-cats ConvNet built in section 8.2.3 was far shallower.",
+        "p.343: the preset name `sam_huge_sa1b` similarly encodes model, size and dataset."
+      ]
+    },
+    {
+      "ref": "p282_e09",
+      "excerpt": "There’s one more missing piece we need before we can use this model.",
+      "what_it_says": "Every pretrained ConvNet rescales and resizes images in a specific way before pretraining, and our inputs must match; otherwise the model would need to relearn feature extraction for a totally different input range. Rather than tracking which models expect `[0, 1]` and which `[-1, 1]` pixel ranges, we can use KerasHub's `ImageConverter` layer, which rescales images to match the checkpoint and has the same `from_preset()` constructor.",
+      "what_it_means": "The learned filters and biases are calibrated to a particular input distribution. If Xception saw pixels in `[-1, 1]` during training but you feed raw `[0, 255]` values, every activation would be shifted and scaled far outside what the weights were tuned for, and the 'pretrained' features would be garbage. Pairing the backbone with its own `ImageConverter` preset eliminates this class of bug.",
+      "why_it_matters": "Preprocessing mismatch is one of the most common silent failures in transfer learning: the code runs, but accuracy is poor. The authors make it a first-class step of the workflow.",
+      "technical_idea": "Train/inference input distribution must match. For a checkpoint trained on `[-1, 1]` inputs, raw pixels $p\\in[0,255]$ must be mapped by $x = p/127.5 - 1$; for `[0, 1]` checkpoints by $x = p/255$ (beyond the book: these are the standard formulas, not shown on this page).",
+      "terminology": [
+        {"term": "ImageConverter", "meaning": "A KerasHub preprocessing layer that resizes/rescales images to what a given pretrained checkpoint expects."},
+        {"term": "checkpoint", "meaning": "A saved set of trained weights (here, Xception trained on ImageNet)."}
+      ],
+      "connections": [
+        "p.283: Listing 8.24 instantiates the preprocessing paired with the Xception model.",
+        "p.317: chapter 10 again stresses applying model-specific preprocessing so images match the Xception pretraining range.",
+        "p.271: section 8.2.4 covered data preprocessing for the from-scratch model."
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "transfer_learning",
+      "name": "Transfer learning (feature extraction)",
+      "definition": "Reusing representations learned by a model trained on a large dataset to solve a new, typically smaller problem.",
+      "intuition": "A network that learned to recognize 1,000 kinds of objects already 'knows how to see' edges, textures and object parts; you only need to teach it the new decision on top.",
+      "technical": "Here: run images through the frozen ImageNet-trained Xception backbone, take its output feature maps, and train a new classifier on them for dogs vs. cats.",
+      "significance": "Makes deep learning effective on small datasets such as the 2,000-ish training images of section 8.2.",
+      "example": "Using ImageNet Xception features to classify furniture or cats vs. dogs.",
+      "misconception": "That transfer only works when the new classes appear in the original dataset. The authors deliberately avoid relying on the overlap to show the general case.",
+      "related": ["backbone", "pretrained_model", "convolution"],
+      "source": "book"
+    },
+    {
+      "id": "backbone",
+      "name": "Backbone (convolutional base)",
+      "definition": "The feature-extractor portion of a network, without its classification head.",
+      "intuition": "The 'eyes' of the model; the head is the 'decision'.",
+      "technical": "In KerasHub, `keras_hub.models.Backbone` subclasses return feature maps rather than class probabilities.",
+      "significance": "The reusable part in transfer learning; its representations are generic and retain spatial information.",
+      "example": "`conv_base = keras_hub.models.Backbone.from_preset(\"xception_41_imagenet\")`.",
+      "misconception": "That the backbone outputs class predictions. It outputs feature maps; a head must be added.",
+      "related": ["transfer_learning", "classification_head"],
+      "source": "book"
+    },
+    {
+      "id": "model_preset",
+      "name": "Preset and from_preset()",
+      "definition": "A named bundle of model configuration and pretrained weights, instantiated with the `from_preset()` constructor.",
+      "intuition": "Like ordering a dish by name instead of listing every ingredient and step.",
+      "technical": "`from_preset()` downloads (and caches) the config and weights, builds the architecture from the config, and loads the weights. The same constructor exists on backbones and on preprocessing layers like `ImageConverter`.",
+      "significance": "Guarantees architecture/weights/preprocessing consistency across the book's pretrained models.",
+      "example": "`xception_41_imagenet`: Xception family, 41 trainable layers, trained on ImageNet.",
+      "misconception": "That the preset only provides weights; it also provides the configuration.",
+      "related": ["backbone", "image_converter"],
+      "source": "book"
+    },
+    {
+      "id": "image_converter",
+      "name": "Matching input preprocessing (ImageConverter)",
+      "definition": "The resizing and rescaling of input images to the exact form used during a checkpoint's pretraining.",
+      "intuition": "A pretrained model is like an instrument calibrated for one unit system; feeding it a different unit gives meaningless readings.",
+      "technical": "Some checkpoints expect pixel values in `[0, 1]`, others in `[-1, 1]`. KerasHub's `ImageConverter.from_preset(...)` applies the right transformation for a given preset.",
+      "significance": "Mismatched preprocessing would force the model to relearn feature extraction, defeating the purpose of pretraining.",
+      "example": "Pairing `ImageConverter.from_preset(\"xception_41_imagenet\")` with the Xception backbone (Listing 8.24, p.283).",
+      "misconception": "That a ConvNet is robust to any input scale; its weights and biases are tuned to a specific range.",
+      "related": ["backbone", "model_preset", "data_preprocessing"],
+      "source": "book"
+    },
+    {
+      "id": "network_depth",
+      "name": "Network depth in model names",
+      "definition": "The number of stacked trainable (conv and dense) layers, often encoded in a pretrained model's name.",
+      "intuition": "A count of how many learned transformation stages the data passes through.",
+      "technical": "Xception-41 has 41 trainable layers; similar conventions: ResNet-50, ResNet-152.",
+      "significance": "Depth correlates with capacity and compute cost, guiding model choice.",
+      "example": "`xception_41_imagenet` is the deepest model in the book up to this point.",
+      "misconception": "That the number counts every Keras layer object; per the book it counts trainable conv and dense layers.",
+      "related": ["backbone"],
+      "source": "book"
+    }
+  ],
+  "math": [],
+  "code": [
+    {
+      "id": "c1",
+      "listing": "8.23",
+      "title": "Instantiating the Xception convolutional base",
+      "original_code": "import keras_hub\n\nconv_base = keras_hub.models.Backbone.from_preset(\"xception_41_imagenet\")",
+      "language": "python",
+      "what_it_does": "Imports KerasHub and builds the Xception backbone (convolutional base, no classification head) with its ImageNet-pretrained weights downloaded from the named preset.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Imports the separately installed KerasHub package."},
+        {"lines": "3", "explanation": "`Backbone.from_preset(\"xception_41_imagenet\")` downloads the configuration and weights for the 41-layer Xception trained on ImageNet and returns a Keras model that maps images to feature maps. The result is stored as `conv_base`."}
+      ],
+      "inputs_outputs": "Input: the preset name string. Output: a Keras model (`conv_base`) that takes image batches and returns convolutional feature maps. Side effect: on first call, files are downloaded and cached locally.",
+      "algorithm": "Look up preset -> download/cached config + weights -> construct architecture from config -> load weights.",
+      "theory_link": "Implements the 'keep the convolutional base, replace the classifier' strategy of figure 8.12 (p.281): only the backbone is loaded, so a new head can be trained for dogs vs. cats.",
+      "parameters": [
+        {"name": "\"xception_41_imagenet\"", "role": "Preset identifier: architecture family (Xception), depth (41 trainable layers), training dataset (ImageNet)."}
+      ],
+      "pitfalls": [
+        "Requires `pip install keras-hub` outside Colab/Kaggle.",
+        "Needs internet access the first time to download weights.",
+        "The backbone does not include preprocessing; images must be passed through the matching `ImageConverter` (Listing 8.24, p.283) first."
+      ],
+      "illustrative_code": "# AI-written: quick inspection of the backbone (not from the book)\nconv_base.summary()\nprint(conv_base.count_params())"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why a wrong input range breaks pretrained features",
+      "kind": "numerical",
+      "body": "Beyond the book: suppose a first-layer filter was trained on inputs in $[-1, 1]$ and has learned weights summing roughly to zero so that it responds to edges, plus a bias $b=-0.2$ that acts as a threshold. A uniform gray patch has value $0$ in $[-1,1]$ scale, so the response is $\\approx -0.2$ and ReLU outputs $0$ (no edge, correct). If you feed the same patch in $[0, 255]$ scale (value $127.5$) to a filter whose weights do *not* sum exactly to zero (say they sum to $0.05$), the response becomes $0.05\\times127.5 - 0.2 \\approx 6.2$: a strong false 'edge'. Errors like this compound through 41 layers. That is the 'relearn how to extract features' problem the authors warn about.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Choosing how much of a pretrained network to reuse",
+      "kind": "breakdown",
+      "body": "Synthesizing p.281-282:\n\n1. **New classes overlap the original ones and data are similar** (dogs vs. cats on ImageNet): you *could* reuse the whole model including the dense head.\n2. **New classes differ, images similar** (furniture photos): reuse the full convolutional base, train a new head. This is the book's chosen path.\n3. **Images very different** (e.g. microscopy): reuse only the first few layers, whose edge/texture features stay generic.\n\nThe book's example deliberately takes option 2 so that the recipe generalizes.",
+      "source": "inference"
+    },
+    {
+      "title": "Backbone and head as a camera and a judge",
+      "kind": "analogy",
+      "body": "Think of the backbone as a high-quality camera-plus-image-processor that turns raw pixels into a rich description ('furry texture here, pointed ear there'), and the head as a judge who reads that description and decides 'cat' or 'dog'. Transfer learning keeps the camera and hires a new judge. `ImageConverter` makes sure you load the film the camera was designed for.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "The feature-extraction pipeline being assembled",
+      "why": "The page sets up the components: matching preprocessing (ImageConverter), the pretrained Xception backbone, and a new dogs-vs-cats classifier that replaces ImageNet's head.",
+      "mermaid": "flowchart LR\n  A[Cat/dog image] --> B[ImageConverter.from_preset\\nrescale to checkpoint range]\n  B --> C[Xception backbone\\nxception_41_imagenet\\npretrained, reused]\n  C --> D[Feature maps]\n  D --> E[New dense classifier\\ntrained from scratch]\n  E --> F[P dog]\n  C -.-> G[Original ImageNet head\\n1000 classes, discarded]"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "The ImageNet dense classifier is useless for dogs vs. cats.",
+      "correction": "The authors say it would likely be beneficial because ImageNet contains several dog and cat classes; they skip it only to demonstrate the general case."
+    },
+    {
+      "claim": "A backbone is a complete classifier.",
+      "correction": "A backbone is the feature extractor without the classification head; it outputs feature maps, not class probabilities."
+    },
+    {
+      "claim": "Any reasonable pixel scaling works with a pretrained model.",
+      "correction": "Inputs must match the checkpoint's pretraining range (e.g. `[0, 1]` vs `[-1, 1]`); otherwise the learned features no longer apply. Use the matching `ImageConverter`."
+    },
+    {
+      "claim": "KerasHub ships with Keras.",
+      "correction": "It is a separate package (`pip install keras-hub`), preinstalled only on Colab and Kaggle."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 280, "note": "Introduces pretrained models, feature extraction, and the term convolutional base/backbone."},
+      {"page": 281, "note": "Figure 8.12 and the argument for reusing only the convolutional base; generality depends on layer depth."},
+      {"page": 269, "note": "The from-scratch ConvNet for dogs vs. cats that the pretrained approach will be compared against."}
+    ],
+    "later": [
+      {"page": 283, "note": "Listing 8.24 creates the ImageConverter and presents the two ways to do feature extraction."},
+      {"page": 286, "note": "Feature extraction together with data augmentation: freezing the convolutional base."},
+      {"page": 316, "note": "Chapter 10 reuses the same Xception backbone to visualize filters."},
+      {"page": 324, "note": "Chapter 10 uses KerasHub's task API to load the full Xception with its classification head for Grad-CAM."},
+      {"page": 480, "note": "Chapter 15 loads RoBERTa with the same from_preset() pattern."}
+    ],
+    "prerequisites": [
+      {"page": 280, "note": "Definition of feature extraction and of the convolutional base."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 283, "note": "Listing 8.24: instantiating the preprocessing paired with Xception."},
+      {"page": 316, "note": "Listing 10.7 instantiates the Xception convolutional base again."}
+    ],
+    "related_figures": [
+      {"page": 281, "note": "Figure 8.12: swapping classifiers while keeping the same convolutional base."}
+    ]
+  },
+  "takeaways": [
+    "When the new data differ strongly from the original data, consider reusing only the first few layers.",
+    "ImageNet's dense head could help for dogs vs. cats, but the book reuses only the convolutional base to show the general case.",
+    "KerasHub (a separate package) provides pretrained architectures + weights; `Backbone.from_preset(\"xception_41_imagenet\")` loads Xception's convolutional base.",
+    "'Backbone' = convolutional base without the classification head; '41' = number of trainable conv/dense layers.",
+    "Inputs must be preprocessed exactly as during pretraining; KerasHub's `ImageConverter.from_preset()` handles this."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "Why do the authors avoid reusing Xception's original densely connected classifier for the dogs-vs-cats task?",
+      "options": [
+        "Because ImageNet contains no dog or cat classes",
+        "To demonstrate the general case where the new classes do not overlap the original class set",
+        "Because dense layers cannot be loaded from KerasHub",
+        "Because the dense head has too many parameters to fit in memory"
+      ],
+      "answer": "To demonstrate the general case where the new classes do not overlap the original class set",
+      "explanation": "The page states that reusing the dense layers would likely be beneficial (ImageNet has several dog and cat classes) but they choose not to so as to cover the general case. Option 1 contradicts the text; options 3 and 4 are not mentioned and are false (KerasHub can load full models, see p.324).",
+      "page_refs": [282]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "What does each part of the preset name `xception_41_imagenet` indicate?",
+      "options": [],
+      "answer": "`xception` is the architecture family, `41` is the depth (41 trainable conv and dense layers), and `imagenet` is the dataset the weights were trained on.",
+      "explanation": "The page explains the 41 as the count of trainable layers and states the model is Xception trained on ImageNet.",
+      "page_refs": [282]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "Explain why feeding images with pixel values in [0, 1] to a model pretrained on [-1, 1] inputs is harmful, and how KerasHub avoids the issue.",
+      "options": [],
+      "answer": "The pretrained weights are tuned to the input distribution seen in pretraining; a different range shifts and scales every activation, so the learned features no longer fire correctly and the model would have to relearn feature extraction. KerasHub's `ImageConverter.from_preset()` applies the rescaling that matches the checkpoint.",
+      "explanation": "Directly from the last paragraph of the page; the alternative of manually tracking each model's range is what ImageConverter replaces.",
+      "page_refs": [282, 283]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "In KerasHub terminology, what is a 'backbone'?",
+      "options": [
+        "The full pretrained model including the classification head",
+        "The preprocessing layer that rescales images",
+        "The feature-extractor network without the classification head",
+        "The downloaded weight file"
+      ],
+      "answer": "The feature-extractor network without the classification head",
+      "explanation": "The page defines backbone as the underlying feature extractor network without the classification head (= convolutional base). The full model with head is a 'task' (p.324); preprocessing is ImageConverter; weights are part of the preset.",
+      "page_refs": [282, 324]
+    },
+    {
+      "id": "q5",
+      "type": "short",
+      "question": "When might you reuse only the first few layers of a pretrained model instead of the whole convolutional base?",
+      "options": [],
+      "answer": "When the new dataset differs a lot from the dataset the original model was trained on, since only early layers' generic features (edges, colors, textures) transfer well.",
+      "explanation": "The page's opening sentence, completing the argument from p.281 about layer generality.",
+      "page_refs": [281, 282]
+    },
+    {
+      "id": "q6",
+      "type": "mcq",
+      "question": "What does `from_preset()` do when called on `keras_hub.models.Backbone`?",
+      "options": [
+        "Trains Xception from scratch on ImageNet",
+        "Downloads the configuration and weights for the named model and builds it",
+        "Only downloads the weights; the architecture must be defined manually",
+        "Converts a Keras model into a preset file"
+      ],
+      "answer": "Downloads the configuration and weights for the named model and builds it",
+      "explanation": "The page says it downloads the configuration and weights. No training happens (option 1), the architecture comes from the configuration (option 3), and it loads rather than saves (option 4).",
+      "page_refs": [282]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Without looking, write the two lines of Listing 8.23 and state what you must install first if you are not on Colab or Kaggle.",
+      "options": [],
+      "answer": "`import keras_hub` and `conv_base = keras_hub.models.Backbone.from_preset(\"xception_41_imagenet\")`; install with `pip install keras-hub`.",
+      "explanation": "Checks recall of the listing and the NOTE about KerasHub being a separate package.",
+      "page_refs": [282]
+    }
+  ]
+}

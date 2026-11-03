@@ -1,0 +1,282 @@
+{
+ "page_id": "page_365",
+ "pdf_page": 365,
+ "printed_page": "341",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:16:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Figure 12.5 caption (\"YOLO outputs a bounding box prediction and class label for each image region\") describes model outputs, but the figure, produced by `draw_prediction(metadata[0][\"path\"], box_array[0], class_array[0], cutoff=1.0)`, visualizes the training targets built in listing 12.7, not model predictions. The same caption is also reused for figure 12.3 on p.359, which shows raw COCO annotations."
+  ],
+  "extraction_quality": "Good. Listing 12.8 and its two callouts match the page image. Figure 12.5 is a photograph and has no extractable labels; it was read from the image: a landscape photo of a giraffe next to a tree, padded with white bands at top and bottom, overlaid with a 6 x 6 black grid; a tinted block of cells on the right half and one box labeled 'giraffe 1.00'. Exact cell coverage of the tint is approximate."
+ },
+ "overview": {
+  "title": "Listing 12.8: drawing the YOLO grid, class map and boxes (figure 12.5)",
+  "chapter": "12 Object detection",
+  "section": "12.2 Training a YOLO model from scratch",
+  "subsection": "12.2.3 Readying the COCO data for the YOLO model",
+  "main_topic": "A reusable `draw_prediction` function that overlays the 6 x 6 grid with class-colored cells and draws every box whose confidence is at or above a cutoff, applied to the first training target",
+  "central_idea": "`draw_prediction` works on grid-shaped data, so it can display both targets (now) and model predictions (later). It colors each grid cell by its class label, converts each cell's box back to image coordinates with `from_grid`, and draws it with its class name and confidence, filtering by `cutoff`. Applied to the first target, it shows a single 'giraffe 1.00' box over a block of giraffe-labeled cells.",
+  "importance": "Visual checks of the targets catch encoding bugs before an expensive training run. The same function is reused later to inspect what the trained model predicts (p.368-370), where the cutoff becomes essential.",
+  "learning_objectives": [
+   "Explain each part of `draw_prediction`: drawing the image, the class-map cells, and the boxes above a cutoff.",
+   "Explain how grid-cell rectangles are computed from `(xi, yi)` and `grid_size`.",
+   "Explain the role of `cutoff`, `from_grid` and `max(confidence, 0)`.",
+   "Interpret figure 12.5 as a visualization of the training targets for one image."
+  ],
+  "prerequisites": [
+   "`draw_image`, `draw_box`, `label_to_color` from listing 12.4 (p.358-359)",
+   "`from_grid` (p.363-364) and the targets from listing 12.7 (p.364)",
+   "Basic Matplotlib: figures, axes, patches"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Listing 12.8** defines `draw_prediction(image, boxes, classes, cutoff=None)`, a visualization for grid-shaped YOLO data:\n\n1. It creates a figure (`dpi=300`) and draws the image with `draw_image`, which places it in the unit square with (0, 0) at the top left, padding non-square images (p.359).\n2. **Grid and class map** (callout: *draws the YOLO output grid and class probability map*): for each row `yi` and column `xi` of `classes`, it picks `label_to_color(label)` if the label is non-zero and `\"none\"` otherwise, computes the cell's rectangle `(xi/6, yi/6, 1/6, 1/6)`, and adds a `Rectangle` with a black edge and the class color at `alpha=0.5`. Every cell gets a black outline, so the full 6 x 6 grid is visible.\n3. **Boxes** (callout: *draws all boxes at each grid location above our cutoff*): for each cell it splits the 5-vector into `box[:4]` and `confidence = box[4]`; if no cutoff is given or `confidence >= cutoff`, it converts the box to image coordinates with `from_grid((xi, yi), box)`, takes the label from `classes[yi, xi]`, and calls `draw_box` with the caption `f\"{name} {max(confidence, 0):.2f}\"`, where `name` comes from `keras_hub.utils.coco_id_to_name`.\n\nThe call `draw_prediction(metadata[0][\"path\"], box_array[0], class_array[0], cutoff=1.0)` draws the targets of the first (shuffled) image. With `cutoff=1.0`, only the real boxes (confidence 1) are drawn.\n\n**Figure 12.5** shows the result: a landscape photo of a giraffe beside a tree, with white padding rows at top and bottom, a 6 x 6 grid, a tinted block of cells covering the giraffe's extent, and one box labeled **\"giraffe 1.00\"**.",
+ "paragraphs": [],
+ "concepts": [
+  {
+   "id": "target_visualization",
+   "name": "Visualizing targets before training",
+   "definition": "Drawing the encoded labels back onto the input image to check that the data preparation is correct.",
+   "intuition": "Proofread the answer key before giving the exam.",
+   "technical": "`draw_prediction` decodes the grid encoding with `from_grid` and the cell geometry `v / grid_size`; if the decoded box sits on the object, both `to_grid` and `from_grid` are consistent.",
+   "significance": "Coordinate bugs (swapped axes, wrong offsets, wrong padding) would otherwise silently prevent learning.",
+   "example": "Figure 12.5: the decoded giraffe box lines up with the giraffe.",
+   "misconception": "Figure 12.5 is not a model prediction, despite its caption; it shows targets.",
+   "related": ["yolo_targets", "yolo_box_encoding"],
+   "source": "book"
+  },
+  {
+   "id": "confidence_cutoff",
+   "name": "Confidence cutoff",
+   "definition": "A threshold below which predicted boxes are not drawn (or not reported).",
+   "intuition": "Only show boxes the model, or the label data, is sure about.",
+   "technical": "`if not cutoff or confidence >= cutoff:`. `cutoff=None` draws all 36 boxes; `cutoff=1.0` draws only target boxes with confidence exactly 1.",
+   "significance": "Turns the fixed 36 box slots into a variable set of detections; crucial for model predictions, where most confidences are small but non-zero.",
+   "example": "`draw_prediction(..., cutoff=1.0)` on the targets.",
+   "misconception": "`cutoff=0.0` does not mean 'draw boxes with confidence >= 0'; because 0.0 is falsy, `not cutoff` is True and every box is drawn regardless.",
+   "related": ["confidence_score"],
+   "source": "book"
+  },
+  {
+   "id": "class_probability_map",
+   "name": "Class probability map (drawn)",
+   "definition": "The per-cell class labels, drawn as semi-transparent colored cells.",
+   "intuition": "A coarse paint-by-numbers layer over the image.",
+   "technical": "Cells with label 0 get `fc=\"none\"` (only the black outline); others get the label's HSV-generated color at `alpha=0.5`.",
+   "significance": "Shows where the model is told each class lives, and later where it predicts each class.",
+   "example": "The tinted cells over the giraffe in figure 12.5.",
+   "misconception": "The colored cells are not boxes; only `draw_box` draws boxes.",
+   "related": ["yolo", "yolo_targets"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Rectangle of grid cell (xi, yi)",
+   "latex": "(x, y, w, h) = \\left(\\frac{x_i}{S},\\ \\frac{y_i}{S},\\ \\frac{1}{S},\\ \\frac{1}{S}\\right)",
+   "source_text": "x, y, w, h = (v / grid_size for v in (xi, yi, 1.0, 1.0))",
+   "variables": [
+    {"symbol": "x_i, y_i", "meaning": "Column and row index of the cell."},
+    {"symbol": "S", "meaning": "`grid_size` = 6."}
+   ],
+   "operations": "Divide cell indices and unit cell size by the grid size to get unit-square coordinates.",
+   "purpose": "Places each grid cell on the image, which is drawn on the unit square.",
+   "interpretation": "Each cell is 1/6 of the (padded) image in each direction.",
+   "intuition": "Cell (3, 1) starts half-way across and one sixth down.",
+   "numerical_example": "Cell (xi, yi) = (3, 1): $(0.5, 0.1667, 0.1667, 0.1667)$.",
+   "source": "book",
+   "book_ref": "p.365"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "12.8",
+   "title": "Visualizing a YOLO target",
+   "original_code": "def draw_prediction(image, boxes, classes, cutoff=None):\n    fig, ax = plt.subplots(dpi=300)\n    draw_image(ax, image)\n    for yi, row in enumerate(classes):\n        for xi, label in enumerate(row):\n            color = label_to_color(label) if label else \"none\"\n            x, y, w, h = (v / grid_size for v in (xi, yi, 1.0, 1.0))\n            r = Rectangle((x, y), w, h, lw=2, ec=\"black\", fc=color, alpha=0.5)\n            ax.add_patch(r)\n    for yi, row in enumerate(boxes):\n        for xi, box in enumerate(row):\n            box, confidence = box[:4], box[4]\n            if not cutoff or confidence >= cutoff:\n                box = from_grid((xi, yi), box)\n                label = classes[yi, xi]\n                color = label_to_color(label)\n                name = keras_hub.utils.coco_id_to_name(label)\n                draw_box(ax, box, f\"{name} {max(confidence, 0):.2f}\", color)\n    plt.show()\n\ndraw_prediction(metadata[0][\"path\"], box_array[0], class_array[0], cutoff=1.0)",
+   "language": "python",
+   "what_it_does": "Draws an image, overlays the 6 x 6 grid with cells colored by class, and draws each grid cell's box (decoded to image coordinates) with its class name and confidence when the confidence passes the cutoff. Called on the first training target.",
+   "line_explanations": [
+    {"lines": "1-3", "explanation": "Signature: `image` is a file path, `boxes` a `(6, 6, 5)` array, `classes` a `(6, 6)` array of labels (or, later, derived from predictions). Creates a high-resolution figure and draws the image in the unit square via `draw_image` (p.359)."},
+    {"lines": "4-5", "explanation": "Callout 'Draws the YOLO output grid and class probability map': iterates over rows `yi` and columns `xi` of the class map."},
+    {"lines": "6", "explanation": "Non-zero labels get a color from `label_to_color`; label 0 (no object) gets a transparent face."},
+    {"lines": "7", "explanation": "Cell rectangle in unit-square coordinates: `(xi/6, yi/6, 1/6, 1/6)`."},
+    {"lines": "8-9", "explanation": "Adds a semi-transparent rectangle with a black 2-pt edge, so every cell outline is drawn and labeled cells are tinted."},
+    {"lines": "10-12", "explanation": "Callout 'Draws all boxes at each grid location above our cutoff': for each cell, separates the four box values from the confidence."},
+    {"lines": "13", "explanation": "Draws the box if no cutoff was given or its confidence reaches the cutoff."},
+    {"lines": "14", "explanation": "`from_grid` converts the cell-relative box to a top-left box in image coordinates."},
+    {"lines": "15-17", "explanation": "The box's label is the class-map label of its cell; it is turned into a color and a human-readable COCO name."},
+    {"lines": "18", "explanation": "`draw_box` (p.358-359) draws the rectangle and a caption such as `giraffe 1.00`; `max(confidence, 0)` keeps negative confidences (possible with the linear box output) from being displayed."},
+    {"lines": "19", "explanation": "Renders the figure."},
+    {"lines": "21", "explanation": "Visualizes the targets of the first image in the shuffled dataset; `cutoff=1.0` shows only real boxes."}
+   ],
+   "inputs_outputs": "Input: an image path, a `(6, 6, 5)` box grid, a `(6, 6)` class grid, optional cutoff. Output: a Matplotlib figure (figure 12.5); no return value.",
+   "algorithm": "Two nested loops over the grid: one painting cells by class, one decoding and drawing boxes that pass a confidence threshold.",
+   "theory_link": "Visual inverse of the target encoding of listing 12.7; at inference it implements the 'keep boxes with high confidence' step of figure 12.4 (p.361).",
+   "parameters": [
+    {"name": "cutoff", "role": "Minimum confidence for a box to be drawn; `None` draws all boxes."},
+    {"name": "dpi=300", "role": "High-resolution rendering for print."},
+    {"name": "alpha=0.5", "role": "Transparency of class-colored cells, so the image stays visible."}
+   ],
+   "pitfalls": [
+    "`cutoff=0` behaves like `None` because `not 0` is True.",
+    "`classes` comes from `class_array`, a float array; labels like `25.0` are passed to `label_to_color` and `coco_id_to_name`. A float key creates a separate color entry from an int key, and some lookup functions may require `int(label)`.",
+    "Each box takes its label from its own cell in the class map, so if an overlapping box overwrote the class map there, the label could be wrong (listing 12.7 guards against this for targets).",
+    "With model predictions, `classes` must first be reduced from `(6, 6, 91)` probabilities to `(6, 6)` labels (e.g. argmax).",
+    "Because `metadata` was shuffled without a seed (p.360), `metadata[0]` (and thus the figure) differs between runs."
+   ],
+   "illustrative_code": "# AI-written: show all 36 target boxes, including the empty ones\ndraw_prediction(metadata[0][\"path\"], box_array[0], class_array[0])  # cutoff=None\n# Later, with a trained model (shapes (1, 6, 6, 5) and (1, 6, 6, 91)):\n# preds = model.predict(images[:1])\n# draw_prediction(path, preds[\"box\"][0], np.argmax(preds[\"class\"][0], -1), cutoff=0.1)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Reading figure 12.5",
+   "kind": "breakdown",
+   "body": "- **White bands at top and bottom**: the photo is wider than tall, so `draw_image` pads it vertically (`hpad`) to fit the unit square (p.359). The top and bottom grid rows therefore cover padding.\n- **Black grid**: every one of the 36 cells is outlined because each `Rectangle` has `ec=\"black\"`, even those with `fc=\"none\"`.\n- **Tinted block**: the cells that the giraffe's box intersects, labeled with the giraffe class by the first loop of listing 12.7 (floor/ceil outward rounding makes the tinted block slightly larger than the box).\n- **One box, 'giraffe 1.00'**: drawn from the single responsible cell whose confidence target is 1.0; all other cells have confidence 0 and are filtered by `cutoff=1.0`.\n\nThe exact cell coverage is read approximately from the printed figure.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the same function serves targets and predictions",
+   "kind": "application",
+   "body": "Because the model's outputs and the targets share the grid format (`(6, 6, 5)` boxes and a per-cell class), a single drawing function can show both. For targets, confidences are exactly 0 or 1, so `cutoff=1.0` cleanly isolates the real boxes. For predictions, confidences are continuous, and the cutoff becomes the detection threshold: too high and nothing is shown, too low and the image fills with boxes. The book later shows exactly this, noting the trained model learns very low confidence values (p.370). The specific `cutoff` used later is not on this page.",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "What draw_prediction does",
+   "why": "Listing 12.8 has two callout-marked phases, drawing the grid and class map, then drawing the boxes above the cutoff; this flow shows their order and the decoding step.",
+   "mermaid": "flowchart TD\n  A[draw_image: photo in unit square] --> B[For each cell yi, xi in classes]\n  B --> C{label != 0?}\n  C -- yes --> D[Cell rect, class color, alpha 0.5]\n  C -- no --> E[Cell rect, outline only]\n  D --> F[For each cell box in boxes]\n  E --> F\n  F --> G{cutoff is None or confidence >= cutoff?}\n  G -- no --> F\n  G -- yes --> H[from_grid: decode to image box]\n  H --> I[label = classes yi, xi; name via coco_id_to_name]\n  I --> J[draw_box with name and confidence]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Figure 12.5 shows what the YOLO model predicts.",
+   "correction": "It shows the training targets for `metadata[0]` (box_array[0], class_array[0]); the model has not been trained yet at this point."
+  },
+  {
+   "claim": "Every grid cell's box is drawn.",
+   "correction": "Only boxes with confidence at or above `cutoff` (here 1.0) are drawn; with targets, that is one box per object."
+  },
+  {
+   "claim": "The class color of a box comes from the box vector.",
+   "correction": "The box vector has no label; the label is read from the class map at the box's cell, `classes[yi, xi]`."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 358, "note": "`label_to_color` and `draw_box` (listing 12.4)."},
+   {"page": 359, "note": "`draw_image` and its padding to the unit square."},
+   {"page": 363, "note": "`to_grid` / `from_grid`."},
+   {"page": 364, "note": "Listing 12.7 builds `box_array` and `class_array`."},
+   {"page": 360, "note": "Shuffling of `metadata`, which determines `metadata[0]`."}
+  ],
+  "later": [
+   {"page": 366, "note": "Training the YOLO model on these targets."},
+   {"page": 370, "note": "Figure 12.7 shows every bounding box predicted by the trained model and its low confidences."}
+  ],
+  "prerequisites": [
+   {"page": 364, "note": "The target arrays."}
+  ],
+  "related_math": [
+   {"page": 364, "note": "The `from_grid` formulas used here."}
+  ],
+  "related_code": [
+   {"page": 358, "note": "Listing 12.4, drawing helpers."},
+   {"page": 364, "note": "Listing 12.7, targets."}
+  ],
+  "related_figures": [
+   {"page": 361, "note": "Figure 12.4, the paper's version of the same visualization idea."},
+   {"page": 359, "note": "Figure 12.3, raw COCO boxes drawn with the same helpers."}
+  ]
+ },
+ "takeaways": [
+  "`draw_prediction` paints the 6 x 6 grid with class colors and draws decoded boxes whose confidence passes a cutoff.",
+  "Cell geometry is `(xi, yi, 1, 1) / grid_size` in unit-square coordinates.",
+  "Boxes are decoded with `from_grid` and labeled from the class map at their cell.",
+  "With targets, `cutoff=1.0` draws only real boxes; figure 12.5 shows one 'giraffe 1.00' box.",
+  "Figure 12.5 visualizes targets, not predictions; the same function will be reused for predictions."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In `draw_prediction(..., cutoff=1.0)` applied to the targets, which boxes are drawn?",
+   "options": [
+    "Only boxes in cells holding a real box center (confidence 1.0)",
+    "All 36 boxes, one per grid cell",
+    "Every cell whose class label is non-zero",
+    "No boxes, because confidences are never above 1.0"
+   ],
+   "answer": "Only boxes in cells holding a real box center (confidence 1.0)",
+   "explanation": "The condition is `confidence >= cutoff`; targets have confidence 1.0 only at box centers. All 36 would be drawn only with no cutoff; labeled cells are tinted but not drawn as boxes; `>=` includes 1.0.",
+   "page_refs": [365, 364]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Using `draw_prediction`'s formula, what rectangle is drawn for grid cell (xi, yi) = (4, 2) with `grid_size = 6`?",
+   "options": [],
+   "answer": "(x, y, w, h) = (4/6, 2/6, 1/6, 1/6) = (0.667, 0.333, 0.167, 0.167).",
+   "explanation": "`x, y, w, h = (v / grid_size for v in (xi, yi, 1.0, 1.0))`.",
+   "page_refs": [365]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "Where does the label of each drawn box come from, given that the box array has no label channel?",
+   "options": [],
+   "answer": "From the class map at the box's own grid cell: `label = classes[yi, xi]`.",
+   "explanation": "Listing 12.7 ensured the class label at each center cell matches the box; listing 12.8 relies on that.",
+   "page_refs": [365, 364]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why does figure 12.5 have white bands above and below the photo, and what does that imply for the top and bottom rows of the grid?",
+   "options": [],
+   "answer": "The photo is wider than tall, so `draw_image` pads it vertically to fit the unit square (as `scale_box` did for the boxes). The top and bottom grid rows therefore lie mostly over padding, where no object centers can fall.",
+   "explanation": "Padding logic is in `draw_image` (p.359) and `scale_box` (p.357); the consequence for grid rows is an inference.",
+   "page_refs": [365, 359, 357]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Why does the caption use `max(confidence, 0)`?",
+   "options": [
+    "To avoid displaying negative confidence values, which a linear box output can produce",
+    "To convert confidence to a percentage",
+    "To select the most confident box in the image",
+    "To round confidence to two decimal places"
+   ],
+   "answer": "To avoid displaying negative confidence values, which a linear box output can produce",
+   "explanation": "The box slice of the model has no activation (p.362), so predicted confidences can be negative; clamping keeps the display sensible. Percentage conversion and rounding are done by nothing / by `:.2f` respectively, and `max(..., 0)` compares with 0, not across boxes.",
+   "page_refs": [365, 362]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "What would `draw_prediction(path, box_array[0], class_array[0])` (no cutoff) draw, and why might that be useful?",
+   "options": [],
+   "answer": "It would attempt to draw all 36 boxes: the real ones plus, for every empty cell, a degenerate zero-width, zero-height box at the cell's top-left corner (decoded from an all-zero vector), captioned with its cell's class name and confidence 0.00. (Whether `coco_id_to_name` accepts label 0 is not shown in the book.) It is useful for inspecting raw model predictions, where you want to see every box regardless of confidence.",
+   "explanation": "`if not cutoff` is True for `None`, so the condition passes for every cell.",
+   "page_refs": [365]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Look at figure 12.5 and identify (a) the cells labeled with the giraffe class, (b) the responsible cell for the giraffe box, and (c) what the '1.00' means.",
+   "options": [],
+   "answer": "(a) The tinted block of cells under the giraffe's box; (b) the cell containing the giraffe box's center, from which the single box is drawn; (c) the target confidence for a real box, always 1.",
+   "explanation": "If you can map each visual element to `class_array`, `box_array` and the confidence channel, you understand the target encoding.",
+   "page_refs": [365, 364]
+  }
+ ]
+}

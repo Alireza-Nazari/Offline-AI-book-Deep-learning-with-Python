@@ -1,0 +1,254 @@
+{
+ "page_id": "page_251",
+ "pdf_page": 251,
+ "printed_page": "227",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:29:50Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction. The page opens with the second half of the TensorFlow metric-handling train_step begun on p.250 and ends mid-listing in the PyTorch version, which continues on p.252. Callouts verified against the image."
+ },
+ "overview": {
+  "title": "Updating all compiled metrics in train_step (TensorFlow), then the same change for PyTorch",
+  "chapter": "7 A deep dive on Keras",
+  "section": "7.4 Writing your own training and evaluation loops",
+  "subsection": "7.4.5 Handling metrics in a custom train_step()",
+  "main_topic": "Finishing the TensorFlow train_step that loops over self.metrics (loss metric updated with the loss, others with targets and predictions) and returns a dict of all metric results; compiling with loss and SparseCategoricalAccuracy; and starting the PyTorch version, which uses the identical self.compute_loss change.",
+  "central_idea": "Once compile() supplies a loss and metrics, a custom train_step can update every metric generically, distinguishing the loss tracker by name, and return {m.name: m.result() for m in self.metrics}. The change is backend-independent: the PyTorch step differs from p.248 only in using self.compute_loss and the metric loop.",
+  "importance": "This is the fully general form of a custom train_step that behaves like Keras's built-in one: any loss and metrics chosen at compile() time appear in the progress bar, logs and callbacks.",
+  "learning_objectives": [
+   "Explain the metric update loop: metric.update_state(loss) for the metric named 'loss', metric.update_state(targets, predictions) for the others.",
+   "Explain the returned dict comprehension and how it feeds fit()'s logs.",
+   "Rewrite get_custom_model() to compile with optimizer, loss and metrics.",
+   "Port the same change to the PyTorch train_step."
+  ],
+  "prerequisites": [
+   "self.compute_loss and self.metrics (p.250).",
+   "Listing 7.21 and the PyTorch train_step (p.247-248).",
+   "Keras metrics API update_state/result (p.245)."
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page completes the **TensorFlow** `train_step` begun on p.250. After computing the loss with `self.compute_loss`, it takes `tape.gradient(loss, self.trainable_weights)` and calls `self.optimizer.apply(gradients, self.trainable_weights)` exactly as in Listing 7.21. Then comes the new part: a loop **`for metric in self.metrics:`**. If `metric.name == \"loss\"` the metric is updated with the loss value (`metric.update_state(loss)`); otherwise it is updated with `metric.update_state(targets, predictions)` (callout: updates the model's metrics, including the one that tracks the loss). The step returns **`{m.name: m.result() for m in self.metrics}`**, a dict mapping metric names to their current value (callout).\n\nTo try it, `get_custom_model()` is redefined so that `compile()` now receives **`optimizer=keras.optimizers.Adam()`, `loss=keras.losses.SparseCategoricalCrossentropy()` and `metrics=[keras.metrics.SparseCategoricalAccuracy()]`**; the architecture (784 inputs, Dense 512 relu, Dropout 0.5, Dense 10 softmax) is unchanged, and training is again `model.fit(train_images, train_labels, epochs=3)`. The progress bar should now show both `loss` and the accuracy metric.\n\nUnder *train_step() metrics handling with PyTorch*, the authors note that it is **exactly the same code change**. The PyTorch `CustomModel` computes predictions with `self(inputs, training=True)`, the loss with `self.compute_loss(y=targets, y_pred=predictions)`, calls `loss.backward()` and gathers `gradients = [v.value.grad for v in trainable_weights]`. The page breaks here; the weight update under `torch.no_grad()`, the metric loop and the return are on p.252, followed by the JAX version, which uses `compute_loss()` inside `compute_loss_and_updates()`.",
+ "paragraphs": [
+  {
+   "ref": "p251_e03",
+   "excerpt": "gradients = tape.gradient(loss, self.trainable_weights)",
+   "what_it_says": "Second half of the TensorFlow train_step: gradients, optimizer update, a loop updating each metric in self.metrics, and a returned dict of all metric results.",
+   "what_it_means": "Metrics have two kinds of update signature: the loss tracker (a Mean) takes a single value, while metrics like accuracy take (y_true, y_pred). The name check routes each to the right call. The returned dict makes every compiled metric visible to fit().",
+   "why_it_matters": "This generic loop means the class never needs editing when the user adds or changes metrics in compile().",
+   "technical_idea": "Dispatch by metric name: the built-in loss tracker is named \"loss\", which distinguishes it from target/prediction metrics.",
+   "terminology": [{"term": "{m.name: m.result() for m in self.metrics}", "meaning": "Dict comprehension producing logs such as {'loss': ..., 'sparse_categorical_accuracy': ...}."}],
+   "connections": ["p.250: first half of this train_step and the description of self.metrics.", "p.247: Listing 7.21 returned only {\"loss\": loss_tracker.result()}."]
+  },
+  {
+   "ref": "p251_e05",
+   "excerpt": "def get_custom_model():",
+   "what_it_says": "'Let's try it': get_custom_model() now compiles with Adam, SparseCategoricalCrossentropy and SparseCategoricalAccuracy, then the model is trained for three epochs.",
+   "what_it_means": "The loss and metrics are now configuration, not code. self.compute_loss uses the compiled crossentropy; self.metrics contains the loss tracker and the accuracy metric.",
+   "why_it_matters": "The custom model is now used exactly like any built-in Keras model, which is the point of integrating with fit().",
+   "connections": ["p.248: the earlier get_custom_model() compiled with only an optimizer."]
+  },
+  {
+   "ref": "p251_e07",
+   "excerpt": "And here’s what it looks like with PyTorch—it’s exactly the same code",
+   "what_it_says": "The PyTorch version requires exactly the same code change.",
+   "what_it_means": "Replace loss_fn with self.compute_loss and the loss_tracker with a loop over self.metrics; the backend-specific gradient code from p.248 stays.",
+   "why_it_matters": "Reinforces that metric handling is backend-independent in Keras.",
+   "connections": ["p.248: the original PyTorch train_step."]
+  },
+  {
+   "ref": "p251_e08",
+   "excerpt": "import keras",
+   "what_it_says": "Start of the PyTorch CustomModel with self.compute_loss, loss.backward() and gradient collection; continues on p.252.",
+   "what_it_means": "Up to the gradient collection this matches p.248 except for the loss line.",
+   "why_it_matters": "Shows the minimal diff between the two PyTorch versions.",
+   "connections": ["p.252: continuation of this listing and the JAX version."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "metrics_property",
+   "name": "Updating self.metrics in a custom train_step",
+   "definition": "Iterating over the compiled metrics (which include a loss tracker) to update each one and returning their results as logs.",
+   "intuition": "Hand each scorekeeper the information it needs, then read all the scores.",
+   "technical": "for metric in self.metrics: metric.update_state(loss) if metric.name == \"loss\" else metric.update_state(targets, predictions); return {m.name: m.result() for m in self.metrics}",
+   "significance": "Makes a custom step fully compatible with compile()'s metrics and with callbacks that monitor them.",
+   "example": "Compiling with SparseCategoricalAccuracy yields logs with both loss and accuracy.",
+   "misconception": "That the loss tracker can be updated with (targets, predictions); it expects the loss value.",
+   "related": ["keras_metric", "compute_loss", "custom_train_step"],
+   "source": "book"
+  },
+  {
+   "id": "compute_loss",
+   "name": "self.compute_loss",
+   "definition": "Compiled loss plus layer regularization losses, available after compile().",
+   "intuition": "The model's configured objective.",
+   "technical": "self.compute_loss(y=targets, y_pred=predictions)",
+   "significance": "Used identically in the TensorFlow and PyTorch versions on this page.",
+   "example": "PyTorch train_step on this page.",
+   "misconception": "That it differs across backends; the call is the same.",
+   "related": ["loss_function", "regularization"],
+   "source": "book"
+  },
+  {
+   "id": "custom_train_step",
+   "name": "Overriding train_step()",
+   "definition": "Redefining the per-batch method fit() calls.",
+   "intuition": "Swap the loop body, keep the loop.",
+   "technical": "The general version uses compile()'s loss and metrics.",
+   "significance": "Behaves like the built-in step while allowing custom logic.",
+   "example": "This page's TensorFlow and PyTorch steps.",
+   "misconception": "That custom steps cannot use compiled metrics.",
+   "related": ["metrics_property", "compute_loss"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Sparse categorical accuracy tracked by the compiled metric",
+   "latex": "\\text{acc} = \\frac{1}{N}\\sum_{i=1}^{N} \\mathbb{1}\\left[\\arg\\max_k \\hat{y}_{i,k} = y_i\\right]",
+   "source_text": "Not printed as a formula; metrics=[keras.metrics.SparseCategoricalAccuracy()] in compile().",
+   "variables": [
+    {"symbol": "N", "meaning": "Number of samples seen since the last reset (accumulated over batches)"},
+    {"symbol": "y_i", "meaning": "Integer label of sample i"},
+    {"symbol": "\\hat{y}_{i,k}", "meaning": "Softmax probability for class k"}
+   ],
+   "operations": "argmax, comparison, average over all samples accumulated across batches.",
+   "purpose": "Explains what the accuracy entry in the returned logs measures.",
+   "interpretation": "Fraction of training samples so far this epoch classified correctly (with dropout active).",
+   "intuition": "Running hit rate.",
+   "numerical_example": "If after 100 batches of 32 samples 2,976 of 3,200 predictions are correct, the reported accuracy is 0.93.",
+   "source": "ai_explanation",
+   "book_ref": "p.251"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "TensorFlow train_step with compiled metrics, second part (continued from p.250)",
+   "original_code": "        gradients = tape.gradient(loss, self.trainable_weights)\n        self.optimizer.apply(gradients, self.trainable_weights)\n\n        for metric in self.metrics:\n            if metric.name == \"loss\":\n                metric.update_state(loss)\n            else:\n                metric.update_state(targets, predictions)\n\n        return {m.name: m.result() for m in self.metrics}",
+   "language": "python",
+   "what_it_does": "Computes and applies gradients, updates every compiled metric, and returns their current values. The class header, data unpacking and self.compute_loss call are on p.250.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Same gradient computation and optimizer update as Listing 7.21."},
+    {"lines": "4-8", "explanation": "Callout: updates the model's metrics, including the one that tracks the loss. The loss tracker is identified by its name and receives the loss; other metrics receive targets and predictions."},
+    {"lines": "10", "explanation": "Callout: returns a dict mapping metric names to their current value."}
+   ],
+   "inputs_outputs": "Uses loss, targets, predictions from p.250. Returns a logs dict with one entry per metric.",
+   "algorithm": "Gradient step, then generic metric update and report.",
+   "theory_link": "Implements the 'return a dictionary mapping metric names (including the loss)' rule from p.247 in a general way.",
+   "parameters": [{"name": "self.metrics", "role": "Compiled metrics plus the built-in loss tracker (p.250)."}],
+   "pitfalls": [
+    "A user metric that happens to be named \"loss\" would be fed the loss value instead of (targets, predictions).",
+    "Metrics are computed with training-mode predictions (dropout active), so training accuracy is typically below evaluation accuracy."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "get_custom_model() compiled with loss and metrics, and training",
+   "original_code": "def get_custom_model():\n    inputs = keras.Input(shape=(28 * 28,))\n    features = layers.Dense(512, activation=\"relu\")(inputs)\n    features = layers.Dropout(0.5)(features)\n    outputs = layers.Dense(10, activation=\"softmax\")(features)\n    model = CustomModel(inputs, outputs)\n    model.compile(\n        optimizer=keras.optimizers.Adam(),\n        loss=keras.losses.SparseCategoricalCrossentropy(),\n        metrics=[keras.metrics.SparseCategoricalAccuracy()],\n    )\n    return model\n\nmodel = get_custom_model()\nmodel.fit(train_images, train_labels, epochs=3)",
+   "language": "python",
+   "what_it_does": "Redefines the model factory so that compile() supplies loss and metrics for self.compute_loss and self.metrics, then trains.",
+   "line_explanations": [
+    {"lines": "2-6", "explanation": "Same Functional architecture as p.248, wrapped in the new CustomModel."},
+    {"lines": "7-11", "explanation": "compile() now sets optimizer, loss and a SparseCategoricalAccuracy metric."},
+    {"lines": "14-15", "explanation": "Build and train for three epochs; logs show loss and sparse_categorical_accuracy."}
+   ],
+   "inputs_outputs": "MNIST training images and labels; returns History with loss and accuracy per epoch.",
+   "algorithm": "Standard compile/fit with a custom step.",
+   "theory_link": "Makes the custom step configurable through compile().",
+   "parameters": [
+    {"name": "loss", "role": "Used by self.compute_loss."},
+    {"name": "metrics", "role": "Added to self.metrics alongside the loss tracker."}
+   ],
+   "pitfalls": ["Omitting loss= would make self.compute_loss unusable in train_step."]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "PyTorch train_step with compiled loss and metrics (first part; continues on p.252)",
+   "original_code": "import keras\nfrom keras import layers\n\nclass CustomModel(keras.Model):\n    def train_step(self, data):\n        inputs, targets = data\n        predictions = self(inputs, training=True)\n        loss = self.compute_loss(y=targets, y_pred=predictions)\n\n        loss.backward()\n        trainable_weights = [v for v in self.trainable_weights]\n        gradients = [v.value.grad for v in trainable_weights]",
+   "language": "python",
+   "what_it_does": "Begins the PyTorch CustomModel that uses self.compute_loss. Only this page's lines are reproduced; the weight update and metric handling continue on p.252.",
+   "line_explanations": [
+    {"lines": "4-7", "explanation": "Same structure and forward pass as the p.248 PyTorch version."},
+    {"lines": "8", "explanation": "The one changed line so far: the compiled loss via self.compute_loss."},
+    {"lines": "10-12", "explanation": "PyTorch backward pass and gradient collection from v.value.grad, unchanged from p.248."}
+   ],
+   "inputs_outputs": "Input: one batch. (Continuation on p.252.)",
+   "algorithm": "Forward -> compiled loss -> backward -> gradients.",
+   "theory_link": "Shows the metric-handling change is backend-independent.",
+   "parameters": [{"name": "self.compute_loss", "role": "Compiled loss plus regularization losses."}],
+   "pitfalls": ["Requires `import torch` and the PyTorch backend, as in p.248."]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why dispatch on metric.name?",
+   "kind": "step_by_step",
+   "body": "Keras metrics share the method name `update_state`, but not its arguments. A `Mean`-style loss tracker takes one value; `SparseCategoricalAccuracy` takes `(y_true, y_pred)`. `self.metrics` mixes both kinds, so the loop needs to tell them apart. The book's code uses the loss tracker's name, `\"loss\"`. Beyond the book: Keras 3 also offers `self.compute_metrics(x, y, y_pred)`, which does the update and return in one call. The book does not mention it on this page.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Reading the progress bar",
+   "kind": "application",
+   "body": "Beyond the book: with this version, each epoch line shows something like `loss: 0.29 - sparse_categorical_accuracy: 0.91`. Both are running averages over the epoch so far, reset automatically at each epoch because they are in `self.metrics`. A callback such as `EarlyStopping(monitor=\"sparse_categorical_accuracy\")` can now monitor accuracy, which wasn't possible with Listing 7.21's loss-only logs.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "The metric update loop in train_step",
+   "why": "The code at the top of the page routes the loss to the loss tracker and (targets, predictions) to the other compiled metrics, then returns all results.",
+   "mermaid": "flowchart TD\n  L[loss] --> LOOP{\"for metric in self.metrics\"}\n  YP[\"targets, predictions\"] --> LOOP\n  LOOP -- \"name == 'loss'\" --> M1[\"metric.update_state(loss)\"]\n  LOOP -- otherwise --> M2[\"metric.update_state(targets, predictions)\"]\n  M1 --> R[\"return {m.name: m.result()}\"]\n  M2 --> R\n  R --> FIT[\"fit() logs: loss, sparse_categorical_accuracy\"]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "All metrics can be updated with update_state(targets, predictions).", "correction": "The loss tracker takes the loss value; the code checks metric.name == \"loss\" to treat it differently."},
+  {"claim": "Switching to PyTorch requires a different metric-handling approach.", "correction": "The page says it is exactly the same code change."},
+  {"claim": "The custom model can't show accuracy because train_step is custom.", "correction": "Once compiled with metrics and the generic loop, accuracy appears in fit()'s logs."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 250, "note": "First half of the TensorFlow train_step and the definitions of self.compute_loss and self.metrics."},
+   {"page": 248, "note": "The earlier get_custom_model() and PyTorch train_step."},
+   {"page": 247, "note": "Listing 7.21 with a global loss tracker."}
+  ],
+  "later": [
+   {"page": 252, "note": "Continuation of the PyTorch version and the JAX version using compute_loss() in compute_loss_and_updates()."},
+   {"page": 254, "note": "Chapter summary."}
+  ],
+  "prerequisites": [
+   {"page": 245, "note": "Low-level usage of metrics."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 250, "note": "First half of the TensorFlow version."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "Loop over self.metrics: update the 'loss' metric with the loss, others with (targets, predictions).",
+  "Return {m.name: m.result() for m in self.metrics} so fit() sees every metric.",
+  "get_custom_model() now compiles with optimizer, loss and metrics.",
+  "The PyTorch version needs exactly the same change: self.compute_loss plus the metric loop.",
+  "The JAX version follows on p.252."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "In the metric loop, why does the code check metric.name == \"loss\"?", "options": ["To skip the loss metric", "Because the loss tracker is updated with the loss value, while other metrics take targets and predictions", "Because only the loss metric needs resetting", "Because metric names must be unique"], "answer": "Because the loss tracker is updated with the loss value, while other metrics take targets and predictions", "explanation": "The two branches call update_state with different arguments. The loss metric isn't skipped; resetting is handled by fit(); uniqueness is unrelated.", "page_refs": [251]},
+  {"id": "q2", "type": "short", "question": "What does the train_step return, and what does it contain for the model compiled on this page?", "options": [], "answer": "{m.name: m.result() for m in self.metrics}, containing the loss and the sparse categorical accuracy.", "explanation": "self.metrics includes the compiled SparseCategoricalAccuracy plus the loss tracker (p.250).", "page_refs": [251, 250]},
+  {"id": "q3", "type": "conceptual", "question": "Compared to p.248, what changed in get_custom_model() and why?", "options": [], "answer": "compile() now also receives loss=SparseCategoricalCrossentropy() and metrics=[SparseCategoricalAccuracy()], because the new train_step uses self.compute_loss and self.metrics instead of global objects.", "explanation": "The architecture is unchanged.", "page_refs": [251, 248]},
+  {"id": "q4", "type": "mcq", "question": "Which line differs between the PyTorch train_step on p.248 and the one starting on this page (up to the gradient collection)?", "options": ["predictions = self(inputs, training=True)", "loss = self.compute_loss(y=targets, y_pred=predictions)", "loss.backward()", "gradients = [v.value.grad for v in trainable_weights]"], "answer": "loss = self.compute_loss(y=targets, y_pred=predictions)", "explanation": "p.248 used loss_fn(targets, predictions); the other lines are identical.", "page_refs": [251, 248]},
+  {"id": "q5", "type": "conceptual", "question": "Why is the training accuracy reported by this train_step likely lower than the accuracy from evaluate() on the same data?", "options": [], "answer": "Because predictions are computed with training=True, so Dropout(0.5) is active, and because the reported value averages over an epoch during which the model was still improving.", "explanation": "Inference from the code: metrics are updated with training-mode predictions.", "page_refs": [251]},
+  {"id": "q6", "type": "self", "question": "Could you write the full TensorFlow train_step of section 7.4.5 from memory, combining pp.250-251?", "options": [], "answer": "Unpack data; under GradientTape compute predictions and self.compute_loss; tape.gradient; optimizer.apply; loop over self.metrics; return the dict of results.", "explanation": "Check against the two pages.", "page_refs": [250, 251]}
+ ]
+}

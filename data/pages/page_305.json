@@ -1,0 +1,420 @@
+{
+  "page_id": "page_305",
+  "pdf_page": 305,
+  "printed_page": "281",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:36:08Z",
+    "confidence": "high",
+    "review_flags": [
+      "Not an issue on this page, but worth checking: by our count the code here (plus the Dropout/Dense head on p.306) has 718,849 trainable and 3,008 non-trainable (BatchNormalization moving statistics) parameters, 721,857 in total. p.306 calls 721,857 the 'trainable parameter count'. The deeper section mentions this as our own calculation."
+    ],
+    "extraction_quality": "Clean. The four bullets, body text and code listing match the page image; all callouts were extracted. The listing continues on p.306 (Dropout, Dense output, keras.Model)."
+  },
+  "overview": {
+    "title": "The mini Xception-like model: design principles in code",
+    "chapter": "9 ConvNet architecture patterns",
+    "section": "9.5 Putting it together: A mini Xception-like model",
+    "subsection": "",
+    "main_topic": "The rest of the chapter's design checklist and the code of a small Xception-like ConvNet for dogs vs. cats that combines blocks, increasing filters, batch normalization, separable convolutions and residual connections",
+    "central_idea": "The model rescales its 180x180 RGB input, applies one regular 5x5 Conv2D (separable convolution's channel-independence assumption fails for RGB), then five residual blocks with 32, 64, 128, 256 and 512 filters. Each block is BN -> ReLU -> SeparableConv2D twice, then max pooling, with a strided 1x1 Conv2D on the residual. Global average pooling replaces Flatten.",
+    "importance": "This is the payoff of chapter 9: every pattern from sections 9.1-9.4 appears in about 20 lines of code. On p.306 the model reaches 90.8% test accuracy vs. 83.9% for chapter 8's model, with fewer parameters.",
+    "learning_objectives": [
+      "List the six ConvNet architecture principles of the chapter (two on p.304, four here)",
+      "Trace each line of the mini Xception-like model and the tensor shapes it produces",
+      "Explain why the first convolution is a regular Conv2D rather than SeparableConv2D",
+      "Explain the block structure: pre-activation BN -> ReLU -> SeparableConv2D, max pooling, and a strided 1x1 projection residual",
+      "Explain why use_bias=False appears on every convolution",
+      "Explain the switch from Flatten to GlobalAveragePooling2D"
+    ],
+    "prerequisites": [
+      "Residual connections with projection shortcuts (pp.296-299)",
+      "BatchNormalization and the Conv -> BN -> ReLU ordering (pp.301-302)",
+      "SeparableConv2D (pp.302-304)",
+      "The dogs-vs-cats data pipeline and training setup of section 8.2 (chapter 8)",
+      "Keras functional API"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The list of principles begun on p.304 (blocks of layers; more filters as feature maps shrink) continues with four more:\n\n- **Deep and narrow is better than broad and shallow.**\n- **Residual connections** around blocks help you train deeper networks.\n- It can be beneficial to add **batch normalization** after your convolution layers.\n- It can be beneficial to replace `Conv2D` with **`SeparableConv2D`**, which is more parameter efficient.\n\nThe authors combine them into one model, a smaller version of **Xception**, for the **dogs-versus-cats** task of chapter 8. Data loading and training are reused unchanged from section 8.2; only the model definition changes.\n\nThe code:\n\n1. `keras.Input(shape=(180, 180, 3))` and `Rescaling(1.0 / 255)` (callout: *don't forget input rescaling!*).\n2. A **regular** `Conv2D(filters=32, kernel_size=5, use_bias=False)`. Callout: separable convolution assumes *feature channels are largely independent*, which **does not hold for RGB images**, whose red, green and blue channels are highly correlated. So the first layer is a regular Conv2D and SeparableConv2D is used only afterward.\n3. A loop over `size in [32, 64, 128, 256, 512]`, building blocks with **increasing feature depth**. Each block saves `residual = x`, then does `BatchNormalization -> Activation(\"relu\") -> SeparableConv2D(size, 3, padding=\"same\", use_bias=False)` twice, then `MaxPooling2D(3, strides=2, padding=\"same\")`. The residual is projected with `Conv2D(size, 1, strides=2, padding=\"same\", use_bias=False)` so its shape matches, and the two are combined with `layers.add`. Callout: *each block consists of two batch-normalized depthwise separable convolution layers and a max pooling layer, with a residual connection around the entire block*.\n4. `GlobalAveragePooling2D()`. Callout: the original model used `Flatten` before the `Dense` layer.\n\nThe listing ends with `Dropout`, the sigmoid `Dense` output and `keras.Model` on p.306, where the authors report 721,857 parameters and 90.8% test accuracy.",
+  "paragraphs": [
+    {
+      "ref": "p305_e03",
+      "excerpt": "Deep and narrow is better than broad and shallow.",
+      "what_it_says": "Prefer many narrow layers over few wide ones.",
+      "what_it_means": "Depth lets the network compose features hierarchically (edges -> textures -> parts -> objects), which a single wide layer cannot do as efficiently. For a fixed parameter budget, stacking more, narrower layers typically gives a better model, provided it can be trained, which is what the next two bullets (residual connections, batch normalization) make possible.",
+      "why_it_matters": "It explains why the mini Xception has ten separable convolutions in five blocks rather than a few huge layers.",
+      "terminology": [
+        {"term": "narrow", "meaning": "Few filters/units per layer."},
+        {"term": "shallow", "meaning": "Few layers."}
+      ],
+      "connections": [
+        "p.293: section 9.1 on hierarchy and modularity",
+        "p.304: the first two principles of the list"
+      ]
+    },
+    {
+      "ref": "p305_e04",
+      "excerpt": "Introducing residual connections around blocks of layers helps you train deeper networks.",
+      "what_it_says": "Residual connections around blocks enable deeper networks.",
+      "what_it_means": "The shortcut gives gradients a direct path past each block, avoiding vanishing gradients. In the code, the shortcut wraps the entire block (two separable convs plus pooling), so it must be projected with a strided 1x1 convolution.",
+      "why_it_matters": "It is the precondition for 'deep and narrow' to work in practice.",
+      "terminology": [
+        {"term": "residual connection", "meaning": "Adding a block's input (possibly projected) to its output."}
+      ],
+      "connections": [
+        "p.296: residual connections",
+        "p.300: 'networks of arbitrary depth, without having to worry about vanishing gradients'"
+      ]
+    },
+    {
+      "ref": "p305_e05",
+      "excerpt": "It can be beneficial to introduce batch normalization layers after your convolution",
+      "what_it_says": "Adding batch normalization after convolution layers can help.",
+      "what_it_means": "The hedged 'can be beneficial' matches the authors' admission (p.301) that why batch normalization works is not understood. In the code, BN normalizes the output of each convolution (or of the previous block's add) before the ReLU, and the convolutions have use_bias=False.",
+      "why_it_matters": "Improves gradient propagation, supporting depth.",
+      "terminology": [],
+      "connections": [
+        "p.301: BatchNormalization introduced",
+        "p.302: activation placed after batch normalization"
+      ]
+    },
+    {
+      "ref": "p305_e06",
+      "excerpt": "It can be beneficial to replace Conv2D layers with SeparableConv2D layers, which",
+      "what_it_says": "Replacing Conv2D with the more parameter-efficient SeparableConv2D can help.",
+      "what_it_means": "Fewer parameters per layer leaves budget for more depth and reduces overfitting, valuable for a small dataset like dogs vs. cats trained from scratch.",
+      "why_it_matters": "The block convolutions in the code are all SeparableConv2D; only the first layer and the residual projections are regular Conv2D.",
+      "terminology": [
+        {"term": "parameter efficient", "meaning": "Achieving similar representational power with fewer weights."}
+      ],
+      "connections": [
+        "p.303: 36,864 vs. 4,672 parameters for a 3x3, 64-channel layer",
+        "p.304: still worthwhile without a GPU speedup"
+      ]
+    },
+    {
+      "ref": "p305_e07",
+      "excerpt": "Let’s bring all of these ideas together into a single model. Its architecture",
+      "what_it_says": "The ideas are combined into one model resembling a small Xception, applied to the dogs-vs-cats task of chapter 8. Data loading and training are reused exactly from section 8.2; only the model definition is replaced.",
+      "what_it_means": "This is a controlled comparison: same data, same augmentation and training loop, different architecture. Any performance difference (reported on p.306) can therefore be attributed to the architecture patterns.",
+      "why_it_matters": "It turns the chapter's principles into an experiment with a measurable result.",
+      "terminology": [
+        {"term": "Xception-like", "meaning": "Following Xception's design (separable convs, BN, residual blocks) at smaller scale."}
+      ],
+      "connections": [
+        "p.303: Xception, the full-size architecture",
+        "p.306: results: 90.8% vs. 83.9% test accuracy"
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "xception",
+      "name": "Mini Xception-like model",
+      "definition": "A small ConvNet combining a regular stem convolution, residual blocks of batch-normalized separable convolutions with max pooling, and global average pooling.",
+      "intuition": "Every lesson of chapter 9 in one compact model.",
+      "technical": "Stem: Conv2D(32, 5, use_bias=False). Five blocks (32, 64, 128, 256, 512 filters): [BN, ReLU, SeparableConv2D(size, 3, same)] x2, MaxPooling2D(3, strides=2, same), residual Conv2D(size, 1, strides=2, same). Head: GlobalAveragePooling2D, Dropout(0.5), Dense(1, sigmoid) (head completed on p.306).",
+      "significance": "Beats chapter 8's model with fewer parameters (p.306).",
+      "example": "Input (180, 180, 3) -> output a probability of 'dog'.",
+      "misconception": "That every convolution should be separable; the stem is regular because RGB channels are correlated.",
+      "related": ["depthwise_separable_convolution", "batch_normalization", "residual_connection", "global_average_pooling"],
+      "source": "book"
+    },
+    {
+      "id": "depthwise_separable_convolution",
+      "name": "When not to use separable convolution",
+      "definition": "Separable convolution assumes feature channels are largely independent.",
+      "intuition": "Red, green and blue at a pixel are strongly related (a bright pixel is bright in all three), so treating them separately wastes the most important cross-channel information.",
+      "technical": "Hence the first layer is a regular Conv2D; once the network has produced learned feature channels, SeparableConv2D is used.",
+      "significance": "Shows priors must be accurate to help (p.303).",
+      "example": "Conv2D(filters=32, kernel_size=5) as the stem.",
+      "misconception": "That the assumption holds for raw images; the callout says it does not.",
+      "related": ["inductive_bias", "xception"],
+      "source": "book"
+    },
+    {
+      "id": "pre_activation_block",
+      "name": "BN -> ReLU -> convolution ordering inside the block",
+      "definition": "Each separable convolution is preceded by BatchNormalization and ReLU, so the block starts with normalization of its input.",
+      "intuition": "Normalize, rectify, then convolve, repeated twice.",
+      "technical": "Equivalent to the Conv -> BN -> ReLU rule of p.302 seen from a different starting point: every convolution output is batch-normalized before its activation. The stem conv's output is normalized by the first block's first BN.",
+      "significance": "Implements the activation-after-BN recommendation and keeps use_bias=False valid.",
+      "example": "x = BN(x); x = relu(x); x = SeparableConv2D(...)(x)",
+      "misconception": "That the block ignores p.302's advice; each conv is still followed by BN then ReLU.",
+      "related": ["batch_normalization", "relu"],
+      "source": "inference"
+    },
+    {
+      "id": "global_average_pooling",
+      "name": "Global average pooling instead of Flatten",
+      "definition": "Averaging each feature map over space to produce one value per channel.",
+      "intuition": "Ask 'how strongly is each feature present anywhere?' rather than keeping every position.",
+      "technical": "(None, 6, 6, 512) -> (None, 512). Flatten would give 18,432 features and a much larger Dense layer.",
+      "significance": "Fewer parameters and less overfitting in the head; the callout notes it replaces chapter 8's Flatten.",
+      "example": "Dense(1) after GAP has 513 parameters vs. 18,433 after Flatten.",
+      "misconception": "That GAP discards useful information for classification; for 'is there a dog' the spatial location is usually irrelevant.",
+      "related": ["dense_layer", "max_pooling"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Spatial size through the network",
+      "latex": "H_{\\text{stem}} = 180 - 5 + 1 = 176, \\qquad H_{\\text{after block}} = \\left\\lceil \\frac{H_{\\text{in}}}{2} \\right\\rceil",
+      "source_text": "Conv2D(filters=32, kernel_size=5) with default 'valid' padding; MaxPooling2D(3, strides=2, padding=\"same\")",
+      "variables": [
+        {"symbol": "H", "meaning": "Feature-map height (width is identical)"},
+        {"symbol": "\\lceil\\cdot\\rceil", "meaning": "Ceiling, from 'same' padding with stride 2"}
+      ],
+      "operations": "A valid 5x5 conv removes 4 pixels; each block halves the size (rounding up); the 1x1 stride-2 'same' residual conv produces the same size.",
+      "purpose": "Explains why the residual projection uses strides=2 and padding='same': it must match the max-pooled main path.",
+      "interpretation": "176 -> 88 -> 44 -> 22 -> 11 -> 6, while filters go 32 -> 64 -> 128 -> 256 -> 512.",
+      "intuition": "Each block trades half the resolution for (from the second block) twice the channels.",
+      "numerical_example": "Block 5: input 11x11; MaxPooling2D(3, strides=2, 'same') gives $\\lceil 11/2 \\rceil = 6$; Conv2D(512, 1, strides=2, 'same') on 11x11 also gives 6x6, so `add` works.",
+      "source": "ai_explanation",
+      "book_ref": "p.305"
+    },
+    {
+      "id": "m2",
+      "title": "Parameters of one block",
+      "latex": "\\begin{aligned} P_{\\text{block}}(c, s) &= \\underbrace{4c}_{\\text{BN}_1} + \\underbrace{9c + cs}_{\\text{SepConv}_1} + \\underbrace{4s}_{\\text{BN}_2} + \\underbrace{9s + s^2}_{\\text{SepConv}_2} + \\underbrace{cs}_{\\text{1x1 residual}} \\end{aligned}",
+      "source_text": "Not printed in the book; derived from the code (use_bias=False everywhere; BN has gamma, beta, moving mean, moving variance).",
+      "variables": [
+        {"symbol": "c", "meaning": "Input channels of the block"},
+        {"symbol": "s", "meaning": "The block's `size` (filters)"}
+      ],
+      "operations": "Sum of each layer's weights; half of each BN's 4 values per channel are non-trainable moving statistics.",
+      "purpose": "Lets you verify the total reported on p.306.",
+      "interpretation": "The s^2 term of the second separable conv dominates for wide blocks; the last block (s = 512) holds about 74% of the model.",
+      "intuition": "Cost is dominated by pointwise channel mixing in the widest block.",
+      "numerical_example": "Block 5 ($c=256, s=512$): $1024 + (2304 + 131072) + 2048 + (4608 + 262144) + 131072 = 534{,}272$ values, of which $1{,}536$ are non-trainable.",
+      "source": "ai_explanation",
+      "book_ref": "p.306"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Mini Xception-like ConvNet for dogs vs. cats (first part)",
+      "original_code": "import keras\ninputs = keras.Input(shape=(180, 180, 3))\nx = layers.Rescaling(1.0 / 255)(inputs)\nx = layers.Conv2D(filters=32, kernel_size=5, use_bias=False)(x)\nfor size in [32, 64, 128, 256, 512]:\n    residual = x\n    x = layers.BatchNormalization()(x)\n    x = layers.Activation(\"relu\")(x)\n    x = layers.SeparableConv2D(size, 3, padding=\"same\", use_bias=False)(x)\n    x = layers.BatchNormalization()(x)\n    x = layers.Activation(\"relu\")(x)\n    x = layers.SeparableConv2D(size, 3, padding=\"same\", use_bias=False)(x)\n    x = layers.MaxPooling2D(3, strides=2, padding=\"same\")(x)\n    residual = layers.Conv2D(\n        size, 1, strides=2, padding=\"same\", use_bias=False\n    )(residual)\n    x = layers.add([x, residual])\nx = layers.GlobalAveragePooling2D()(x)",
+      "language": "python",
+      "what_it_does": "Defines the input, rescaling, a regular 5x5 stem convolution, five residual blocks of batch-normalized separable convolutions with max pooling, and global average pooling. The listing continues on p.306 with `x = layers.Dropout(0.5)(x)`, `outputs = layers.Dense(1, activation=\"sigmoid\")(x)` and `model = keras.Model(inputs=inputs, outputs=outputs)`.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Import Keras; `layers` is assumed imported (from keras import layers) as in earlier listings."},
+        {"lines": "2", "explanation": "Input of 180x180 RGB images, the size used by the chapter 8 data pipeline."},
+        {"lines": "3", "explanation": "Rescaling(1/255) maps pixel values from 0-255 to 0-1. Callout: don't forget input rescaling!"},
+        {"lines": "4", "explanation": "Regular Conv2D, 32 filters of 5x5, no bias (its output is batch-normalized by the first block). Output 176x176x32. Callout: separable convolution's 'feature channels are largely independent' assumption does not hold for RGB images, whose color channels are highly correlated, so the first layer is a regular Conv2D."},
+        {"lines": "5", "explanation": "Five blocks with increasing feature depth: 32, 64, 128, 256, 512 filters."},
+        {"lines": "6", "explanation": "Save the block's input for the residual connection."},
+        {"lines": "7-9", "explanation": "BN -> ReLU -> SeparableConv2D(size, 3, padding='same', use_bias=False): first batch-normalized separable convolution; 'same' padding keeps the spatial size."},
+        {"lines": "10-12", "explanation": "Second BN -> ReLU -> SeparableConv2D with the same settings."},
+        {"lines": "13", "explanation": "MaxPooling2D with a 3x3 window, stride 2, 'same' padding: halves height and width (rounding up). Note the overlapping 3x3 window, unlike the 2x2 pooling of chapter 8."},
+        {"lines": "14-16", "explanation": "Project the residual with a 1x1 Conv2D, `size` filters, stride 2, 'same' padding, no bias, so it matches the main path in both channels and spatial size."},
+        {"lines": "17", "explanation": "Add the main path and the projected residual. Callout: each block consists of two batch-normalized depthwise separable convolution layers and a max pooling layer, with a residual connection around the entire block."},
+        {"lines": "18", "explanation": "GlobalAveragePooling2D: (None, 6, 6, 512) -> (None, 512). Callout: in the original model, we used a Flatten layer before the Dense layer."}
+      ],
+      "inputs_outputs": "Input: batches of (180, 180, 3) images with pixel values 0-255. After this page's code: (None, 512) feature vectors; the p.306 lines produce (None, 1) sigmoid probabilities.",
+      "algorithm": "Stem convolution, then five pre-normalized residual blocks of separable convolutions that each halve resolution and (from block 2) double channels, then global average pooling.",
+      "theory_link": "Implements all six principles: blocks (9.1), increasing filters, deep and narrow, residual connections (9.2), batch normalization with activation after it and use_bias=False (9.3), separable convolutions where their prior holds (9.4).",
+      "parameters": [
+        {"name": "shape=(180, 180, 3)", "role": "Input image size and RGB channels"},
+        {"name": "kernel_size=5 (stem)", "role": "Larger window for the first regular convolution"},
+        {"name": "[32, 64, 128, 256, 512]", "role": "Filters per block; increasing feature depth"},
+        {"name": "padding=\"same\"", "role": "Keeps spatial size in the convolutions; gives ceil(H/2) in the stride-2 layers"},
+        {"name": "use_bias=False", "role": "Every convolution's output gets batch-normalized (in the next block for the residual sum), so biases would be redundant"},
+        {"name": "MaxPooling2D(3, strides=2)", "role": "Overlapping 3x3 pooling halving resolution"},
+        {"name": "Conv2D(size, 1, strides=2)", "role": "Residual projection matching channels and resolution"}
+      ],
+      "pitfalls": [
+        "The residual projection must use the same stride and padding as the pooling, or `add` fails with a shape mismatch.",
+        "Do not make the stem a SeparableConv2D: the channel-independence assumption fails for RGB.",
+        "The code assumes `from keras import layers`.",
+        "The model is incomplete without the p.306 lines (Dropout, Dense, keras.Model).",
+        "Reuse chapter 8's training setup, including data augmentation, for a fair comparison."
+      ],
+      "illustrative_code": "# Beyond the book: inspect shapes and parameter counts after completing the model\n# (append the p.306 lines first)\nx = layers.Dropout(0.5)(x)\noutputs = layers.Dense(1, activation=\"sigmoid\")(x)\nmodel = keras.Model(inputs=inputs, outputs=outputs)\nmodel.summary()   # by our count: 718,849 trainable + 3,008 non-trainable = 721,857"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Shape trace of the whole model",
+      "kind": "step_by_step",
+      "body": "Beyond the book, derived from the code:\n\n| stage | output shape |\n|---|---|\n| Input / Rescaling | (None, 180, 180, 3) |\n| Conv2D 5x5, 32 (valid) | (None, 176, 176, 32) |\n| Block 32 | (None, 88, 88, 32) |\n| Block 64 | (None, 44, 44, 64) |\n| Block 128 | (None, 22, 22, 128) |\n| Block 256 | (None, 11, 11, 256) |\n| Block 512 | (None, 6, 6, 512) |\n| GlobalAveragePooling2D | (None, 512) |\n| Dropout + Dense (p.306) | (None, 1) |\n\nThe first block keeps 32 channels (it only downsamples); every later block halves resolution and doubles channels, following the principle on p.304.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Where the parameters are, and the 721,857 figure",
+      "kind": "numerical",
+      "body": "Our own count from the code (not in the book): stem 2,400; blocks 3,904 / 9,440 / 35,264 / 136,064 / 534,272 (including BatchNormalization's moving mean and variance); Dense head 513. Total **721,857**, which matches the figure on p.306. Of these, 3,008 are BatchNormalization moving statistics, which Keras reports as *non-trainable*, so the trainable count would be 718,849. The book calls 721,857 the trainable count; the small difference is these moving averages. Either way it is less than half of chapter 8's 1,569,089, and about three quarters sits in the last block, mostly in the $512 \\times 512$ pointwise matrix of its second separable convolution.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Why the stem must be regular: a concrete look at RGB",
+      "kind": "application",
+      "body": "In a natural photo, a pixel's red, green and blue values rise and fall together with brightness; correlation between channels is often above 0.9. The most informative early features (edges of a certain color, color contrasts) are combinations of channels at nearby positions. A depthwise conv would detect edges separately in R, G and B and only mix them afterward, three nearly redundant computations. A regular Conv2D learns joint spatial-color filters directly. After the stem, the 32 learned channels are much less correlated, so the separable prior becomes reasonable. This illustrates p.303's caveat: priors help only when they are accurate.",
+      "source": "ai_explanation"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "widget",
+      "title": "Shape flow of the mini Xception-like model",
+      "why": "Traces the tensor through the stem, the five blocks of the `for size in [32, 64, 128, 256, 512]` loop and global average pooling.",
+      "widget": "tensor_shapes",
+      "params": {
+        "steps": [
+          {"op": "input + rescaling", "shape": [null, 180, 180, 3]},
+          {"op": "Conv2D 5x5, 32", "shape": [null, 176, 176, 32]},
+          {"op": "block 32", "shape": [null, 88, 88, 32]},
+          {"op": "block 64", "shape": [null, 44, 44, 64]},
+          {"op": "block 128", "shape": [null, 22, 22, 128]},
+          {"op": "block 256", "shape": [null, 11, 11, 256]},
+          {"op": "block 512", "shape": [null, 6, 6, 512]},
+          {"op": "global avg pool", "shape": [null, 512]}
+        ]
+      }
+    },
+    {
+      "id": "v2",
+      "type": "mermaid",
+      "title": "One block of the loop",
+      "why": "The callout: two batch-normalized depthwise separable convolution layers and a max pooling layer, with a residual connection around the entire block.",
+      "mermaid": "flowchart TB\n X[block input x] --> B1[BatchNormalization]\n B1 --> R1[ReLU]\n R1 --> S1[SeparableConv2D size, 3x3, same]\n S1 --> B2[BatchNormalization]\n B2 --> R2[ReLU]\n R2 --> S2[SeparableConv2D size, 3x3, same]\n S2 --> P[MaxPooling2D 3, strides 2, same]\n X --> C[Conv2D size, 1x1, strides 2, same]\n P --> A((add))\n C --> A\n A --> Y[block output]"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "SeparableConv2D should replace every Conv2D, including the first layer.",
+      "correction": "The callout explains that RGB channels are highly correlated, violating separable convolution's assumption, so the first layer stays a regular Conv2D."
+    },
+    {
+      "claim": "Wider layers are always the better way to add capacity.",
+      "correction": "The principle on this page: deep and narrow is better than broad and shallow."
+    },
+    {
+      "claim": "The residual can be added directly without projection.",
+      "correction": "The block changes both channel count and spatial size (via stride-2 pooling), so the residual needs a 1x1 Conv2D with strides=2 and padding='same'."
+    },
+    {
+      "claim": "Batch normalization is guaranteed to help.",
+      "correction": "The page says it 'can be beneficial', consistent with the authors' statement that its mechanism is not well understood."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 304, "note": "First two principles and the separable-convolution speed sidebar"},
+      {"page": 303, "note": "Separable convolution parameter savings and Xception"},
+      {"page": 302, "note": "Conv -> BN -> ReLU ordering"},
+      {"page": 301, "note": "BatchNormalization and use_bias=False"},
+      {"page": 298, "note": "Residual blocks with max pooling and strided 1x1 projections"}
+    ],
+    "later": [
+      {"page": 306, "note": "End of the listing; 721,857 parameters vs. 1,569,089; 90.8% vs. 83.9% test accuracy; figure 9.5"},
+      {"page": 306, "note": "Section 9.6: Vision Transformers"}
+    ],
+    "prerequisites": [
+      {"page": 299, "note": "residual_block function and the residual model"},
+      {"page": 302, "note": "SeparableConv2D"}
+    ],
+    "related_math": [
+      {"page": 303, "note": "Separable convolution parameter count"}
+    ],
+    "related_code": [
+      {"page": 299, "note": "Earlier residual model with blocks of 32, 64, 128 filters"},
+      {"page": 306, "note": "Remaining lines of this listing"}
+    ],
+    "related_figures": [
+      {"page": 303, "note": "Figure 9.4: depthwise separable convolution"},
+      {"page": 306, "note": "Figure 9.5: training and validation metrics of this model"}
+    ]
+  },
+  "takeaways": [
+    "Full checklist: blocks; more filters as maps shrink; deep and narrow; residual connections; batch normalization after convolutions; SeparableConv2D for parameter efficiency.",
+    "The mini Xception-like model reuses chapter 8's data and training setup; only the architecture changes.",
+    "The first layer is a regular Conv2D because RGB channels are highly correlated.",
+    "Each block: [BN, ReLU, SeparableConv2D] x2, MaxPooling2D(3, strides=2), plus a strided 1x1 residual projection.",
+    "All convolutions use use_bias=False since their outputs are batch-normalized.",
+    "GlobalAveragePooling2D replaces Flatten before the classifier."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "Why is the first convolution in the model a regular Conv2D rather than a SeparableConv2D?",
+      "options": [
+        "Red, green and blue channels are highly correlated in natural images, so the channel-independence assumption fails",
+        "SeparableConv2D cannot accept 3-channel inputs",
+        "A 5x5 window is not supported by SeparableConv2D",
+        "Regular convolutions are faster on the first layer"
+      ],
+      "answer": "Red, green and blue channels are highly correlated in natural images, so the channel-independence assumption fails",
+      "explanation": "That is the callout's reasoning. SeparableConv2D accepts any channel count and window size; speed is not the argument given.",
+      "page_refs": [305]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "Why does the residual projection use `strides=2` and `padding=\"same\"`?",
+      "options": [],
+      "answer": "Because the main path is downsampled by MaxPooling2D(3, strides=2, padding='same'); the projected residual must have the same spatial size (and `size` channels) to be added.",
+      "explanation": "Both stride-2 'same' operations give ceil(H/2), e.g. 11 -> 6 in the last block.",
+      "page_refs": [305]
+    },
+    {
+      "id": "q3",
+      "type": "math",
+      "question": "Starting from a 180x180 input, what is the spatial size after the stem Conv2D (5x5, valid) and after each of the five blocks?",
+      "options": [],
+      "answer": "176 after the stem; then 88, 44, 22, 11, 6.",
+      "explanation": "Valid 5x5: 180 - 4 = 176. Each block halves with rounding up: ceil(11/2) = 6.",
+      "page_refs": [305]
+    },
+    {
+      "id": "q4",
+      "type": "conceptual",
+      "question": "Every convolution in the code has use_bias=False. Justify this for the SeparableConv2D layers and for the residual projection.",
+      "options": [],
+      "answer": "The first SeparableConv2D of each block is followed directly by BatchNormalization, which subtracts the per-channel mean and cancels any constant bias. The second one and the residual projection feed the add; whatever constant they would contribute is cancelled by the next block's first BatchNormalization on the main path. On the shortcut chain it would only propagate as a constant offset through 1x1 convolutions and adds to global average pooling, where the Dense layer's own bias can absorb it. So the biases would be redundant.",
+      "explanation": "This applies the NOTE on p.301 (normalization centers the output, so the bias is unnecessary) to the less obvious places in this model. The argument for the shortcut chain is our own reasoning, not the book's.",
+      "page_refs": [305, 301]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "Which statement matches a principle listed on this page?",
+      "options": [
+        "Deep and narrow is better than broad and shallow",
+        "Broad and shallow is better than deep and narrow",
+        "Batch normalization should always be placed before the input rescaling",
+        "Separable convolutions should only be used in the first layer"
+      ],
+      "answer": "Deep and narrow is better than broad and shallow",
+      "explanation": "It is the first bullet on the page. The second option is the reverse; the third and fourth contradict the code (rescaling comes first; separable convolutions are used after the first layer).",
+      "page_refs": [305]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "What does the model use instead of chapter 8's Flatten layer, and what shape does it produce here?",
+      "options": [],
+      "answer": "GlobalAveragePooling2D, producing (None, 512).",
+      "explanation": "Stated in the callout; 512 is the last block's filter count.",
+      "page_refs": [305]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "For each of the six principles (p.304 and this page), can you point to the line(s) of the code that implement it?",
+      "options": [],
+      "answer": "Blocks: the for-loop body. Increasing filters: [32, 64, 128, 256, 512]. Deep and narrow: ten 3x3 separable convs in five blocks. Residual: residual = x / Conv2D(size, 1, strides=2) / layers.add. Batch normalization: the BatchNormalization lines before each ReLU. SeparableConv2D: the two SeparableConv2D lines per block.",
+      "explanation": "Mapping principles to code is the purpose of section 9.5.",
+      "page_refs": [304, 305]
+    }
+  ]
+}

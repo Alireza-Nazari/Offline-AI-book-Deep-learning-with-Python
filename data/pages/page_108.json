@@ -1,0 +1,394 @@
+{
+  "page_id": "page_108",
+  "pdf_page": 108,
+  "printed_page": "84",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:14:45Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean extraction; all body paragraphs, the listing caption and the four code blocks match the page image. The final paragraph introduces a split example that appears on the next page."
+  },
+  "overview": {
+    "title": "Seed keys: stateless random numbers in JAX",
+    "chapter": "3 Introduction to TensorFlow, PyTorch, JAX, and Keras",
+    "section": "3.5 Introduction to JAX",
+    "subsection": "3.5.3 Random number generation in JAX",
+    "main_topic": "How JAX replaces NumPy's hidden global random state with explicit, immutable PRNG keys that every random function takes as its first argument.",
+    "central_idea": "Because JAX is stateless, random functions cannot remember where they are in a random stream. You pass the randomness in explicitly as a key: the same key always produces the same numbers, and you get fresh randomness by deriving new keys with `jax.random.split()`.",
+    "importance": "Explicit key management is the first real place where JAX code looks different from NumPy code. Every JAX model that uses dropout, random initialization or noise has to thread keys through its functions, so understanding this pattern now prevents confusing bugs (identical 'random' values) later.",
+    "learning_objectives": [
+      "Explain why a stateless framework cannot offer NumPy-style `np.random.normal()` calls that return different values each time.",
+      "Manage a seed outside a function and pass it in as an argument, as in the `apply_noise` example.",
+      "Create a JAX PRNG key with `jax.random.key()` and pass it as the first positional argument to `jax.random.normal()`.",
+      "Predict that two calls with the same key return identical arrays (Listing 3.30).",
+      "State that `jax.random.split()` derives new keys deterministically from an existing one."
+    ],
+    "prerequisites": [
+      "NumPy random API (`np.random.seed`, `np.random.normal`)",
+      "The idea of JAX as a stateless framework (p.106)",
+      "Basic JAX arrays via `jax.numpy` (p.107)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "This page continues section 3.5.3 on random number generation in JAX. The previous page (p.107) showed that NumPy's `np.random.normal()` returns different values on each call because it silently advances a **hidden global state**, and noted that a stateless framework cannot have such state: the same call must always return the same value.\n\nThe page first shows what this means in plain NumPy if you refuse to rely on global state across calls: a function such as `apply_noise(x, seed)` receives its seed as an argument, and the *caller* is responsible for changing the seed (`seed += 1`) between calls so that each call gets different noise. The seed state lives outside the function.\n\nJAX works \"basically the same\", with one change: instead of integer seeds it uses special array structures called **keys**, created from an integer with `jax.random.key(1337)`. To make it impossible to forget the seed, **every** JAX random function takes the key as its **first positional argument**, e.g. `jax.random.normal(seed_key, shape=(3,))`, which with `key(0)` prints `Array([ 1.8160863 , -0.48262316,  0.33988908], dtype=float32)`.\n\nListing 3.30 demonstrates the consequence: calling `jax.random.normal` twice with the same `key(123)` returns exactly the same array, `[-0.1470326, 0.5524756, 1.648498]`, both times. Randomness in JAX is a pure function of the key.\n\nThe page ends by introducing `jax.random.split()`, which creates new keys from an existing one. It is deterministic, so the same sequence of splits always yields the same final key; the example code for this is on the next page (p.109), along with the authors' justification that statelessness makes code vectorizable and reproducible.",
+  "paragraphs": [
+    {
+      "ref": "p108_e03",
+      "excerpt": "Now, it’s often the case that your PRNG calls are going to be",
+      "what_it_says": "Random calls usually live inside functions that are called repeatedly and should produce different random values each time. Without global state, you must keep the seed outside the function and manage it yourself, as the following code shows.",
+      "what_it_means": "In a stateless world the function cannot 'remember' how many times it has been called, so the variation between calls has to come from its inputs. The seed becomes an ordinary argument, and whoever calls the function is in charge of supplying a different seed each time.",
+      "why_it_matters": "This is the exact mental model that JAX imposes: randomness is an input, not a side effect. The NumPy example is a bridge that lets you see the pattern in familiar syntax before JAX's own API appears.",
+      "technical_idea": "Converting a stateful random call into a pure function by lifting the generator state into an explicit parameter (state-passing style).",
+      "terminology": [
+        {"term": "PRNG", "meaning": "Pseudo-Random Number Generator: a deterministic algorithm that produces sequences of numbers that look random, fully determined by an initial seed/state (defined on p.107)."},
+        {"term": "global state", "meaning": "Data stored outside any function (here, NumPy's internal generator state) that a function reads and modifies implicitly."}
+      ],
+      "connections": ["p.107: Listing 3.29 showed `np.random.normal()` returning different values because of hidden global state."]
+    },
+    {
+      "ref": "p108_e05",
+      "excerpt": "It’s basically the same in JAX. However, JAX doesn’t use integer seeds.",
+      "what_it_says": "JAX follows the same pattern but replaces integer seeds with special array structures called keys, which you create from an integer using `jax.random.key()`.",
+      "what_it_means": "A key is a small JAX array that encodes the full state of the random generator. Because it is an array, it can flow through JAX functions, be compiled with `jit` and be split, just like any other value. The integer you pass (1337) is only used once, to build the initial key.",
+      "why_it_matters": "Making the key an array rather than a Python int is what lets JAX treat random state as data inside compiled, parallel computations.",
+      "technical_idea": "Beyond the book: modern JAX's `jax.random.key()` returns a typed key array with a special key dtype; the older `jax.random.PRNGKey()` returned a raw `uint32` array of shape `(2,)`. Both are accepted by the `jax.random.*` functions.",
+      "terminology": [
+        {"term": "key", "meaning": "A JAX array that holds PRNG state; passed explicitly to every random function."},
+        {"term": "jax.random.key()", "meaning": "Builds a key from an integer seed."}
+      ],
+      "connections": ["p.106: JAX's stateless approach to computation is introduced as its defining trait."]
+    },
+    {
+      "ref": "p108_e07",
+      "excerpt": "To force you to always provide a seed “key” to PRNG calls, all",
+      "what_it_says": "Every JAX operation that uses randomness takes `key` as its first positional argument, so you cannot call it without a seed. The example draws three normal samples with `jax.random.normal(seed_key, shape=(3,))` using `key(0)`.",
+      "what_it_means": "The API design itself enforces discipline: there is no default, implicit generator to fall back on. Note also that the shape is given via an explicit `shape=` argument, after the key.",
+      "why_it_matters": "If you port NumPy code and forget about keys, JAX will raise an error instead of silently using some global stream; the key-first convention is consistent across `normal`, `uniform`, `bernoulli`, `permutation` and so on (beyond the book).",
+      "technical_idea": "Signature convention: `jax.random.<dist>(key, shape=..., dtype=...)`.",
+      "terminology": [
+        {"term": "first positional argument", "meaning": "The argument passed first without a name; here, always the key."}
+      ],
+      "connections": []
+    },
+    {
+      "ref": "p108_e09",
+      "excerpt": "Two calls to `random.normal()` that receive the same seed key will always",
+      "what_it_says": "Calling `random.normal()` twice with the same key returns the same value both times, which Listing 3.30 demonstrates.",
+      "what_it_means": "A JAX random function is a pure function of its key (and shape/dtype). Reusing a key means reusing the randomness.",
+      "why_it_matters": "This is both a feature (perfect reproducibility) and a trap: reusing one key for two dropout layers or two initializations gives them identical 'random' values. You must derive a new key for each independent random draw.",
+      "technical_idea": "Determinism: output = f(key, shape). Same inputs, same output.",
+      "terminology": [],
+      "connections": []
+    },
+    {
+      "ref": "p108_e12",
+      "excerpt": "If you need a new seed key, you can simply create a new",
+      "what_it_says": "New keys are created from existing ones with `jax.random.split()`. Splitting is deterministic, so the same sequence of splits always produces the same final key. The code follows on the next page.",
+      "what_it_means": "Instead of incrementing an integer (as in the NumPy `seed += 1` example), you derive child keys from a parent key. The whole tree of keys is fixed by the original integer seed, so an entire program's randomness is reproducible from one number.",
+      "why_it_matters": "`split` is the standard way to get fresh randomness in JAX training loops: split the key, use one part now, keep the other for later.",
+      "technical_idea": "Beyond the book: `jax.random.split(key, num=2)` returns an array of `num` new keys; typical usage is `key, subkey = jax.random.split(key)`, then pass `subkey` to the random function and keep `key` for future splits.",
+      "terminology": [
+        {"term": "jax.random.split()", "meaning": "Deterministically derives one or more new keys from an existing key."}
+      ],
+      "connections": ["p.109: the split example and the argument that statelessness enables vectorization and determinism."]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "prng_key",
+      "name": "PRNG key (JAX)",
+      "definition": "A special JAX array that holds the state of the pseudo-random generator and is passed explicitly as the first argument of every JAX random function.",
+      "intuition": "Think of the key as a ticket: the same ticket always wins the same prize. To get a different prize you need a new ticket, which you derive from an existing one.",
+      "technical": "Created with `jax.random.key(seed_int)`. Random functions compute their output purely from the key plus shape/dtype arguments; they never modify the key. New keys come from `jax.random.split()`.",
+      "significance": "Makes random operations compatible with JAX's stateless, compiled, parallel execution model.",
+      "example": "`jax.random.normal(jax.random.key(123), shape=(3,))` always returns `[-0.1470326, 0.5524756, 1.648498]` (Listing 3.30).",
+      "misconception": "That calling a JAX random function 'consumes' or advances the key. It does not; the key is immutable and reusing it repeats the result.",
+      "related": ["stateless_computation", "key_splitting", "pseudo_random_number_generation"],
+      "source": "book"
+    },
+    {
+      "id": "stateless_computation",
+      "name": "Stateless computation",
+      "definition": "A style in which functions keep no persistent hidden state: their outputs depend only on their inputs.",
+      "intuition": "A calculator rather than a notebook: press the same keys, get the same answer, and nothing is written down between presses.",
+      "technical": "In JAX this applies to randomness (keys instead of a global generator) and to arrays (no in-place assignment, p.109). Any state the computation needs must be passed in and, if updated, returned.",
+      "significance": "The authors present it as JAX's core design choice, enabling automatic parallelization, compilation and reproducibility (p.106, p.109).",
+      "example": "`apply_noise(x, seed)` receives the seed as an argument instead of relying on `np.random`'s hidden state between calls.",
+      "misconception": "That stateless means 'no randomness'. Randomness is still available; it is just supplied explicitly.",
+      "related": ["prng_key", "jit_compilation"],
+      "source": "book"
+    },
+    {
+      "id": "pseudo_random_number_generation",
+      "name": "Pseudo-random number generation (PRNG)",
+      "definition": "Producing random-looking numbers with a deterministic algorithm driven by a seed.",
+      "intuition": "A very long, scrambled list of numbers; the seed tells you where to start reading.",
+      "technical": "NumPy keeps the generator state globally (`np.random.get_state()` / `np.random.seed()`, p.107); JAX makes the state an explicit value (the key).",
+      "significance": "Random initialization, dropout, shuffling and noise injection all rely on PRNGs, so how a framework manages PRNG state affects every model.",
+      "example": "`np.random.seed(1337)` followed by `np.random.normal(...)` is reproducible; calling `np.random.normal(...)` again without reseeding gives different numbers.",
+      "misconception": "That pseudo-random numbers are 'truly' random. They are fully determined by the seed, which is exactly what makes experiments reproducible.",
+      "related": ["prng_key"],
+      "source": "book"
+    },
+    {
+      "id": "key_splitting",
+      "name": "Key splitting",
+      "definition": "Deriving new PRNG keys from an existing key with `jax.random.split()`.",
+      "intuition": "Like a family tree: each key can have children, and the whole tree is fixed by the root seed.",
+      "technical": "Deterministic: the same sequence of splits always yields the same final key (book). Beyond the book: it returns an array of new keys (two by default) that are statistically independent streams.",
+      "significance": "It is the JAX replacement for `seed += 1`: the way to get fresh randomness for each call.",
+      "example": "`key, subkey = jax.random.split(key)` then `jax.random.normal(subkey, shape=(3,))` (idiom, not from this page).",
+      "misconception": "That incrementing the integer seed (`key(1337)`, `key(1338)`) is equivalent and preferable. It works, but `split` is the idiomatic, well-mixed way to derive many independent keys from one root.",
+      "related": ["prng_key"],
+      "source": "book"
+    }
+  ],
+  "math": [],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Managing the seed outside the function (NumPy)",
+      "original_code": "def apply_noise(x, seed):\n    np.random.seed(seed)\n    x = x * np.random.normal((3,))\n    return x\nseed = 1337\ny = apply_noise(x, seed)\nseed += 1\nz = apply_noise(x, seed)",
+      "language": "python",
+      "what_it_does": "Defines a function that multiplies its input by random noise generated from an explicitly provided seed, then calls it twice with two different seeds so that `y` and `z` receive different noise.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "The seed is a parameter of the function, so the function's randomness is controlled from outside."},
+        {"lines": "2", "explanation": "Reseeds NumPy's generator with the given seed, making the next random draw a function of `seed`."},
+        {"lines": "3", "explanation": "Draws normal noise and multiplies `x` by it."},
+        {"lines": "4", "explanation": "Returns the noisy array."},
+        {"lines": "5-6", "explanation": "The caller picks the initial seed and makes the first call."},
+        {"lines": "7-8", "explanation": "The caller changes the seed before the second call, so `z` gets different noise from `y`. The seed state is managed outside the function."}
+      ],
+      "inputs_outputs": "Input: an array `x` (assumed defined earlier) and an integer seed. Output: `x` multiplied by random noise; `y` and `z` differ because their seeds differ.",
+      "algorithm": "State-passing: the caller owns and advances the seed; the function is deterministic given `(x, seed)`.",
+      "theory_link": "Illustrates how to emulate stateless randomness in NumPy, motivating JAX's key-based API.",
+      "parameters": [
+        {"name": "seed", "role": "Integer that fully determines the noise drawn inside the function."}
+      ],
+      "pitfalls": [
+        "Note (not in the book): `np.random.normal((3,))` passes `(3,)` as the first positional parameter, which is `loc` (the mean), not `size`. It returns a single sample with mean 3 of shape `(1,)`, which then broadcasts over `x`. To draw three standard-normal values you would write `np.random.normal(size=(3,))`.",
+        "Note (not in the book): `np.random.seed()` still mutates NumPy's global generator; the function is only reproducible, not truly free of global side effects. JAX removes the global generator entirely.",
+        "Forgetting `seed += 1` would make `y` and `z` receive identical noise."
+      ],
+      "illustrative_code": "# AI-written: a NumPy version with no global side effect\nimport numpy as np\n\ndef apply_noise(x, seed):\n    rng = np.random.default_rng(seed)      # local generator\n    return x * rng.normal(size=x.shape)\n\nx = np.ones(3)\ny = apply_noise(x, 1337)\nz = apply_noise(x, 1338)"
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Creating a seed key",
+      "original_code": "import jax\nseed_key = jax.random.key(1337)",
+      "language": "python",
+      "what_it_does": "Imports JAX and builds a PRNG key from the integer 1337.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Imports the JAX library."},
+        {"lines": "2", "explanation": "`jax.random.key()` turns the integer seed into a key array, the object that all JAX random functions expect."}
+      ],
+      "inputs_outputs": "Input: integer 1337. Output: a JAX key array.",
+      "algorithm": "Seed initialization.",
+      "theory_link": "Keys replace integer seeds in JAX's stateless PRNG design.",
+      "parameters": [
+        {"name": "1337", "role": "The integer seed from which the key is derived."}
+      ],
+      "pitfalls": [
+        "A key is not an integer: you cannot do `seed_key += 1`. Derive new keys with `jax.random.split()`."
+      ],
+      "illustrative_code": null
+    },
+    {
+      "id": "c3",
+      "listing": null,
+      "title": "Sampling with jax.random.normal",
+      "original_code": ">>> seed_key = jax.random.key(0)\n>>> jax.random.normal(seed_key, shape=(3,))\nArray([ 1.8160863 , -0.48262316,  0.33988908], dtype=float32)",
+      "language": "python",
+      "what_it_does": "Creates a key from seed 0 and draws three standard-normal samples with it.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Builds a key from the integer 0."},
+        {"lines": "2", "explanation": "The key is the first positional argument; the output shape is given with `shape=(3,)`."},
+        {"lines": "3", "explanation": "The result is a float32 JAX `Array` of three values drawn from a standard normal distribution."}
+      ],
+      "inputs_outputs": "Input: key(0), shape (3,). Output: float32 array of shape (3,).",
+      "algorithm": "Deterministic mapping from (key, shape) to samples.",
+      "theory_link": "Key-first API enforces explicit randomness.",
+      "parameters": [
+        {"name": "seed_key", "role": "PRNG key, required first argument."},
+        {"name": "shape", "role": "Shape of the output array."}
+      ],
+      "pitfalls": [
+        "Exact printed values can differ between JAX versions or PRNG implementations; reproducibility is guaranteed for a fixed setup, not across all versions (beyond the book)."
+      ],
+      "illustrative_code": null
+    },
+    {
+      "id": "c4",
+      "listing": "3.30",
+      "title": "Using a random seed in Jax",
+      "original_code": ">>> seed_key = jax.random.key(123)\n>>> jax.random.normal(seed_key, shape=(3,))\nArray([-0.1470326,  0.5524756,  1.648498 ], dtype=float32)\n>>> jax.random.normal(seed_key, shape=(3,))\nArray([-0.1470326,  0.5524756,  1.648498 ], dtype=float32)",
+      "language": "python",
+      "what_it_does": "Shows that two calls with the same key return identical arrays.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Creates a key from seed 123."},
+        {"lines": "2-3", "explanation": "First draw: `[-0.1470326, 0.5524756, 1.648498]`."},
+        {"lines": "4-5", "explanation": "Second draw with the same key: exactly the same values. Unlike NumPy (p.107), nothing hidden changed between the calls."}
+      ],
+      "inputs_outputs": "Same key in, same array out, every time.",
+      "algorithm": "Pure function of the key.",
+      "theory_link": "Direct contrast to Listing 3.29 on p.107, where repeated `np.random.normal()` calls differ.",
+      "parameters": [
+        {"name": "seed_key", "role": "Reused key; reuse reproduces the result."}
+      ],
+      "pitfalls": [
+        "Reusing a key where you meant independent randomness (e.g., two weight initializations) silently gives correlated or identical values."
+      ],
+      "illustrative_code": "# AI-written: getting different values by splitting\nimport jax\nkey = jax.random.key(123)\nkey, sub1 = jax.random.split(key)\nkey, sub2 = jax.random.split(key)\na = jax.random.normal(sub1, shape=(3,))\nb = jax.random.normal(sub2, shape=(3,))  # differs from a"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "The ticket analogy",
+      "kind": "analogy",
+      "body": "NumPy's global generator is like a ticket dispenser at a deli counter: every time anyone pulls, the number advances, and who gets which number depends on the order of pulls across the whole program. JAX's keys are like printed tickets you hold in your hand: a ticket always maps to the same number, and to get new ones you tear a ticket in two (`split`). Nothing anywhere else in the program can change what your ticket says.",
+      "source": "analogy"
+    },
+    {
+      "title": "Why a global generator breaks parallel and compiled code",
+      "kind": "step_by_step",
+      "body": "1. A compiler like XLA (used by `jax.jit`, p.112) may reorder, fuse or parallelize operations.\n2. If random calls read and advance a shared global counter, their results depend on execution order.\n3. Reordering or running calls in parallel would then change the numbers produced, or require synchronization.\n4. With explicit keys, each random call's output depends only on its own key, so any execution order gives the same results.\n\nThe authors state the conclusion on p.109: statelessness makes code vectorizable while maintaining determinism, which is impossible with a global PRNG state. Steps 1-3 are an explanation beyond the book.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Typical key-threading pattern in a training loop",
+      "kind": "application",
+      "body": "Beyond the book: in practice you keep one 'root' key and split it each step:\n\n```python\nkey = jax.random.key(0)\nfor step in range(num_steps):\n    key, dropout_key = jax.random.split(key)\n    state = train_step(state, batch, dropout_key)\n```\n\nThe training step receives randomness as an argument, exactly like `apply_noise(x, seed)` on this page.",
+      "source": "ai_explanation"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "Global state (NumPy) vs explicit keys (JAX)",
+      "why": "The page contrasts NumPy's hidden seed state with JAX keys that are passed into each call and derived with split.",
+      "mermaid": "flowchart LR\n  subgraph NumPy[\"NumPy: hidden global state\"]\n    G[(global RNG state)] --> N1[\"np.random.normal() call 1\"]\n    N1 -->|advances| G\n    G --> N2[\"np.random.normal() call 2\"]\n  end\n  subgraph JAX[\"JAX: explicit keys\"]\n    K0[\"jax.random.key(123)\"] --> R1[\"normal(key) -> [-0.147, 0.552, 1.648]\"]\n    K0 --> R2[\"normal(key) -> same values\"]\n    K0 -->|split| K1[new key] --> R3[\"normal(new key) -> different values\"]\n  end"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "Calling `jax.random.normal(key, ...)` updates the key so the next call gives new numbers.",
+      "correction": "Keys are immutable; Listing 3.30 shows the same key returning the same array twice. Use `jax.random.split()` to get a new key."
+    },
+    {
+      "claim": "JAX random functions can be called without a seed and fall back to a default generator.",
+      "correction": "The key is a required first positional argument of every JAX PRNG operation; there is no global default."
+    },
+    {
+      "claim": "Passing the seed into `apply_noise` makes the NumPy version fully stateless.",
+      "correction": "It makes the results controlled by the caller, but `np.random.seed()` still mutates NumPy's global generator (note beyond the book). JAX removes that global object entirely."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 107, "note": "Listing 3.29 and the explanation of NumPy's hidden global PRNG state that motivates this page."},
+      {"page": 106, "note": "JAX introduced as a stateless framework, with random operations listed as a key concept."}
+    ],
+    "later": [
+      {"page": 109, "note": "The `jax.random.split()` example, the benefits of statelessness, and the second NumPy difference: immutable arrays with `.at().set()`."},
+      {"page": 112, "note": "`@jax.jit` compilation, which relies on functions being stateless."},
+      {"page": 242, "note": "Writing stateless JAX training steps in Keras, where all state must be passed in and returned."}
+    ],
+    "prerequisites": [
+      {"page": 107, "note": "jax.numpy and the definition of PRNG."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 107, "note": "Listing 3.29, the NumPy random tensors counterpart to Listing 3.30."}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "JAX has no hidden global random state; randomness is an explicit input called a key.",
+    "Create a key from an integer with `jax.random.key(seed)`.",
+    "Every JAX random function takes the key as its first positional argument, e.g. `jax.random.normal(key, shape=(3,))`.",
+    "The same key always produces the same values (Listing 3.30); reuse means repetition.",
+    "Get fresh randomness by deriving new keys with the deterministic `jax.random.split()`.",
+    "The NumPy `apply_noise(x, seed)` pattern, where the caller manages the seed, is the same idea in familiar syntax."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "You run `k = jax.random.key(123)` and then call `jax.random.normal(k, shape=(3,))` twice. What happens?",
+      "options": [
+        "The second call returns different values because the key advanced",
+        "Both calls return exactly the same array",
+        "The second call raises an error because the key was consumed",
+        "The values differ unless you call np.random.seed(123) first"
+      ],
+      "answer": "Both calls return exactly the same array",
+      "explanation": "Listing 3.30 shows both calls returning `[-0.1470326, 0.5524756, 1.648498]`. Keys are not advanced or consumed (options 1 and 3 are wrong), and NumPy's seed has no effect on JAX's PRNG (option 4 is wrong).",
+      "page_refs": [108]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "Where does the key go in the argument list of a JAX random function, and why did JAX choose this design?",
+      "options": [],
+      "answer": "It is the first positional argument of every PRNG-using operation, which forces you to always provide a seed key.",
+      "explanation": "The page states that all JAX PRNG operations take `key` as their first positional argument 'to force you to always provide a seed key', since there is no global state to fall back on.",
+      "page_refs": [108]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "In the NumPy `apply_noise` example, what is the role of `seed += 1`, and what is its JAX equivalent?",
+      "options": [],
+      "answer": "It gives the second call a different seed so `z` gets different noise from `y`; the caller manages seed state outside the function. In JAX you would derive a new key with `jax.random.split()` instead of incrementing an integer.",
+      "explanation": "The page says you must 'manage your seed state outside of the target function', and then introduces `jax.random.split()` as the way to create a new key from an existing one.",
+      "page_refs": [108, 109]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "What does `jax.random.key(1337)` return?",
+      "options": [
+        "The integer 1337 unchanged",
+        "A random float drawn from a normal distribution",
+        "A special array structure (a key) that holds PRNG state",
+        "A NumPy Generator object"
+      ],
+      "answer": "A special array structure (a key) that holds PRNG state",
+      "explanation": "The book: 'JAX doesn't use integer seeds. It uses special array structures called keys. You can create one from an integer value.' It is not the integer itself, not a sample, and not a NumPy object.",
+      "page_refs": [108]
+    },
+    {
+      "id": "q5",
+      "type": "conceptual",
+      "question": "Why is `jax.random.split()` being deterministic a desirable property rather than a limitation?",
+      "options": [],
+      "answer": "Because the whole program's randomness becomes reproducible from one root seed: the same sequence of splits always yields the same keys, so runs can be repeated exactly, while the new keys still give different values from the parent.",
+      "explanation": "The page notes that the same sequence of splits always results in the same final key; p.109 adds that statelessness maintains determinism, i.e., running the same code twice gives the same results.",
+      "page_refs": [108, 109]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "Beyond the book: what does `np.random.normal((3,))` in the `apply_noise` example actually compute, and how would you request three standard-normal samples?",
+      "options": [],
+      "answer": "`(3,)` is taken as `loc` (mean), so it returns one sample with mean 3, shape (1,). Use `np.random.normal(size=(3,))`.",
+      "explanation": "NumPy's signature is `normal(loc=0.0, scale=1.0, size=None)`; the first positional argument is the mean. The example's intent is clear either way, but the size keyword is needed for a shape.",
+      "page_refs": [108]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you write, from memory, code that creates a JAX key, splits it into two subkeys, and draws two different 3-element normal arrays?",
+      "options": [],
+      "answer": "`key = jax.random.key(0); k1, k2 = jax.random.split(key); a = jax.random.normal(k1, shape=(3,)); b = jax.random.normal(k2, shape=(3,))`",
+      "explanation": "This combines the three API pieces from this page: `key()`, key-first `normal()`, and `split()`. If `a` and `b` came out equal, you reused a key.",
+      "page_refs": [108, 109]
+    }
+  ]
+}

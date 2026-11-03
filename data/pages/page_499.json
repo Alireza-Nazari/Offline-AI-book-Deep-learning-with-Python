@@ -1,0 +1,424 @@
+{
+  "page_id": "page_499",
+  "pdf_page": 499,
+  "printed_page": "475",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:58:00Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean. Element p499_e04 merges two printed paragraphs ('We can actually tie...' and 'Adding this to our PositionalEmbedding...'); each gets its own note. Listing 16.6 starts here and continues on p.500 (num_heads, num_layers, model construction)."
+  },
+  "overview": {
+    "title": "Weight tying and the start of the mini-GPT model",
+    "chapter": "16 Text generation",
+    "section": "16.2 Training a mini-GPT",
+    "subsection": "16.2.1 Building the model",
+    "main_topic": "Tying the token-embedding and output-projection weights via a 'reverse' mode of PositionalEmbedding (Listing 16.5), and the first lines of the mini-GPT model with mixed precision (Listing 16.6)",
+    "central_idea": "The output projection to vocabulary logits can reuse the transpose of the token-embedding matrix, a 'reverse embedding' from hidden space to token space. This saves the largest block of weights and is a good idea in practice; the layer gets a reverse=True switch. The model is then configured with mixed precision, the 32,000-token vocabulary, hidden_dim 512 and intermediate_dim 2056.",
+    "importance": "Weight tying is used in GPT and many later LLMs, and the PositionalEmbedding defined here is both the first and last layer of the mini-GPT built on p.500. Mixed precision is the first time the book switches on a performance setting that is explained only in chapter 18.",
+    "learning_objectives": [
+      "State the shapes of the token embedding (vocab_size, hidden_dim) and output projection (hidden_dim, vocab_size) and why they are the largest weights",
+      "Explain weight tying: logits = hidden states times the transpose of the embedding matrix",
+      "Read Listing 16.5, including how positions are computed with cumsum(ones_like(inputs)) - 1",
+      "Know what keras.config.set_dtype_policy(\"mixed_float16\") does at a high level",
+      "Recall the hyperparameters introduced so far in Listing 16.6"
+    ],
+    "prerequisites": [
+      "Embedding layers as lookup tables (p.435)",
+      "The PositionalEmbedding layer of chapter 15 (p.476)",
+      "Matrix multiplication and transposes",
+      "The decoder block of Listing 16.4 (p.498)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "Continuing from p.498, the page explains why the input token embedding and the output prediction layer are the biggest weights in a Transformer: both live in vocabulary space. The embedding has shape `(vocab_size, hidden_dim)` (one vector per possible token) and the output projection has shape `(hidden_dim, vocab_size)` (one logit per possible token).\n\nThese two matrices can be **tied**. Final predictions are computed by multiplying the hidden states by the **transpose of the token-embedding matrix**. The authors describe the output projection as a **\"reverse embedding\"**: an embedding maps token space to hidden space, the projection maps hidden space back to token space, and using the same weights for both turns out to be a good idea. Implementing it only requires adding a `reverse` argument to `PositionalEmbedding.call`.\n\n**Listing 16.5** shows the layer. It owns two `Embedding` tables: `token_embeddings` (`input_dim` x `output_dim`) and `position_embeddings` (`sequence_length` x `output_dim`). In reverse mode it returns `ops.matmul(inputs, ops.transpose(token_embeddings))`, where `token_embeddings` is the raw weight matrix. In forward mode it builds the position indices `0, 1, ..., L-1` with `ops.cumsum(ops.ones_like(inputs), axis=-1) - 1`, embeds tokens and positions, and adds them.\n\nThe authors then announce the model: **eight decoder layers** stacked into a \"mini\" GPT. They turn on **mixed precision**, which lets Keras run some computations much faster at the cost of some numerical fidelity; the full explanation is deferred to chapter 18. **Listing 16.6** begins with `keras.config.set_dtype_policy(\"mixed_float16\")`, `vocab_size = tokenizer.vocabulary_size()` (32,000 for the SentencePiece vocabulary of p.495), `hidden_dim = 512` and `intermediate_dim = 2056`; the listing continues on p.500 with `num_heads = 8`, `num_layers = 8` and the functional model, which uses the same `embedding` object at the input and, with `reverse=True`, at the output.",
+  "paragraphs": [
+    {
+      "ref": "p499_e03",
+      "excerpt": "prediction layer because they deal with our vocabulary space. The token embedding",
+      "what_it_says": "The embedding and the output prediction layer are the biggest weights because they deal with the vocabulary space. The token embedding has shape (vocab_size, hidden_dim) to embed every possible token, and the output projection has shape (hidden_dim, vocab_size) to produce a floating-point prediction for every possible token.",
+      "what_it_means": "With vocab_size = 32,000 and hidden_dim = 512 each matrix has 32,000 x 512 = 16,384,000 parameters. A single decoder block of Listing 16.4 with these sizes has about 3.16M parameters, so one vocabulary matrix is worth roughly five Transformer blocks. The two matrices are exact transposes of each other in shape, which is what makes tying possible.",
+      "why_it_matters": "It identifies where memory goes in a small language model and sets up the weight-tying trick.",
+      "technical_idea": "Shapes: $E \\in \\mathbb{R}^{V \\times d}$, $W_{out} \\in \\mathbb{R}^{d \\times V}$; both have $Vd$ parameters.",
+      "terminology": [
+        {"term": "Vocabulary space", "meaning": "The space indexed by token ids, of size vocab_size."},
+        {"term": "Output projection", "meaning": "The final dense map from each hidden vector to one logit per vocabulary token."}
+      ],
+      "connections": [
+        "p.498: the sentence begins there ('The biggest weights in a Transformer model are the input token embeddings and output dense...')",
+        "p.495: the SentencePiece vocabulary has 32,000 terms"
+      ]
+    },
+    {
+      "ref": "p499_e04",
+      "excerpt": "We can actually tie these two weight matrices together. To compute our model’s",
+      "what_it_says": "The two matrices can be tied: the model's final predictions are computed by multiplying hidden states by the transpose of the token-embedding matrix. The final projection is a 'reverse embedding', mapping hidden space to token space, while the embedding maps token space to hidden space. Using the same weights for input and output projections turns out to be a good idea.",
+      "what_it_means": "The logit for token $j$ at a position becomes the dot product between the hidden state and token $j$'s embedding vector. The model predicts a token when its final hidden state points in the same direction as that token's embedding. This forces input and output representations to share one geometry and removes a 16M-parameter matrix. Gradients reach the embedding from both ends of the network: from where tokens are read and from where they are predicted.",
+      "why_it_matters": "It saves memory (the reason given on p.498) and is a widely used choice in language models; the authors state it 'turns out' to be a good idea, an empirical claim rather than a theorem.",
+      "technical_idea": "$\\text{logits} = H E^{\\top}$, with $H \\in \\mathbb{R}^{L\\times d}$ and $E \\in \\mathbb{R}^{V\\times d}$.",
+      "terminology": [
+        {"term": "Weight tying", "meaning": "Sharing one parameter matrix between two parts of a network; here the input embedding and the output projection."},
+        {"term": "Reverse embedding", "meaning": "The authors' name for the output projection computed with the transposed embedding matrix."}
+      ],
+      "connections": [
+        "p.500: the model calls embedding(x, reverse=True) to produce its outputs"
+      ]
+    },
+    {
+      "ref": "p499_e04",
+      "excerpt": "Adding this to our PositionalEmbedding is simple; we will just add a reverse argument",
+      "what_it_says": "To implement tying, a reverse argument is added to the call method of PositionalEmbedding; when set, the layer computes the projection with the transpose of the token embedding.",
+      "what_it_means": "Because both uses share the same layer object, they automatically share the same weight variable; no extra bookkeeping is needed. In reverse mode the position embeddings are not used at all.",
+      "why_it_matters": "It is a concrete pattern for weight sharing in Keras: call one layer instance in two places, here in two different modes.",
+      "connections": [
+        "p.476: the original PositionalEmbedding of chapter 15 without reverse mode"
+      ]
+    },
+    {
+      "ref": "p499_e07",
+      "excerpt": "Let’s build our model. We will stack eight decoder layers into a single",
+      "what_it_says": "The model is built by stacking eight decoder layers into a single 'mini' GPT.",
+      "what_it_means": "This is why per-block dropout was added on p.498: eight blocks of Listing 16.4 make up most of the network's depth (and about 25M of its parameters).",
+      "why_it_matters": "It fixes the depth of the model whose size (41 million parameters) is reported on p.500.",
+      "connections": [
+        "p.498: Listing 16.4, the block being stacked",
+        "p.500: num_layers = 8 and the stacking loop"
+      ]
+    },
+    {
+      "ref": "p499_e08",
+      "excerpt": "We will also turn on a Keras setting called mixed precision to speed",
+      "what_it_says": "Mixed precision is turned on to speed up training. It lets Keras run some computations much faster by sacrificing some numerical fidelity. A full explanation is promised in chapter 18.",
+      "what_it_means": "With the 'mixed_float16' policy, layers compute in 16-bit floating point (fast on modern GPUs' tensor cores, and half the memory for activations) while keeping their variables in 32-bit float. Beyond the book: Keras' fit() also applies loss scaling for float16 so that small gradients do not underflow to zero.",
+      "why_it_matters": "Training a 41M-parameter model on about a billion tokens is expensive; mixed precision can make it substantially faster on supported hardware.",
+      "terminology": [
+        {"term": "Mixed precision", "meaning": "Using lower-precision (float16) arithmetic for most computations while keeping weights in float32."},
+        {"term": "Dtype policy", "meaning": "A Keras global setting that decides the compute dtype and variable dtype of layers."}
+      ],
+      "connections": [
+        "Chapter 18 (later in the book) explains mixed precision in full"
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "weight_tying",
+      "name": "Weight tying",
+      "definition": "Using the transpose of the input token-embedding matrix as the output projection from hidden states to vocabulary logits.",
+      "intuition": "The same 'dictionary' is read in both directions: token to vector on the way in, vector to token on the way out.",
+      "technical": "logits = H @ E^T where E is the (vocab_size, hidden_dim) embedding table. In Listing 16.5 this is ops.matmul(inputs, ops.transpose(self.token_embeddings.embeddings)).",
+      "significance": "Saves vocab_size x hidden_dim parameters (16.4M here) and, according to the authors, works well.",
+      "example": "If token 'Paris' has embedding e, the model predicts 'Paris' with high probability when its final hidden state h has a large dot product with e.",
+      "misconception": "That weight tying adds an extra transposed copy of the matrix as a parameter; it is the same variable, only transposed at compute time.",
+      "related": ["embedding", "positional_encoding", "language_model"],
+      "source": "book"
+    },
+    {
+      "id": "positional_encoding",
+      "name": "Learned positional embedding",
+      "definition": "A trainable vector for each position index 0..sequence_length-1, added to the token embedding.",
+      "intuition": "A stamp saying 'I am the 5th token' added to each token's meaning vector.",
+      "technical": "positions = cumsum(ones_like(inputs), axis=-1) - 1 gives [0, 1, ..., L-1] for every sequence in the batch; position_embeddings is an Embedding(sequence_length, output_dim).",
+      "significance": "Attention has no built-in notion of order; this injects it.",
+      "example": "For inputs of shape (128, 256), positions has shape (128, 256) with each row equal to 0..255.",
+      "misconception": "That learned positions extend to any length; inputs longer than sequence_length (256) would index past the position table.",
+      "related": ["embedding", "transformer"],
+      "source": "book"
+    },
+    {
+      "id": "embedding",
+      "name": "Token embedding",
+      "definition": "A lookup table mapping each token id to a dense vector.",
+      "intuition": "A dictionary from integers to learned vectors (p.435).",
+      "technical": "layers.Embedding(input_dim, output_dim) stores a weight matrix accessible as .embeddings with shape (input_dim, output_dim).",
+      "significance": "It is both the first layer and, transposed, the last layer of the mini-GPT.",
+      "example": "Embedding(32000, 512): 16,384,000 parameters.",
+      "misconception": "That an embedding is different in kind from a Dense layer; a lookup equals multiplying a one-hot vector by the same matrix.",
+      "related": ["weight_tying", "positional_encoding"],
+      "source": "book"
+    },
+    {
+      "id": "mixed_precision",
+      "name": "Mixed precision",
+      "definition": "Running most computations in a lower-precision float type (float16) while keeping variables in float32.",
+      "intuition": "Doing rough arithmetic fast where exactness does not matter, while keeping the master copy of the weights precise.",
+      "technical": "keras.config.set_dtype_policy(\"mixed_float16\") sets every subsequently created layer's compute dtype to float16 and variable dtype to float32.",
+      "significance": "Speeds up training on hardware with fast float16 units, at the cost of some numerical fidelity (book); details in chapter 18.",
+      "example": "A Dense layer under this policy casts its float32 kernel to float16 for the matmul.",
+      "misconception": "That mixed precision stores the model in float16; the weights remain float32.",
+      "related": ["optimizer"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Tied output projection (reverse embedding)",
+      "latex": "\\text{logits} = H\\,E^{\\top},\\qquad H \\in \\mathbb{R}^{L \\times d},\\ E \\in \\mathbb{R}^{V \\times d},\\ \\text{logits} \\in \\mathbb{R}^{L \\times V}",
+      "source_text": "\"we will multiply our hidden states by the transpose of our token embedding matrix\"; code: ops.matmul(inputs, ops.transpose(token_embeddings))",
+      "variables": [
+        {"symbol": "H", "meaning": "Hidden states from the last decoder block (per sequence), one row per position"},
+        {"symbol": "E", "meaning": "Token embedding matrix, shape (vocab_size, hidden_dim)"},
+        {"symbol": "L", "meaning": "Sequence length (256 in this chapter)"},
+        {"symbol": "d", "meaning": "hidden_dim = 512"},
+        {"symbol": "V", "meaning": "vocab_size = 32,000"}
+      ],
+      "operations": "Transpose the embedding matrix and multiply; each output entry is a dot product between a hidden vector and a token embedding.",
+      "purpose": "Produce next-token logits without a separate output weight matrix.",
+      "interpretation": "$\\text{logits}_{t,j} = h_t \\cdot e_j$: the score of token $j$ at position $t$ is how aligned the hidden state is with that token's embedding.",
+      "intuition": "Embedding: token to point in space. Reverse embedding: point in space to scores for every token (the nearest tokens score highest).",
+      "numerical_example": "With $d=2$, $E = \\begin{pmatrix}1&0\\\\0&1\\\\1&1\\end{pmatrix}$ (3 tokens) and $h = (2, 1)$: logits $= (2, 1, 3)$, so token 2 is most likely. Parameters saved here in the real model: $32{,}000 \\times 512 = 16{,}384{,}000$.",
+      "source": "book",
+      "book_ref": "p.499"
+    },
+    {
+      "id": "m2",
+      "title": "Position indices and the combined embedding",
+      "latex": "p_t = \\Big(\\sum_{s=1}^{t} 1\\Big) - 1 = t-1,\\qquad z_t = E[x_t] + P[p_t]",
+      "source_text": "positions = ops.cumsum(ops.ones_like(inputs), axis=-1) - 1; return embedded_tokens + embedded_positions",
+      "variables": [
+        {"symbol": "x_t", "meaning": "Token id at (1-based) step t"},
+        {"symbol": "p_t", "meaning": "0-based position index"},
+        {"symbol": "E", "meaning": "Token embedding table"},
+        {"symbol": "P", "meaning": "Position embedding table, shape (sequence_length, hidden_dim)"},
+        {"symbol": "z_t", "meaning": "Input vector to the first decoder block"}
+      ],
+      "operations": "Cumulative sum of a tensor of ones along the sequence axis, minus one; two table lookups; elementwise addition.",
+      "purpose": "Produce position ids with the same shape as the input batch, without hard-coding the length.",
+      "interpretation": "Every sequence in the batch gets positions 0..L-1.",
+      "intuition": "Counting the tokens seen so far gives each token its index.",
+      "numerical_example": "inputs = [[17, 4, 9]] -> ones_like = [[1,1,1]] -> cumsum = [[1,2,3]] -> minus 1 = [[0,1,2]].",
+      "source": "book",
+      "book_ref": "p.499"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": "16.5",
+      "title": "A positional embedding layer that can reverse a text embedding",
+      "original_code": "from keras import ops\n\nclass PositionalEmbedding(keras.Layer):\n    def __init__(self, sequence_length, input_dim, output_dim):\n        super().__init__()\n        self.token_embeddings = layers.Embedding(input_dim, output_dim)\n        self.position_embeddings = layers.Embedding(sequence_length, output_dim)\n\n    def call(self, inputs, reverse=False):\n        if reverse:\n            token_embeddings = self.token_embeddings.embeddings\n            return ops.matmul(inputs, ops.transpose(token_embeddings))\n        positions = ops.cumsum(ops.ones_like(inputs), axis=-1) - 1\n        embedded_tokens = self.token_embeddings(inputs)\n        embedded_positions = self.position_embeddings(positions)\n        return embedded_tokens + embedded_positions",
+      "language": "python",
+      "what_it_does": "Defines a layer that, in normal mode, turns token ids into token embeddings plus learned position embeddings, and in reverse mode turns hidden vectors into vocabulary logits using the transpose of the same token-embedding matrix.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Imports the backend-agnostic ops module (matmul, transpose, cumsum, ones_like)."},
+        {"lines": "3-7", "explanation": "Two Embedding tables: token_embeddings with input_dim = vocab_size rows, and position_embeddings with sequence_length rows, both of width output_dim = hidden_dim."},
+        {"lines": "9", "explanation": "call takes an extra keyword reverse, defaulting to False (normal embedding)."},
+        {"lines": "10-12", "explanation": "Reverse mode: fetch the raw (vocab_size, hidden_dim) weight matrix via .embeddings, transpose it to (hidden_dim, vocab_size), and matmul with the hidden states (batch, seq, hidden_dim), giving (batch, seq, vocab_size) logits. Position embeddings are unused."},
+        {"lines": "13", "explanation": "Normal mode: build position ids 0..L-1 with the same shape as inputs by cumulative-summing ones and subtracting one."},
+        {"lines": "14-16", "explanation": "Look up token and position embeddings and add them elementwise; output shape (batch, seq, hidden_dim)."}
+      ],
+      "inputs_outputs": "Normal mode: int token ids (batch, seq_len) -> float (batch, seq_len, output_dim). Reverse mode: float hidden states (batch, seq_len, output_dim) -> float logits (batch, seq_len, input_dim).",
+      "algorithm": "Embedding lookup plus learned positional embedding; tied output projection via transposed embedding matrix.",
+      "theory_link": "Implements the weight tying described in the paragraphs above; the reverse output is raw logits (no softmax), so the loss must be configured with from_logits=True.",
+      "parameters": [
+        {"name": "sequence_length", "role": "Number of positions with a learned embedding (256 in this chapter); maximum usable input length."},
+        {"name": "input_dim", "role": "Vocabulary size (32,000)."},
+        {"name": "output_dim", "role": "Embedding width = hidden_dim (512)."},
+        {"name": "reverse", "role": "If True, compute logits with the transposed token embedding instead of embedding."}
+      ],
+      "pitfalls": [
+        "Inputs longer than sequence_length would produce position ids outside the position table.",
+        "Reverse mode returns logits, not probabilities; pair it with a from_logits loss or apply a softmax for sampling.",
+        "Under the mixed_float16 policy the matmul runs in float16; beyond the book, many implementations cast logits to float32 before the softmax/loss for numerical stability.",
+        "self.token_embeddings.embeddings only exists after the layer has been built (called once in normal mode); in the model of p.500 the forward call comes first, so this is satisfied."
+      ],
+      "illustrative_code": "# AI-written check (not from the book)\nimport numpy as np\nemb = PositionalEmbedding(sequence_length=256, input_dim=32000, output_dim=512)\nids = np.array([[17, 4, 9]])\nh = emb(ids)                  # (1, 3, 512)\nlogits = emb(h, reverse=True) # (1, 3, 32000)\nprint(h.shape, logits.shape)\nprint(len(emb.weights))       # 2 weight matrices only: no separate output kernel"
+    },
+    {
+      "id": "c2",
+      "listing": "16.6",
+      "title": "Creating a mini-GPT functional model (first lines; continues on p.500)",
+      "original_code": "keras.config.set_dtype_policy(\"mixed_float16\")\n\nvocab_size = tokenizer.vocabulary_size()\nhidden_dim = 512\nintermediate_dim = 2056",
+      "language": "python",
+      "what_it_does": "Turns on mixed precision for all layers created afterwards and sets the vocabulary size and layer widths of the mini-GPT. The rest of the listing (num_heads = 8, num_layers = 8, the Input, the PositionalEmbedding, a LayerNormalization, the loop of TransformerDecoder blocks, the reverse embedding output and keras.Model) is on p.500.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Enables mixed precision (callout: see chapter 18). Must be called before the layers are created, because each layer reads the global policy at construction time."},
+        {"lines": "3", "explanation": "Vocabulary size taken from the SentencePiece tokenizer of Listing 16.2 (32,000 terms, p.495)."},
+        {"lines": "4", "explanation": "hidden_dim = 512: width of embeddings and of each decoder block's residual stream."},
+        {"lines": "5", "explanation": "intermediate_dim = 2056: hidden width of each block's feedforward network, about 4 x hidden_dim."}
+      ],
+      "inputs_outputs": "No tensors yet; sets global policy and hyperparameters.",
+      "algorithm": "Configuration step of model construction.",
+      "theory_link": "With these sizes, one Listing 16.4 block has about 3.16M parameters; eight blocks plus the 16.4M tied embedding and 0.13M position table give the 41 million parameters reported on p.500.",
+      "parameters": [
+        {"name": "\"mixed_float16\"", "role": "Compute in float16, store variables in float32."},
+        {"name": "vocab_size", "role": "Rows of the token embedding / columns of the logits."},
+        {"name": "hidden_dim", "role": "Model width."},
+        {"name": "intermediate_dim", "role": "Feedforward width."}
+      ],
+      "pitfalls": [
+        "Setting the dtype policy is global and affects every model built later in the same session.",
+        "Mixed float16 speeds up only on hardware with fast float16 support (most modern GPUs); on CPU it may be slower."
+      ],
+      "illustrative_code": "# AI-written parameter count (not from the book)\nV, d, f, L, n = 32000, 512, 2056, 256, 8\nattn = 4 * (d * d + d)                  # q, k, v, output projections\nffn = (d * f + f) + (f * d + d)\nblock = attn + ffn + 2 * (2 * d)        # + two LayerNorms\ntotal = V * d + L * d + 2 * d + n * block\nprint(block, total)  # 3160584 41800768  (~41M as stated on p.500)"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Where the 41 million parameters go",
+      "kind": "numerical",
+      "body": "Beyond the book, computed from the sizes on this page and p.500 (vocab 32,000; hidden 512; intermediate 2056; 8 heads; 8 layers; sequence length 256):\n\n| part | parameters |\n|---|---|\n| token embedding (tied, used twice) | 16,384,000 |\n| position embedding | 131,072 |\n| initial LayerNorm | 1,024 |\n| per block: attention (4 x (512x512+512)) | 1,050,624 |\n| per block: feedforward | 2,107,912 |\n| per block: 2 LayerNorms | 2,048 |\n| 8 blocks | 25,284,672 |\n| **total** | **about 41.8M** |\n\nWithout tying, a separate (512, 32000) output kernel (+ bias) would add about 16.4M more, roughly 40% more parameters.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Embedding as one-hot times matrix",
+      "kind": "breakdown",
+      "body": "Beyond the book: looking up row $j$ of $E$ equals computing $o_j^{\\top} E$ where $o_j$ is a one-hot vector. The forward embedding is therefore the linear map $o \\mapsto o^{\\top}E$ (token space to hidden space), and the reverse embedding is $h \\mapsto h E^{\\top}$ (hidden space to token space), its transpose. This is why the authors' 'reverse embedding' description is mathematically exact.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Library analogy",
+      "kind": "analogy",
+      "body": "Think of the embedding table as a shelf of 32,000 labeled reference cards. Embedding a token is pulling out its card. Reverse embedding is holding up a new card (the hidden state) and measuring how similar it is to every card on the shelf; the most similar labels are the best guesses for the next token.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "widget",
+      "title": "Shape flow through the tied embedding",
+      "why": "Follows Listing 16.5 in both modes, with the chapter's sizes (sequence length 256, hidden_dim 512, vocab 32,000).",
+      "widget": "tensor_shapes",
+      "params": {
+        "steps": [
+          {"op": "token ids", "shape": [null, 256]},
+          {"op": "embed + positions", "shape": [null, 256, 512]},
+          {"op": "8 decoder blocks", "shape": [null, 256, 512]},
+          {"op": "matmul E^T (reverse)", "shape": [null, 256, 32000]}
+        ]
+      }
+    },
+    {
+      "id": "v2",
+      "type": "mermaid",
+      "title": "One embedding object used at both ends",
+      "why": "Shows the weight-sharing the page describes: the same token-embedding matrix maps token space to hidden space and, transposed, hidden space back to token space.",
+      "mermaid": "flowchart LR\n  T[token ids] -->|lookup E| H0[hidden 512-d]\n  P[positions 0..L-1] -->|lookup P| H0\n  H0 --> D[8 x TransformerDecoder]\n  D --> HL[hidden 512-d]\n  HL -->|matmul E transpose| Lg[logits 32,000-d]\n  E[(token_embeddings.embeddings 32000 x 512)] -.shared.- T\n  E -.shared.- Lg"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "Weight tying means the output layer is initialized from the embedding and then trained separately.",
+      "correction": "It is literally the same variable: reverse mode reads self.token_embeddings.embeddings at every call, so both uses update one matrix."
+    },
+    {
+      "claim": "Mixed precision makes the model store its weights in float16.",
+      "correction": "With mixed_float16, computations use float16 but variables are kept in float32; the book only says some computations run faster by sacrificing some numerical fidelity, with details in chapter 18."
+    },
+    {
+      "claim": "The reverse embedding output is a probability distribution.",
+      "correction": "It is raw logits from a matmul; no softmax is applied in the layer."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 498, "note": "Listing 16.4 decoder block and the start of the sentence about the biggest weights."},
+      {"page": 476, "note": "The chapter 15 PositionalEmbedding that is extended here."},
+      {"page": 435, "note": "Embedding layers as dictionaries mapping ints to vectors."},
+      {"page": 495, "note": "The SentencePiece tokenizer with a 32,000-term vocabulary."},
+      {"page": 496, "note": "sequence_length = 256 used to window the data."}
+    ],
+    "later": [
+      {"page": 500, "note": "Rest of Listing 16.6: num_heads, num_layers, stacking decoders, embedding(x, reverse=True); the 41M parameter count; warmup schedule."},
+      {"page": 502, "note": "Generative decoding uses the logits produced by the reverse embedding."}
+    ],
+    "prerequisites": [
+      {"page": 435, "note": "What an Embedding layer is."},
+      {"page": 476, "note": "Positional embeddings."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 476, "note": "Original PositionalEmbedding (chapter 15)."},
+      {"page": 500, "note": "Continuation of Listing 16.6."}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "The token embedding (vocab_size, hidden_dim) and the output projection (hidden_dim, vocab_size) are the largest weights; here 16.4M parameters each.",
+    "Weight tying computes logits as hidden states times the transposed embedding matrix: a 'reverse embedding'.",
+    "Listing 16.5 implements tying with a reverse flag on PositionalEmbedding; one layer object, one weight matrix, used at both ends of the model.",
+    "Positions are computed as cumsum(ones_like(inputs)) - 1, giving 0..L-1 for any batch.",
+    "Mixed precision (set_dtype_policy(\"mixed_float16\")) speeds training at some cost in numerical fidelity; explained in chapter 18.",
+    "The mini-GPT uses vocab 32,000, hidden_dim 512, intermediate_dim 2056 and (p.500) 8 heads and 8 layers."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "In reverse mode, what does PositionalEmbedding compute?",
+      "options": [
+        "token_embeddings(inputs) + position_embeddings(positions)",
+        "matmul(inputs, transpose(token_embedding_matrix))",
+        "matmul(inputs, transpose(position_embedding_matrix))",
+        "softmax over the token embedding matrix"
+      ],
+      "answer": "matmul(inputs, transpose(token_embedding_matrix))",
+      "explanation": "Reverse mode returns ops.matmul(inputs, ops.transpose(self.token_embeddings.embeddings)). The first option is normal mode; position embeddings are not used in reverse mode; no softmax is applied.",
+      "page_refs": [499]
+    },
+    {
+      "id": "q2",
+      "type": "math",
+      "question": "With vocab_size = 32,000 and hidden_dim = 512, how many parameters does weight tying save (ignoring any output bias)?",
+      "options": [],
+      "answer": "32,000 x 512 = 16,384,000 parameters.",
+      "explanation": "An untied output projection would be a separate (hidden_dim, vocab_size) matrix; tying reuses the embedding matrix instead.",
+      "page_refs": [499]
+    },
+    {
+      "id": "q3",
+      "type": "short",
+      "question": "What does ops.cumsum(ops.ones_like(inputs), axis=-1) - 1 produce for an input batch of shape (2, 4)?",
+      "options": [],
+      "answer": "[[0, 1, 2, 3], [0, 1, 2, 3]]: the 0-based position index of each token.",
+      "explanation": "ones_like gives all ones; the cumulative sum along the sequence axis gives 1..4; subtracting 1 gives 0..3.",
+      "page_refs": [499]
+    },
+    {
+      "id": "q4",
+      "type": "conceptual",
+      "question": "Why do the authors call the output projection a 'reverse embedding'?",
+      "options": [],
+      "answer": "An embedding maps token space to hidden space; the output projection maps hidden space back to token space. With tying, it uses the same matrix transposed, so it literally reverses the direction of the embedding map.",
+      "explanation": "This is the description in the second paragraph; mathematically, the lookup is a multiplication of a one-hot vector by E, and the projection multiplies by E transposed.",
+      "page_refs": [499]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "What does the book say mixed precision trades away to gain speed?",
+      "options": [
+        "Model capacity",
+        "Some numerical fidelity",
+        "The ability to use dropout",
+        "Training data"
+      ],
+      "answer": "Some numerical fidelity",
+      "explanation": "The page states mixed precision lets Keras run some computations much faster by sacrificing some numerical fidelity. It does not change capacity, data or dropout.",
+      "page_refs": [499]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "Why must keras.config.set_dtype_policy(\"mixed_float16\") be called at the top of Listing 16.6, before the model's layers are created?",
+      "options": [],
+      "answer": "Layers read the global dtype policy when they are constructed, so the policy only applies to layers created after it is set.",
+      "explanation": "Beyond the book: this is how Keras dtype policies work; the book simply places the call first, with a pointer to chapter 18.",
+      "page_refs": [499]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Sketch the shapes of a batch passing through the mini-GPT from token ids to logits, using the sizes on this page.",
+      "options": [],
+      "answer": "(batch, 256) ints -> (batch, 256, 512) after embedding + positions -> (batch, 256, 512) after each of 8 decoder blocks -> (batch, 256, 32000) logits after the reverse embedding.",
+      "explanation": "Check against Listings 16.4-16.6; every block preserves shape and only the reverse embedding changes the last axis to the vocabulary size.",
+      "page_refs": [498, 499, 500]
+    }
+  ]
+}

@@ -1,0 +1,339 @@
+{
+ "page_id": "page_497",
+ "pdf_page": 497,
+ "printed_page": "473",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:50:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. The first code block continues Listing 16.3 from p.496 (unnumbered on this page). Its callouts, matched to lines by the arrows in the image: 'Combines our file shards into a single dataset' → interleave; 'Windows tokens into even samples of 256 tokens' → rebatch; 'Splits labels, offset by one' → map. The extractor merged printed paragraphs: p497_e05 holds 'We have 29,373 batches…' and 'At 128 samples per batch…'; p497_e09 holds 'This was an interesting bet…' and 'The other consequence…', which continues on p.498."
+ },
+ "overview": {
+  "title": "Finishing the pretraining pipeline; GPT as a decoder-only Transformer",
+  "chapter": "16 Text generation",
+  "section": "16.2 Training a mini-GPT",
+  "subsection": "16.2.1 Building the model",
+  "main_topic": "Interleaving shard datasets, windowing the token stream into 257-token chunks with rebatch(), splitting inputs and labels offset by one, batching and prefetching; counting 29,373 batches (about a billion tokens) and holding out 500 for validation; then the GPT design choice of dropping the encoder and keeping only a causal decoder",
+  "central_idea": "The token streams of all shards are merged, cut into equal chunks of sequence_length + 1 tokens, and turned into (input, next-token label) pairs, giving just under a billion training tokens. The model that will learn from them is decoder-only: one sequence, one set of parameters, information flowing only left to right.",
+  "importance": "This completes the data side of the book's most expensive training run and introduces the architectural bet behind GPT and today's LLMs: giving up bidirectional encoding in exchange for training on any raw text at massive scale.",
+  "learning_objectives": [
+   "Explain each step of the pipeline: from_tensor_slices, interleave, rebatch, map, batch, prefetch",
+   "Explain why chunks have sequence_length + 1 tokens and how `(x[:-1], x[1:])` produces next-token labels",
+   "Compute the number of tokens in the dataset from batches, batch size and sequence length",
+   "Explain the take/skip validation split and why both datasets are repeated",
+   "Describe how GPT simplifies the encoder-decoder Transformer and what decoder-only means for question answering",
+   "State the consequence that information flow is no longer bidirectional, even over the input"
+  ],
+  "prerequisites": [
+   "read_file() and the <|endoftext|> token (Listing 16.3, p.496)",
+   "Language-model training with labels offset by one (p.447)",
+   "tf.data prefetch() (chapter 8, p.273)",
+   "Encoder-decoder Transformer for translation (p.472) and causal attention (p.470)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Finishing Listing 16.3.** The shard filenames (`extract_dir.glob(\"*.txt\")`) become a dataset with `from_tensor_slices`. `interleave(read_file, cycle_length=32, num_parallel_calls=32)` runs `read_file()` on 32 shards at once and merges their tokenized documents (\"Combines our file shards into a single dataset\"). `rebatch(sequence_length + 1, drop_remainder=True)` treats the stream of variable-length token vectors as one long sequence and cuts it into equal chunks of 257 tokens (\"Windows tokens into even samples of 256 tokens\"). `map(lambda x: (x[:-1], x[1:]))` turns each chunk into a 256-token input and the same tokens **shifted by one** as labels (\"Splits labels, offset by one\"). Finally `batch(batch_size)` groups 128 samples and `prefetch(8)`, as first done in chapter 8, keeps batches ready for the GPU.\n\n**Size.** There are **29,373 batches**. You could count them with `ds.reduce(0, lambda c, _: c + 1)`, but merely tokenizing this much data takes a few minutes on a fast CPU. At 128 samples × 256 tokens, that is **just under a billion tokens** ($29{,}373 \\times 128 \\times 256 \\approx 9.6 \\times 10^8$). The first **500 batches** become a quick validation set (`take`), the rest the training set (`skip`), and both are `repeat()`ed.\n\n**16.2.1 Building the model.** The original GPT simplifies the sequence-to-sequence Transformer of chapter 15: it **drops the encoder entirely and keeps only the decoder**, so information can only travel **left to right**. This was a bet. A decoder-only model can still handle sequence-to-sequence problems like question answering, but the question and answer must be **combined into a single sequence**. Question tokens are then handled exactly like answer tokens: **all tokens share the same latent space and the same parameters**. The other consequence is that information flow is **no longer bidirectional, even for the input**: in \"Where is the capital of France?\" (continued on p.498), \"Where\" cannot attend to later words.",
+ "paragraphs": [
+  {
+   "ref": "p497_e04",
+   "excerpt": "As we first did in chapter 8, we will end our",
+   "what_it_says": "As in chapter 8, the tf.data pipeline ends with `prefetch()`, so some batches are always loaded onto the GPU and ready for the model.",
+   "what_it_means": "Prefetching overlaps data preparation (on CPU) with training (on GPU): while the model processes batch $n$, the pipeline is already preparing up to 8 more.",
+   "why_it_matters": "This pipeline does real work per batch (reading, regex, tokenizing); without prefetching the GPU would wait for the CPU at every step of a multi-hour run.",
+   "technical_idea": "Beyond the book: strictly, `prefetch(8)` buffers 8 prepared batches in host memory; the framework's data adapter then copies each batch to the device. The effect described in the book (data always ready for the model) is the same.",
+   "terminology": [
+    {"term": "prefetch", "meaning": "A tf.data transformation that prepares upcoming elements in a background buffer while the current one is being consumed."}
+   ],
+   "connections": ["p.273: prefetch() and map() introduced in chapter 8"]
+  },
+  {
+   "ref": "p497_e05",
+   "excerpt": "We have 29,373 batches. You could count this yourself if you would",
+   "what_it_says": "The dataset has 29,373 batches. You can count them with `ds.reduce(0, lambda c, _: c + 1)`, which iterates through the whole dataset, but just tokenizing this much data takes a few minutes on a fast CPU.",
+   "what_it_means": "A tf.data pipeline built from text files does not know its length in advance (its cardinality is unknown), so the number has to be counted once by running the whole pipeline, and then hard-coded.",
+   "why_it_matters": "The batch count is needed to split off a validation set and to compute steps per epoch later (p.501).",
+   "technical_idea": "Beyond the book: `ds.cardinality()` would return `UNKNOWN_CARDINALITY` (−2) here, because `interleave` and `rebatch` over files of unknown length make the size impossible to infer without iterating.",
+   "terminology": [
+    {"term": "Dataset.reduce", "meaning": "Folds a dataset into a single value by applying a function to an accumulator and each element in turn."}
+   ],
+   "connections": ["p.501: steps_per_epoch = num_train_batches // num_epochs"]
+  },
+  {
+   "ref": "p497_e05",
+   "excerpt": "At 128 samples per batch and 256 tokens per sample, this is",
+   "what_it_says": "128 samples per batch × 256 tokens per sample gives just under a billion tokens. The first 500 batches are split off as a quick validation set, and pretraining can start.",
+   "what_it_means": "The arithmetic is 29,373 × 128 × 256 = 962,494,464 tokens. Holding out 500 batches (about 16 million tokens, 1.7%) leaves about 946 million training tokens.",
+   "why_it_matters": "This is a tiny fraction of real LLM pretraining corpora (trillions of tokens, p.484) but large for a book example; p.501 says the model will make one pass over it, split across eight epochs.",
+   "technical_idea": "",
+   "terminology": [
+    {"term": "validation set", "meaning": "Held-out data used to monitor generalization during training; here 500 batches."}
+   ],
+   "connections": ["p.484: modern Transformers train on trillions of tokens", "p.501: one pass over the data, split into eight epochs"]
+  },
+  {
+   "ref": "p497_e08",
+   "excerpt": "The original GPT model simplifies the sequence-to-sequence Transformer we saw in",
+   "what_it_says": "GPT simplifies the chapter 15 sequence-to-sequence Transformer: instead of an encoder for the source and a decoder for the target, it removes the encoder and uses only the decoder, so information travels only left to right.",
+   "what_it_means": "The translation model of p.472 had two stacks: a bidirectional encoder over English and a causal decoder over Spanish with cross-attention between them. GPT keeps a stack of decoder blocks without cross-attention (p.498), applied to a single sequence with causal attention.",
+   "why_it_matters": "This is the architecture of essentially all modern generative LLMs, including the Gemma model used in section 16.3.",
+   "technical_idea": "",
+   "terminology": [
+    {"term": "decoder-only Transformer", "meaning": "A stack of Transformer decoder blocks with causal self-attention and no encoder or cross-attention."},
+    {"term": "GPT", "meaning": "Generative Pretrained Transformer (OpenAI, 2018), introduced on p.493."}
+   ],
+   "connections": ["p.472: the encoder-decoder translation Transformer", "p.493: GPT-1 introduced", "p.498: TransformerDecoder copied without the cross-attention layer"]
+  },
+  {
+   "ref": "p497_e09",
+   "excerpt": "This was an interesting bet on the part of the GPT developers.",
+   "what_it_says": "Dropping the encoder was a bet. A decoder-only model can still do sequence-to-sequence tasks like question answering, but the question and answer must be combined into one sequence. Unlike the original Transformer, question tokens are not handled differently from answer tokens: all tokens are embedded in the same latent space with the same parameters.",
+   "what_it_means": "Any input-to-output task becomes 'continue this text': the input is a prefix (the prompt) and the output is the continuation. There is no separate 'source' module; the same weights read the question and write the answer.",
+   "why_it_matters": "This is why prompting works: a pretrained decoder-only model can be steered just by writing the input as text (p.493: GPT-2 translating 'cheese' from a few-shot prompt).",
+   "technical_idea": "Beyond the book: a question-answer pair might be formatted as `Question: Where is the capital of France? Answer: Paris<|endoftext|>`. During training, the loss is computed on every position, so the model learns to predict question tokens too. Instruction fine-tuning (p.512) often masks the loss on the prompt part.",
+   "terminology": [
+    {"term": "shared latent space", "meaning": "All tokens, whether from the prompt or the response, are embedded and processed by the same parameters."}
+   ],
+   "connections": ["p.493: GPT-2's few-shot prompting", "p.512: instruction fine-tuning"]
+  },
+  {
+   "ref": "p497_e09",
+   "excerpt": "The other consequence of this approach is that the information flow is",
+   "what_it_says": "Information flow is no longer bidirectional, even for the input. In 'Where is the capital of France?', the representation of 'Where' cannot attend to 'capital' and 'France' (the example finishes on p.498).",
+   "what_it_means": "In an encoder, every input token sees the whole input. In a decoder-only model, the causal mask applies to the prompt too, so early tokens' representations are built without knowledge of later ones; only later tokens can integrate the full context.",
+   "why_it_matters": "It is a real loss of expressivity compared with a bidirectional encoder, which p.498 weighs against the huge gain in simplicity: any text on the internet can be used for pretraining without curated input/output pairs.",
+   "technical_idea": "Beyond the book: in practice the representation used to predict the answer is computed at the *last* prompt position, which can attend to all prompt tokens, so much of the lost bidirectionality is recovered by depth and by where predictions are made.",
+   "terminology": [
+    {"term": "causal attention", "meaning": "Attention in which each position sees only itself and earlier positions."}
+   ],
+   "connections": ["p.489: decoders use causal attention to predict the next word", "p.498: why the trade-off pays off for pretraining"]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "next_token_labels",
+   "name": "Input/label shift for language modeling",
+   "definition": "Building training pairs from a chunk of $T+1$ tokens by using the first $T$ as inputs and the last $T$ as labels, so the label at position $t$ is the token at $t+1$.",
+   "intuition": "Every position in the chunk becomes a 'guess the next word' exercise.",
+   "technical": "`ds.map(lambda x: (x[:-1], x[1:]))` on 257-token chunks gives 256 inputs and 256 labels; with causal attention all 256 predictions are trained in one forward pass.",
+   "significance": "Turns raw unlabeled text into supervised training data: self-supervised learning.",
+   "example": "Chunk [The, cat, sat, on] → inputs [The, cat, sat], labels [cat, sat, on].",
+   "misconception": "The label is not a single next token per sample; it is a full sequence of next tokens, one per input position.",
+   "related": ["language_model", "causal_attention"],
+   "source": "book"
+  },
+  {
+   "id": "decoder_only_transformer",
+   "name": "Decoder-only Transformer (GPT)",
+   "definition": "A Transformer with no encoder: a stack of causal self-attention + feedforward blocks over a single token sequence.",
+   "intuition": "One model that only ever reads left to right and continues text.",
+   "technical": "Sequence-to-sequence tasks are expressed as a single sequence (prompt followed by response); all tokens share embeddings and parameters; no cross-attention.",
+   "significance": "The basis of GPT and of modern LLMs; enables pretraining on any raw text at massive scale.",
+   "example": "The mini-GPT built in section 16.2.",
+   "misconception": "Decoder-only does not mean it cannot handle inputs; the input is just the beginning of the sequence.",
+   "related": ["transformer", "causal_attention", "language_model"],
+   "source": "book"
+  },
+  {
+   "id": "tf_data_rebatch",
+   "name": "Windowing a token stream with rebatch()",
+   "definition": "Using `Dataset.rebatch(n, drop_remainder=True)` on a dataset of variable-length 1-D token tensors to re-slice their concatenation into chunks of exactly `n` tokens.",
+   "intuition": "Pour all documents into one long tape, then cut equal-length pieces.",
+   "technical": "rebatch treats axis 0 of each element as a batch axis, so documents of lengths 120, 300, 90 … are re-split into elements of exactly 257 tokens; the incomplete final chunk is dropped.",
+   "significance": "Implements GPT-style sequence packing in a single line, with no padding.",
+   "example": "Documents of 100 and 200 tokens → one 257-token chunk (100 + first 157) and a 43-token remainder carried into the next chunk.",
+   "misconception": "This is not `batch()`: it does not stack documents into a 2-D tensor; it re-cuts the token stream.",
+   "related": ["tokenization"],
+   "source": "inference"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Size of the pretraining dataset",
+   "latex": "N_{\\text{tokens}} = 29{,}373 \\times 128 \\times 256 = 962{,}494{,}464 \\approx 9.6 \\times 10^{8}",
+   "source_text": "We have 29,373 batches. … At 128 samples per batch and 256 tokens per sample, this is just under a billion tokens of data.",
+   "variables": [
+    {"symbol": "29{,}373", "meaning": "number of batches in the dataset"},
+    {"symbol": "128", "meaning": "batch_size, samples per batch"},
+    {"symbol": "256", "meaning": "sequence_length, input tokens per sample"},
+    {"symbol": "N_{\\text{tokens}}", "meaning": "total number of input token positions"}
+   ],
+   "operations": "Multiplication of batches × samples per batch × tokens per sample.",
+   "purpose": "Quantifies how much data the mini-GPT will see in its single pass.",
+   "interpretation": "Just under a billion tokens. The validation set is 500 × 128 × 256 = 16,384,000 tokens; training keeps 28,873 × 32,768 = 946,110,464.",
+   "intuition": "Each batch is a 128 × 256 grid of tokens, 32,768 tokens; there are about 29 thousand such grids.",
+   "numerical_example": "Batch: $128 \\times 256 = 32{,}768$ tokens. All batches: $32{,}768 \\times 29{,}373 = 962{,}494{,}464$. Each sample actually consumes 257 tokens from the stream, so about $29{,}373 \\times 128 \\times 257 \\approx 9.66 \\times 10^8$ stream tokens are used.",
+   "source": "book",
+   "book_ref": "p.497"
+  },
+  {
+   "id": "m2",
+   "title": "Inputs and labels offset by one",
+   "latex": "\\mathbf{x} = (t_1, \\dots, t_{256}), \\quad \\mathbf{y} = (t_2, \\dots, t_{257}), \\quad y_i = t_{i+1}",
+   "source_text": "ds = ds.map(lambda x: (x[:-1], x[1:]))  # Splits labels, offset by one",
+   "variables": [
+    {"symbol": "t_1, \\dots, t_{257}", "meaning": "the 257 token ids of one chunk produced by rebatch(sequence_length + 1)"},
+    {"symbol": "\\mathbf{x}", "meaning": "model input, x[:-1], 256 tokens"},
+    {"symbol": "\\mathbf{y}", "meaning": "labels, x[1:], 256 tokens"}
+   ],
+   "operations": "Slicing: drop the last token for inputs, drop the first token for labels.",
+   "purpose": "Creates next-token prediction targets from raw text.",
+   "interpretation": "At position $i$ the model sees $t_1, \\dots, t_i$ (causal attention) and must predict $t_{i+1}$; the loss sums over all 256 positions.",
+   "intuition": "Slide the sequence one step left to get the answers.",
+   "numerical_example": "Chunk [450, 4996, 17354, 1701] (the first four ids of 'The quick brown fox.' on p.496) → x = [450, 4996, 17354], y = [4996, 17354, 1701].",
+   "source": "book",
+   "book_ref": "p.497"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "16.3",
+   "title": "Preprocessing text input for Transformer pretraining (continued)",
+   "original_code": "files = [str(file) for file in extract_dir.glob(\"*.txt\")]\nds = tf.data.Dataset.from_tensor_slices(files)\nds = ds.interleave(read_file, cycle_length=32, num_parallel_calls=32)\nds = ds.rebatch(sequence_length + 1, drop_remainder=True)\nds = ds.map(lambda x: (x[:-1], x[1:]))\nds = ds.batch(batch_size).prefetch(8)",
+   "language": "python",
+   "what_it_does": "Builds the full pretraining dataset: merges all shards' tokenized documents, cuts the token stream into 257-token chunks, splits each into 256-token inputs and next-token labels, batches 128 samples and prefetches.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Lists the 50 shard files from the extracted mini-C4 directory (p.495) as strings."},
+    {"lines": "2", "explanation": "A dataset whose elements are filenames."},
+    {"lines": "3", "explanation": "Callout 'Combines our file shards into a single dataset'. For each filename, `read_file` (p.496) produces a dataset of tokenized documents; 32 of them are read concurrently on 32 threads and their outputs interleaved."},
+    {"lines": "4", "explanation": "Callout 'Windows tokens into even samples of 256 tokens'. `rebatch` re-slices the concatenated token stream into chunks of `sequence_length + 1 = 257` tokens, dropping the incomplete last chunk. The extra token is needed for the label shift."},
+    {"lines": "5", "explanation": "Callout 'Splits labels, offset by one'. Inputs are tokens 0-255 of the chunk, labels tokens 1-256."},
+    {"lines": "6", "explanation": "Stacks 128 samples into `(128, 256)` input and label tensors and keeps 8 batches prepared in advance."}
+   ],
+   "inputs_outputs": "Input: shard text files. Output: a dataset of `(inputs, labels)` with shapes `(128, 256)` and `(128, 256)`, int32.",
+   "algorithm": "Parallel read/tokenize → concatenate and re-cut → shift → batch → prefetch.",
+   "theory_link": "Implements self-supervised language-model training data with GPT-style packing (p.496).",
+   "parameters": [
+    {"name": "cycle_length = 32", "role": "How many shard files are read at once."},
+    {"name": "num_parallel_calls = 32", "role": "Number of threads producing interleaved elements."},
+    {"name": "sequence_length + 1", "role": "Chunk length: 256 inputs + 1 extra token for the shifted labels."},
+    {"name": "drop_remainder = True", "role": "Guarantees every chunk is exactly 257 tokens."},
+    {"name": "prefetch(8)", "role": "Number of batches buffered ahead of the model."}
+   ],
+   "pitfalls": [
+    "Using `rebatch(sequence_length)` would leave inputs and labels of length 255.",
+    "`batch()` without the preceding `rebatch()` would fail or pad, because documents have different lengths.",
+    "Interleaving changes the order of documents relative to the files; that is intended here (mixing sources)."
+   ],
+   "illustrative_code": "# AI-written: check one batch\nx, y = next(iter(ds))\nprint(x.shape, y.shape)                 # (128, 256) (128, 256)\nprint((x[0, 1:] == y[0, :-1]).numpy().all())  # True: labels are inputs shifted by one"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Splitting off a validation set",
+   "original_code": "num_batches = 29373\nnum_val_batches = 500\nnum_train_batches = num_batches - num_val_batches\nval_ds = ds.take(num_val_batches).repeat()\ntrain_ds = ds.skip(num_val_batches).repeat()",
+   "language": "python",
+   "what_it_does": "Hard-codes the counted batch total, takes the first 500 batches as validation data and the rest as training data, and makes both repeat indefinitely.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "The batch count, obtained once by iterating the dataset (e.g., with `ds.reduce`)."},
+    {"lines": "2-3", "explanation": "500 validation batches; 28,873 training batches."},
+    {"lines": "4", "explanation": "`take(500)` keeps the first 500 batches; `repeat()` lets `fit()` evaluate on them at the end of every epoch."},
+    {"lines": "5", "explanation": "`skip(500)` drops those batches; `repeat()` makes the stream endless so `fit()` controls epoch length with `steps_per_epoch` (p.501)."}
+   ],
+   "inputs_outputs": "Input: the batched dataset. Output: `train_ds` and `val_ds`, both infinite.",
+   "algorithm": "Prefix split of an ordered stream.",
+   "theory_link": "Validation data must not overlap training data so that validation loss measures generalization.",
+   "parameters": [
+    {"name": "num_val_batches = 500", "role": "About 1.7% of the data held out."},
+    {"name": "num_train_batches", "role": "Used on p.501 to compute steps_per_epoch = num_train_batches // num_epochs."}
+   ],
+   "pitfalls": [
+    "The split relies on the pipeline producing batches in the same order every time; tf.data's interleave is deterministic by default, but setting `deterministic=False` for speed could make the 'first 500' differ between iterations and leak data.",
+    "Because both datasets repeat forever, `fit()` must be given `steps_per_epoch` and `validation_steps` (as on p.501), or it will never finish an epoch.",
+    "If the corpus or tokenizer changes, the hard-coded 29373 must be recounted."
+   ],
+   "illustrative_code": "# AI-written: counting the batches (slow: tokenizes the whole corpus)\nnum_batches = int(ds.reduce(0, lambda c, _: c + 1))"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "How rebatch() cuts the document stream",
+   "kind": "step_by_step",
+   "body": "Suppose (toy numbers) the interleaved stream yields three tokenized documents of lengths 150, 200 and 60, each ending with <|endoftext|>, and the chunk size is 257.\n\n1. Chunk 1 = all 150 tokens of doc A + the first 107 tokens of doc B.\n2. Chunk 2 = the remaining 93 tokens of doc B + all 60 of doc C + 104 tokens of the next document…\n3. At the very end, a final chunk shorter than 257 is dropped (`drop_remainder=True`).\n\nThis is the packing described on p.496: samples ignore document boundaries, and <|endoftext|> tokens appear wherever documents end.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Encoder-decoder vs decoder-only for question answering",
+   "kind": "alternative",
+   "body": "- **Encoder-decoder (chapter 15 translation model):** the question goes into a bidirectional encoder; the answer is generated by a decoder that cross-attends to the encoded question. Question and answer use *different* parameters. Training needs curated (input, output) pairs.\n- **Decoder-only (GPT):** `question + answer` is one sequence processed by one causal stack. Same parameters for all tokens; no curated pairs needed for pretraining, since any text is a valid training sequence. Cost: the question is read only left to right (p.498).",
+   "source": "book"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Shapes through the pretraining pipeline",
+   "why": "The first listing on the page turns variable-length documents into 257-token chunks, then (256, 256) input/label pairs, then batches of 128.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "one document", "shape": [null]},
+     {"op": "rebatch 257", "shape": [257]},
+     {"op": "x[:-1] inputs", "shape": [256]},
+     {"op": "batch 128", "shape": [128, 256]}
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "The decoder block GPT keeps",
+   "why": "Section 16.2.1 says GPT discards the encoder and uses only the decoder. Explore the decoder block; p.498 removes its cross-attention sublayer.",
+   "widget": "transformer_block",
+   "params": {"kind": "decoder"}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "The chunks produced by rebatch() are 256 tokens long.", "correction": "They are `sequence_length + 1 = 257` tokens; after the shift, inputs and labels each have 256 tokens, which is what the callout's '256 tokens' refers to."},
+  {"claim": "A decoder-only model cannot do question answering or translation.", "correction": "It can, by putting input and output into one sequence; the page calls it a bet, not a limitation on the task type."},
+  {"claim": "In a decoder-only model the prompt is still encoded bidirectionally.", "correction": "The causal mask applies to every position, including prompt tokens: 'Where' cannot attend to 'capital' or 'France'."},
+  {"claim": "repeat() means the model trains on the data many times.", "correction": "repeat() only makes the stream endless; p.501 sets steps_per_epoch so that 8 epochs together make one pass over the training batches."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 496, "note": "Listing 16.3 begins: batch_size, sequence_length, suffix and read_file()."},
+   {"page": 495, "note": "The 50 mini-C4 shards and the extract_dir path."},
+   {"page": 447, "note": "Chapter 15's Shakespeare model split inputs and labels offset by one character."},
+   {"page": 273, "note": "prefetch() introduced in chapter 8."},
+   {"page": 472, "note": "The encoder-decoder Transformer that GPT simplifies."}
+  ],
+  "later": [
+   {"page": 498, "note": "Finishes the 'capital of France' example; TransformerDecoder without cross-attention (Listing 16.4)."},
+   {"page": 500, "note": "The mini-GPT model: 8 decoder layers, tied embeddings, warmup schedule."},
+   {"page": 501, "note": "Training with steps_per_epoch = num_train_batches // 8 and validation_steps = 500."},
+   {"page": 502, "note": "Generative decoding with the trained model."}
+  ],
+  "prerequisites": [
+   {"page": 470, "note": "Transformer decoder block with causal attention."},
+   {"page": 493, "note": "GPT and GPT-2 history."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 496, "note": "read_file(), used by interleave here."},
+   {"page": 501, "note": "Listing 16.8 consumes train_ds and val_ds."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "interleave() merges 32 shards at a time; rebatch(257) cuts the token stream into equal chunks; map() splits inputs and next-token labels; batch(128) and prefetch(8) finish the pipeline.",
+  "Chunks have sequence_length + 1 tokens so that inputs and labels each have 256.",
+  "29,373 batches × 128 × 256 ≈ 0.96 billion tokens; 500 batches are held out for validation with take/skip.",
+  "GPT drops the encoder and uses only a causal decoder; inputs and outputs are combined into one sequence sharing all parameters.",
+  "The price is that information flows only left to right, even across the prompt."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "Why does the pipeline call `ds.rebatch(sequence_length + 1, …)` rather than `ds.rebatch(sequence_length, …)`?", "options": ["To leave room for the <|endoftext|> token", "So that after shifting by one, inputs and labels each have 256 tokens", "To add a padding token at the end of each sample", "Because tf.data requires odd chunk sizes"], "answer": "So that after shifting by one, inputs and labels each have 256 tokens", "explanation": "`x[:-1]` and `x[1:]` each drop one token from a 257-token chunk. <|endoftext|> is added per document in read_file(), there is no padding, and tf.data has no odd-size requirement.", "page_refs": [497, 496]},
+  {"id": "q2", "type": "math", "question": "How many tokens are in the training split (excluding the 500 validation batches)?", "options": [], "answer": "28,873 × 128 × 256 = 946,110,464 tokens (about 0.95 billion).", "explanation": "num_train_batches = 29,373 − 500 = 28,873; each batch holds 128 × 256 = 32,768 input tokens.", "page_refs": [497]},
+  {"id": "q3", "type": "short", "question": "What does `ds.map(lambda x: (x[:-1], x[1:]))` produce from the chunk [5, 9, 2, 7]?", "options": [], "answer": "Inputs [5, 9, 2] and labels [9, 2, 7].", "explanation": "Labels are the inputs offset by one, so each position's target is the next token.", "page_refs": [497]},
+  {"id": "q4", "type": "conceptual", "question": "Why are both `val_ds` and `train_ds` followed by `.repeat()`?", "options": [], "answer": "So that the datasets never run out during fit(); epoch length is then controlled explicitly with steps_per_epoch and validation_steps (p.501), which lets the single pass over the data be split into eight epochs.", "explanation": "With an infinite dataset, Keras needs explicit step counts; p.501 sets steps_per_epoch = num_train_batches // 8.", "page_refs": [497, 501]},
+  {"id": "q5", "type": "mcq", "question": "How does the GPT approach handle a sequence-to-sequence task like question answering?", "options": ["It adds a separate encoder for the question", "It combines question and answer into a single sequence processed by the same parameters", "It uses cross-attention from the answer to the question", "It cannot handle such tasks"], "answer": "It combines question and answer into a single sequence processed by the same parameters", "explanation": "The page says question and answer must be combined into a single sequence and all tokens are embedded with the same parameters. There is no encoder or cross-attention, and the page says such tasks can still be handled.", "page_refs": [497]},
+  {"id": "q6", "type": "conceptual", "question": "In the prompt 'Where is the capital of France?', why can the representation of 'Where' not use the words 'capital' and 'France' in a GPT-style model, and why do the authors accept this?", "options": [], "answer": "Causal attention restricts every token to earlier positions, including in the prompt. They accept the loss of expressivity because it makes pretraining far simpler: no curated input/output pairs, any internet text can be used at massive scale (p.498).", "explanation": "The page introduces the consequence; p.498 completes the trade-off argument.", "page_refs": [497, 498]},
+  {"id": "q7", "type": "short", "question": "What does `cycle_length=32` control in `ds.interleave(read_file, cycle_length=32, num_parallel_calls=32)`?", "options": [], "answer": "How many shard files (sub-datasets produced by read_file) are open and read from concurrently while interleaving.", "explanation": "With 50 shards, 32 are processed at a time; num_parallel_calls sets how many threads do the work.", "page_refs": [497]},
+  {"id": "q8", "type": "self", "question": "Can you sketch, without looking, the six tf.data steps from filenames to prefetched (128, 256) batches, and say what each callout refers to?", "options": [], "answer": "Self-check: from_tensor_slices(files) → interleave(read_file) [combines shards] → rebatch(257) [windows tokens] → map shift [splits labels] → batch(128) → prefetch(8).", "explanation": "If you can rebuild this from memory, you can adapt it to your own corpora.", "page_refs": [496, 497]}
+ ]
+}

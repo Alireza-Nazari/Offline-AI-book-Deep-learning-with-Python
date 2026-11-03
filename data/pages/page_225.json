@@ -1,0 +1,454 @@
+{
+ "page_id": "page_225",
+ "pdf_page": 225,
+ "printed_page": "201",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:41:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Book inconsistency: Listing 7.9 names the shared layer `dense_features`, but Figures 7.3/7.4 and Listing 7.12 show `dense_10` (likely from an earlier code version)."
+  ],
+  "extraction_quality": "Clean. The page opens with the continuation of Listing 7.12 (its first two lines are on p.224). One printed line of the model.layers[3].input output wraps ('name=title>'); it is rejoined in the code. Figure 7.4 itself is on p.226."
+ },
+ "overview": {
+  "title": "Feature extraction: adding a difficulty head to the ticket model",
+  "chapter": "7 A deep dive on Keras",
+  "section": "7.2 Different ways to build Keras models",
+  "subsection": "7.2.2 The Functional API",
+  "main_topic": "The rest of Listing 7.12 (querying model.layers, layer.input and layer.output), the definition of feature extraction, and Listing 7.13, which builds a new three-output model by attaching a difficulty classifier to the intermediate Dense layer's output.",
+  "central_idea": "Because a Functional model's intermediate tensors are accessible, you can create new models that reuse them. To add a three-way 'difficulty' prediction you just take model.layers[4].output, put a new softmax Dense on it, and build keras.Model(inputs=[...], outputs=[priority, department, difficulty]); there is no need to recreate and retrain the model from scratch.",
+  "importance": "This is the concrete payoff of the Functional API's explicit graph, and the same pattern (reuse a trained model's internal features and add new heads) is what transfer learning with pretrained networks relies on later in the book.",
+  "learning_objectives": [
+   "Interpret the printed outputs of model.layers, model.layers[3].input and model.layers[3].output.",
+   "Define feature extraction in the sense used by the book.",
+   "Explain why model.layers[4] is the intermediate Dense layer.",
+   "Build a new Functional model that reuses existing tensors and adds a new output.",
+   "Explain what is shared between model and new_model."
+  ],
+  "prerequisites": [
+   "model.layers, layer.input, layer.output (p.224)",
+   "The ticket model of Listing 7.9 (p.221)",
+   "Softmax classification layers"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page first completes **Listing 7.12**. `model.layers` lists seven layers in graph order: the three `InputLayer`s (`title`, `text_body`, `tags`), `Concatenate` (`concatenate`), `Dense` (`dense_10`), and the two head `Dense` layers `priority` and `department`. `model.layers[3]` is the Concatenate layer. Its `.input` is a **list** of three `KerasTensor`s with shapes `(None, 10000)`, `(None, 10000)` and `(None, 100)` (named `title`, `text_body`, `tags`), and its `.output` is a single `KerasTensor` of shape `(None, 20100)`, dtype `float32`.\n\nThe authors then name the technique: **feature extraction**, creating models that reuse intermediate features from another model. Their example: you also want to predict how long a ticket will take to resolve, a difficulty rating that is a classification over three categories (\"quick,\" \"medium,\" \"difficult\"). You don't need to recreate and retrain a model from scratch, because you can start from the intermediate features of the previous model.\n\n**Listing 7.13** does this in three statements. `features = model.layers[4].output` (the callout notes that `layers[4]` is the intermediate Dense layer) picks out the 64-dimensional shared representation. `difficulty = layers.Dense(3, activation=\"softmax\", name=\"difficulty\")(features)` adds a new head. `new_model = keras.Model(inputs=[title, text_body, tags], outputs=[priority, department, difficulty])` creates a three-output model from the original input tensors, the two existing heads, and the new one. The page ends with the `plot_model` call that produces figure 7.4 (`\"updated_ticket_classifier.png\"`, with shapes and layer names). The figure itself is on p.226.",
+ "paragraphs": [
+  {
+   "ref": "p225_e03",
+   "excerpt": "<InputLayer name=text_body, built=True>, <InputLayer name=tags, built=True>,",
+   "what_it_says": "The rest of Listing 7.12: the full layer list, then model.layers[3].input (a list of three KerasTensors) and model.layers[3].output (one KerasTensor of shape (None, 20100)).",
+   "what_it_means": "Index 3 is the Concatenate layer (0-2 are the inputs). Its input is the list of the three Input tensors, and its output is the merged feature vector. All of these are symbolic tensors with shape and dtype but no values.",
+   "why_it_matters": "It shows concretely what you get back when you query connectivity, and why model.layers[4] (the next layer) is the shared Dense layer used in Listing 7.13.",
+   "technical_idea": "layer.input is a list for multi-input layers like Concatenate and a single tensor for single-input layers.",
+   "terminology": [
+    {
+     "term": "KerasTensor",
+     "meaning": "Symbolic tensor used while building Functional models; carries shape, dtype, sparseness and name."
+    },
+    {
+     "term": "built=True",
+     "meaning": "The layer has created its weights (it knows its input shape)."
+    }
+   ],
+   "connections": [
+    "p.224: the first two lines of Listing 7.12 and the description of model.layers / layer.input / layer.output."
+   ]
+  },
+  {
+   "ref": "p225_e04",
+   "excerpt": "This enables you to do feature extraction: creating models that reuse",
+   "what_it_says": "Access to layer inputs and outputs enables feature extraction: creating models that reuse intermediate features from another model.",
+   "what_it_means": "The output of an internal layer is a learned representation (a 'feature'). A new model can stop there (output the features) or build on them.",
+   "why_it_matters": "This defines a term the book uses again, for example when reusing pretrained convnets.",
+   "terminology": [
+    {
+     "term": "feature extraction",
+     "meaning": "Reusing intermediate representations of an existing model in a new model."
+    }
+   ],
+   "connections": [
+    "p.287: using a pretrained model's features for image classification."
+   ]
+  },
+  {
+   "ref": "p225_e05",
+   "excerpt": "Let’s say you want to add another output to the model",
+   "what_it_says": "Example: also predict a ticket's resolution difficulty as a three-class classification (quick, medium, difficult). You need not recreate and retrain from scratch; start from the previous model's intermediate features.",
+   "what_it_means": "The shared 64-dim representation already encodes the tickets' content; a new classifier head on it is a cheap extension.",
+   "why_it_matters": "Real systems evolve; extending a model without rebuilding it saves effort and can reuse training already done.",
+   "technical_idea": "Beyond the book: the new head starts untrained and still needs training on difficulty labels; if you train new_model, the shared layers are updated too unless frozen (trainable=False).",
+   "terminology": [
+    {
+     "term": "head",
+     "meaning": "An output layer (or small stack) attached to shared features for one task."
+    }
+   ],
+   "connections": [
+    "p.221: the original two-head design of the ticket model."
+   ]
+  },
+  {
+   "ref": "p225_e07",
+   "excerpt": "features = model.layers[4].output difficulty = layers.Dense(3, activation=\"softmax\", name=\"difficulty\")(features)",
+   "what_it_says": "Listing 7.13 takes layers[4]'s output, adds a 3-way softmax Dense named difficulty, and builds new_model with three outputs.",
+   "what_it_means": "The original title/text_body/tags Inputs and the priority/department tensors are reused unchanged; new_model and model share all their layers and weights.",
+   "why_it_matters": "It demonstrates that Functional models are composable from any graph node.",
+   "connections": [
+    "p.226: figure 7.4 plots the new model."
+   ]
+  },
+  {
+   "ref": "p225_e08",
+   "excerpt": "Let’s plot our new model, as shown in figure 7.4:",
+   "what_it_says": "The new model is plotted with shapes and names into updated_ticket_classifier.png (figure 7.4).",
+   "what_it_means": "The plot should show a third branch, difficulty (Dense) with output shape (None, 3), coming off the shared Dense layer.",
+   "why_it_matters": "A quick visual check that the new head is attached where intended.",
+   "connections": [
+    "p.226: figure 7.4."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "feature_extraction",
+   "name": "Feature extraction",
+   "definition": "Creating models that reuse intermediate features from another model.",
+   "intuition": "Reuse what the network has already learned to see; just ask a new question about it.",
+   "technical": "Take a KerasTensor such as model.layers[4].output and use it as an output, or as the input of new layers, in a new keras.Model built from the original inputs.",
+   "significance": "Avoids recreating and retraining from scratch; foundation of transfer learning.",
+   "example": "Adding a difficulty head over the shared 64-unit Dense output.",
+   "misconception": "That the reused layers are copied; they are the same layer objects with shared weights.",
+   "related": [
+    "functional_api",
+    "transfer_learning",
+    "layer_connectivity"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "keras_tensor",
+   "name": "KerasTensor",
+   "definition": "The symbolic tensor type returned by keras.Input and by layer calls on symbolic inputs.",
+   "intuition": "A labeled placeholder for data that will flow later.",
+   "technical": "Carries shape (with None for batch), dtype and optional name; used to define graphs, not to hold values.",
+   "significance": "It is what layer.input and layer.output return.",
+   "example": "<KerasTensor shape=(None, 20100), dtype=float32, sparse=False>",
+   "misconception": "That it contains actual data values.",
+   "related": [
+    "functional_api"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "weight_sharing",
+   "name": "Layer sharing between models",
+   "definition": "Two models built from the same layer objects use the same weights.",
+   "intuition": "Two doors into the same room.",
+   "technical": "new_model includes the layers of model; training either updates the shared weights.",
+   "significance": "Explains why reuse is 'free' and why freezing may be needed (beyond the book).",
+   "example": "model and new_model share title...dense_10, priority, department.",
+   "misconception": "That building new_model leaves model unaffected by subsequent training of new_model.",
+   "related": [
+    "feature_extraction",
+    "transfer_learning"
+   ],
+   "source": "inference"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "7.12",
+   "title": "Retrieving the inputs or outputs of a layer in a Functional model (continued)",
+   "original_code": " <InputLayer name=text_body, built=True>,\n <InputLayer name=tags, built=True>,\n <Concatenate name=concatenate, built=True>,\n <Dense name=dense_10, built=True>,\n <Dense name=priority, built=True>,\n <Dense name=department, built=True>]\n\n>>> model.layers[3].input\n[<KerasTensor shape=(None, 10000), dtype=float32, sparse=None, name=title>,\n <KerasTensor shape=(None, 10000), dtype=float32, sparse=None, name=text_body>,\n <KerasTensor shape=(None, 100), dtype=float32, sparse=None, name=tags>]\n\n>>> model.layers[3].output\n<KerasTensor shape=(None, 20100), dtype=float32, sparse=False>",
+   "language": "python",
+   "what_it_does": "Completes the model.layers listing begun on p.224 and queries the Concatenate layer's input and output tensors.",
+   "line_explanations": [
+    {
+     "lines": "1-6",
+     "explanation": "Remaining layers in graph order: text_body and tags inputs, concatenate, dense_10, priority, department (index 0 title is on p.224)."
+    },
+    {
+     "lines": "8-11",
+     "explanation": "model.layers[3] is Concatenate; its input is a list of the three input KerasTensors with their shapes and names."
+    },
+    {
+     "lines": "13-14",
+     "explanation": "Its output is a single (None, 20100) float32 tensor."
+    }
+   ],
+   "inputs_outputs": "Interactive output only.",
+   "algorithm": "Reads stored graph nodes.",
+   "theory_link": "Shows that connectivity is data you can query (p.223).",
+   "parameters": [],
+   "pitfalls": [
+    "Positional indices depend on graph order; model.get_layer(\"concatenate\") is safer (beyond the book).",
+    "The shared Dense prints as dense_10 even though p.221 names it dense_features, so the printed output probably comes from a run without that name."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "7.13",
+   "title": "Creating a new model by reusing intermediate layer outputs",
+   "original_code": "features = model.layers[4].output\ndifficulty = layers.Dense(3, activation=\"softmax\", name=\"difficulty\")(features)\n\nnew_model = keras.Model(\n    inputs=[title, text_body, tags], outputs=[priority, department, difficulty]\n)",
+   "language": "python",
+   "what_it_does": "Attaches a three-class difficulty classifier to the shared intermediate Dense layer and builds a three-output model.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "layers[4] is our intermediate Dense layer (callout); its output is a (None, 64) KerasTensor."
+    },
+    {
+     "lines": "2",
+     "explanation": "New head: Dense(3, softmax) named difficulty for quick/medium/difficult; output (None, 3)."
+    },
+    {
+     "lines": "4-6",
+     "explanation": "New Functional model from the original Input tensors to three outputs: the two existing heads plus difficulty."
+    }
+   ],
+   "inputs_outputs": "Inputs: the same three Inputs as model. Outputs: priority (None,1), department (None,4), difficulty (None,3).",
+   "algorithm": "Graph extension: new layer on an existing node, new Model over the extended graph.",
+   "theory_link": "Feature extraction: reusing intermediate features of another model.",
+   "parameters": [
+    {
+     "name": "3",
+     "role": "Number of difficulty classes."
+    },
+    {
+     "name": "activation=\"softmax\"",
+     "role": "Turns the 3 scores into a probability distribution."
+    },
+    {
+     "name": "name=\"difficulty\"",
+     "role": "Key for dict-based losses/targets when training new_model."
+    }
+   ],
+   "pitfalls": [
+    "The difficulty head is untrained; new_model must be compiled and fit with difficulty labels before its third output is meaningful (beyond the book).",
+    "Training new_model also changes the weights used by model, since the layers are shared."
+   ],
+   "illustrative_code": "# AI-written: train only the new head by freezing shared layers\nfor layer in model.layers:\n    layer.trainable = False\nnew_model.compile(\n    optimizer=\"adam\",\n    loss={\"priority\": \"mean_squared_error\",\n          \"department\": \"sparse_categorical_crossentropy\",\n          \"difficulty\": \"sparse_categorical_crossentropy\"},\n)"
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Plotting the new model",
+   "original_code": "keras.utils.plot_model(\n    new_model,\n    \"updated_ticket_classifier.png\",\n    show_shapes=True,\n    show_layer_names=True,\n)",
+   "language": "python",
+   "what_it_does": "Draws new_model with names and shapes (figure 7.4, printed on p.226).",
+   "line_explanations": [
+    {
+     "lines": "1-6",
+     "explanation": "Same options as on p.224, applied to new_model."
+    }
+   ],
+   "inputs_outputs": "Output: updated_ticket_classifier.png.",
+   "algorithm": "Graph rendering.",
+   "theory_link": "Visual check of the extended topology.",
+   "parameters": [
+    {
+     "name": "show_shapes",
+     "role": "Show shapes."
+    },
+    {
+     "name": "show_layer_names",
+     "role": "Show names."
+    }
+   ],
+   "pitfalls": [
+    "Requires pydot/Graphviz (beyond the book)."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Index arithmetic in model.layers",
+   "kind": "breakdown",
+   "body": "| index | layer | output shape |\n|---|---|---|\n| 0 | title (InputLayer) | (None, 10000) |\n| 1 | text_body (InputLayer) | (None, 10000) |\n| 2 | tags (InputLayer) | (None, 100) |\n| 3 | concatenate | (None, 20100) |\n| 4 | dense_10 (shared Dense) | (None, 64) |\n| 5 | priority | (None, 1) |\n| 6 | department | (None, 4) |\n\nShapes taken from figure 7.3 (p.224). So `model.layers[3].input` is the list of three inputs and `model.layers[4].output` is the 64-dim feature vector.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Cost of the new head",
+   "kind": "numerical",
+   "body": "Beyond the book: `Dense(3)` on 64 features adds $64\\times3+3 = 195$ parameters, compared with about 1.29 million in the shared Dense layer. The new capability is tiny in parameters because it reuses the expensive representation.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "A familiar pattern",
+   "kind": "analogy",
+   "body": "It is like an experienced support agent who already reads tickets to judge urgency and department: asked to also estimate difficulty, they don't relearn reading; they just learn one more judgment on top of what they already notice.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "new_model: three heads on the shared features",
+   "why": "Listing 7.13 attaches a difficulty head to model.layers[4].output; the diagram marks the reused part and the new layer (figure 7.4 on p.226 shows the plot_model version).",
+   "mermaid": "flowchart TB\n  subgraph reused [\"Reused from model (shared weights)\"]\n    A[\"title (None,10000)\"] --> C[\"concatenate (None,20100)\"]\n    B[\"text_body (None,10000)\"] --> C\n    T[\"tags (None,100)\"] --> C\n    C --> D[\"layers[4]: dense_10 (None,64)\"]\n    D --> P[\"priority (None,1)\"]\n    D --> Q[\"department (None,4)\"]\n  end\n  D --> N[\"NEW difficulty Dense 3 softmax (None,3)\"]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Listing 7.13 creates a copy of the original model.",
+   "correction": "new_model reuses the same layer objects and weights; only the difficulty layer is new."
+  },
+  {
+   "claim": "After Listing 7.13 the difficulty predictions are already meaningful.",
+   "correction": "The new head has random initial weights; it must be trained on difficulty labels (the book only says you need not retrain from scratch)."
+  },
+  {
+   "claim": "layer.input is always a single tensor.",
+   "correction": "For Concatenate (model.layers[3]) it is a list of three KerasTensors."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 224,
+    "note": "Start of Listing 7.12 and the properties model.layers, layer.input, layer.output."
+   },
+   {
+    "page": 221,
+    "note": "The original model and its Input tensors reused here."
+   }
+  ],
+  "later": [
+   {
+    "page": 226,
+    "note": "Figure 7.4 and the start of Model subclassing (7.2.3), where the same model is reimplemented."
+   },
+   {
+    "page": 287,
+    "note": "Reusing a pretrained model's features for image classification."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 223,
+    "note": "Functional models as explicit graphs."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 228,
+    "note": "Mixing subclassed components into Functional models."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 224,
+    "note": "Figure 7.3 (original model with shapes)."
+   },
+   {
+    "page": 226,
+    "note": "Figure 7.4 (updated model)."
+   }
+  ]
+ },
+ "takeaways": [
+  "model.layers[3] is Concatenate; its input is a list of 3 tensors and its output is (None, 20100).",
+  "Feature extraction = building models that reuse intermediate features of another model.",
+  "Listing 7.13 adds a 3-class difficulty head on model.layers[4].output, the shared Dense layer.",
+  "new_model reuses the original inputs and heads; no rebuilding from scratch.",
+  "The reused layers share weights with the original model."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Which layer is model.layers[4] in the ticket model?",
+   "options": [
+    "The concatenate layer",
+    "The shared intermediate Dense layer",
+    "The priority head",
+    "The tags InputLayer"
+   ],
+   "answer": "The shared intermediate Dense layer",
+   "explanation": "Indices 0-2 are inputs, 3 is Concatenate, 4 is the Dense layer the callout calls 'our intermediate Dense layer'; 5 and 6 are the heads.",
+   "page_refs": [
+    225
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "What does model.layers[3].input return, and why is it a list?",
+   "options": [],
+   "answer": "A list of three KerasTensors (title (None,10000), text_body (None,10000), tags (None,100)), because the Concatenate layer receives three inputs.",
+   "explanation": "Shown in the second part of Listing 7.12.",
+   "page_refs": [
+    225
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "Define feature extraction as the book does.",
+   "options": [],
+   "answer": "Creating models that reuse intermediate features from another model.",
+   "explanation": "Stated directly after Listing 7.12.",
+   "page_refs": [
+    225
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why can the authors say you don't need to recreate and retrain a model from scratch to add the difficulty output?",
+   "options": [],
+   "answer": "Because the Functional model gives access to its intermediate features (model.layers[4].output); a new head can be added on top and a new model built from the original inputs, reusing the existing layers and their learned weights.",
+   "explanation": "Only the new 3-unit head is new; everything else is shared.",
+   "page_refs": [
+    225
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "math",
+   "question": "What are the output shape and parameter count of the difficulty layer?",
+   "options": [],
+   "answer": "(None, 3); 64 x 3 + 3 = 195 parameters.",
+   "explanation": "It is Dense(3) on the 64-dim output of layers[4].",
+   "page_refs": [
+    224,
+    225
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "mcq",
+   "question": "Which outputs does new_model have?",
+   "options": [
+    "difficulty only",
+    "priority and department",
+    "priority, department and difficulty",
+    "the 64-dim features and difficulty"
+   ],
+   "answer": "priority, department and difficulty",
+   "explanation": "outputs=[priority, department, difficulty] in Listing 7.13. The features tensor is used internally but is not an output.",
+   "page_refs": [
+    225
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "If you now train new_model, will model's predictions change? Explain to yourself why.",
+   "options": [],
+   "answer": "Yes, unless the shared layers are frozen, because model and new_model share the same layer objects and weights.",
+   "explanation": "This follows from layer reuse; it is not stated on the page.",
+   "page_refs": [
+    225
+   ]
+  }
+ ]
+}

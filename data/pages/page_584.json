@@ -1,0 +1,574 @@
+{
+ "page_id": "page_584",
+ "pdf_page": 584,
+ "printed_page": "560",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:00:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction. The last element (p584_e11) merges three printed paragraphs and ends mid-sentence ('float8 training' continues on p.585)."
+ },
+ "overview": {
+  "title": "Loss scaling in Keras, and why float8 training is hard",
+  "chapter": "18 Best practices for the real world",
+  "section": "18.3 Speeding up training and inference with lower-precision computation",
+  "subsection": "18.3.5 Beyond mixed precision: float8 training",
+  "main_topic": "Finishing loss scaling for mixed precision (fixed `loss_scale_factor` vs. the dynamic `LossScaleOptimizer`) and introducing float8 training and its limits.",
+  "central_idea": "Multiplying the loss by a large factor lifts tiny float16 gradients out of the underflow zone; Keras offers a fixed factor or an automatic, adaptive one. Going below 16 bits (float8) no longer 'just works': it needs per-tensor rescaling machinery that only pays off for very large models on top-end GPUs.",
+  "importance": "Loss scaling is what makes float16 mixed-precision training reliable in practice, and knowing why float8 is not a simple dtype switch tells you where the free lunch of lower precision ends.",
+  "learning_objectives": [
+   "Explain why small gradients underflow to zero in float16 and how multiplying the loss counters it.",
+   "Use `loss_scale_factor` on a Keras optimizer and wrap an optimizer in `keras.optimizers.LossScaleOptimizer`.",
+   "Explain why a dynamic loss scale is usually preferable to a fixed one.",
+   "State why float8 cannot be enabled by just setting `compute_dtype`, which Keras layers support float8 training, and what its overhead is."
+  ],
+  "prerequisites": [
+   "Floating-point formats: exponent and mantissa bits, float16 vs. bfloat16 (pp.580-583).",
+   "Mixed-precision training with `variable_dtype`/`compute_dtype` (p.583).",
+   "Gradient descent and the chain rule (p.64-68)."
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens by finishing section 18.3.4: in float16 the limited *range* of representable numbers means very small gradients get rounded down to zero, which stops the model from learning. Because gradients are proportional to the loss value, the fix is to **multiply the loss by a large scalar** before differentiating; every gradient is then scaled up by the same factor and is far less likely to underflow.\n\nKeras offers two ways to do this. A **fixed** factor is passed directly to any optimizer: `keras.optimizers.Adam(learning_rate=1e-3, loss_scale_factor=10)`. Alternatively, the **`LossScaleOptimizer` wrapper** picks the factor automatically: `keras.optimizers.LossScaleOptimizer(keras.optimizers.Adam(learning_rate=1e-3))`. The authors recommend the wrapper as \"usually your best option\" because the right scaling value changes over the course of training.\n\nSection 18.3.5 then asks whether we can go below 16 bits: 8, 4, even 2 bits? The answer is \"it's complicated.\" float16 in the forward pass is the last precision level that \"just works\": it can represent all intermediate tensors (gradient updates aside, which stay in float32). With **float8** you lose too much information, so you cannot just set `compute_dtype` to `float8`; you must substantially modify the forward pass. Keras ships a built-in float8 training implementation aimed at Transformers, covering only `Dense`, `EinsumDense` (the `Dense` variant used inside `MultiHeadAttention`) and `Embedding`. It tracks past activation values to rescale activations at each step so they use the full float8 range, and overrides part of the backward pass to do the same for gradients. That bookkeeping costs compute: for small models or weaker GPUs it outweighs the gains and you get a *slowdown*. The sentence finishes on p.585: float8 is only viable for very large models (typically > 5B parameters) on recent GPUs such as the H100.",
+ "paragraphs": [
+  {
+   "ref": "p584_e03",
+   "excerpt": "of representable numbers can cause small gradients to be rounded down to zero.",
+   "what_it_says": "Completes a sentence from p.583: in float16, the restricted range of representable numbers makes small gradients round to zero, preventing effective learning.",
+   "what_it_means": "float16 has only 5 exponent bits (table 18.1, p.583). Its smallest positive normal number is about $6.1\\times10^{-5}$ and its smallest subnormal about $6\\times10^{-8}$ (beyond the book). Gradient entries smaller than that become exactly 0, so the corresponding weights receive no update at all.",
+   "why_it_matters": "Silent underflow is the main failure mode of naive float16 training: the loss stalls without any error message.",
+   "technical_idea": "Underflow (values too small for the exponent range) is a range problem, distinct from the resolution problem caused by few mantissa bits.",
+   "terminology": [
+    {
+     "term": "underflow",
+     "meaning": "A nonzero value too small in magnitude for a format, which gets rounded to zero (or to a coarse subnormal)."
+    }
+   ],
+   "connections": [
+    "p.583: table 18.1 gives float16 5 exponent bits vs. 8 for bfloat16, which is why bfloat16 rarely needs loss scaling.",
+    "p.582: weight updates around 1e-6 are common."
+   ]
+  },
+  {
+   "ref": "p584_e04",
+   "excerpt": "Gradient values are proportional to the loss value, so to encourage gradients",
+   "what_it_says": "Since gradients scale with the loss, multiply the loss by a large constant so gradients become larger and rarely round to zero. Keras makes this easy: pass `loss_scale_factor` to the optimizer.",
+   "what_it_means": "Differentiation is linear: $\\nabla_\\theta (sL) = s\\,\\nabla_\\theta L$. Scaling the loss by $s$ shifts every gradient up by the same factor in magnitude, moving it into float16's representable range. Before the update the optimizer divides the gradients by $s$ again (in float32), so the actual step is unchanged.",
+   "why_it_matters": "It is a nearly free trick: one multiply and one divide per step, with no change to the mathematics of training.",
+   "technical_idea": "The scale must be undone before the update; otherwise it would act like multiplying the learning rate by $s$. Keras's `loss_scale_factor` handles both the multiply and the divide.",
+   "terminology": [
+    {
+     "term": "loss scaling",
+     "meaning": "Multiplying the loss by a constant before backprop and dividing the gradients by it afterward, to avoid low-precision underflow."
+    },
+    {
+     "term": "loss_scale_factor",
+     "meaning": "Keras optimizer argument giving a fixed loss-scaling constant."
+    }
+   ],
+   "connections": [
+    "p.68: the update `W -= learning_rate * gradient` is what must remain unaffected by the scale."
+   ]
+  },
+  {
+   "ref": "p584_e06",
+   "excerpt": "If you would like for the optimizer to automatically figure out the",
+   "what_it_says": "To let the optimizer choose the scale automatically, wrap it in `LossScaleOptimizer`. The following line says this wrapper is usually the best option because the right scale changes during training.",
+   "what_it_means": "A fixed factor may be too small (gradients still underflow) or too large (scaled gradients overflow float16's max of 65,504 and become `inf`/`NaN`). Gradient magnitudes drift over training, typically shrinking as the loss falls, so no single factor is ideal throughout.",
+   "why_it_matters": "Dynamic scaling removes a sensitive hyperparameter and protects against both failure modes.",
+   "technical_idea": "Beyond the book: dynamic loss scaling starts with a large factor (Keras uses 2^15 by default), halves it and skips the step whenever a gradient is non-finite, and doubles it after a run of steps (2,000 by default) with finite gradients.",
+   "terminology": [
+    {
+     "term": "LossScaleOptimizer",
+     "meaning": "A Keras optimizer wrapper that applies dynamic loss scaling around an inner optimizer."
+    }
+   ],
+   "connections": [
+    "p.583: mixed precision is where loss scaling is needed."
+   ]
+  },
+  {
+   "ref": "p584_e10",
+   "excerpt": "If running your forward pass in 16-bit precision yields such neat performance",
+   "what_it_says": "Since 16 bits worked so well, why not 8, 4 or 2 bits? The answer is complicated.",
+   "what_it_means": "Each halving of width roughly halves memory traffic and can double arithmetic throughput on hardware with native support, so the temptation is natural; the price is an exponential loss of representable values (256 bit patterns for 8 bits).",
+   "why_it_matters": "It frames the rest of the section: lower precision has diminishing and eventually negative returns for training.",
+   "terminology": [],
+   "connections": [
+    "p.580: section 18.3 opened with the promise of up to 2x speedups from lower precision."
+   ]
+  },
+  {
+   "ref": "p584_e11",
+   "excerpt": "Mixed precision training using float16 in the forward pass is that last level",
+   "what_it_says": "float16 in the forward pass is the last precision that 'just works': it can represent all intermediate tensors (only gradient updates need float32). float8 loses too much information; it can still be used in some computations, but only with considerable modifications to the forward pass, not by setting `compute_dtype='float8'`.",
+   "what_it_means": "With 8 bits, the format must split very few bits between range and resolution. Common float8 variants (beyond the book) are E4M3 (max about 448, 3 mantissa bits) and E5M2 (max 57,344, 2 mantissa bits). Raw activations would either overflow or lose most of their precision, so every tensor needs a carefully chosen scale.",
+   "why_it_matters": "It explains why there is no float8 equivalent of the one-line mixed-precision switch from p.583.",
+   "technical_idea": "The dtype policy approach works for float16 because casting is enough; for float8, casting alone destroys the signal, so scale factors become part of the computation.",
+   "terminology": [
+    {
+     "term": "float8",
+     "meaning": "An 8-bit floating-point format (sign + exponent + mantissa), supported natively by recent accelerators."
+    },
+    {
+     "term": "compute_dtype",
+     "meaning": "The dtype a Keras layer uses for its computations (vs. `variable_dtype` for storing weights)."
+    }
+   ],
+   "connections": [
+    "p.583: `variable_dtype` and `compute_dtype` were introduced for mixed precision."
+   ]
+  },
+  {
+   "ref": "p584_e11",
+   "excerpt": "The Keras framework provides a built-in implementation for float8 training.",
+   "what_it_says": "Keras's float8 training targets Transformers and only covers `Dense`, `EinsumDense` (used by `MultiHeadAttention`) and `Embedding`. It tracks past activation values to rescale activations each step to use the full float8 range, and overrides part of the backward pass to do the same with gradients.",
+   "what_it_means": "This is 'delayed scaling': each layer keeps a short history of the maximum absolute values its inputs and gradients took, and uses it to pick the scale for the current step, so a tensor's largest values land near the top of the float8 range. Tracking the history avoids an extra pass to compute the max before every cast.",
+   "why_it_matters": "In a Transformer almost all FLOPs are matrix multiplications inside these three layer types, so covering them captures most of the possible speedup.",
+   "technical_idea": "`EinsumDense` generalizes `Dense` to arbitrary einsum contractions, which is how `MultiHeadAttention` implements its query/key/value and output projections.",
+   "terminology": [
+    {
+     "term": "EinsumDense",
+     "meaning": "A Keras layer computing a dense projection specified by an einsum equation; used inside MultiHeadAttention."
+    },
+    {
+     "term": "amax history (delayed scaling)",
+     "meaning": "Recorded recent max-abs values of a tensor, used to choose its float8 scale (term not used in the book)."
+    }
+   ],
+   "connections": [
+    "p.586: int8 quantization is built into exactly the same three layers."
+   ]
+  },
+  {
+   "ref": "p584_e11",
+   "excerpt": "Importantly, this added overhead has a computational cost. If your model is too small",
+   "what_it_says": "The bookkeeping costs compute; on a too-small model or a not-powerful-enough GPU, the overhead exceeds the gains and you see a slowdown. (The sentence continues on p.585: float8 is viable only for very large models, typically over 5B parameters, on recent GPUs like the H100.)",
+   "what_it_means": "The float8 savings scale with the size of the matmuls, while the scaling overhead (max computations, history updates, casts) is roughly elementwise. Only when matmuls dominate the step does the trade pay off.",
+   "why_it_matters": "It is a practical warning: float8 is not a default knob to try on ordinary models.",
+   "terminology": [],
+   "connections": [
+    "p.585: conclusion that float8 is rarely used outside foundation-model training."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "loss_scaling",
+   "name": "Loss scaling",
+   "definition": "Multiplying the loss by a factor $s$ before computing gradients, then dividing the gradients by $s$ before the weight update, to keep low-precision gradients from underflowing.",
+   "intuition": "Like zooming in on a tiny measurement so it registers on a coarse ruler, then dividing the reading by the zoom factor.",
+   "technical": "Because $\\nabla(sL)=s\\nabla L$, all backward-pass intermediates in float16 are multiplied by $s$; gradients are cast to float32 and unscaled before the optimizer step, so the update is mathematically identical.",
+   "significance": "Makes float16 mixed-precision training numerically stable.",
+   "example": "A gradient of $2\\times10^{-8}$ underflows in float16; with $s=1024$ it becomes about $2\\times10^{-5}$, which float16 can represent (as a subnormal).",
+   "misconception": "Loss scaling does not change the effective learning rate: the scale is undone before the update.",
+   "related": [
+    "mixed_precision",
+    "float16",
+    "optimizer"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "dynamic_loss_scaling",
+   "name": "Dynamic loss scaling (LossScaleOptimizer)",
+   "definition": "Automatically adjusting the loss scale during training, as done by `keras.optimizers.LossScaleOptimizer`.",
+   "intuition": "Turn the volume up as far as possible without clipping; back off when it distorts.",
+   "technical": "Beyond the book: start high; if any gradient is inf/NaN, skip the step and halve the scale; after N consecutive good steps, double it.",
+   "significance": "The book calls it usually the best option because the right scale changes over training.",
+   "example": "`optimizer = keras.optimizers.LossScaleOptimizer(keras.optimizers.Adam(learning_rate=1e-3))`",
+   "misconception": "A skipped step after overflow is not a bug; it is part of the algorithm.",
+   "related": [
+    "loss_scaling",
+    "optimizer",
+    "adam"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "float8_training",
+   "name": "float8 training",
+   "definition": "Training in which some computations (mainly matmuls in Dense/EinsumDense/Embedding) run in 8-bit floating point, with per-tensor rescaling.",
+   "intuition": "With only 256 bit patterns, you must constantly re-aim the format at the values you actually have.",
+   "technical": "Keras tracks past activation magnitudes to choose scales so tensors fill the float8 range, and overrides part of the backward pass to scale gradients likewise.",
+   "significance": "Can speed up very large Transformer training on recent GPUs; otherwise its overhead causes slowdowns.",
+   "example": "Per p.585: viable for models over ~5B parameters on GPUs like the NVIDIA H100.",
+   "misconception": "You cannot get float8 training by setting `compute_dtype='float8'` the way you enable mixed float16.",
+   "related": [
+    "mixed_precision",
+    "quantization",
+    "transformer"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "mixed_precision",
+   "name": "Mixed-precision training",
+   "definition": "Running most of the forward pass in 16-bit while keeping weights and updates in float32.",
+   "intuition": "Do rough work fast, careful bookkeeping slowly.",
+   "technical": "Layers have `compute_dtype='float16'` and `variable_dtype='float32'`; gradients are cast to float32 before updating variables.",
+   "significance": "Described here as the last precision level that 'just works'.",
+   "example": "float16 forward pass + float32 weights + LossScaleOptimizer.",
+   "misconception": "Mixed precision does not store weights in float16.",
+   "related": [
+    "loss_scaling",
+    "float8_training"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Loss scaling and unscaling",
+   "latex": "\\tilde{g} = \\nabla_\\theta\\,(s\\cdot L) = s\\,\\nabla_\\theta L, \\qquad g = \\frac{\\tilde{g}}{s}, \\qquad \\theta \\leftarrow \\theta - \\eta\\, g",
+   "source_text": "Gradient values are proportional to the loss value ... multiply the loss by a large scalar factor",
+   "variables": [
+    {
+     "symbol": "L",
+     "meaning": "the loss on the batch"
+    },
+    {
+     "symbol": "s",
+     "meaning": "loss scale factor (e.g. `loss_scale_factor=10`)"
+    },
+    {
+     "symbol": "\\theta",
+     "meaning": "model weights"
+    },
+    {
+     "symbol": "\\tilde g",
+     "meaning": "scaled gradient, computed in float16"
+    },
+    {
+     "symbol": "g",
+     "meaning": "true gradient after unscaling (float32)"
+    },
+    {
+     "symbol": "\\eta",
+     "meaning": "learning rate"
+    }
+   ],
+   "operations": "Scalar multiplication of the loss; linearity of differentiation; division of the gradients by the same scalar before the update.",
+   "purpose": "Keep small gradients representable in float16 without changing the update.",
+   "interpretation": "The book's sentence 'gradient values are proportional to the loss value' is exactly the linearity $\\nabla(sL)=s\\nabla L$. The unscaling and update step are added explanation; Keras performs them internally.",
+   "intuition": "Shift every gradient up the exponent ladder by $\\log_2 s$ rungs, then shift back once you are in float32.",
+   "numerical_example": "float16's smallest subnormal is $2^{-24}\\approx 5.96\\times10^{-8}$. A gradient of $3\\times10^{-8}$ rounds to 0 (or to $2^{-24}$ at best). With $s=2^{15}=32768$: $3\\times10^{-8}\\times32768\\approx 9.8\\times10^{-4}$, comfortably representable. After casting to float32 and dividing by 32768 we recover $\\approx 3\\times10^{-8}$.",
+   "source": "book",
+   "book_ref": "p.584"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Fixed loss scaling via loss_scale_factor",
+   "original_code": "optimizer = keras.optimizers.Adam(learning_rate=1e-3, loss_scale_factor=10)",
+   "language": "python",
+   "what_it_does": "Creates an Adam optimizer that multiplies the loss by 10 before gradients are computed and divides the gradients by 10 before applying them.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "`learning_rate=1e-3` is Adam's usual default; `loss_scale_factor=10` sets a constant loss scale. Every Keras optimizer accepts this argument."
+    }
+   ],
+   "inputs_outputs": "Input: hyperparameters. Output: an optimizer object to pass to `model.compile(optimizer=...)`.",
+   "algorithm": "scaled_loss = loss * 10 -> backprop -> grads / 10 -> Adam update.",
+   "theory_link": "Implements the fixed-$s$ version of loss scaling (math m1).",
+   "parameters": [
+    {
+     "name": "learning_rate",
+     "role": "Adam step size."
+    },
+    {
+     "name": "loss_scale_factor",
+     "role": "Constant multiplier applied to the loss (and divided out of the gradients)."
+    }
+   ],
+   "pitfalls": [
+    "A factor of 10 is mild; in practice factors are often large powers of two. Too large a factor overflows float16 (max 65,504) and produces inf/NaN gradients.",
+    "A fixed factor cannot adapt as gradient magnitudes change over training."
+   ],
+   "illustrative_code": null
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Dynamic loss scaling with LossScaleOptimizer",
+   "original_code": "optimizer = keras.optimizers.LossScaleOptimizer(\n    keras.optimizers.Adam(learning_rate=1e-3)\n)",
+   "language": "python",
+   "what_it_does": "Wraps an Adam optimizer so that the loss scale is chosen and adjusted automatically during training.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "`LossScaleOptimizer` is a wrapper: it takes another optimizer as its argument."
+    },
+    {
+     "lines": "2",
+     "explanation": "The inner optimizer performs the actual weight update after unscaling."
+    },
+    {
+     "lines": "3",
+     "explanation": "Closes the call."
+    }
+   ],
+   "inputs_outputs": "Input: an inner optimizer. Output: a wrapped optimizer usable anywhere a Keras optimizer is expected.",
+   "algorithm": "Beyond the book: maintain a scale; on non-finite gradients skip the update and halve the scale; after a fixed number of finite steps, double it.",
+   "theory_link": "Dynamic choice of $s$ in math m1, which the book recommends because the right value changes over training.",
+   "parameters": [
+    {
+     "name": "inner optimizer",
+     "role": "Adam with learning_rate=1e-3 here."
+    }
+   ],
+   "pitfalls": [
+    "Occasional skipped steps right after start are expected while the scale settles.",
+    "Loss scaling matters mainly for float16; with bfloat16's 8 exponent bits underflow is rarely an issue."
+   ],
+   "illustrative_code": "# AI-written sketch (not from the book) of what dynamic loss scaling does per step\nscale = 2.0 ** 15\ngood_steps = 0\ndef train_step(compute_grads, apply_grads):\n    global scale, good_steps\n    grads = compute_grads(loss_multiplier=scale)   # grads of scale * loss\n    grads = [g / scale for g in grads]              # unscale in float32\n    if all(np.isfinite(g).all() for g in grads):\n        apply_grads(grads)\n        good_steps += 1\n        if good_steps == 2000:\n            scale *= 2; good_steps = 0\n    else:\n        scale /= 2; good_steps = 0                  # skip this update"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Range vs. resolution: two different ways low precision fails",
+   "kind": "breakdown",
+   "body": "Exponent bits set the **range** (how small/large a number can be); mantissa bits set the **resolution** (how finely numbers are spaced). Loss scaling fixes a *range* problem (underflow of tiny gradients). It cannot fix a *resolution* problem such as adding $10^{-6}$ to a weight of $1.0$ in float16, which is why weights and updates stay in float32 under mixed precision (p.583). float8 suffers from both at once: E4M3 has 3 mantissa bits (relative spacing 1/8) and a max of 448; E5M2 has more range but only 2 mantissa bits. That is why float8 needs per-tensor scaling for every matmul input, not one global loss scale.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why float8 gains only appear for very large models",
+   "kind": "step_by_step",
+   "body": "1. A dense layer on a batch costs $O(B\\cdot d_{in}\\cdot d_{out})$ multiply-adds; float8 can roughly double throughput on that part.\n2. Scaling costs $O(B\\cdot d_{in} + d_{in}\\cdot d_{out})$ elementwise work (max-abs, multiply, cast), plus history bookkeeping and extra kernel launches.\n3. The ratio of savings to overhead grows with the layer width. With small widths, the GPU is not saturated by matmuls anyway, so float8 brings little and the overhead dominates: the slowdown the book warns about.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "One training step with dynamic loss scaling",
+   "why": "Shows what `LossScaleOptimizer` (code c2) automates and why the scale changes over training, as the page states.",
+   "mermaid": "flowchart TD\n A[Forward pass in float16] --> B[loss L]\n B --> C[scaled loss = s * L]\n C --> D[Backward pass: grads = s * dL/dw]\n D --> E[Cast to float32, divide by s]\n E --> F{All gradients finite?}\n F -- yes --> G[Apply inner Adam update]\n G --> H{Many good steps in a row?}\n H -- yes --> I[s = 2s]\n H -- no --> J[keep s]\n F -- no --> K[Skip update, s = s/2]"
+  },
+  {
+   "id": "v2",
+   "type": "chart",
+   "title": "Representable range of floating-point formats (log10 scale)",
+   "why": "The page contrasts float16 (needs loss scaling) and float8 (needs per-tensor scaling); the bars show each format's normal range from smallest to largest positive value. float8 values are standard E4M3/E5M2 figures, not from the book.",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": [
+      "float32",
+      "bfloat16",
+      "float16",
+      "float8 E5M2",
+      "float8 E4M3"
+     ],
+     "datasets": [
+      {
+       "label": "log10(min normal) to log10(max)",
+       "data": [
+        [
+         -37.9,
+         38.5
+        ],
+        [
+         -37.9,
+         38.5
+        ],
+        [
+         -4.2,
+         4.8
+        ],
+        [
+         -4.2,
+         4.8
+        ],
+        [
+         -1.8,
+         2.65
+        ]
+       ]
+      }
+     ]
+    },
+    "options": {
+     "indexAxis": "y",
+     "plugins": {
+      "legend": {
+       "display": false
+      }
+     },
+     "scales": {
+      "x": {
+       "title": {
+        "display": true,
+        "text": "log10 of magnitude"
+       }
+      }
+     }
+    }
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Loss scaling with factor s is the same as multiplying the learning rate by s.",
+   "correction": "The gradients are divided by s before the update, so the step is unchanged; only the intermediate float16 values are larger."
+  },
+  {
+   "claim": "If float16 mixed precision works, float8 is just one more setting away.",
+   "correction": "The page states you cannot simply set `compute_dtype` to float8; it requires rescaling machinery in the forward and backward pass, available only for Dense, EinsumDense and Embedding."
+  },
+  {
+   "claim": "float8 training always speeds things up.",
+   "correction": "On small models or less powerful GPUs, the scaling overhead exceeds the gains and training slows down."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 583,
+    "note": "Mixed precision, compute_dtype vs. variable_dtype, and table 18.1 (float16 vs. bfloat16 bits)."
+   },
+   {
+    "page": 582,
+    "note": "float16 inference and why typical weight updates (~1e-6) need float32."
+   },
+   {
+    "page": 580,
+    "note": "Section 18.3 intro on floating-point precision."
+   }
+  ],
+  "later": [
+   {
+    "page": 585,
+    "note": "End of the float8 discussion (viable only above ~5B parameters) and start of int8 quantization."
+   },
+   {
+    "page": 586,
+    "note": "int8 quantization is built into the same Dense/EinsumDense/Embedding layers."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 68,
+    "note": "Mini-batch SGD and the update W -= learning_rate * gradient."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 64,
+    "note": "Gradient-based optimization basics."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 241,
+    "note": "Custom training loops, where gradients are retrieved explicitly."
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "float16's narrow range makes tiny gradients round to zero; multiplying the loss by a large factor scales all gradients up and avoids this.",
+  "Use `loss_scale_factor=...` for a fixed scale, or wrap the optimizer in `keras.optimizers.LossScaleOptimizer` for an automatic one (usually best).",
+  "float16 is the last precision that 'just works'; float8 needs per-tensor rescaling of activations and gradients.",
+  "Keras's float8 training covers only Dense, EinsumDense and Embedding, targeting Transformers.",
+  "float8's overhead makes it a slowdown on small models or weaker GPUs."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why does multiplying the loss by a constant help float16 training?",
+   "options": [
+    "It increases the effective learning rate",
+    "Gradients scale by the same constant, so small ones no longer underflow to zero",
+    "It reduces the number of mantissa bits needed",
+    "It makes the loss converge to a lower value"
+   ],
+   "answer": "Gradients scale by the same constant, so small ones no longer underflow to zero",
+   "explanation": "Gradients are proportional to the loss (linearity of differentiation). The learning rate is unaffected because gradients are unscaled before the update; mantissa bits are fixed by the format; the optimum is unchanged.",
+   "page_refs": [
+    584
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Why does the book recommend `LossScaleOptimizer` over a fixed `loss_scale_factor`?",
+   "options": [],
+   "answer": "Because the right scaling value can change over the course of training, and the wrapper figures it out automatically.",
+   "explanation": "Stated directly on the page. Gradient magnitudes drift during training, so any fixed factor may become too small (underflow) or too large (overflow).",
+   "page_refs": [
+    584
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "math",
+   "question": "float16's smallest positive subnormal is about 6e-8. A gradient entry is 1e-9. What is the smallest power-of-two loss scale that makes the scaled value at least 6e-8, and what value is passed to the update after unscaling?",
+   "options": [],
+   "answer": "s = 64 (2^6), giving 6.4e-8; after dividing by 64 in float32 the update uses about 1e-9.",
+   "explanation": "We need s >= 60; the smallest power of two is 64. In practice much larger scales (e.g. 2^15) are used to keep values in the normal range with full precision. The divide happens in float32, so 1e-9 is recovered.",
+   "page_refs": [
+    584
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "Which Keras layers does the built-in float8 training implementation cover?",
+   "options": [
+    "All layers, via compute_dtype='float8'",
+    "Conv2D, Dense and LSTM",
+    "Dense, EinsumDense and Embedding",
+    "Only MultiHeadAttention"
+   ],
+   "answer": "Dense, EinsumDense and Embedding",
+   "explanation": "The page lists exactly these three, targeting Transformers. compute_dtype='float8' is explicitly said not to work; Conv2D/LSTM are not mentioned; MultiHeadAttention is covered indirectly through EinsumDense.",
+   "page_refs": [
+    584
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "Why can float8 training make a model train slower than float16 mixed precision?",
+   "options": [],
+   "answer": "Float8 needs extra work (tracking past activation values, rescaling activations and gradients, overriding part of the backward pass). On small models or weaker GPUs that overhead costs more than the faster float8 matmuls save.",
+   "explanation": "The page says the added overhead has a computational cost that can exceed the benefits; p.585 adds that it is viable only for very large models on recent GPUs.",
+   "page_refs": [
+    584,
+    585
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Why is float16 described as the last precision level that 'just works'?",
+   "options": [],
+   "answer": "It has enough bits to represent all intermediate tensors of the forward pass by simple casting (with float32 only for gradient updates); float8 loses too much information for plain casting.",
+   "explanation": "Direct paraphrase of the page. The contrast is that float8 requires modifying the computation with scale factors, not just changing dtypes.",
+   "page_refs": [
+    584
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you explain to a colleague, without notes, how a single training step with dynamic loss scaling proceeds, including what happens when a gradient overflows?",
+   "options": [],
+   "answer": "Scale loss, backprop, unscale in float32, check finiteness, apply or skip, adjust the scale.",
+   "explanation": "Compare your explanation with diagram v1. The overflow handling is beyond the book's text but is what LossScaleOptimizer does.",
+   "page_refs": [
+    584
+   ]
+  }
+ ]
+}

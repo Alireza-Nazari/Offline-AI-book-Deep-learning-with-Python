@@ -1,0 +1,290 @@
+{
+ "page_id": "page_250",
+ "pdf_page": 250,
+ "printed_page": "226",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:29:50Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction. The page opens with the continuation of the JAX train_step from p.249 and ends with the start of a TensorFlow train_step that continues on p.251. Callouts verified against the image."
+ },
+ "overview": {
+  "title": "Finishing the JAX train_step; 7.4.5 Handling metrics with compile()'s loss and metrics",
+  "chapter": "7 A deep dive on Keras",
+  "section": "7.4 Writing your own training and evaluation loops",
+  "subsection": "7.4.5 Handling metrics in a custom train_step()",
+  "main_topic": "The second half of the JAX train_step (optimizer.stateless_apply, logs, repacking state), training it with fit(), and the start of section 7.4.5: using self.compute_loss and self.metrics to reuse the loss and metrics passed to compile() inside a custom train_step.",
+  "central_idea": "A JAX train_step must return (logs, state), with trainable and optimizer variables updated by optimizer.stateless_apply. Once a model is compiled with a loss and metrics, a custom train_step can use self.compute_loss (compiled loss plus layer regularization losses) and self.metrics (compiled metrics plus a loss tracker) instead of module-level objects.",
+  "importance": "Completes the three-backend tour of customizing fit(), then removes the main awkwardness of those examples (hard-coded global loss and tracker) so custom steps can be configured through compile() like regular models.",
+  "learning_objectives": [
+   "Read the second half of the JAX train_step: optimizer.stateless_apply returns new trainable and optimizer variables.",
+   "Explain why the JAX train_step returns (logs, state).",
+   "Describe what self.compute_loss combines (compiled loss and layer regularization losses).",
+   "Describe what self.metrics contains after compile() (compiled metrics plus a loss-tracking metric).",
+   "Start rewriting the TensorFlow train_step to use self.compute_loss(y=..., y_pred=...)."
+  ],
+  "prerequisites": [
+   "The first half of the JAX train_step (p.249).",
+   "optimizer.stateless_apply() from the from-scratch JAX step (p.244).",
+   "compile() arguments optimizer, loss, metrics (p.122).",
+   "Listing 7.21 (p.247)."
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the end of the **JAX `train_step`** from p.249. The `grad_fn` call is completed with `targets` and `training=True` (callout: computes gradients and updates to non-trainable variables). Then **`self.optimizer.stateless_apply(optimizer_variables, grads, trainable_variables)`** returns new `trainable_variables` and `optimizer_variables` (callout: updates trainable variables and optimizer variables). The logs are simply `{\"loss\": loss}`, the per-batch value rather than a moving average (callout). The state is repacked as `(trainable_variables, non_trainable_variables, optimizer_variables, metrics_variables)` and **`return logs, state`** sends back metric logs and updated state variables. Training uses the familiar `model = get_custom_model()` and `model.fit(train_images, train_labels, epochs=3)`.\n\nSection **7.4.5, Handling metrics in a custom train_step()**, then asks: what about the `loss` and `metrics` you can pass to `compile()`? After calling `compile()` you get access to:\n\n- **`self.compute_loss`**, which combines the loss function passed to `compile()` with **regularization losses** that certain layers may add;\n- **`self.metrics`**, the list of metrics passed to `compile()`, which **also includes a metric that tracks the loss**.\n\nUnder *train_step() metrics handling with TensorFlow*, a new `CustomModel` begins: `train_step(self, data)` unpacks the batch and, inside a `tf.GradientTape`, runs `self(inputs, training=True)` and computes **`loss = self.compute_loss(y=targets, y_pred=predictions)`** (callout: computes the loss via self.compute_loss). The rest of this listing, which updates every metric in `self.metrics` and returns a dict of their results, is on p.251.",
+ "paragraphs": [
+  {
+   "ref": "p250_e03",
+   "excerpt": "targets,",
+   "what_it_says": "Continuation of the JAX train_step: finishes the grad_fn call, applies the optimizer statelessly, builds logs = {\"loss\": loss}, repacks the state and returns (logs, state).",
+   "what_it_means": "optimizer.stateless_apply is the pure counterpart of optimizer.apply: given the optimizer's own variables (e.g. Adam's moment estimates), the gradients and the current weights, it returns the new weights and new optimizer variables. metrics_variables pass through unchanged because no metric is updated here.",
+   "why_it_matters": "Returning the full state is what allows fit() to keep all variables consistent across jit-compiled steps.",
+   "technical_idea": "The full step is a pure function (state, data) -> (logs, state').",
+   "terminology": [{"term": "optimizer.stateless_apply", "meaning": "Returns (new_trainable_variables, new_optimizer_variables) given optimizer variables, gradients and trainable variables."}, {"term": "optimizer_variables", "meaning": "The optimizer's internal state, such as Adam's first and second moment estimates and its iteration counter."}],
+   "connections": ["p.249: first half of this train_step.", "p.244: stateless_apply in the from-scratch JAX step."]
+  },
+  {
+   "ref": "p250_e05",
+   "excerpt": "model = get_custom_model()",
+   "what_it_says": "'Let's try it out': the JAX custom model is trained with the same fit() call.",
+   "what_it_means": "get_custom_model() (p.248) now picks up the JAX CustomModel. The displayed loss is the last batch's loss, since no moving average is computed.",
+   "why_it_matters": "All three backends share an identical training call.",
+   "connections": ["p.248: get_custom_model() definition."]
+  },
+  {
+   "ref": "p250_e08",
+   "excerpt": "Finally, what about the loss and metrics that you can pass to",
+   "what_it_says": "Asks how to use compile()'s loss and metrics in a custom train_step and introduces two attributes available after compile().",
+   "what_it_means": "In the previous examples, compile() received only an optimizer and the loss and tracker were globals. A cleaner design lets the user choose loss and metrics at compile time and have the custom step honor them.",
+   "why_it_matters": "Makes a custom model reusable: different loss or metrics without editing the class.",
+   "connections": ["p.247: compile() received only an optimizer in Listing 7.21.", "p.122: compile() takes optimizer, loss and metrics."]
+  },
+  {
+   "ref": "p250_e09",
+   "excerpt": "self.compute_loss—This combines the loss function you passed to compile() together",
+   "what_it_says": "self.compute_loss combines the compiled loss function with regularization losses added by certain layers.",
+   "what_it_means": "Layers with weight regularizers (e.g. kernel_regularizer) or that call add_loss contribute extra penalty terms. Using a raw loss_fn ignores them; self.compute_loss adds them so the training objective is complete.",
+   "why_it_matters": "A subtle bug source: with a hand-picked loss_fn, regularization configured on layers silently does nothing.",
+   "terminology": [{"term": "regularization losses", "meaning": "Additional loss terms contributed by layers, e.g. L2 weight penalties, that are added to the main loss."}],
+   "connections": ["p.251: self.compute_loss used identically in the PyTorch version."]
+  },
+  {
+   "ref": "p250_e10",
+   "excerpt": "self.metrics—The list of metrics you passed to compile(). Note that it",
+   "what_it_says": "self.metrics is the list of compiled metrics and also includes a metric that tracks the loss.",
+   "what_it_means": "You no longer need your own loss_tracker or a metrics property override: Keras creates a loss tracker and includes it in self.metrics, and resets everything in self.metrics each epoch.",
+   "why_it_matters": "Lets the custom step update and report all metrics with a generic loop, as on p.251.",
+   "connections": ["p.247: the manual metrics property returning [loss_tracker].", "p.251: the loop over self.metrics."]
+  },
+  {
+   "ref": "p250_e13",
+   "excerpt": "import keras",
+   "what_it_says": "'Here's what it looks like with TensorFlow': start of a CustomModel whose train_step computes the loss via self.compute_loss(y=targets, y_pred=predictions).",
+   "what_it_means": "Identical to Listing 7.21 except the loss now comes from the compiled configuration. No global loss_fn or loss_tracker is defined.",
+   "why_it_matters": "Shows the minimal change required to make a custom step compile-configurable.",
+   "connections": ["p.251: the rest of this train_step."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "stateless_optimizer",
+   "name": "optimizer.stateless_apply()",
+   "definition": "Pure weight update: takes optimizer variables, gradients and trainable variables; returns new trainable and optimizer variables.",
+   "intuition": "The optimizer's notebook (momenta) is handed in and an updated copy handed back.",
+   "technical": "trainable_variables, optimizer_variables = self.optimizer.stateless_apply(optimizer_variables, grads, trainable_variables)",
+   "significance": "Needed in JAX where in-place updates are not allowed inside compiled functions.",
+   "example": "The JAX train_step on this page.",
+   "misconception": "That optimizers are stateless; Adam keeps per-weight moment estimates, which is exactly what optimizer_variables hold.",
+   "related": ["stateless_call", "stateless_metrics", "adam"],
+   "source": "book"
+  },
+  {
+   "id": "compute_loss",
+   "name": "self.compute_loss",
+   "definition": "Model method available after compile() that combines the compiled loss with layer regularization losses.",
+   "intuition": "The model's official objective, as configured, including penalties.",
+   "technical": "Called as self.compute_loss(y=targets, y_pred=predictions) inside train_step.",
+   "significance": "Lets custom steps honor compile()'s loss and any regularizers.",
+   "example": "loss = self.compute_loss(y=targets, y_pred=predictions)",
+   "misconception": "That it is equivalent to calling the loss function directly; it also adds regularization losses.",
+   "related": ["loss_function", "regularization", "custom_train_step"],
+   "source": "book"
+  },
+  {
+   "id": "metrics_property",
+   "name": "self.metrics after compile()",
+   "definition": "The list of compiled metrics, which also includes a metric tracking the loss.",
+   "intuition": "Keras gives you a ready-made set of counters, including a loss average.",
+   "technical": "Can be iterated in train_step to update each metric; fit() resets them at each epoch.",
+   "significance": "Replaces the hand-written loss_tracker and metrics property of Listing 7.21.",
+   "example": "for metric in self.metrics: ... (p.251)",
+   "misconception": "That the loss is not among the metrics; the page says a loss tracker is included.",
+   "related": ["keras_metric", "mean_metric"],
+   "source": "book"
+  },
+  {
+   "id": "jax_train_state",
+   "name": "Returning (logs, state) from a JAX train_step",
+   "definition": "The JAX train_step returns metric logs and the updated four-part state tuple.",
+   "intuition": "Report what happened and hand back the updated memory.",
+   "technical": "state = (trainable_variables, non_trainable_variables, optimizer_variables, metrics_variables); return logs, state.",
+   "significance": "Completes the stateless contract between fit() and a custom JAX step.",
+   "example": "End of the first code block on this page.",
+   "misconception": "That returning logs alone suffices under JAX.",
+   "related": ["stateless_optimizer", "custom_train_step"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Total loss computed by self.compute_loss",
+   "latex": "L_{\\text{total}} = \\ell(y, \\hat{y}) + \\sum_{j} R_j",
+   "source_text": "Not printed as a formula; the text says self.compute_loss combines the loss function passed to compile() together with regularization losses that may be added by certain layers.",
+   "variables": [
+    {"symbol": "\\ell(y, \\hat{y})", "meaning": "The loss passed to compile(), evaluated on targets and predictions"},
+    {"symbol": "R_j", "meaning": "Regularization loss contributed by layer j (e.g. an L2 weight penalty), if any"}
+   ],
+   "operations": "Sum of the main loss and all layer-added regularization terms.",
+   "purpose": "Makes explicit what 'combines' means.",
+   "interpretation": "With no regularized layers, it reduces to the compiled loss alone.",
+   "intuition": "Main objective plus penalties.",
+   "numerical_example": "If crossentropy is 0.30 and a Dense layer with an L2 penalty contributes 0.02, compute_loss returns 0.32.",
+   "source": "ai_explanation",
+   "book_ref": "p.250"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "JAX train_step, second part (continued from p.249)",
+   "original_code": "            targets,\n            training=True,\n        )\n\n        (\n            trainable_variables,\n            optimizer_variables,\n        ) = self.optimizer.stateless_apply(\n            optimizer_variables, grads, trainable_variables\n        )\n\n        logs = {\"loss\": loss}\n        state = (\n            trainable_variables,\n            non_trainable_variables,\n            optimizer_variables,\n            metrics_variables,\n        )\n        return logs, state",
+   "language": "python",
+   "what_it_does": "Completes the grad_fn call begun on p.249, updates weights and optimizer state statelessly, and returns the per-batch loss and the new state. The beginning of this method (signature, state unpacking, grad_fn creation) is on p.249.",
+   "line_explanations": [
+    {"lines": "1-3", "explanation": "Last arguments of grad_fn(...): targets and training=True. Callout: computes gradients and updates to non-trainable variables."},
+    {"lines": "5-10", "explanation": "Callout: updates trainable variables and optimizer variables via stateless_apply."},
+    {"lines": "12", "explanation": "Callout: we aren't computing a moving average of the loss, instead returning the per-batch value."},
+    {"lines": "13-18", "explanation": "Repacks all four variable groups; metrics_variables unchanged."},
+    {"lines": "19", "explanation": "Callout: returns metric logs and updated state variables."}
+   ],
+   "inputs_outputs": "Uses loss, grads and the unpacked variables from p.249. Returns (logs, state).",
+   "algorithm": "Stateless optimizer step, then repack state.",
+   "theory_link": "Pure-function form of the weight update step (p.239).",
+   "parameters": [
+    {"name": "optimizer_variables", "role": "Optimizer internal state (e.g. Adam moments)."},
+    {"name": "grads", "role": "Gradients from value_and_grad on p.249."}
+   ],
+   "pitfalls": [
+    "The order of arguments to stateless_apply is (optimizer_variables, grads, trainable_variables).",
+    "Forgetting to include the updated non_trainable_variables in the returned state would discard forward-pass updates."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Training the JAX custom model",
+   "original_code": "model = get_custom_model()\nmodel.fit(train_images, train_labels, epochs=3)",
+   "language": "python",
+   "what_it_does": "Builds the model with the JAX CustomModel and trains it for three epochs.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "get_custom_model() from p.248, now using the JAX class definition."},
+    {"lines": "2", "explanation": "Standard fit(); the 'loss' shown is per-batch."}
+   ],
+   "inputs_outputs": "MNIST training data; returns History.",
+   "algorithm": "fit() loop over the JAX train_step.",
+   "theory_link": "Backend-independent training API.",
+   "parameters": [{"name": "epochs=3", "role": "Passes over the data."}],
+   "pitfalls": ["Requires the JAX backend."]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "TensorFlow train_step using self.compute_loss (first part; continues on p.251)",
+   "original_code": "import keras\nfrom keras import layers\n\nclass CustomModel(keras.Model):\n    def train_step(self, data):\n        inputs, targets = data\n        with tf.GradientTape() as tape:\n            predictions = self(inputs, training=True)\n            loss = self.compute_loss(y=targets, y_pred=predictions)",
+   "language": "python",
+   "what_it_does": "Begins a TensorFlow CustomModel whose loss comes from compile() via self.compute_loss. Only this page's lines are reproduced; the gradient computation, optimizer update, metric loop and return are on p.251.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Imports; there is no module-level loss_fn or loss_tracker any more."},
+    {"lines": "4-6", "explanation": "Same subclass and signature as Listing 7.21."},
+    {"lines": "7-8", "explanation": "Forward pass under the gradient tape."},
+    {"lines": "9", "explanation": "Callout: computes the loss via self.compute_loss, i.e. the compiled loss plus regularization losses."}
+   ],
+   "inputs_outputs": "Input: one batch. (Output on p.251: dict of all metric results.)",
+   "algorithm": "Forward -> compiled loss (continued on p.251: gradients, update, metrics).",
+   "theory_link": "Ties the custom step to compile()'s configuration.",
+   "parameters": [
+    {"name": "y=targets, y_pred=predictions", "role": "Keyword arguments to self.compute_loss."}
+   ],
+   "pitfalls": ["self.compute_loss requires that a loss was passed to compile() (as done in the get_custom_model() on p.251)."]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "From globals to compile(): what changes",
+   "kind": "breakdown",
+   "body": "| Element | Listing 7.21 (p.247) | 7.4.5 version (p.250-251) |\n|---|---|---|\n| Loss | global `loss_fn` | `self.compute_loss(y=..., y_pred=...)` |\n| Loss tracking | global `loss_tracker` | built into `self.metrics` |\n| Reset registration | `metrics` property override | automatic |\n| compile() | optimizer only | optimizer, loss, metrics |\n\nEditorial summary based on the two versions.",
+   "source": "inference"
+  },
+  {
+   "title": "What lives in optimizer_variables",
+   "kind": "numerical",
+   "body": "Beyond the book: for Adam, each trainable weight tensor has two same-shaped moment estimates, plus a scalar iteration counter (and the learning rate as a variable). For the 407,050-parameter model built by `get_custom_model()`, that means about 2 x 407,050 = 814,100 extra floats of optimizer state, all threaded through `optimizer_variables` in the JAX step.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Second half of the JAX train_step",
+   "why": "The code at the top of the page turns gradients into new trainable and optimizer variables, then repacks the state; the flow makes the inputs and outputs of stateless_apply explicit.",
+   "mermaid": "flowchart LR\n  G[grads] --> SA[\"optimizer.stateless_apply\"]\n  OV[optimizer_variables] --> SA\n  TV[trainable_variables] --> SA\n  SA --> TV2[new trainable_variables]\n  SA --> OV2[new optimizer_variables]\n  TV2 --> ST[\"state tuple\"]\n  OV2 --> ST\n  NTV[non_trainable_variables from grad_fn] --> ST\n  MV[metrics_variables unchanged] --> ST\n  ST --> RET[\"return logs, state\"]\n  L[\"logs = {'loss': loss}\"] --> RET"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "self.compute_loss is just the compiled loss function.", "correction": "It also adds regularization losses contributed by layers."},
+  {"claim": "You must add your own loss tracker to self.metrics.", "correction": "The page says self.metrics already includes a metric that tracks the loss."},
+  {"claim": "The JAX train_step only needs to return logs.", "correction": "It returns (logs, state), with all four variable groups."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 249, "note": "First half of the JAX train_step and compute_loss_and_updates()."},
+   {"page": 247, "note": "Listing 7.21 with global loss_fn and loss_tracker."},
+   {"page": 244, "note": "optimizer.stateless_apply in the from-scratch JAX step."},
+   {"page": 122, "note": "compile() arguments optimizer, loss, metrics."}
+  ],
+  "later": [
+   {"page": 251, "note": "Rest of the TensorFlow metric-handling train_step, the compile() with loss and metrics, and the PyTorch version."},
+   {"page": 254, "note": "Chapter summary."}
+  ],
+  "prerequisites": [
+   {"page": 246, "note": "Stateless metrics API, relevant for a JAX version of 7.4.5."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 248, "note": "get_custom_model() used to train the JAX model."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "optimizer.stateless_apply(optimizer_variables, grads, trainable_variables) returns new trainable and optimizer variables.",
+  "The JAX train_step returns (logs, state); here logs hold the per-batch loss.",
+  "After compile(), self.compute_loss = compiled loss + layer regularization losses.",
+  "After compile(), self.metrics = compiled metrics + a loss-tracking metric.",
+  "A custom step can thus be configured through compile() instead of global objects."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "What does self.optimizer.stateless_apply return in the JAX train_step?", "options": ["Only the gradients", "New trainable variables and new optimizer variables", "The loss and the logs", "New non-trainable variables"], "answer": "New trainable variables and new optimizer variables", "explanation": "The code unpacks (trainable_variables, optimizer_variables). Gradients are its input; the loss comes from grad_fn; non-trainable updates come from compute_loss_and_updates.", "page_refs": [250]},
+  {"id": "q2", "type": "short", "question": "What two things does self.compute_loss combine?", "options": [], "answer": "The loss function passed to compile() and the regularization losses that may be added by certain layers.", "explanation": "Stated in the first bullet of 7.4.5.", "page_refs": [250]},
+  {"id": "q3", "type": "conceptual", "question": "Why is self.metrics enough to report the loss, without a separate loss_tracker?", "options": [], "answer": "Because after compile(), self.metrics includes a metric that tracks the loss in addition to the compiled metrics.", "explanation": "Stated in the second bullet of 7.4.5.", "page_refs": [250]},
+  {"id": "q4", "type": "mcq", "question": "In the JAX train_step on this page, what value appears under 'loss' in the logs?", "options": ["The epoch-average loss", "The per-batch loss", "The validation loss", "The regularization loss only"], "answer": "The per-batch loss", "explanation": "The callout says no moving average is computed; it returns the per-batch value. Validation and regularization-only values are not involved.", "page_refs": [250, 249]},
+  {"id": "q5", "type": "conceptual", "question": "Why is metrics_variables included in the returned state even though it was not used?", "options": [], "answer": "Because the JAX train_step contract requires returning the full state tuple that fit() passed in; fit() needs all four groups back to stay consistent.", "explanation": "The state is repacked with all four components before return logs, state.", "page_refs": [250, 249]},
+  {"id": "q6", "type": "math", "question": "If the compiled crossentropy loss is 0.45 and two regularized layers add penalties of 0.01 and 0.03, what does self.compute_loss return?", "options": [], "answer": "0.49", "explanation": "compute_loss adds the regularization losses to the compiled loss: 0.45 + 0.01 + 0.03.", "page_refs": [250]},
+  {"id": "q7", "type": "self", "question": "Can you explain the practical advantage of using self.compute_loss over a global loss_fn in a reusable custom model?", "options": [], "answer": "The user chooses the loss in compile(), and regularization terms from layers are automatically included.", "explanation": "Compare Listing 7.21 (p.247) with the 7.4.5 version.", "page_refs": [250, 247]}
+ ]
+}

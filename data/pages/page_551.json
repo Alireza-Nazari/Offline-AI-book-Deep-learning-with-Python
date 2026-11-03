@@ -1,0 +1,394 @@
+{
+ "page_id": "page_551",
+ "pdf_page": 551,
+ "printed_page": "527",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:30:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. call() and compute_loss() extracted verbatim as one code element. The generate() method begins at the bottom of the page and continues on p.552 (denoise, next rates, re-noising, denormalization); notes use p.552 for context. 'It returns' and its three bullets (e03-e06) are covered by one note."
+ },
+ "overview": {
+  "title": "Training forward pass, loss, and start of generate()",
+  "chapter": "17 Image generation",
+  "section": "17.2 Diffusion models",
+  "subsection": "17.2.5 The generation process",
+  "main_topic": "The call() method that builds noisy training images and denoises them, the compute_loss() override that scores noise prediction with MAE, and the opening of the generate() method.",
+  "central_idea": "call() normalizes a batch, samples Gaussian noise masks and one uniform diffusion time per image, mixes them with the schedule's rates, and denoises; it returns predicted images, predicted noise masks and the real noise masks so that compute_loss() can compare the last two. Generation starts from pure Gaussian noise and walks the diffusion time down from 1 in steps of 1/diffusion_steps.",
+  "importance": "These ~20 lines are the entire training objective of the diffusion model, and the start of the sampling loop that turns noise into flowers.",
+  "learning_objectives": [
+   "Trace call() line by line and give the shape of every tensor.",
+   "Explain why call() returns the real noise masks along with its predictions.",
+   "Write the loss computed by compute_loss().",
+   "Explain how generate() initializes images and computes the diffusion times of each step."
+  ],
+  "prerequisites": [
+   "DiffusionModel constructor and denoise() (p.550)",
+   "diffusion_schedule() (p.548)",
+   "The noise-prediction MAE loss (p.549)",
+   "Broadcasting of (batch, 1, 1, 1) tensors against image batches"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page completes the training logic of `DiffusionModel` and starts the generation logic.\n\n**call() returns three things**: the predicted denoised images, the predicted noise masks and the actual noise masks it applied. The last two are what `compute_loss()` uses to score the model on the **noise mask prediction task**.\n\n**call(images)** step by step (callouts in parentheses):\n\n1. `images = self.normalizer(images)`: standardize the batch.\n2. `noise_masks = keras.random.normal((batch_size, image_size, image_size, 3), seed=self.seed_generator)` (\"Samples random noise masks\").\n3. `diffusion_times = keras.random.uniform((batch_size, 1, 1, 1), 0.0, 1.0, ...)` (\"Samples random diffusion times\"), one per image, shaped to broadcast over pixels.\n4. `noise_rates, signal_rates = diffusion_schedule(diffusion_times)`.\n5. `noisy_images = signal_rates * images + noise_rates * noise_masks` (\"Adds noise to the images\").\n6. `pred_images, pred_noise_masks = self.denoise(noisy_images, noise_rates, signal_rates)` (\"Denoises them\").\n7. Returns `pred_images, pred_noise_masks, noise_masks`.\n\n**compute_loss(self, x, y, y_pred, sample_weight=None, training=True)** unpacks `y_pred`, discards the predicted images and returns `self.loss(noise_masks, pred_noise_masks)`, the MAE between real and predicted noise.\n\n**17.2.5 The generation process.** Generation starts from pure random noise and repeatedly applies `denoise()` until the images are high-signal, low-noise. `generate(num_images, diffusion_steps)` samples standard Gaussian `noisy_images` of shape `(num_images, image_size, image_size, 3)` (\"Starts from pure noise\"), sets `step_size = 1.0 / diffusion_steps` and loops. At iteration `step`, the diffusion time is `1 - step * step_size` for every image (shape `(num_images, 1, 1, 1)`), and the matching rates come from `diffusion_schedule()` (\"Computes appropriate noise rates and signal rates\"). The loop body continues on p.552.\n\nNote: `call()` uses `batch_size`, which is not an attribute or argument; it is the global `batch_size = 32` defined with the dataset on p.545. This works because the dataset was rebatched with `drop_remainder=True`, so every batch has exactly 32 images.",
+ "paragraphs": [
+  {
+   "ref": "p551_e03",
+   "excerpt": "It returns",
+   "what_it_says": "call() returns the predicted denoised images, the predicted noise masks, and the actual noise masks it applied.",
+   "what_it_means": "The real noise masks are generated inside call(), so they cannot come from the dataset as labels. Returning them as part of y_pred is how they reach compute_loss(). The predicted images are returned too, although training does not use them.",
+   "why_it_matters": "This packaging is what lets a self-supervised objective (the target is made up on the fly) fit Keras's standard fit() / compute_loss(x, y, y_pred) machinery.",
+   "terminology": [
+    {"term": "y_pred", "meaning": "Whatever call() returns; here a 3-tuple."}
+   ],
+   "connections": [
+    "p.550: the five steps of call() were listed there."
+   ]
+  },
+  {
+   "ref": "p551_e07",
+   "excerpt": "These last two quantities are then used in compute_loss() to compute",
+   "what_it_says": "The predicted and actual noise masks are used in compute_loss() to compute the loss on the noise mask prediction task, followed by the code of call() and compute_loss().",
+   "what_it_means": "Training is a regression problem: given a noisy image and its noise rate, predict the exact noise tensor. Each batch has its own random noise and random diffusion times, so the model never sees the same training example twice even though the dataset is finite.",
+   "why_it_matters": "This is the full diffusion training objective. Generation, defined next, only reuses the learned denoiser.",
+   "technical_idea": "Loss = mean |eps - U-Net(s x_0 + n eps, n)|, with t ~ U(0, 1), (n, s) = schedule(t), eps ~ N(0, I).",
+   "terminology": [
+    {"term": "Noise mask prediction task", "meaning": "Predicting the Gaussian noise mixed into an image."}
+   ],
+   "connections": [
+    "p.549: the MAE loss was introduced there.",
+    "p.550: denoise() is called inside call()."
+   ]
+  },
+  {
+   "ref": "p551_e10",
+   "excerpt": "Finally, let’s implement the image generation process. We start from pure random",
+   "what_it_says": "The generation process starts from pure random noise and repeatedly applies denoise() until the images are high-signal and low-noise.",
+   "what_it_means": "generate() is the reverse diffusion loop. Each iteration estimates the clean image and noise from the current noisy image, then (p.552) builds a slightly less noisy image for the next diffusion time. With diffusion_steps = T, the times visited are 1, 1 - 1/T, ..., 1/T.",
+   "why_it_matters": "This is how the trained denoiser becomes a generator; the number of steps trades speed for quality (compare p.557 for Stable Diffusion).",
+   "technical_idea": "Beyond the book: the update used on p.552 (re-noise the predicted image with the predicted noise at the next rates) is the deterministic DDIM sampler of Song et al. (2020).",
+   "terminology": [
+    {"term": "diffusion_steps", "meaning": "Number of denoising iterations used to generate an image."},
+    {"term": "step_size", "meaning": "Decrease in diffusion time per iteration, 1 / diffusion_steps."}
+   ],
+   "connections": [
+    "p.552: the loop body and the denormalization of the final images.",
+    "p.552: VisualizationCallback calls generate() with diffusion_steps=20."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "noise_prediction",
+   "name": "Noise prediction objective",
+   "definition": "Training the denoiser to output the exact noise mask that was added to a clean image.",
+   "intuition": "Show the model a picture behind static and ask it to describe the static.",
+   "technical": "compute_loss returns MAE(noise_masks, pred_noise_masks); the noisy input is signal_rates * images + noise_rates * noise_masks.",
+   "significance": "Single-step, cheap training that teaches all noise levels at once.",
+   "example": "A batch of 32 images gets 32 different diffusion times and 32 independent noise masks.",
+   "misconception": "That training runs the full multi-step generation loop. Each training example uses a single denoising step.",
+   "related": ["diffusion_model", "mae", "diffusion_schedule"],
+   "source": "book"
+  },
+  {
+   "id": "reverse_diffusion_sampling",
+   "name": "Reverse diffusion (generation loop)",
+   "definition": "Generating images by starting from Gaussian noise and repeatedly denoising while decreasing the diffusion time from 1 toward 0.",
+   "intuition": "Sculpting: each pass removes a bit more noise until an image emerges (the Michelangelo analogy on p.544).",
+   "technical": "noisy_images ~ N(0, I); for step in range(T): t = 1 - step / T; (n, s) = schedule(t); denoise; re-noise at t - 1/T (p.552).",
+   "significance": "The same trained network can be sampled with any number of steps.",
+   "example": "diffusion_steps = 20: t = 1.00, 0.95, ..., 0.05.",
+   "misconception": "That generation starts from a blurred or partially noisy image. It starts from pure standard Gaussian noise.",
+   "related": ["diffusion_model", "diffusion_time"],
+   "source": "book"
+  },
+  {
+   "id": "diffusion_time",
+   "name": "Diffusion time",
+   "definition": "Continuous noise-level index in [0, 1]; 1 = noisiest.",
+   "intuition": "A noise dial.",
+   "technical": "Training: sampled uniformly per image; generation: 1 - step * step_size.",
+   "significance": "Links each image to its noise and signal rates.",
+   "example": "Shape (batch_size, 1, 1, 1) so it broadcasts over (batch_size, 128, 128, 3).",
+   "misconception": "That one diffusion time is shared by the whole training batch. Each image gets its own.",
+   "related": ["diffusion_schedule"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Forward noising in call()",
+   "latex": "x_t = s(t)\\,x_0 + n(t)\\,\\varepsilon, \\qquad t \\sim \\mathcal{U}(0,1),\\ \\varepsilon \\sim \\mathcal{N}(0, I)",
+   "source_text": "noisy_images = signal_rates * images + noise_rates * noise_masks",
+   "variables": [
+    {"symbol": "x_0", "meaning": "normalized clean images (images after self.normalizer)"},
+    {"symbol": "\\varepsilon", "meaning": "noise_masks, standard Gaussian, same shape as the images"},
+    {"symbol": "t", "meaning": "diffusion_times, one per image"},
+    {"symbol": "s(t), n(t)", "meaning": "signal_rates and noise_rates from diffusion_schedule"},
+    {"symbol": "x_t", "meaning": "noisy_images"}
+   ],
+   "operations": "Broadcast multiply-add: rates of shape (B, 1, 1, 1) times tensors of shape (B, 128, 128, 3).",
+   "purpose": "Creates training inputs at random noise levels.",
+   "interpretation": "Each pixel is a weighted mix of its true value and a random Gaussian value.",
+   "intuition": "Dial in a random amount of static for each picture.",
+   "numerical_example": "Pixel value 1.2 (normalized), noise draw -0.7, t = 0.5 (s = 0.594, n = 0.804): $x_t = 0.594\\cdot1.2 + 0.804\\cdot(-0.7) = 0.713 - 0.563 = 0.150$.",
+   "source": "book",
+   "book_ref": "p.551"
+  },
+  {
+   "id": "m2",
+   "title": "Training loss",
+   "latex": "\\mathcal{L} = \\operatorname{mean}\\big|\\,\\varepsilon - \\hat\\varepsilon_\\phi(x_t, n(t))\\,\\big|",
+   "source_text": "return self.loss(noise_masks, pred_noise_masks)",
+   "variables": [
+    {"symbol": "\\hat\\varepsilon_\\phi", "meaning": "the U-Net with weights phi, called inside denoise()"},
+    {"symbol": "\\varepsilon", "meaning": "noise_masks"}
+   ],
+   "operations": "Mean absolute error over all batch elements, pixels and channels.",
+   "purpose": "The objective minimized by fit().",
+   "interpretation": "How far, on average, the predicted noise is from the true noise.",
+   "intuition": "Score the static-guessing.",
+   "source": "book",
+   "book_ref": "p.551"
+  },
+  {
+   "id": "m3",
+   "title": "Diffusion times visited during generation",
+   "latex": "t_k = 1 - \\frac{k}{T}, \\qquad k = 0, 1, \\dots, T-1",
+   "source_text": "diffusion_times = ops.ones((num_images, 1, 1, 1)) - step * step_size",
+   "variables": [
+    {"symbol": "T", "meaning": "diffusion_steps"},
+    {"symbol": "k", "meaning": "step, the loop index"},
+    {"symbol": "t_k", "meaning": "diffusion time at step k (same for all images)"}
+   ],
+   "operations": "Arithmetic sequence decreasing from 1.",
+   "purpose": "Schedules the noise levels the generation loop walks through.",
+   "interpretation": "The last step uses t = 1/T and re-noises to t = 0 (p.552).",
+   "intuition": "Evenly spaced notches on the noise dial, from fully noisy toward clean.",
+   "numerical_example": "T = 4: t = 1.0, 0.75, 0.5, 0.25, with signal rates 0.02, 0.322, 0.594, 0.811.",
+   "source": "book",
+   "book_ref": "p.551"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "call() and compute_loss(): the training logic",
+   "original_code": "    def call(self, images):\n        images = self.normalizer(images)\n        noise_masks = keras.random.normal(\n            (batch_size, self.image_size, self.image_size, 3),\n            seed=self.seed_generator,\n        )\n        diffusion_times = keras.random.uniform(\n            (batch_size, 1, 1, 1),\n            minval=0.0,\n            maxval=1.0,\n            seed=self.seed_generator,\n        )\n        noise_rates, signal_rates = diffusion_schedule(diffusion_times)\n        noisy_images = signal_rates * images + noise_rates * noise_masks\n        pred_images, pred_noise_masks = self.denoise(\n            noisy_images, noise_rates, signal_rates\n        )\n        return pred_images, pred_noise_masks, noise_masks\n\n    def compute_loss(self, x, y, y_pred, sample_weight=None, training=True):\n        _, pred_noise_masks, noise_masks = y_pred\n        return self.loss(noise_masks, pred_noise_masks)",
+   "language": "python",
+   "what_it_does": "call() turns a batch of clean images into noisy images at random noise levels and predicts their noise; compute_loss() returns the MAE between the real and predicted noise masks.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Normalize the raw images with the adapted Normalization layer (zero mean, unit variance)."},
+    {"lines": "3-6", "explanation": "Callout 'Samples random noise masks': standard Gaussian noise of shape (32, 128, 128, 3), using the model's SeedGenerator. `batch_size` is the global variable from p.545."},
+    {"lines": "7-12", "explanation": "Callout 'Samples random diffusion times': one value in [0, 1) per image, shaped (32, 1, 1, 1) to broadcast against images."},
+    {"lines": "13", "explanation": "Rates for each image's diffusion time (note the noise-first return order)."},
+    {"lines": "14", "explanation": "Callout 'Adds noise to the images': the forward noising equation."},
+    {"lines": "15-17", "explanation": "Callout 'Denoises them': U-Net predicts the noise; denoise() also reconstructs images."},
+    {"lines": "18", "explanation": "Return predictions plus the real noise masks so compute_loss() can see the target."},
+    {"lines": "20-22", "explanation": "compute_loss() ignores x, y (None) and sample_weight, unpacks y_pred and returns MAE(real noise, predicted noise)."}
+   ],
+   "inputs_outputs": "call: images (32, 128, 128, 3) raw pixels -> (pred_images, pred_noise_masks, noise_masks), each (32, 128, 128, 3). compute_loss: -> scalar loss.",
+   "algorithm": "Normalize -> sample eps and t -> schedule -> mix -> predict eps -> MAE.",
+   "theory_link": "Implements the five steps listed on p.550 and the noise-prediction loss of p.549.",
+   "parameters": [
+    {"name": "batch_size", "role": "Global variable (32, p.545) fixing the shape of noise and diffusion-time tensors."},
+    {"name": "minval/maxval", "role": "Range of the uniform diffusion-time distribution, [0, 1)."},
+    {"name": "seed", "role": "self.seed_generator, so each call draws new random values."}
+   ],
+   "pitfalls": [
+    "batch_size is a global, not the actual batch size. A batch with a different size would cause a shape mismatch; the dataset avoids this with drop_remainder=True (p.545). A more robust version would use ops.shape(images)[0].",
+    "y is None because the dataset yields only images; compute_loss() must not rely on it.",
+    "The normalizer must be adapted before training (p.553), otherwise it lacks the dataset statistics."
+   ],
+   "illustrative_code": "# AI-written variant (not from the book): infer the batch size from the input\ndef call(self, images):\n    images = self.normalizer(images)\n    batch = ops.shape(images)[0]\n    noise_masks = keras.random.normal(\n        (batch, self.image_size, self.image_size, 3), seed=self.seed_generator)\n    diffusion_times = keras.random.uniform(\n        (batch, 1, 1, 1), minval=0.0, maxval=1.0, seed=self.seed_generator)\n    ..."
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "generate(): start from pure noise (first part)",
+   "original_code": "    def generate(self, num_images, diffusion_steps):\n        noisy_images = keras.random.normal(\n            (num_images, self.image_size, self.image_size, 3),\n            seed=self.seed_generator,\n        )\n        step_size = 1.0 / diffusion_steps\n        for step in range(diffusion_steps):\n            diffusion_times = ops.ones((num_images, 1, 1, 1)) - step * step_size\n            noise_rates, signal_rates = diffusion_schedule(diffusion_times)",
+   "language": "python",
+   "what_it_does": "Begins the generation method: draws pure Gaussian noise images and, for each of diffusion_steps iterations, computes the current diffusion time and its noise and signal rates. The loop body continues on p.552.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "num_images: how many images to generate; diffusion_steps: how many denoising iterations."},
+    {"lines": "2-5", "explanation": "Callout 'Starts from pure noise': standard Gaussian tensor shaped like a batch of images."},
+    {"lines": "6", "explanation": "Diffusion time decreases by 1/diffusion_steps per iteration."},
+    {"lines": "7-8", "explanation": "Current diffusion time 1 - step * step_size, the same for all images, as a (num_images, 1, 1, 1) tensor."},
+    {"lines": "9", "explanation": "Callout 'Computes appropriate noise rates and signal rates' for the current time."}
+   ],
+   "inputs_outputs": "Inputs: num_images, diffusion_steps. Output (after p.552): images clipped to [0, 255], shape (num_images, 128, 128, 3).",
+   "algorithm": "Initialize x ~ N(0, I); for k in 0..T-1: t = 1 - k/T; rates = schedule(t); (continued on p.552: denoise, compute next rates, re-noise).",
+   "theory_link": "Reverse diffusion: walk the diffusion time from 1 toward 0.",
+   "parameters": [
+    {"name": "num_images", "role": "Batch size of the generation."},
+    {"name": "diffusion_steps", "role": "Number of iterations; more steps = smaller step_size, usually better quality, slower."}
+   ],
+   "pitfalls": [
+    "Starting noise is N(0, 1) while the schedule at t = 1 assumes signal rate 0.02, so the starting point is very close to, but not exactly, what training saw at t = 1.",
+    "The loop never evaluates t = 0 itself; the last iteration uses t = 1/T and prepares t = 0 (p.552)."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Shapes through call() for one training batch",
+   "kind": "numerical",
+   "body": "| tensor | shape |\n|---|---|\n| images (after normalizer) | (32, 128, 128, 3) |\n| noise_masks | (32, 128, 128, 3) |\n| diffusion_times | (32, 1, 1, 1) |\n| noise_rates, signal_rates | (32, 1, 1, 1) |\n| noisy_images | (32, 128, 128, 3) via broadcasting |\n| pred_noise_masks, pred_images | (32, 128, 128, 3) |\n| loss | scalar |\n\nThe (32, 1, 1, 1) rates broadcast across height, width and channels, so every pixel of image i is mixed with the same rates.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why one random time per image, not per batch?",
+   "kind": "breakdown",
+   "body": "If the whole batch shared one diffusion time, consecutive gradient steps would each focus on a single noise level, giving noisier, more biased updates. With independent times, every batch is a cross-section of all noise levels, so each gradient step improves the denoiser roughly uniformly across the spectrum. (Explanation beyond the book.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Training vs generation at a glance",
+   "kind": "alternative",
+   "body": "- **Training** (call): one random noise level per image, one U-Net call, the target noise is known, a loss is computed.\n- **Generation** (generate): all images go through every noise level from 1 down, `diffusion_steps` U-Net calls, no target, no loss.\n\nTraining is therefore cheap per example, while generation costs `diffusion_steps` forward passes per image.",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Diffusion times and signal rates visited by generate() with 20 steps",
+   "why": "Shows the arithmetic sequence t = 1 - step/20 computed at the bottom of this page and the signal rate the schedule assigns to each; the callback on p.552 uses exactly 20 steps.",
+   "chart": {
+    "type": "line",
+    "data": {
+     "labels": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+     "datasets": [
+      {"label": "Diffusion time t", "data": [1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05]},
+      {"label": "Signal rate", "data": [0.02, 0.082, 0.143, 0.204, 0.263, 0.322, 0.38, 0.436, 0.491, 0.544, 0.594, 0.643, 0.689, 0.732, 0.773, 0.81, 0.845, 0.876, 0.904, 0.929]},
+      {"label": "Noise rate", "data": [1.0, 0.997, 0.99, 0.979, 0.965, 0.947, 0.925, 0.9, 0.871, 0.839, 0.804, 0.766, 0.725, 0.681, 0.635, 0.586, 0.535, 0.482, 0.427, 0.37]}
+     ]
+    },
+    "options": {
+     "scales": {
+      "x": {"title": {"display": true, "text": "Generation step"}},
+      "y": {"min": 0, "max": 1.05}
+     }
+    }
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "compute_loss() compares predicted images with the input images.",
+   "correction": "It discards pred_images (the `_`) and compares predicted noise masks with the real ones."
+  },
+  {
+   "claim": "batch_size inside call() is read from the input.",
+   "correction": "It is the global variable defined on p.545 (32); it works only because all batches have that size (drop_remainder=True)."
+  },
+  {
+   "claim": "Generation and training both sample random diffusion times.",
+   "correction": "Training samples them uniformly; generation uses a deterministic decreasing sequence 1, 1 - 1/T, ..."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 550, "note": "Constructor, denoise(), and the five-step plan for call()."},
+   {"page": 549, "note": "The MAE noise-prediction loss and the normalization rationale."},
+   {"page": 548, "note": "diffusion_schedule() called in both call() and generate()."},
+   {"page": 545, "note": "Defines batch_size = 32 and rebatches the dataset with drop_remainder=True."}
+  ],
+  "later": [
+   {"page": 552, "note": "The rest of generate(): denoise, compute next rates, re-noise, then denormalize and clip to [0, 255]."},
+   {"page": 552, "note": "VisualizationCallback calls generate() at the end of each epoch."},
+   {"page": 553, "note": "The model is instantiated, compiled with AdamW and fit on the flowers dataset."}
+  ],
+  "prerequisites": [
+   {"page": 550, "note": "denoise() and the DiffusionModel attributes."}
+  ],
+  "related_math": [
+   {"page": 550, "note": "Inversion of the noising equation in denoise()."}
+  ],
+  "related_code": [
+   {"page": 552, "note": "Continuation of generate()."},
+   {"page": 537, "note": "The VAE's compute_loss() pattern in section 17.1.3."}
+  ],
+  "related_figures": [
+   {"page": 549, "note": "Figure 17.11, the rates that generate() walks through."}
+  ]
+ },
+ "takeaways": [
+  "call() normalizes, samples noise masks and per-image diffusion times, mixes them via the schedule, and denoises.",
+  "call() returns (pred_images, pred_noise_masks, noise_masks) so compute_loss() can access the real noise.",
+  "compute_loss() returns MAE(noise_masks, pred_noise_masks).",
+  "generate() starts from N(0, 1) noise and uses diffusion times 1, 1 - 1/T, ..., 1/T.",
+  "call() relies on the global batch_size = 32; the dataset's drop_remainder=True makes that safe."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Which two of call()'s outputs does compute_loss() use?",
+   "options": ["pred_images and noise_masks", "pred_noise_masks and noise_masks", "pred_images and pred_noise_masks", "images and pred_images"],
+   "answer": "pred_noise_masks and noise_masks",
+   "explanation": "`_, pred_noise_masks, noise_masks = y_pred` discards pred_images; the loss is self.loss(noise_masks, pred_noise_masks). The other options involve images, which the loss does not use.",
+   "page_refs": [551]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Why is diffusion_times sampled with shape (batch_size, 1, 1, 1) rather than (batch_size,)?",
+   "options": [],
+   "answer": "So the resulting rates broadcast against image tensors of shape (batch_size, 128, 128, 3): one diffusion time per image, applied to every pixel and channel.",
+   "explanation": "Broadcasting aligns trailing dimensions; a (batch_size,) tensor would be aligned with the channel axis instead.",
+   "page_refs": [551]
+  },
+  {
+   "id": "q3",
+   "type": "math",
+   "question": "With diffusion_steps = 5, list the diffusion times used inside the generate() loop.",
+   "options": [],
+   "answer": "1.0, 0.8, 0.6, 0.4, 0.2",
+   "explanation": "step_size = 0.2 and diffusion_times = 1 - step * 0.2 for step = 0..4.",
+   "page_refs": [551]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why must call() return the real noise masks instead of letting compute_loss() read them from y?",
+   "options": [],
+   "answer": "Because the noise masks are created randomly inside call(); the dataset has no labels (y is None), so the only way to pass the target to compute_loss() is through y_pred.",
+   "explanation": "The page states that the last two returned quantities are used by compute_loss(); the dataset was built with labels=None (p.545).",
+   "page_refs": [551, 545]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Where does the batch_size used in call() come from?",
+   "options": ["The shape of the images argument", "An attribute set in the constructor", "The global variable defined with the dataset on p.545", "The fit() call"],
+   "answer": "The global variable defined with the dataset on p.545",
+   "explanation": "Neither the constructor nor call() define batch_size, so Python looks it up in the module namespace, where batch_size = 32 was set on p.545. It is not inferred from the input or from fit().",
+   "page_refs": [551, 545]
+  },
+  {
+   "id": "q6",
+   "type": "math",
+   "question": "A normalized pixel value is 0.5 and its noise draw is 1.0. Compute the noisy value at diffusion time 0.25 (signal 0.811, noise 0.586).",
+   "options": [],
+   "answer": "0.811 * 0.5 + 0.586 * 1.0 = 0.4055 + 0.586, about 0.99",
+   "explanation": "noisy_images = signal_rates * images + noise_rates * noise_masks.",
+   "page_refs": [551, 548]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you explain to someone why training a diffusion model needs only one U-Net call per image while generating needs many?",
+   "options": [],
+   "answer": "Training synthesizes a noisy image at one random level and checks the noise prediction once; generation must walk through all levels sequentially, calling the U-Net at each step.",
+   "explanation": "Compare call() with the generate() loop.",
+   "page_refs": [551, 552]
+  }
+ ]
+}

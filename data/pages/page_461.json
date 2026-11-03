@@ -1,0 +1,456 @@
+{
+ "page_id": "page_461",
+ "pdf_page": 461,
+ "printed_page": "437",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T10:20:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "e06 says Google Translate 'circa 2017 was powered by a stack of seven large LSTM layers'. The published GNMT system (Wu et al., 2016) describes 8 encoder and 8 decoder LSTM layers. The book's count may be a simplification or an inaccuracy. The notes present the book's statement and mention the paper's figure as outside knowledge."
+  ],
+  "extraction_quality": "Good. Element e03 merges two printed paragraphs ('Note that this inference setup…' and 'There are many ways…'), and e09 merges three ('This finding unleashed…', 'So, with all that as build-up…', 'Attention was actually developed…'). The notes follow the printed paragraphs. The last sentence continues on p.462."
+ },
+ "overview": {
+  "title": "Limits of RNN seq2seq and the arrival of the Transformer",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "",
+  "main_topic": "Why the RNN translator is inefficient and fundamentally limited (state-vector bottleneck, forgetting over long sequences), and the introduction of the Transformer and attention (Vaswani et al., 2017)",
+  "central_idea": "The RNN generation loop wastes computation, and RNN seq2seq has two structural weaknesses: the whole source must fit in one state vector, and information about early tokens fades over long sequences. Attention, first added to RNNs, turned out to be powerful enough to be the only mechanism that passes information across a sequence. That is the core idea of the Transformer.",
+  "importance": "This is the pivot of chapter 15 from recurrent models to the Transformer, the architecture behind essentially all modern language models. Understanding what problem attention solves (direct access to any position, no bottleneck) is the key to understanding everything that follows.",
+  "learning_objectives": [
+   "Explain why Listing 15.13 recomputes unchanged state, and what would need to be cached",
+   "State the two fundamental limitations of RNN seq2seq models given in the book",
+   "Place RNN seq2seq and the Transformer in their historical context (mid-2010s, 2017)",
+   "Say what was surprising about 'Attention Is All You Need': not attention itself, but attention as the only cross-sequence mechanism"
+  ],
+  "prerequisites": [
+   "The RNN encoder-decoder translator and its inference loop (pp.457-460)",
+   "How recurrent layers carry a state vector from step to step (chapter 13)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page first comments on the inference loop of Listing 15.13 (p.460). It is simple but **inefficient**: every new word causes the entire source sentence and the entire generated target to be reprocessed. All the decoder really needs is the current token and the previous RNN state, which could be cached between iterations.\n\nThe toy model could be improved with deeper recurrent stacks or with `LSTM` instead of `GRU`. But the RNN approach has **fundamental limitations**:\n- The whole source sentence must be held in the **encoder state vector**, which limits the size and complexity of translatable sentences.\n- RNNs **progressively forget**. By the 100th token, little information about the start of the sequence remains.\n\nRNNs dominated seq2seq in the mid-2010s. The authors write that Google Translate circa 2017 used a stack of seven large `LSTM` layers in a setup like the one just built. These limitations led to a new kind of sequence model, the **Transformer**.\n\n**Section 15.3** starts here. In 2017, Vaswani et al. published \"Attention Is All You Need\" while working on translation systems. The key finding, stated in the title: a simple mechanism called **attention** can build powerful sequence models with no recurrent layers. Attention itself was not new. It had already been used in NLP for a couple of years. What surprised people was that it could be the *only* mechanism for passing information across a sequence.\n\nThis finding started a revolution in NLP and beyond. The section promises an in-depth explanation of how attention works and why it is effective, and a rebuilt English-to-Spanish translator. It then asks what attention actually is. The answer begins with history: attention was developed to augment RNN models like the one just built, because RNNs, though good at local dependencies, … (continued on p.462).",
+ "paragraphs": [
+  {
+   "ref": "p461_e03",
+   "excerpt": "Note that this inference setup, while very simple, is inefficient, since we",
+   "what_it_says": "The generation loop of Listing 15.13 reprocesses the whole source sentence and the whole generated target every time it samples a new word. A practical system avoids recomputing unchanged state. The decoder only needs the current token and the previous RNN state, which can be cached before each iteration.",
+   "what_it_means": "An RNN is a recurrence $h_t = f(h_{t-1}, x_t)$. Once $h_t$ is known, the past tokens are not needed again: everything the decoder knows about them is in $h_t$. The encoder output also does not change during decoding. So the efficient loop is: encode the source once, then for each step feed one token and the cached state into the GRU cell and get the next state and prediction. Listing 15.13 instead re-runs everything from scratch, so step $i$ costs $O(i)$ work and a sentence costs $O(N^2)$.",
+   "why_it_matters": "Efficient generation is a practical concern for any autoregressive model. The same caching idea comes back for Transformers as the KV cache ('Cached generation', p.504), where the state is the stored key and value vectors instead of one RNN state.",
+   "technical_idea": "Caching in Keras would mean building separate inference models: an encoder model `english → state`, and a single-step decoder `(token, state) → (probs, new_state)` using `return_state=True` on the GRU.",
+   "terminology": [
+    {
+     "term": "State caching",
+     "meaning": "Keeping intermediate results (here the RNN hidden state) between generation steps so they are not recomputed."
+    }
+   ],
+   "connections": [
+    "p.460: Listing 15.13, the loop being criticized.",
+    "p.504: cached generation for Transformers uses the same principle with key/value vectors."
+   ]
+  },
+  {
+   "ref": "p461_e03",
+   "excerpt": "There are many ways this toy model could be improved. We could",
+   "what_it_says": "The model could be improved by stacking more recurrent layers in the encoder and decoder, or by trying other RNN layers such as `LSTM`. Beyond such tweaks, the RNN approach to seq2seq has fundamental limitations, listed next.",
+   "what_it_means": "The authors separate incremental tuning (depth, cell type) from architectural limits that no tuning removes. More layers add capacity, and an LSTM's gated cell state forgets more slowly than a simple RNN. But both still route all information through a fixed-size recurrent state.",
+   "why_it_matters": "It frames the move to the Transformer as a response to structural problems, not as a fashion: you cannot hyperparameter-tune your way out of a bottleneck.",
+   "terminology": [
+    {
+     "term": "Stacked RNN",
+     "meaning": "Several recurrent layers where each layer's output sequence is the next layer's input (`return_sequences=True` on all but the last)."
+    }
+   ],
+   "connections": [
+    "p.458: the current model uses one Bidirectional GRU encoder and one GRU decoder."
+   ]
+  },
+  {
+   "ref": "p461_e04",
+   "excerpt": "The source sequence representation has to be held entirely in the encoder",
+   "what_it_says": "First limitation: the source representation must fit entirely in the encoder state vector, which significantly limits the size and complexity of translatable sentences.",
+   "what_it_means": "In the model on p.458 the decoder sees the English sentence *only* through a 1,024-dimensional initial state. A 3-word sentence and a 60-word paragraph are both squeezed into the same 1,024 numbers. The decoder cannot go back and look at a specific source word when it needs it, for example when translating a name or a number near the end.",
+   "why_it_matters": "This **information bottleneck** is exactly what attention removes. With attention, the decoder can read every encoder output vector (one per source token) at every step, so the available memory grows with the source length.",
+   "technical_idea": "The capacity of a fixed vector is bounded regardless of input length. Attention replaces the single vector $c = h_T^{enc}$ with a step-dependent context $c_t = \\sum_s \\alpha_{t,s} h_s^{enc}$ (Bahdanau et al., 2014; not in the book).",
+   "terminology": [
+    {
+     "term": "Encoder state vector",
+     "meaning": "The final hidden state of the encoder RNN, used as the decoder's initial state. It is the only channel from source to target in a plain seq2seq RNN."
+    },
+    {
+     "term": "Bottleneck",
+     "meaning": "A low-capacity point that all information must pass through."
+    }
+   ],
+   "connections": [
+    "p.457: figure 15.2, the encoder's final state as the decoder's initial state.",
+    "p.463: attention scores every source vector for the current target token."
+   ]
+  },
+  {
+   "ref": "p461_e05",
+   "excerpt": "RNNs have trouble dealing with very long sequences since they tend to",
+   "what_it_says": "Second limitation: RNNs struggle with very long sequences because they progressively forget the past. By the 100th token, little information about the beginning remains.",
+   "what_it_means": "Information about token 1 reaches token 100 only by passing through 99 successive state updates, each of which partially overwrites the state. Gradients flowing back over the same path shrink (vanishing gradients), so the network also *learns* long-range dependencies poorly. LSTM/GRU gates help but do not remove the problem.",
+   "why_it_matters": "Attention gives every pair of positions a direct, one-step connection. The path length between any two tokens is 1 instead of up to N. This is a central reason Transformers handle long context better (p.489).",
+   "technical_idea": "Path length: an RNN needs $O(N)$ sequential steps between distant tokens, self-attention needs $O(1)$. This was one of the comparisons in Vaswani et al. (outside knowledge).",
+   "terminology": [
+    {
+     "term": "Long-range dependency",
+     "meaning": "A relationship between tokens that are far apart in the sequence, e.g. a pronoun and its distant antecedent."
+    }
+   ],
+   "connections": [
+    "p.489: summary, attention avoids the problems RNNs have with long-range dependencies.",
+    "p.462: the book-reading thought experiment illustrating RNN forgetting."
+   ]
+  },
+  {
+   "ref": "p461_e06",
+   "excerpt": "Recurrent neural networks dominated sequence-to-sequence learning in the mid-2010s. Google Translate",
+   "what_it_says": "RNNs dominated seq2seq learning in the mid-2010s. Google Translate circa 2017 used a stack of seven large `LSTM` layers in a setup similar to the book's model. The RNN limitations eventually led researchers to a new style of sequence model, the Transformer.",
+   "what_it_means": "The toy model on pp.457-460 is not a straw man. It is a scaled-down version of real production systems of that era. Note (not in the book): Google's Neural Machine Translation paper (Wu et al., 2016) describes 8 encoder and 8 decoder LSTM layers with attention, so the exact layer count in the book may be a simplification.",
+   "why_it_matters": "It gives historical context: the Transformer replaced a mature, heavily engineered technology, which shows how large its advantages were.",
+   "terminology": [
+    {
+     "term": "LSTM",
+     "meaning": "Long Short-Term Memory, a gated recurrent layer with a separate cell state that helps preserve information over time."
+    }
+   ],
+   "connections": [
+    "p.458: the GRU-based seq2seq model 'we just created'."
+   ]
+  },
+  {
+   "ref": "p461_e08",
+   "excerpt": "In 2017, Vaswani et al. introduced the Transformer architecture in the seminal",
+   "what_it_says": "Vaswani et al. introduced the Transformer in 2017 in 'Attention Is All You Need' while working on translation systems like the book's. The discovery is in the title: attention alone can build powerful sequence models without recurrent layers. Attention was not new, since it had been used in NLP for a couple of years, but using it as the *only* mechanism to pass information across a sequence was surprising.",
+   "what_it_means": "Before 2017, attention was an *add-on*: an RNN carried information along the sequence, and attention let the decoder peek at encoder outputs. The Transformer removes the recurrence entirely. Tokens exchange information *only* through attention, and per-token feedforward layers process each position independently (p.469).",
+   "why_it_matters": "Removing recurrence removes the sequential dependency between time steps, so all positions can be computed in parallel at training time. This is what let Transformers scale to huge datasets and parameter counts (p.489).",
+   "technical_idea": "Information flow in a Transformer layer: $\\text{mix across positions}$ (attention) → $\\text{transform each position}$ (feedforward). In an RNN both happen inside one sequential recurrence.",
+   "terminology": [
+    {
+     "term": "Attention",
+     "meaning": "A mechanism that computes, for each position, a weighted sum of vectors from a sequence, with weights given by learned relevance scores."
+    },
+    {
+     "term": "Recurrent layer",
+     "meaning": "A layer that processes a sequence step by step while carrying a state, e.g. `GRU`, `LSTM`."
+    }
+   ],
+   "connections": [
+    "p.468: attention used as self-attention, the step that makes it 'all you need'.",
+    "p.489: the Transformer uses attention as the only mechanism to pass information across a sequence."
+   ]
+  },
+  {
+   "ref": "p461_e09",
+   "excerpt": "This finding unleashed nothing short of a revolution in natural language processing",
+   "what_it_says": "The finding revolutionized NLP and beyond, and attention became one of the most influential ideas in deep learning. The section will explain in depth how attention works and why it is so effective, and then use it to rebuild the English-to-Spanish translator.",
+   "what_it_means": "This is the roadmap for section 15.3: dot-product attention (15.3.1, p.463), encoder block (15.3.2, p.468), decoder block (15.3.3, p.470), the full seq2seq Transformer (15.3.4, p.472) and positional information (15.3.5, p.475). 'Beyond NLP' points to vision, audio and multimodal models built on the same blocks.",
+   "why_it_matters": "Knowing the plan helps you see each upcoming component as part of one architecture, and the translation task gives a direct comparison with the RNN model.",
+   "terminology": [],
+   "connections": [
+    "p.472: section 15.3.4 rebuilds the translator with Transformer blocks.",
+    "p.474: first result, 58% accuracy, worse than the RNN until positional information is added."
+   ]
+  },
+  {
+   "ref": "p461_e09",
+   "excerpt": "So, with all that as build-up, what exactly is attention? And how",
+   "what_it_says": "The text poses two questions: what exactly is attention, and how can it replace the recurrent neural networks used so far?",
+   "what_it_means": "The second question is the deeper one. Replacing an RNN requires a mechanism that (a) passes information between positions and (b) can be stacked into deep models. Attention will provide (a). The feedforward block and residual/normalization layers will provide the rest (p.469). Word order, which an RNN gets for free, has to be added separately (p.475).",
+   "why_it_matters": "It sets up the conceptual explanation on p.462 and the concrete math on pp.463-466.",
+   "terminology": [],
+   "connections": [
+    "p.474: attention alone treats tokens as a set, so order information must be added (p.475)."
+   ]
+  },
+  {
+   "ref": "p461_e09",
+   "excerpt": "Attention was actually developed as a way to augment an RNN model",
+   "what_it_says": "Historically, attention was developed to augment RNN models like the one just built. Researchers noticed that while RNNs were good at modeling dependencies in a local neighborhood… (the sentence continues on p.462: they struggled with recall as sequences got longer).",
+   "what_it_means": "Attention began as a fix for the bottleneck and forgetting problems listed above. Instead of relying only on the final encoder state, the decoder could look back at all encoder outputs at each step.",
+   "why_it_matters": "Seeing attention as a 'look-back' tool for RNNs makes the next step intuitive: if looking back works so well, maybe you don't need the recurrence at all.",
+   "terminology": [
+    {
+     "term": "Local neighborhood",
+     "meaning": "Nearby tokens in a sequence, which an RNN state still represents well."
+    }
+   ],
+   "connections": [
+    "p.462: continuation, RNNs struggle with recall over long documents, and the book-reading analogy.",
+    "p.468: adding MultiHeadAttention to the RNN model is 'how attention was first used in the mid-2010s'."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "encoder_bottleneck",
+   "name": "Encoder state bottleneck",
+   "definition": "In a plain RNN encoder-decoder, the entire source sequence must be compressed into one fixed-size state vector that initializes the decoder.",
+   "intuition": "Summarizing a whole chapter on one index card and then translating it from that card alone.",
+   "technical": "Context $c = h^{enc}_T \\in \\mathbb{R}^{d}$ (here $d = 1024$) is fixed regardless of source length $T$. The decoder computes $p(y_t \\mid y_{<t}, c)$ and has no other access to the source tokens.",
+   "significance": "It is the first of the two fundamental RNN seq2seq limitations in the book, and the main thing attention removes.",
+   "example": "A 1,024-float vector must encode both 'You know that.' and a 20-word sentence with names and numbers.",
+   "misconception": "That a larger state vector solves the problem. It helps marginally, but capacity stays fixed while inputs can grow without bound.",
+   "related": [
+    "seq2seq",
+    "attention",
+    "rnn"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "rnn",
+   "name": "Recurrent neural network: forgetting over long sequences",
+   "definition": "An RNN carries information from token to token only through its state, so early information gradually fades.",
+   "intuition": "A message passed along a line of 100 people gets distorted with every retelling.",
+   "technical": "$h_t = f(h_{t-1}, x_t)$. The influence of $x_1$ on $h_{100}$ goes through 99 nonlinear updates, and gradients $\\partial h_{100} / \\partial h_1$ are products of 99 Jacobians, which tend to vanish.",
+   "significance": "This is the second limitation the authors list. LSTMs and GRUs mitigate it but do not eliminate it.",
+   "example": "Agreement between a subject at token 3 and a verb at token 80 is hard for an RNN to learn.",
+   "misconception": "That LSTMs have unlimited memory. Their gating slows forgetting but does not prevent it.",
+   "related": [
+    "lstm",
+    "vanishing_gradients",
+    "attention"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "attention",
+   "name": "Attention (as introduced here)",
+   "definition": "A mechanism that lets a model pull information from any position in a sequence, weighted by contextual relevance.",
+   "intuition": "Instead of remembering everything, you keep the book open and flip to the relevant page when you need it (the analogy on p.462).",
+   "technical": "For a query $q$ and sequence vectors $k_s, v_s$: weights $\\alpha_s = \\operatorname{softmax}_s(q\\cdot k_s)$, output $\\sum_s \\alpha_s v_s$ (developed on pp.463-466).",
+   "significance": "The Transformer uses attention as the only way information moves between positions, which removes both RNN limitations and enables parallel training.",
+   "example": "When generating 'Te', the decoder can attend directly to 'you' at the end of the English sentence (p.457).",
+   "misconception": "That the Transformer invented attention. The book states attention was already used in NLP for a couple of years before 2017.",
+   "related": [
+    "self_attention",
+    "transformer",
+    "dot_product_attention"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "transformer",
+   "name": "Transformer",
+   "definition": "A sequence model built from stacked attention and feedforward blocks, with no recurrent layers (Vaswani et al., 2017).",
+   "intuition": "Every token can talk to every other token directly in each layer, instead of passing notes down a chain.",
+   "technical": "Each block = multi-head attention (mix across positions) + position-wise two-layer feedforward network, with residual connections and layer normalization (pp.468-472).",
+   "significance": "The basis of modern NLP and of LLMs. It scales with data and parameters and trains in parallel across sequence positions.",
+   "example": "The translator rebuilt in Listing 15.16 (p.473).",
+   "misconception": "That a Transformer is inherently aware of word order. Attention is order-agnostic, and positional information must be added (pp.474-475).",
+   "related": [
+    "attention",
+    "self_attention",
+    "positional_encoding"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [],
+ "deeper": [
+  {
+   "title": "The book-reading analogy, previewed",
+   "kind": "analogy",
+   "body": "On p.462 the authors compare an RNN to finishing a book, closing it, and implementing a model entirely from memory. Attention is like keeping the book open and consulting the relevant chapter when needed. The two bullet points on this page are the 'memory' problems: the memory is small (bottleneck) and it fades (forgetting).",
+   "source": "book"
+  },
+  {
+   "title": "What the caching would look like",
+   "kind": "step_by_step",
+   "body": "Beyond the book, an efficient RNN decoder loop works like this:\n1. Run the encoder once: `state = encoder(english_ids)`.\n2. `token = [start]`.\n3. Repeat: `probs, state = decoder_step(token, state)`; `token = argmax(probs)`; stop on `[end]`.\n\nEach step processes exactly one token, so total work is linear in the output length instead of quadratic. In Keras you would build `decoder_step` from the same trained layers but call the GRU with `return_state=True` on one-token inputs.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why removing recurrence enables parallel training",
+   "kind": "breakdown",
+   "body": "An RNN must compute $h_1$ before $h_2$ before $h_3$…: the time dimension is sequential even on a GPU. With teacher forcing, a Transformer has every target position's input available at once, and attention for all positions is a few matrix multiplications ($QK^\\top$, softmax, times $V$). The whole sequence is processed in parallel. This is the 'no sequence-length loops at training time' advantage summarized on p.489. At *generation* time, Transformers are still sequential, one token per step (p.477, p.504).",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "RNN seq2seq bottleneck vs. attention",
+   "why": "Contrasts the first limitation on this page (the source squeezed into one encoder state) with what attention allows: the decoder reading all encoder outputs directly.",
+   "mermaid": "flowchart LR\n  subgraph RNN[\"RNN seq2seq (pp.457-460)\"]\n    direction LR\n    e1[I] --> e2[will] --> e3[bring] --> e4[...] --> e5[you]\n    e5 --> S((\"one state vector (1024)\"))\n    S --> d1[\"decoder: Te traeré ...\"]\n  end\n  subgraph ATT[\"With attention (section 15.3)\"]\n    direction LR\n    a1[I] & a2[will] & a3[bring] & a4[...] & a5[you] --> Q{\"weighted sum for current target token\"}\n    Q --> t1[\"decoder: Te\"]\n  end"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The Transformer invented attention.",
+   "correction": "Attention had been used in NLP systems for a couple of years. The 2017 contribution was making attention the only mechanism for passing information across a sequence."
+  },
+  {
+   "claim": "Switching from GRU to LSTM, or adding layers, would fix RNN seq2seq.",
+   "correction": "Those are tweaks. The bottleneck (everything in one state vector) and progressive forgetting are structural limitations."
+  },
+  {
+   "claim": "The inefficiency of Listing 15.13 is inherent to RNNs.",
+   "correction": "It comes from the simple loop that recomputes everything. Caching the RNN state makes each step process only the current token."
+  },
+  {
+   "claim": "Transformers generate all output tokens in parallel.",
+   "correction": "They train in parallel across positions. Autoregressive generation is still one token per step."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 460,
+    "note": "Listing 15.13, the generation loop whose inefficiency is discussed here."
+   },
+   {
+    "page": 457,
+    "note": "Figure 15.2: the encoder state as the decoder's initial state, the bottleneck named in the first bullet."
+   },
+   {
+    "page": 458,
+    "note": "The GRU-based seq2seq model that the Google Translate comparison refers to."
+   }
+  ],
+  "later": [
+   {
+    "page": 462,
+    "note": "Continuation: RNNs struggle with recall over long documents, plus the book-reading analogy and figure 15.3."
+   },
+   {
+    "page": 463,
+    "note": "15.3.1 Dot-product attention: the concrete mechanism."
+   },
+   {
+    "page": 468,
+    "note": "Self-attention and the Transformer encoder block."
+   },
+   {
+    "page": 472,
+    "note": "15.3.4 Rebuilding the translator with a Transformer."
+   },
+   {
+    "page": 489,
+    "note": "Chapter summary: why the Transformer works (attention only, parallel training, scaling)."
+   },
+   {
+    "page": 504,
+    "note": "Cached generation for Transformers, the analogue of caching the RNN state."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 457,
+    "note": "How the encoder-decoder RNN passes the source to the decoder."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 460,
+    "note": "Listing 15.13 generation loop."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 457,
+    "note": "Figure 15.2 sequence-to-sequence RNN."
+   }
+  ]
+ },
+ "takeaways": [
+  "The RNN generation loop wastes work. Only the current token and the previous RNN state are needed per step, and both can be cached.",
+  "RNN seq2seq has two fundamental limits: the whole source must fit in one encoder state vector, and information fades over long sequences.",
+  "RNN seq2seq (LSTM stacks) powered production translation in the mid-2010s.",
+  "The Transformer (Vaswani et al., 2017) showed that attention alone, with no recurrence, can pass information across a sequence.",
+  "Attention predates the Transformer. It was invented to augment RNNs."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "According to the book, what does the decoder really need to predict a new token in an efficient RNN inference loop?",
+   "options": [
+    "The current token and the previous RNN state",
+    "The entire source sentence and the entire generated target",
+    "Only the encoder's final state",
+    "All previous predicted probability distributions"
+   ],
+   "answer": "The current token and the previous RNN state",
+   "explanation": "The RNN state summarizes all earlier tokens, so only the newest token and the cached state are needed. Reprocessing everything (option 2) is what the inefficient loop does. The encoder state alone ignores the generated prefix. Previous distributions are not inputs to the model.",
+   "page_refs": [
+    461
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Name the two fundamental limitations of the RNN approach to seq2seq listed on this page.",
+   "options": [],
+   "answer": "(1) The source representation must be held entirely in the encoder state vector, which limits sentence size and complexity. (2) RNNs progressively forget the past on long sequences, so little remains about the start by the 100th token.",
+   "explanation": "These are the two bullets on p.461.",
+   "page_refs": [
+    461
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why would a larger encoder state (say 4,096 instead of 1,024 units) not fundamentally solve the first limitation?",
+   "options": [],
+   "answer": "The capacity is still fixed while source sentences can be arbitrarily long, and the decoder still cannot selectively look up specific source tokens. Attention instead gives access to one vector per source token, so memory grows with the input.",
+   "explanation": "The problem is structural (a single fixed channel), not just a matter of size.",
+   "page_refs": [
+    461,
+    463
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "What was surprising about 'Attention Is All You Need' at the time, according to the authors?",
+   "options": [
+    "That attention could be the only mechanism used to pass information across a sequence",
+    "That attention could be used in NLP at all",
+    "That LSTMs could be stacked seven layers deep",
+    "That translation could be done with neural networks"
+   ],
+   "answer": "That attention could be the only mechanism used to pass information across a sequence",
+   "explanation": "The book says attention 'was not new' and had been used in NLP for a couple of years. The novelty was dropping recurrence entirely. Deep LSTM stacks and neural translation already existed.",
+   "page_refs": [
+    461
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "Explain in terms of path length why RNNs forget the start of long sequences while attention does not.",
+   "options": [],
+   "answer": "In an RNN, information from token 1 reaches token 100 only through 99 sequential state updates, each of which can overwrite it, and gradients shrink along that path. Attention connects any two positions directly in one step through a weighted sum.",
+   "explanation": "Path length O(N) vs O(1) between positions. This is additional explanation building on the second bullet.",
+   "page_refs": [
+    461,
+    462
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "self",
+   "question": "Can you sketch how you would restructure Listing 15.13 to cache the RNN state?",
+   "options": [],
+   "answer": "Self-check: encode once; loop feeding only the last token plus the cached GRU state into a one-step decoder that returns the new state; argmax; stop on [end].",
+   "explanation": "If unsure, review how GRU states are passed as `initial_state` on p.458.",
+   "page_refs": [
+    458,
+    460,
+    461
+   ]
+  }
+ ]
+}

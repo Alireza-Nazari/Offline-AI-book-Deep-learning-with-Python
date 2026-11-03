@@ -1,0 +1,482 @@
+{
+ "page_id": "page_325",
+ "pdf_page": 325,
+ "printed_page": "301",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:40:30Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. p325_e03 is the tail of the interactive session begun on p.324. Listing 10.19 (p325_e19) starts here with two lines and continues on p.326. The bullet list (e05-e08) is short and is annotated together with its lead-in sentence. The callout next to img_array = model.preprocessor(img_array) reads 'KerasHub tasks like ImageClassifier have a preprocessor layer.' Feature-map shapes mentioned in the notes (10 x 10 x 2048) are not printed in the book and are marked as added explanation."
+ },
+ "overview": {
+  "title": "Top-class prediction and splitting Xception for Grad-CAM",
+  "chapter": "10 Interpreting what ConvNets learn",
+  "section": "10.3 Visualizing heatmaps of class activation",
+  "subsection": "",
+  "main_topic": "Reading the classifier's top-five predictions for the elephant image, finding the top class index (386, African elephant), preprocessing the image explicitly with the task's preprocessor, and starting to cut the model into two submodels: input -> last convolutional activations (Listing 10.18) and last convolutional activations -> class predictions (Listing 10.19, continued on p.326).",
+  "central_idea": "To get the gradient of the class score with respect to the last convolutional feature map, the model is split at layer block14_sepconv2_act into a feature-map model and a classifier model. Because these submodels bypass the task's built-in preprocessing, the image must first be passed through model.preprocessor.",
+  "importance": "Splitting the network makes the last conv output an explicit tensor that can be watched by a gradient tape or differentiated by jax.grad (p.326-p.327). Getting the split and the preprocessing right is the practical heart of the Grad-CAM implementation.",
+  "learning_objectives": [
+   "Interpret the top-five ImageNet predictions and the argmax index 386.",
+   "Explain why the image must be preprocessed manually with model.preprocessor before using the submodels.",
+   "Build a Keras functional model that outputs an intermediate layer's activations (last_conv_layer_model).",
+   "Explain why the last convolutional layer is chosen as the place to split the model.",
+   "Begin a second model whose input is the last conv layer's output (classifier_input)."
+  ],
+  "prerequisites": [
+   "The ImageClassifier task and its predictions (p.324)",
+   "Extracting intermediate activations with keras.Model(inputs, layer.output), as in section 10.1 (p.310-p.312)",
+   "The Grad-CAM idea of weighting channels by class gradients (p.323)",
+   "np.argmax and multiclass prediction vectors (p.143)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page first finishes the prediction output from p.324: the last two decoded entries are `(\"triceratops\", 0.00029)` and `(\"Mexican_hairless\", 0.00018)`. The text then lists the **top five classes**: African elephant (90%), tusker (5%), Indian elephant (2%), and triceratops and Mexican hairless dog (each under 0.1%).\n\nThe network has recognized \"an undetermined quantity of African elephants\" (the classifier says *what* is in the picture, not how many). The maximally activated entry of the prediction vector is **index 386**, the African elephant class: `np.argmax(preds[0])` returns `386`.\n\nThe goal now is to see which parts of the image are the most \"African elephant-like\", so the Grad-CAM process is set up:\n\n- **Preprocessing.** We did not preprocess the image before calling the task, because `ImageClassifier` preprocesses inputs inside `predict()`. For Grad-CAM we will call parts of the network directly, so we preprocess ourselves: `img_array = model.preprocessor(img_array)` (callout: KerasHub tasks have a preprocessor layer).\n- **Listing 10.18.** A model that maps the input image to the activations of the last convolutional layer: the layer `\"block14_sepconv2_act\"` is fetched from `model.backbone` with `get_layer()`, and `keras.Model(model.inputs, last_conv_layer.output)` creates `last_conv_layer_model`.\n- **Listing 10.19 (begins).** A second model maps those activations to the final class predictions. It starts with `classifier_input = last_conv_layer.output` and `x = classifier_input`; the rest (applying the `pooler` and `predictions` layers) is on p.326.\n\nSplitting the network at the last conv layer turns its output into an explicit input of the classifier part, which is exactly the tensor we need gradients with respect to.",
+ "paragraphs": [
+  {
+   "ref": "p325_e04",
+   "excerpt": "The top five classes predicted for this image are as follows:",
+   "what_it_says": "Introduces a bulleted list of the top five predictions: African elephant (90%), tusker (5%), Indian elephant (2%), and triceratops and Mexican hairless dog with less than 0.1% each.",
+   "what_it_means": "The percentages are rounded versions of the decoded probabilities: 0.90331, 0.05487, 0.01637, 0.00029 and 0.00018. Almost all probability is on elephant classes; the last two are tiny residuals.",
+   "why_it_matters": "It confirms the model classifies the image correctly, so the heatmap we are about to build explains a correct decision for the class African elephant.",
+   "technical_idea": "Beyond the book: 'tusker' is an ImageNet class for elephants with prominent tusks, which the adult in Figure 10.7 has; its 5% share is a plausible confusion rather than an error.",
+   "terminology": [
+    {"term": "top-five predictions", "meaning": "The five classes with the highest predicted probabilities."}
+   ],
+   "connections": [
+    "p.324: the decoded output began with African_elephant 0.90331, tusker 0.05487, Indian_elephant 0.01637."
+   ]
+  },
+  {
+   "ref": "p325_e09",
+   "excerpt": "The network has recognized the image as containing an undetermined quantity of African",
+   "what_it_says": "The network recognized the image as containing an undetermined number of African elephants. The maximally activated entry of the prediction vector corresponds to the African elephant class at index 386, as shown by np.argmax(preds[0]).",
+   "what_it_means": "An image classifier outputs one distribution over classes per image; it says nothing about how many instances there are. The argmax index identifies which of the 1,000 output units we will explain.",
+   "why_it_matters": "The 'top class' used in the gradient code on p.326-p.327 is exactly this argmax (computed there with ops.argmax(preds[0])). Grad-CAM produces a heatmap for one class at a time.",
+   "technical_idea": "preds[0] selects the first (only) image in the batch, giving a vector of 1,000 probabilities; np.argmax returns the position of its largest entry.",
+   "terminology": [
+    {"term": "argmax", "meaning": "The index of the maximum value in an array."},
+    {"term": "prediction vector", "meaning": "The model's 1,000 class probabilities for one image."}
+   ],
+   "connections": [
+    "p.326: Listing 10.20 recomputes top_pred_index = ops.argmax(preds[0]) inside the gradient tape.",
+    "p.143: argmax was used to read multiclass predictions in the newswire example."
+   ]
+  },
+  {
+   "ref": "p325_e11",
+   "excerpt": "To visualize which parts of the image are the most African elephant–like,",
+   "what_it_says": "The next step is to set up the Grad-CAM process to show which parts of the image are the most African elephant-like.",
+   "what_it_means": "The question shifts from 'what is in the image?' (answered by the classifier) to 'where in the image is the evidence for that answer?'.",
+   "why_it_matters": "This sentence frames everything through p.330: the output will be a spatial map for the single class African elephant.",
+   "terminology": [],
+   "connections": [
+    "p.323: Grad-CAM produces a spatial map of 'how intensely the input image activates the class'."
+   ]
+  },
+  {
+   "ref": "p325_e12",
+   "excerpt": "You will note that we didn’t need to preprocess our image before calling",
+   "what_it_says": "We did not preprocess the image before calling the task model because the KerasHub ImageClassifier preprocesses inputs as part of predict(). We now preprocess the image ourselves so we can use the preprocessed inputs directly, with img_array = model.preprocessor(img_array).",
+   "what_it_means": "The submodels about to be built start at the backbone's input, after the preprocessing stage. Calling them on raw pixels would feed the network data at the wrong scale and size. Applying model.preprocessor once gives exactly what the backbone expects.",
+   "why_it_matters": "A silent bug source: if preprocessing is skipped, the heatmap is computed for an input the network never sees in normal use, and the gradients and predictions change. If it is applied twice (manually and again inside predict()), the input is also wrong.",
+   "technical_idea": "The preprocessor is itself a layer (callout: 'KerasHub tasks like ImageClassifier have a preprocessor layer'), so it can be called like a function on a batch of images. Beyond the book: for Xception it resizes the image to the model's input resolution and rescales pixel values to the range used during pretraining.",
+   "terminology": [
+    {"term": "preprocessor", "meaning": "The task's preprocessing layer (resizing and rescaling for images) that predict() applies automatically."}
+   ],
+   "connections": [
+    "p.317: section 10.2 also stressed applying model-specific preprocessing so images match the Xception pretraining range.",
+    "p.282: ImageConverter handles the [0, 1] vs [-1, 1] input range of different pretrained models."
+   ]
+  },
+  {
+   "ref": "p325_e14",
+   "excerpt": "First, we create a model that maps the input image to the activations",
+   "what_it_says": "The first submodel maps the input image to the activations of the last convolutional layer (Listing 10.18).",
+   "what_it_means": "This is the 'feature map' half of Grad-CAM: for the given image it yields a tensor of shape (1, rows, cols, channels) whose channels are the high-level features we will weight.",
+   "why_it_matters": "The last convolutional layer is used because it is the deepest layer that still has spatial structure: deep enough to encode class-relevant concepts, but not yet pooled away into a single vector.",
+   "technical_idea": "Beyond the book: for Xception the layer block14_sepconv2_act (the ReLU after the final separable convolution) outputs 2,048 channels on a coarse grid (10 x 10 for a 299 x 299 input). That coarse grid is why the heatmap in Figure 10.8 is blocky.",
+   "terminology": [
+    {"term": "last convolutional layer", "meaning": "The final layer with a spatial (rows x cols) output before global pooling."}
+   ],
+   "connections": [
+    "p.310: section 10.1 built a model returning intermediate activations in the same way."
+   ]
+  },
+  {
+   "ref": "p325_e17",
+   "excerpt": "Second, we create a model that maps the activations of the last convolutional",
+   "what_it_says": "The second submodel maps the last convolutional layer's activations to the final class predictions (Listing 10.19, which starts on this page and finishes on p.326).",
+   "what_it_means": "Splitting the network lets us treat the last conv output as an ordinary input tensor of the classifier part, so we can compute the derivative of the class score with respect to it.",
+   "why_it_matters": "Differentiating with respect to an intermediate activation is easiest when that activation is the input of a function. The two submodels compose back into the full classifier: classifier_model(last_conv_layer_model(x)) equals the original prediction.",
+   "terminology": [
+    {"term": "classifier_input", "meaning": "The symbolic tensor last_conv_layer.output, reused as the input of the second model."}
+   ],
+   "connections": [
+    "p.326: the head layers 'pooler' and 'predictions' are applied to x and classifier_model is created."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "grad_cam",
+   "name": "Grad-CAM",
+   "definition": "Class activation mapping that weights the channels of a convolutional feature map by the gradient of a class score with respect to those channels.",
+   "intuition": "Find the channels that matter for the class, then see where in the image those channels fire.",
+   "technical": "Requires the feature map of the last conv layer and the gradient of the top class score with respect to it; this page sets up the first of these and begins the model for the second.",
+   "significance": "Explains why the network predicted African elephant and where it looked.",
+   "example": "Top class index 386 (African elephant) for the test image.",
+   "misconception": "Grad-CAM does not count objects; neither does the classifier ('an undetermined quantity').",
+   "related": ["class_activation_map", "convolution", "gradient_tape"],
+   "source": "book"
+  },
+  {
+   "id": "model_splitting",
+   "name": "Splitting a model at an intermediate layer",
+   "definition": "Building one model from the original input to an intermediate layer's output, and a second model from that output to the final prediction.",
+   "intuition": "Cutting a pipe in two so you can measure what flows through the cut.",
+   "technical": "keras.Model(model.inputs, last_conv_layer.output) gives the first half; a second keras.Model takes last_conv_layer.output as input and reapplies the remaining layers (p.326).",
+   "significance": "Makes the intermediate activation an explicit tensor that can be watched by a tape or passed to jax.grad.",
+   "example": "Listing 10.18 and Listing 10.19.",
+   "misconception": "The halves do not copy weights; they share the same layer objects as the original model.",
+   "related": ["functional_api", "keras_model"],
+   "source": "book"
+  },
+  {
+   "id": "preprocessing_pipeline",
+   "name": "Task preprocessor",
+   "definition": "The preprocessing layer included in a KerasHub task, applied automatically by predict().",
+   "intuition": "The model's built-in adapter from raw photos to network-ready tensors.",
+   "technical": "model.preprocessor(img_array) applies it explicitly; needed because the Grad-CAM submodels start after preprocessing.",
+   "significance": "Ensures the gradient computation sees the same input the network saw during prediction.",
+   "example": "img_array = model.preprocessor(img_array)",
+   "misconception": "That predict() working on raw images means the submodels will too.",
+   "related": ["keras_hub_task", "pretrained_model"],
+   "source": "book"
+  },
+  {
+   "id": "functional_api",
+   "name": "Functional API for feature extraction",
+   "definition": "Creating a Keras Model from existing symbolic inputs and outputs of layers in another model.",
+   "intuition": "Because layers are nodes in a graph, any node can become a model output.",
+   "technical": "model.inputs and last_conv_layer.output are symbolic tensors from the already-built graph; keras.Model connects them.",
+   "significance": "Lets you reuse a pretrained network's internals without retraining.",
+   "example": "last_conv_layer_model = keras.Model(model.inputs, last_conv_layer.output)",
+   "misconception": "That you need to rebuild the architecture from scratch to get intermediate outputs.",
+   "related": ["keras_model", "model_splitting"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Top predicted class",
+   "latex": "c^{*} = \\arg\\max_{c \\in \\{0,\\dots,999\\}} \\; p_c(x) = 386",
+   "source_text": ">>> np.argmax(preds[0])\n386",
+   "variables": [
+    {"symbol": "p_c(x)", "meaning": "The softmax probability the model assigns to class c for image x (an entry of preds[0])."},
+    {"symbol": "c^{*}", "meaning": "Index of the top class; 386 is African elephant in the ImageNet label set."}
+   ],
+   "operations": "Take the index of the largest entry of the 1,000-dimensional prediction vector.",
+   "purpose": "Selects the single class whose activation map will be computed.",
+   "interpretation": "p_{386}(x) ≈ 0.90331 is the largest of all 1,000 probabilities.",
+   "intuition": "Pick the output unit the network 'voted' for.",
+   "source": "book",
+   "book_ref": "p.325"
+  },
+  {
+   "id": "m2",
+   "title": "The model as a composition of two functions",
+   "latex": "\\hat{y}(x) = g\\big(f(\\operatorname{pre}(x))\\big), \\qquad A = f(\\operatorname{pre}(x)) \\in \\mathbb{R}^{H\\times W\\times K}",
+   "source_text": "Described in words: a model that maps the input image to the activations of the last convolutional layer, and a model that maps those activations to the final class predictions.",
+   "variables": [
+    {"symbol": "\\operatorname{pre}", "meaning": "model.preprocessor."},
+    {"symbol": "f", "meaning": "last_conv_layer_model: preprocessed image to the activations of block14_sepconv2_act."},
+    {"symbol": "g", "meaning": "classifier_model: last conv activations to class probabilities (completed on p.326)."},
+    {"symbol": "A", "meaning": "The last conv feature map with H x W spatial positions and K channels."}
+   ],
+   "operations": "Function composition; the split point is the last convolutional activation.",
+   "purpose": "Makes A an explicit variable so that \\partial \\hat{y}_{c^*} / \\partial A can be computed in the next listings.",
+   "interpretation": "Nothing about the network changes; it is only regrouped.",
+   "intuition": "Split the pipeline where you want to measure sensitivity.",
+   "numerical_example": "Beyond the book: for a 299 x 299 input, Xception's A has shape 10 x 10 x 2048, i.e. 204,800 numbers, and the gradient tensor computed on p.326 has the same shape.",
+   "source": "inference",
+   "book_ref": "p.325"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "End of the decoded predictions (continued from p.324)",
+   "original_code": "  (\"triceratops\", 0.00029),\n  (\"Mexican_hairless\", 0.00018)]]",
+   "language": "python",
+   "what_it_does": "The last two entries of the output of keras_hub.utils.decode_imagenet_predictions(preds), whose call and first three entries are on p.324.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Fourth and fifth predictions: triceratops (0.029%) and Mexican_hairless (0.018%). The double closing bracket ends the per-image list and the batch list."}
+   ],
+   "inputs_outputs": "Output only (part of the REPL display).",
+   "algorithm": "Top-5 lookup of class names.",
+   "theory_link": "Shows how little probability is left for unrelated classes.",
+   "parameters": [],
+   "pitfalls": ["The result is a list of lists: one inner list per image in the batch."],
+   "illustrative_code": ""
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Finding the top class index",
+   "original_code": ">>> np.argmax(preds[0])\n386",
+   "language": "python",
+   "what_it_does": "Returns the index of the highest probability in the first image's prediction vector: 386, African elephant.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "preds[0] drops the batch axis (shape (1000,)); np.argmax returns the position of the maximum."}
+   ],
+   "inputs_outputs": "Input: preds of shape (1, 1000). Output: the integer 386.",
+   "algorithm": "Argmax.",
+   "theory_link": "The selected class is the one Grad-CAM will explain.",
+   "parameters": [],
+   "pitfalls": ["np.argmax(preds) without [0] would flatten the array; it works here only because the batch has one image."],
+   "illustrative_code": ""
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Preprocessing the image with the task's preprocessor",
+   "original_code": "img_array = model.preprocessor(img_array)",
+   "language": "python",
+   "what_it_does": "Applies the ImageClassifier's built-in preprocessor layer to the raw image batch and overwrites img_array with the preprocessed version.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Callout: KerasHub tasks like ImageClassifier have a preprocessor layer. Calling it does what predict() did implicitly."}
+   ],
+   "inputs_outputs": "Input: raw image batch from Listing 10.17 (p.323). Output: a batch resized and rescaled for Xception.",
+   "algorithm": "Resize + rescale (as configured by the preset).",
+   "theory_link": "Gradients and activations must be computed on the inputs the network actually sees.",
+   "parameters": [],
+   "pitfalls": [
+    "After this line img_array is preprocessed; calling model.predict(img_array) again would preprocess it a second time.",
+    "The raw image is still needed for the overlay in Listing 10.25 (p.329), which reloads it from img_path."
+   ],
+   "illustrative_code": ""
+  },
+  {
+   "id": "c4",
+   "listing": "10.18",
+   "title": "Returning the last convolutional output",
+   "original_code": "last_conv_layer_name = \"block14_sepconv2_act\"\nlast_conv_layer = model.backbone.get_layer(last_conv_layer_name)\nlast_conv_layer_model = keras.Model(model.inputs, last_conv_layer.output)",
+   "language": "python",
+   "what_it_does": "Builds a model that takes the (preprocessed) image and returns the activations of Xception's last convolutional block.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Name of the activation layer following the second separable convolution of block 14, the last conv layer in Xception."},
+    {"lines": "2", "explanation": "Looks the layer up inside the backbone (the layers live in model.backbone, not directly in the task)."},
+    {"lines": "3", "explanation": "A functional Model from the task's inputs to that layer's output tensor; it shares weights with the original model."}
+   ],
+   "inputs_outputs": "Input: a preprocessed image batch. Output: a feature map of shape (batch, rows, cols, channels); beyond the book, (1, 10, 10, 2048) for a 299 x 299 input.",
+   "algorithm": "Graph truncation using the functional API.",
+   "theory_link": "Provides the feature map A whose channels Grad-CAM weights.",
+   "parameters": [
+    {"name": "last_conv_layer_name", "role": "Which layer to explain; the last conv layer balances semantic depth and spatial resolution."}
+   ],
+   "pitfalls": [
+    "Using a layer name that does not exist in the backbone raises an error; inspect model.backbone.summary() to find names.",
+    "Choosing an earlier layer gives higher spatial resolution but less class-specific features."
+   ],
+   "illustrative_code": "# AI-written check (not from the book)\nfeatures = last_conv_layer_model(img_array)\nprint(features.shape)   # expected (1, 10, 10, 2048) for a 299x299 input"
+  },
+  {
+   "id": "c5",
+   "listing": "10.19",
+   "title": "Going from the last convolutional output to final predictions (first lines)",
+   "original_code": "classifier_input = last_conv_layer.output\nx = classifier_input",
+   "language": "python",
+   "what_it_does": "Starts the second submodel: its input is the symbolic output of the last conv layer. The listing continues on p.326, where the 'pooler' and 'predictions' layers are applied and classifier_model is created.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Reuses the symbolic tensor of the last conv layer as the new model's input."},
+    {"lines": "2", "explanation": "x is the running tensor to which the head layers are applied in the loop on p.326."}
+   ],
+   "inputs_outputs": "Input: last conv activations. Output (after p.326): class probabilities.",
+   "algorithm": "Re-applying the remaining layers of the original network to a new input.",
+   "theory_link": "Makes the class score a function of the feature map, so its gradient with respect to the feature map can be taken.",
+   "parameters": [],
+   "pitfalls": ["Only the layers after the split may be re-applied; the rest of the listing is on p.326."],
+   "illustrative_code": ""
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why split exactly at the last convolutional layer?",
+   "kind": "breakdown",
+   "body": "- **Earlier layers** keep finer spatial detail, but their channels respond to edges and textures (p.322-p.323) rather than to object classes, so the heatmap would be less class-specific.\n- **Later layers** (after global pooling) are class-specific but have no spatial axes: there is no 'where' left.\n- **The last conv layer** is the deepest layer that still has a spatial grid, so it is the sweet spot.\n\nThis reasoning is an added explanation; the book simply chooses `block14_sepconv2_act`.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Composition check",
+   "kind": "step_by_step",
+   "body": "Once `classifier_model` is complete (p.326), you can verify the split:\n\n1. `A = last_conv_layer_model(img_array)` (preprocessed input).\n2. `p = classifier_model(A)`.\n3. `p` should match `model.predict(raw_img_array)` up to numerical noise, and `argmax(p[0])` should be 386.\n\nIf it does not, preprocessing was probably skipped or applied twice. This is a suggested exercise, not in the book.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Top-five predictions for the elephant image",
+   "why": "The page lists the five classes and their probabilities (decoded output from p.324-p.325).",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": ["African_elephant", "tusker", "Indian_elephant", "triceratops", "Mexican_hairless"],
+     "datasets": [{"label": "probability", "data": [0.90331, 0.05487, 0.01637, 0.00029, 0.00018]}]
+    },
+    "options": {"indexAxis": "y", "scales": {"x": {"type": "logarithmic", "min": 0.0001, "max": 1, "title": {"display": true, "text": "probability (log scale)"}}}}
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "Splitting the classifier at block14_sepconv2_act",
+   "why": "Listings 10.18 and 10.19 cut the network into two models at the last conv layer.",
+   "mermaid": "flowchart LR\n  R[\"raw img_array\"] --> P[\"model.preprocessor\"]\n  P --> F[\"last_conv_layer_model<br/>Xception up to block14_sepconv2_act\"]\n  F --> A((\"A: last conv<br/>activations\"))\n  A --> G[\"classifier_model<br/>pooler -> predictions\"]\n  G --> Y[\"preds; top index 386\"]"
+  },
+  {
+   "id": "v3",
+   "type": "widget",
+   "title": "Tensor shapes through the split model",
+   "why": "Shows what the two submodels output. The 299 x 299 input and 10 x 10 x 2048 feature map are standard Xception values, not printed on this page.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "preprocessed input", "shape": [1, 299, 299, 3]},
+     {"op": "block14_sepconv2_act", "shape": [1, 10, 10, 2048]},
+     {"op": "pooler", "shape": [1, 2048]},
+     {"op": "predictions", "shape": [1, 1000]}
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The classifier tells us there are two elephants.",
+   "correction": "The book says the image contains 'an undetermined quantity' of African elephants: a classifier outputs class probabilities, not counts."
+  },
+  {
+   "claim": "Since predict() worked on the raw image, the submodels can be called on the raw image too.",
+   "correction": "The submodels start after the preprocessor, so the image must be preprocessed with model.preprocessor first."
+  },
+  {
+   "claim": "keras.Model(model.inputs, last_conv_layer.output) creates a copy of the network.",
+   "correction": "It creates a new model that shares the same layers and weights; nothing is copied or retrained."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 324, "note": "The ImageClassifier task and the first decoded predictions."},
+   {"page": 323, "note": "Grad-CAM definition and Listing 10.17 (loading the image)."},
+   {"page": 310, "note": "Section 10.1 extracted intermediate activations with a multi-output model."},
+   {"page": 317, "note": "Model-specific preprocessing for the Xception feature extractor."}
+  ],
+  "later": [
+   {"page": 326, "note": "Listing 10.19 finishes (pooler, predictions); gradient of the top class with TensorFlow."},
+   {"page": 327, "note": "PyTorch and JAX versions of the gradient computation."},
+   {"page": 328, "note": "Pooling the gradients and weighting the channels to obtain the heatmap."},
+   {"page": 330, "note": "Interpretation of the heatmap: why and where."}
+  ],
+  "prerequisites": [
+   {"page": 143, "note": "Reading multiclass predictions with argmax."},
+   {"page": 282, "note": "KerasHub backbones and preprocessing (ImageConverter)."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 326, "note": "Continuation of Listing 10.19 and Listing 10.20."},
+   {"page": 312, "note": "Activation model code from section 10.1."}
+  ],
+  "related_figures": [
+   {"page": 324, "note": "Figure 10.7, the test picture."}
+  ]
+ },
+ "takeaways": [
+  "The top five predictions are African elephant (90%), tusker (5%), Indian elephant (2%), triceratops and Mexican hairless dog (<0.1%).",
+  "The top class is index 386 (African elephant), found with np.argmax(preds[0]).",
+  "predict() preprocesses automatically; to use submodels directly, preprocess explicitly with model.preprocessor.",
+  "Listing 10.18 builds last_conv_layer_model from model.inputs to the output of block14_sepconv2_act in the backbone.",
+  "Listing 10.19 starts a second model whose input is that conv output, so the class score becomes a function of the feature map."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "short",
+   "question": "What does np.argmax(preds[0]) return for the elephant image and what does it mean?",
+   "options": [],
+   "answer": "386, the index of the African elephant class, which has the highest probability (about 0.90).",
+   "explanation": "Stated on the page; preds[0] is the 1,000-entry vector of the single image in the batch.",
+   "page_refs": [325]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "Why does the book call img_array = model.preprocessor(img_array) before building the Grad-CAM models?",
+   "options": [
+    "Because predict() never preprocesses inputs",
+    "Because the submodels are called directly and do not apply the task's preprocessing, unlike predict()",
+    "To add a batch dimension to the image",
+    "To convert the image to grayscale for the heatmap"
+   ],
+   "answer": "Because the submodels are called directly and do not apply the task's preprocessing, unlike predict()",
+   "explanation": "The page explains predict() preprocesses for us, so to use preprocessed inputs directly with the submodels we must do it ourselves. The batch dimension was added on p.323 with np.expand_dims; no grayscale conversion happens.",
+   "page_refs": [325]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why is the model split at the last convolutional layer rather than at an early layer or after global pooling?",
+   "options": [],
+   "answer": "The last conv layer is the deepest layer that still has spatial dimensions: its channels encode high-level, class-relevant features, yet it still says where they occur. After pooling there is no spatial information; early layers are spatially precise but encode low-level patterns.",
+   "explanation": "This is an added explanation consistent with the book's Grad-CAM description (p.323) and the filter visualizations of section 10.2.",
+   "page_refs": [323, 325]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "In Listing 10.18, where is the layer block14_sepconv2_act looked up?",
+   "options": [
+    "model.preprocessor",
+    "model.backbone",
+    "keras.applications",
+    "classifier_model"
+   ],
+   "answer": "model.backbone",
+   "explanation": "The code calls model.backbone.get_layer(last_conv_layer_name). The preprocessor has no conv layers, keras.applications is not used, and classifier_model is built afterwards.",
+   "page_refs": [325]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "The book says the network recognized 'an undetermined quantity of African elephants'. Why undetermined?",
+   "options": [],
+   "answer": "A classifier outputs a probability per class for the whole image; it has no output that counts instances. It only says African elephants are present.",
+   "explanation": "Counting or locating objects requires different models (object detection, chapter 12); Grad-CAM gives only a rough localization.",
+   "page_refs": [325, 372]
+  },
+  {
+   "id": "q6",
+   "type": "math",
+   "question": "If the last conv layer output has shape (1, 10, 10, 2048), how many numbers does the gradient tensor computed on the next page contain, and why that shape?",
+   "options": [],
+   "answer": "204,800 (10 x 10 x 2048, plus the batch axis of size 1). The gradient of a scalar with respect to a tensor has the same shape as that tensor.",
+   "explanation": "The 10 x 10 x 2048 shape is a standard Xception value, not printed in the book; the rule that the gradient matches the shape of the variable applies regardless.",
+   "page_refs": [325, 326]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you write Listing 10.18 for a different layer, say block13_sepconv2_act, and predict how the heatmap would change?",
+   "options": [],
+   "answer": "Replace the layer name; an earlier layer typically gives a finer-grained but less class-specific map.",
+   "explanation": "Self-check of understanding of model splitting; the trade-off reasoning is an added explanation.",
+   "page_refs": [325]
+  }
+ ]
+}

@@ -1,0 +1,366 @@
+{
+  "page_id": "page_316",
+  "pdf_page": 316,
+  "printed_page": "292",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:36:32Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean: body text and listings 10.7–10.9 match the image; callouts split into fragments but recoverable. The extractor wrote `Separable` `Conv2D` because of a line-break hyphen; it is `SeparableConv2D`."
+  },
+  "overview": {
+    "title": "Loading Xception and building a feature extractor",
+    "chapter": "10 Interpreting what ConvNets learn",
+    "section": "10.2 Visualizing ConvNet filters",
+    "subsection": "",
+    "main_topic": "Instantiating the ImageNet-pretrained Xception backbone and its preprocessor with KerasHub, listing its convolutional layers, and building a single-output feature-extractor model for layer block3_sepconv1",
+    "central_idea": "To visualize filters, you need a model that maps an input image to the activation of one chosen convolutional layer. Because the KerasHub Xception backbone is a functional model, you can look up any layer by name with `get_layer` and wrap `model.input` → `layer.output` in a new `keras.Model`, with no need to rewrite Xception.",
+    "importance": "The feature extractor is the differentiable function whose output the gradient-ascent loop will maximize. The pattern of building a sub-model from inspectable functional layers is reused for Grad-CAM in section 10.3.",
+    "learning_objectives": [
+      "Load a pretrained backbone and its matching ImageConverter with `from_preset`",
+      "List a model's Conv2D and SeparableConv2D layers with `isinstance`",
+      "Understand Xception's block-based layer naming (blockN_sepconvM)",
+      "Build a feature extractor from `model.input` and `layer.output`",
+      "Explain why functional models are inspectable"
+    ],
+    "prerequisites": [
+      "KerasHub backbones and the `xception_41_imagenet` preset (section 8.3, p.282–283)",
+      "SeparableConv2D and Xception's block structure (chapter 9)",
+      "Functional API and multi-output models; listing 10.3 (p.311)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page completes the sentence from p.315: filter visualization will be the reader's second example of a low-level gradient descent loop (the first was in chapter 2), and it will be shown for **TensorFlow, PyTorch and JAX**.\n\n**Listing 10.7** instantiates the ImageNet-trained Xception model with KerasHub, \"exactly as we did in chapter 8\". `keras_hub.models.Backbone.from_preset(\"xception_41_imagenet\")` builds the feature-extractor network from pretrained weights. `keras_hub.layers.ImageConverter.from_preset(\"xception_41_imagenet\", image_size=(180, 180))` loads the matching preprocessing that scales input images. (In KerasHub a *backbone* is the network without its classification head, p.282.)\n\nThe convolutional layers of interest are the `Conv2D` and `SeparableConv2D` layers, and their names are needed to retrieve their outputs. **Listing 10.8** prints those names in depth order by looping over `model.layers` and filtering with `isinstance`. The `SeparableConv2D` layers have names like `block6_sepconv1` and `block7_sepconv2`, because **Xception is structured into blocks**, each containing several convolutional layers.\n\nNext comes a second model, a **feature extractor**, that returns the output of one specific layer. Because the backbone is a **Functional API model, it is inspectable**: you can query a layer's `output` and reuse it in a new model, with no need to copy the entire Xception code. **Listing 10.9** picks `layer_name = \"block3_sepconv1\"` (any layer of the convolutional base could be used instead), fetches the layer object with `model.get_layer(name=layer_name)`, and builds `feature_extractor = keras.Model(inputs=model.input, outputs=layer.output)`. Given an input image, this model returns the output of the target layer.\n\nThe next page (p.317) applies the feature extractor with the model-specific preprocessing and defines the loss to maximize.",
+  "paragraphs": [
+    {
+      "ref": "p316_e04",
+      "excerpt": "First, let’s instantiate the Xception model trained on the ImageNet dataset. We",
+      "what_it_says": "The page opens by completing the previous page's sentence: this is the second low-level gradient descent loop in the book (the first was in chapter 2), and it will be shown for TensorFlow, PyTorch and JAX. The authors then instantiate the ImageNet-trained Xception model using KerasHub, exactly as in chapter 8.",
+      "what_it_means": "Writing the loop for three backends is needed because gradients with respect to an input are computed differently in each: `GradientTape` in TensorFlow, `.backward()` on a tensor with `requires_grad` in PyTorch, and `jax.grad` of a pure function in JAX (sections 10.2.1–10.2.3). Reusing the chapter 8 KerasHub setup means the same preset name and the same preprocessing call as listing 8.24 (p.283).",
+      "why_it_matters": "A large pretrained model has a rich bank of filters worth visualizing, and the KerasHub preset makes loading it a two-call operation.",
+      "technical_idea": "`xception_41_imagenet`: per p.282, the 41 is the number of trainable (conv and dense) layers.",
+      "terminology": [
+        {"term": "KerasHub", "meaning": "Keras library of pretrained models and matching preprocessing, loaded through presets."},
+        {"term": "ImageNet", "meaning": "Large labeled image dataset (~1 million images, 1,000 classes, p.324) on which Xception was pretrained."}
+      ],
+      "connections": [
+        "p.282: KerasHub backbones and the meaning of '41' in the preset name",
+        "p.283: listing 8.24, the identical ImageConverter call",
+        "p.318: 10.2.1 Gradient ascent in TensorFlow"
+      ]
+    },
+    {
+      "ref": "p316_e07",
+      "excerpt": "We’re interested in the convolutional layers of the model—the Conv2D and",
+      "what_it_says": "The layers of interest are the Conv2D and SeparableConv2D layers. Their names are needed to retrieve their outputs, so the authors print them in depth order.",
+      "what_it_means": "Filter visualization targets the filters of convolution layers. In Xception most of these are depthwise separable convolutions, with a few regular Conv2D layers at the entry and on the residual shortcuts. Listing 10.8 iterates over `model.layers`, which for a functional model are stored in topological (depth) order, and prints the names that pass the `isinstance` filter.",
+      "why_it_matters": "You need an exact layer name to pass to `get_layer`. Printing them also reveals the architecture's depth structure.",
+      "technical_idea": "`isinstance(layer, (A, B))` accepts a tuple of classes, the same idiom as listing 10.3 (p.311).",
+      "terminology": [
+        {"term": "SeparableConv2D", "meaning": "Depthwise separable convolution: a per-channel spatial convolution followed by a 1 × 1 pointwise convolution; more parameter efficient than Conv2D."}
+      ],
+      "connections": [
+        "p.311: same isinstance filtering pattern to collect layer outputs",
+        "p.305: replacing Conv2D with SeparableConv2D layers, which are more parameter efficient"
+      ]
+    },
+    {
+      "ref": "p316_e10",
+      "excerpt": "You’ll notice that the SeparableConv2D layers here are all named something like",
+      "what_it_says": "The SeparableConv2D layers have names like `block6_sepconv1` and `block7_sepconv2`, because Xception is organized into blocks, each containing several convolutional layers.",
+      "what_it_means": "The naming encodes location: `block<N>` is the block index (depth), and `sepconv<M>` is the M-th separable convolution inside it. So `block3_sepconv1` is the first separable conv of the third block, a fairly early layer.",
+      "why_it_matters": "Knowing the naming scheme lets you choose layers at different depths, for instance to compare early, middle and late filters, as figure 10.6 does with block2, block4 and block8 (p.322).",
+      "technical_idea": null,
+      "terminology": [
+        {"term": "block", "meaning": "A repeated group of layers (e.g. SeparableConv–SeparableConv–MaxPooling) that forms a module of the architecture (p.294)."}
+      ],
+      "connections": [
+        "p.294: Xception is structured into repeated SeparableConv–SeparableConv–MaxPooling blocks",
+        "p.322: figure 10.6 shows filters of block2_sepconv1, block4_sepconv1, block8_sepconv1"
+      ]
+    },
+    {
+      "ref": "p316_e11",
+      "excerpt": "Now let’s create a second model that returns the output of a",
+      "what_it_says": "A second model, a 'feature extractor', will return the output of one specific layer. Because the backbone is a functional model it is inspectable: you can query any layer's `output` and reuse it in a new model without copying Xception's code.",
+      "what_it_means": "A functional model keeps its graph of layers and symbolic tensors. `layer.output` is the symbolic tensor flowing out of that layer when the model's input flows in, so `keras.Model(model.input, layer.output)` defines the sub-graph from the input to that layer. It shares the pretrained weights and simply stops at the chosen layer.",
+      "why_it_matters": "This is what makes the gradient-ascent loss computable: the loss is a function of `feature_extractor(image)`, and the gradient flows back through the shared layers to the image.",
+      "technical_idea": "Unlike the nine-output model of listing 10.3, this one has a single output; the same mechanism is used again for Grad-CAM (p.325).",
+      "terminology": [
+        {"term": "feature extractor", "meaning": "A model returning an intermediate representation rather than a final prediction."},
+        {"term": "inspectable model", "meaning": "A functional model whose layers and their input/output tensors can be queried and reused."}
+      ],
+      "connections": [
+        "p.311: activation_model built the same way, with many outputs",
+        "p.325: model mapping the input to the last conv layer's activations for Grad-CAM",
+        "p.317: listing 10.10 calls the feature extractor on preprocessed input"
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "keras_hub_backbone",
+      "name": "KerasHub backbone and preset",
+      "definition": "A pretrained feature-extractor network without its classification head, loaded with `Backbone.from_preset(name)`, which downloads configuration and weights.",
+      "intuition": "A ready-made convolutional base, fetched by name.",
+      "technical": "`keras_hub.models.Backbone.from_preset(\"xception_41_imagenet\")`; the matching `ImageConverter.from_preset(...)` reproduces the pretraining image scaling.",
+      "significance": "Supplies the pretrained Xception whose filters are visualized.",
+      "example": "Listing 10.7.",
+      "misconception": "The backbone does not output ImageNet class probabilities; that requires a KerasHub task model (used for Grad-CAM, p.324).",
+      "related": ["transfer_learning", "keras_model"],
+      "source": "book"
+    },
+    {
+      "id": "feature_extractor_model",
+      "name": "Feature extractor sub-model",
+      "definition": "A Keras model built from an existing model's input and one intermediate layer's output.",
+      "intuition": "Tapping the network at a chosen depth.",
+      "technical": "`keras.Model(inputs=model.input, outputs=model.get_layer(name).output)`; shares weights with the parent.",
+      "significance": "Provides the activation that gradient ascent will maximize.",
+      "example": "`feature_extractor` for `block3_sepconv1`.",
+      "misconception": "It is not a copy, so modifying the weights of one would change the other.",
+      "related": ["functional_api", "multi_output_model", "intermediate_activation"],
+      "source": "book"
+    },
+    {
+      "id": "functional_api",
+      "name": "Inspectability of functional models",
+      "definition": "Functional models expose their layers and the symbolic input/output tensors of each, so sub-graphs can be reused as new models.",
+      "intuition": "The model is a map you can read, not a sealed box.",
+      "technical": "`model.layers`, `model.get_layer(name=...)`, `layer.output`, `model.input`.",
+      "significance": "The page notes there is no need to copy the entire Xception code.",
+      "example": "Listings 10.8 and 10.9.",
+      "misconception": "Subclassed models do not generally offer the same `layer.output` graph access.",
+      "related": ["keras_model", "feature_extractor_model"],
+      "source": "book"
+    },
+    {
+      "id": "depthwise_separable_convolution",
+      "name": "SeparableConv2D",
+      "definition": "A convolution factorized into a depthwise spatial convolution and a pointwise 1 × 1 convolution.",
+      "intuition": "Look at spatial patterns per channel first, then mix channels.",
+      "technical": "Fewer parameters and computations than Conv2D for the same output depth; the main layer type in Xception.",
+      "significance": "Most layers listed by listing 10.8 are of this type, named blockN_sepconvM.",
+      "example": "`block3_sepconv1`.",
+      "misconception": "SeparableConv2D is not a subclass of Conv2D in Keras, which is why both classes are listed in the isinstance tuple.",
+      "related": ["convolution"],
+      "source": "book"
+    }
+  ],
+  "math": [],
+  "code": [
+    {
+      "id": "c1",
+      "listing": "10.7",
+      "title": "Instantiating the Xception convolutional base",
+      "original_code": "import keras_hub\n\nmodel = keras_hub.models.Backbone.from_preset(\n    \"xception_41_imagenet\",\n)\npreprocessor = keras_hub.layers.ImageConverter.from_preset(\n    \"xception_41_imagenet\",\n    image_size=(180, 180),\n)",
+      "language": "python",
+      "what_it_does": "Downloads and builds the ImageNet-pretrained Xception backbone and the preprocessing layer that scales images the way Xception expects.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Imports KerasHub."},
+        {"lines": "3-5", "explanation": "Callout: instantiates the feature extractor network from pretrained weights. `Backbone` means no classification head."},
+        {"lines": "6-9", "explanation": "Callout: loads the matching preprocessing to scale input images; `image_size=(180, 180)` also resizes inputs."}
+      ],
+      "inputs_outputs": "No inputs; produces `model` (backbone) and `preprocessor` (ImageConverter layer).",
+      "algorithm": "Preset lookup → download config and weights → build layers.",
+      "theory_link": "Same as section 8.3 (p.282–283); pretrained ImageNet filters are rich and varied.",
+      "parameters": [
+        {"name": "\"xception_41_imagenet\"", "role": "Preset name: Xception with 41 trainable layers, ImageNet weights."},
+        {"name": "image_size", "role": "Spatial size the converter resizes images to."}
+      ],
+      "pitfalls": [
+        "The first call requires internet access to download weights.",
+        "Forgetting the preprocessor means inputs are not in the range the pretrained filters expect (p.317)."
+      ],
+      "illustrative_code": null
+    },
+    {
+      "id": "c2",
+      "listing": "10.8",
+      "title": "Printing the names of all convolutional layers in Xception",
+      "original_code": "for layer in model.layers:\n    if isinstance(layer, (keras.layers.Conv2D, keras.layers.SeparableConv2D)):\n        print(layer.name)",
+      "language": "python",
+      "what_it_does": "Prints, in depth order, the name of every Conv2D or SeparableConv2D layer in the backbone.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "`model.layers` lists the functional model's layers in order."},
+        {"lines": "2", "explanation": "Keeps only regular and depthwise separable convolution layers."},
+        {"lines": "3", "explanation": "Prints names such as `block6_sepconv1`, `block7_sepconv2`."}
+      ],
+      "inputs_outputs": "Input: `model`. Output: printed list of layer names (not reproduced in the book).",
+      "algorithm": "Linear scan with type filter.",
+      "theory_link": "Functional models are inspectable.",
+      "parameters": [],
+      "pitfalls": ["Relies on `import keras` from earlier in the chapter (p.310)."],
+      "illustrative_code": null
+    },
+    {
+      "id": "c3",
+      "listing": "10.9",
+      "title": "A feature extractor model returning a specific output",
+      "original_code": "layer_name = \"block3_sepconv1\"\nlayer = model.get_layer(name=layer_name)\nfeature_extractor = keras.Model(inputs=model.input, outputs=layer.output)",
+      "language": "python",
+      "what_it_does": "Builds a model that maps an input image to the activation of layer `block3_sepconv1`.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Callout: you could replace this with the name of any layer in the Xception convolutional base."},
+        {"lines": "2", "explanation": "Callout: this is the layer object we're interested in."},
+        {"lines": "3", "explanation": "Callout: we use model.input and layer.output to create a model that, given an input image, returns the output of our target layer."}
+      ],
+      "inputs_outputs": "Input: image batch (preprocessed). Output: activation tensor of `block3_sepconv1`, shape (batch, h, w, channels).",
+      "algorithm": "Sub-graph extraction from a functional model.",
+      "theory_link": "Same mechanism as listing 10.3; weights are shared, not copied.",
+      "parameters": [
+        {"name": "layer_name", "role": "Selects which layer's filters will be visualized."}
+      ],
+      "pitfalls": [
+        "A misspelled name raises a ValueError from get_layer.",
+        "Use the model on preprocessed images (p.317)."
+      ],
+      "illustrative_code": "# AI-written: build extractors for several depths at once\nnames = [\"block2_sepconv1\", \"block4_sepconv1\", \"block8_sepconv1\"]\nextractors = {n: keras.Model(model.input, model.get_layer(name=n).output) for n in names}"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why three backends?",
+      "kind": "breakdown",
+      "body": "Note (not in the book's text on this page): the feature extractor is a Keras model and runs on any backend, but computing a gradient with respect to the *input image* uses each framework's own autodiff API. TensorFlow records operations with `tf.GradientTape` and calls `tape.gradient`. PyTorch marks the image tensor with `requires_grad` and calls `.backward()`. JAX uses `jax.grad` of a pure function, which requires the model's stateless call. Sections 10.2.1–10.2.3 (p.318–319) give these versions.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Reading a layer name",
+      "kind": "step_by_step",
+      "body": "`block3_sepconv1`:\n1. `block3` is the third block of the network, early in the hierarchy.\n2. `sepconv` means a SeparableConv2D layer.\n3. `1` is the first such layer in that block.\nThe layers from early blocks are expected to show simpler patterns than those from deep blocks such as `block8_sepconv1` (see p.322).",
+      "source": "inference"
+    },
+    {
+      "title": "A tap on a pipe",
+      "kind": "analogy",
+      "body": "The backbone is a long water pipe of filters. `get_layer(...).output` drills a tap at one point, and `keras.Model(model.input, tap)` is a short pipe that ends at that tap. Water (gradients) can still flow backward from the tap to the inlet.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "From pretrained backbone to feature extractor",
+      "why": "Listings 10.7–10.9 load Xception, find a layer by name and wrap input→layer.output into a new model.",
+      "mermaid": "flowchart LR\n P[\"preset xception_41_imagenet\"] --> M[\"Backbone model\"]\n P --> C[\"ImageConverter 180x180\"]\n M --> L[\"model.layers -> Conv2D / SeparableConv2D names\"]\n L --> G[\"get_layer('block3_sepconv1')\"]\n M -->|model.input| F[\"feature_extractor = keras.Model(model.input, layer.output)\"]\n G -->|layer.output| F"
+    }
+  ],
+  "misconceptions": [
+    {"claim": "Building `feature_extractor` requires re-implementing Xception up to block3.", "correction": "Functional models are inspectable; `model.input` and `layer.output` are enough."},
+    {"claim": "The KerasHub backbone outputs ImageNet class predictions.", "correction": "A backbone is the feature-extractor network without the classification head (p.282)."},
+    {"claim": "Only SeparableConv2D layers have filters worth visualizing.", "correction": "The authors list both Conv2D and SeparableConv2D layers as the convolutional layers of interest."}
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 315, "note": "Section 10.2 introduction: gradient ascent in input space on Xception."},
+      {"page": 311, "note": "Listing 10.3 built a multi-output activation model the same way."},
+      {"page": 282, "note": "KerasHub backbones, from_preset, and the '41' in the preset name."},
+      {"page": 283, "note": "Listing 8.24, the matching ImageConverter."},
+      {"page": 294, "note": "Xception's repeated block structure."}
+    ],
+    "later": [
+      {"page": 317, "note": "Using the feature extractor with preprocessing and defining the loss; predict vs. model(x)."},
+      {"page": 318, "note": "Gradient ascent in TensorFlow."},
+      {"page": 322, "note": "Filter patterns for block2, block4 and block8 separable convs."},
+      {"page": 325, "note": "A similar sub-model for Grad-CAM."}
+    ],
+    "prerequisites": [
+      {"page": 305, "note": "SeparableConv2D as a parameter-efficient Conv2D replacement."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 311, "note": "Listing 10.3, multi-output activation model."},
+      {"page": 283, "note": "Listing 8.24, ImageConverter for Xception."}
+    ],
+    "related_figures": [
+      {"page": 322, "note": "Figure 10.6, filter patterns of Xception layers."}
+    ]
+  },
+  "takeaways": [
+    "Filter visualization uses a hand-written gradient loop, the book's second after chapter 2, shown for TensorFlow, PyTorch and JAX.",
+    "Listing 10.7 loads the Xception backbone and its matching preprocessor via KerasHub presets.",
+    "Listing 10.8 prints Conv2D/SeparableConv2D layer names; Xception names them by block (blockN_sepconvM).",
+    "Listing 10.9 builds a feature extractor from `model.input` to `get_layer(\"block3_sepconv1\").output`.",
+    "This works because functional models are inspectable; no Xception code needs to be copied."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "What does `keras.Model(inputs=model.input, outputs=layer.output)` produce in listing 10.9?",
+      "options": [
+        "A copy of Xception with new random weights",
+        "A model that, given an input image, returns the output of the target layer, sharing Xception's weights",
+        "A classifier that predicts ImageNet classes",
+        "A model that returns the filter weights of the layer"
+      ],
+      "answer": "A model that, given an input image, returns the output of the target layer, sharing Xception's weights",
+      "explanation": "The callout states this. Weights are reused, not re-initialized, no classification head is involved, and the output is an activation, not kernel weights.",
+      "page_refs": [316]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "Why must listing 10.8 test for both `Conv2D` and `SeparableConv2D`?",
+      "options": [],
+      "answer": "Because Xception contains both kinds of convolution layers, and the authors are interested in all of them; SeparableConv2D is a separate class, so testing only Conv2D would miss most of Xception's layers.",
+      "explanation": "The page names both types as the convolutional layers of interest.",
+      "page_refs": [316]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "What property of the model makes listing 10.9 possible, and why does that save work?",
+      "options": [],
+      "answer": "It is a Functional API model and therefore inspectable: you can query a layer's output and reuse it in a new model, so there's no need to copy the entire Xception code.",
+      "explanation": "Stated directly on the page.",
+      "page_refs": [316]
+    },
+    {
+      "id": "q4",
+      "type": "short",
+      "question": "What does the name `block7_sepconv2` tell you about a layer?",
+      "options": [],
+      "answer": "It is the second SeparableConv2D layer in block 7 of Xception.",
+      "explanation": "Xception is structured into blocks each containing several convolutional layers, and names follow that structure.",
+      "page_refs": [316]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "What is the role of the `preprocessor` created in listing 10.7?",
+      "options": [
+        "It augments images with random flips",
+        "It scales (and resizes) input images to match Xception's pretraining preprocessing",
+        "It converts class indices into labels",
+        "It freezes the backbone's weights"
+      ],
+      "answer": "It scales (and resizes) input images to match Xception's pretraining preprocessing",
+      "explanation": "The callout says it loads the matching preprocessing to scale input images; p.317 stresses scaling to the same range as the pretraining data. It does no augmentation, label decoding or freezing.",
+      "page_refs": [316, 317]
+    },
+    {
+      "id": "q6",
+      "type": "conceptual",
+      "question": "How does listing 10.9 differ from listing 10.3's activation model, and why is a single output enough here?",
+      "options": [],
+      "answer": "Listing 10.3 had nine outputs, one per Conv/Pool layer, to visualize all activations. Here only one layer's filters are being visualized at a time, so the feature extractor needs only that layer's output.",
+      "explanation": "Both use model.input and layer outputs; the purpose differs.",
+      "page_refs": [311, 316]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Could you change listing 10.9 to target a deeper layer, and predict how its filter visualizations would differ from those of block3_sepconv1?",
+      "options": [],
+      "answer": "Replace layer_name with e.g. \"block8_sepconv1\"; deeper filters should show more complex, textured patterns.",
+      "explanation": "Compare with figure 10.6 on p.322.",
+      "page_refs": [316, 322]
+    }
+  ]
+}

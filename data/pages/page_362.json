@@ -1,0 +1,387 @@
+{
+ "page_id": "page_362",
+ "pdf_page": 362,
+ "printed_page": "338",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:53:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. Listing 12.6 and the first part of the model summary match the page image; the summary table continues on p.363 (get_item_6, activation_33 and the parameter totals). Callout-to-line mapping was read from the image: 'Makes our backbone outputs smaller and then flattens' points at the Conv2D/Flatten lines, 'Passes our flattened feature maps through two densely connected layers' at the Dense/Dropout/Dense lines, 'Reshapes outputs to a 6 x 6 grid' at the Reshape line, 'Split box and class predictions' at the slicing lines. All parameter counts were checked arithmetically."
+ },
+ "overview": {
+  "title": "Listing 12.6: attaching the YOLO prediction head",
+  "chapter": "12 Object detection",
+  "section": "12.2 Training a YOLO model from scratch",
+  "subsection": "12.2.2 Creating a YOLO model",
+  "main_topic": "Building the full YOLO model with the Functional API: ResNet-50 backbone, strided Conv2D, Flatten, Dense(2048, relu), Dropout, Dense(6*6*96), Reshape to a 6 x 6 x 96 grid, and a split into box and softmax class outputs; reading the model summary",
+  "central_idea": "Listing 12.6 turns the backbone into a detector whose two named outputs are a `(6, 6, 5)` box tensor and a `(6, 6, 91)` softmax class tensor. The model summary shows how the spatial size shrinks from 448 x 448 to 14 x 14 (backbone) to 6 x 6 (strided conv) and where the parameters live: most are in the first dense layer.",
+  "importance": "This is the actual model trained in section 12.2.4. Its output dictionary keys (`\"box\"`, `\"class\"`) determine how targets and losses are wired up later, and the summary is a worked example of reasoning about shapes and parameter counts.",
+  "learning_objectives": [
+   "Trace the tensor shapes through listing 12.6 from `(None, 448, 448, 3)` to `(None, 6, 6, 96)`.",
+   "Compute the parameter counts of the Conv2D and Dense layers in the summary.",
+   "Explain the purpose of the strided Conv2D before flattening.",
+   "Explain how `x[..., :5]` and `x[..., 5:]` split the reshaped output, and why only the class part gets a softmax.",
+   "Explain why the model returns a dictionary of outputs."
+  ],
+  "prerequisites": [
+   "The head recipe and per-cell 5 + 91 split (p.361)",
+   "Listing 12.5: `image_size` and `backbone` (p.361)",
+   "Keras Functional API and multi-output models (chapter 7)",
+   "Convolution output-size arithmetic and dropout"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Listing 12.6** builds the YOLO model with the Functional API. It fixes `grid_size = 6` and `num_labels = 91`, then:\n\n1. `inputs = keras.Input(shape=(448, 448, 3))` and `x = backbone(inputs)` give ResNet-50 feature maps of shape `(None, 14, 14, 2048)`.\n2. `layers.Conv2D(512, (3, 3), strides=(2, 2))` shrinks them to `(None, 6, 6, 512)` and `Flatten` turns them into a vector of 18,432 values (callout: *makes our backbone outputs smaller and then flattens the output features*).\n3. Two dense layers (callout: *passes our flattened feature maps through two densely connected layers*): `Dense(2048, activation=\"relu\", kernel_initializer=\"glorot_normal\")`, `Dropout(0.5)`, then `Dense(grid_size * grid_size * (num_labels + 5))`, that is 6 x 6 x 96 = 3,456 linear outputs.\n4. `Reshape((6, 6, 96))` restores the grid (callout: *reshapes outputs to a 6 x 6 grid*).\n5. The last axis is split (callout: *split box and class predictions*): `box_predictions = x[..., :5]` stays linear, while `class_predictions` applies a softmax to `x[..., 5:]`.\n6. The model returns a dictionary `{\"box\": ..., \"class\": ...}`.\n\nThe **model summary** (`functional_3`) confirms the shapes and parameter counts: the backbone has 23,580,512 parameters, the strided conv 9,437,696, the first dense layer 37,750,784 (the largest single layer), and the output dense layer 7,081,344. The `GetItem` rows come from the slicing operations; `get_item_7` has shape `(None, 6, 6, 91)`. The table continues on the next page with the 5-channel box slice, the softmax activation and the totals (77,850,336 parameters, p.363).",
+ "paragraphs": [
+  {
+   "ref": "p362_e05",
+   "excerpt": "We can get a better sense of the model by looking at the model summary:",
+   "what_it_says": "The authors print `model.summary()` to understand the model.",
+   "what_it_means": "The summary lists every layer with its output shape, parameter count and inbound connection. For a Functional model it is the fastest check that the shapes match the design: here, that the reshaped output is `(6, 6, 96)` and the slices are `(6, 6, 91)` and `(6, 6, 5)`.",
+   "why_it_matters": "It reveals that the head, not the backbone, holds most of the parameters (about 54 million of 78 million), which matters for overfitting and memory.",
+   "terminology": [
+    {"term": "GetItem layer", "meaning": "The layer Keras creates automatically when you index/slice a symbolic tensor, e.g. `x[..., 5:]`."},
+    {"term": "Connected to", "meaning": "The summary column naming the inbound layer (and node/tensor index) feeding each layer in a Functional model."}
+   ],
+   "connections": [
+    "p.363: the summary continues with the box slice, the softmax activation and parameter totals."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "detection_head",
+   "name": "YOLO detection head",
+   "definition": "The layers added on top of the backbone that convert its feature maps into per-grid-cell box and class predictions.",
+   "intuition": "A translator from 'what visual features are where' into 'which objects are where'.",
+   "technical": "Conv2D(512, 3, stride 2) -> Flatten -> Dense(2048, relu) -> Dropout(0.5) -> Dense(3456) -> Reshape(6, 6, 96) -> split into 5 box values and a softmax over 91 classes.",
+   "significance": "Defines the model's outputs and holds about 54.3 million of the 77.9 million parameters.",
+   "example": "Listing 12.6.",
+   "misconception": "Because the head flattens the entire feature map, a cell's prediction is not limited to the pixels inside that cell (p.363).",
+   "related": ["yolo", "dense_layer", "functional_api"],
+   "source": "book"
+  },
+  {
+   "id": "strided_convolution",
+   "name": "Strided convolution",
+   "definition": "A convolution whose window moves by more than one position, downsampling the feature map.",
+   "intuition": "It reduces 14 x 14 to 6 x 6 so the flattened vector is small enough for a dense layer.",
+   "technical": "With 'valid' padding (the Conv2D default), output size = floor((14 - 3) / 2) + 1 = 6. Parameters: 3 x 3 x 2048 x 512 + 512 = 9,437,696.",
+   "significance": "Cuts the flattened size from 401,408 to 18,432 floats per image (p.363), making the following dense layer feasible.",
+   "example": "`layers.Conv2D(512, (3, 3), strides=(2, 2))`.",
+   "misconception": "Stride 2 does not exactly halve 14 to 7 here; without padding, a 3 x 3 kernel with stride 2 yields 6.",
+   "related": ["convolution", "convnet_backbone"],
+   "source": "book"
+  },
+  {
+   "id": "multi_output_model",
+   "name": "Multi-output Functional model",
+   "definition": "A Keras model whose outputs are given as a dict (or list) of several tensors, each of which can have its own loss.",
+   "intuition": "One network, two answers: where and what.",
+   "technical": "`keras.Model(inputs, {\"box\": box_predictions, \"class\": class_predictions})`; losses and targets can be passed as dicts keyed by the same names.",
+   "significance": "Enables different losses for boxes (sum-squared error) and classes (sparse categorical crossentropy), summed during training (p.366).",
+   "example": "`outputs = {\"box\": box_predictions, \"class\": class_predictions}`.",
+   "misconception": "The two outputs are not two separate models; they share every layer up to the final split.",
+   "related": ["functional_api", "keras_model"],
+   "source": "book"
+  },
+  {
+   "id": "softmax",
+   "name": "Softmax over class scores",
+   "definition": "Turns a vector of scores into a probability distribution.",
+   "intuition": "Each grid cell votes a probability for each of the 91 labels; the votes sum to 1.",
+   "technical": "Applied along the last axis of `x[..., 5:]`, giving `(None, 6, 6, 91)` with $\\sum_k p_k = 1$ for every cell.",
+   "significance": "Matches the classification loss used later; the box slice is deliberately left without activation ('more special consideration', p.363).",
+   "example": "`layers.Activation(\"softmax\")(x[..., 5:])`.",
+   "misconception": "The softmax is not applied to the box coordinates or confidence.",
+   "related": ["cross_entropy", "class_probability_map"],
+   "source": "book"
+  },
+  {
+   "id": "dropout",
+   "name": "Dropout",
+   "definition": "Randomly zeroes a fraction of activations during training to reduce overfitting.",
+   "intuition": "Prevents the huge first dense layer from relying on fragile co-adaptations.",
+   "technical": "`Dropout(0.5)` after the 2,048-unit dense layer; it has no parameters.",
+   "significance": "The head has tens of millions of parameters trained on a reduced dataset, so regularization is welcome. The original YOLO paper also used dropout with rate 0.5 after its first connected layer (beyond the book).",
+   "example": "`dropout_3 (Dropout)` in the summary, 0 parameters.",
+   "misconception": "Dropout is not active at inference time.",
+   "related": ["regularization", "overfitting"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Output size of the strided convolution",
+   "latex": "H_{\\text{out}} = \\left\\lfloor \\frac{H_{\\text{in}} - k}{s} \\right\\rfloor + 1 = \\left\\lfloor \\frac{14 - 3}{2} \\right\\rfloor + 1 = 6",
+   "source_text": "conv2d_3 (Conv2D) (None, 6, 6, 512) after res_net_backbone_12 (None, 14, 14, 2048)",
+   "variables": [
+    {"symbol": "H_{\\text{in}}", "meaning": "Input height (and width): 14."},
+    {"symbol": "k", "meaning": "Kernel size: 3."},
+    {"symbol": "s", "meaning": "Stride: 2."}
+   ],
+   "operations": "Valid-padding convolution output-size formula.",
+   "purpose": "Explains why the grid is 6 x 6 and why `grid_size = 6` matches the conv output.",
+   "interpretation": "The strided conv sets the spatial resolution of the flattened features; the grid of predictions is then created by the Reshape, not inherited directly.",
+   "intuition": "Starting positions 0, 2, 4, 6, 8, 10 fit a 3-wide window inside 14 pixels; position 12 would need pixels up to 14, which do not exist.",
+   "source": "ai_explanation",
+   "book_ref": "p.362"
+  },
+  {
+   "id": "m2",
+   "title": "Parameter counts in the summary",
+   "latex": "\\begin{aligned} P_{\\text{conv}} &= 3\\cdot 3\\cdot 2048\\cdot 512 + 512 = 9{,}437{,}696 \\\\ P_{\\text{dense}_6} &= 18432\\cdot 2048 + 2048 = 37{,}750{,}784 \\\\ P_{\\text{dense}_7} &= 2048\\cdot 3456 + 3456 = 7{,}081{,}344 \\end{aligned}",
+   "source_text": "Param # column: 9,437,696; 37,750,784; 7,081,344",
+   "variables": [
+    {"symbol": "P", "meaning": "Number of trainable weights plus biases of a layer."},
+    {"symbol": "18432", "meaning": "Flattened size 6 x 6 x 512."},
+    {"symbol": "3456", "meaning": "6 x 6 x (91 + 5) outputs."}
+   ],
+   "operations": "Weights = inputs x outputs (times kernel area for conv), plus one bias per output unit/filter.",
+   "purpose": "Verifies the summary and shows where the model's capacity is.",
+   "interpretation": "The first dense layer alone has more parameters (37.8 M) than the whole ResNet-50 backbone (23.6 M).",
+   "intuition": "Fully connecting 18,432 inputs to 2,048 units is expensive; this is the price of letting every cell see the whole image.",
+   "numerical_example": "Head total: 9,437,696 + 37,750,784 + 7,081,344 = 54,269,824. Adding the backbone's 23,580,512 gives 77,850,336, the total printed on p.363.",
+   "source": "ai_explanation",
+   "book_ref": "p.362"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "12.6",
+   "title": "Attaching a YOLO prediction head",
+   "original_code": "from keras import layers\n\ngrid_size = 6\nnum_labels = 91\n\ninputs = keras.Input(shape=(image_size, image_size, 3))\nx = backbone(inputs)\nx = layers.Conv2D(512, (3, 3), strides=(2, 2))(x)\nx = keras.layers.Flatten()(x)\nx = layers.Dense(2048, activation=\"relu\", kernel_initializer=\"glorot_normal\")(x)\nx = layers.Dropout(0.5)(x)\nx = layers.Dense(grid_size * grid_size * (num_labels + 5))(x)\nx = layers.Reshape((grid_size, grid_size, num_labels + 5))(x)\nbox_predictions = x[..., :5]\nclass_predictions = layers.Activation(\"softmax\")(x[..., 5:])\noutputs = {\"box\": box_predictions, \"class\": class_predictions}\nmodel = keras.Model(inputs, outputs)",
+   "language": "python",
+   "what_it_does": "Builds a two-output Keras Functional model: a 448 x 448 RGB image goes through the ResNet-50 backbone and a fully connected head, producing per-cell box predictions `(6, 6, 5)` and per-cell class probabilities `(6, 6, 91)`.",
+   "line_explanations": [
+    {"lines": "1-4", "explanation": "Imports `layers`; sets the grid to 6 x 6 cells and the number of label slots to 91 (p.358)."},
+    {"lines": "6-7", "explanation": "Symbolic input of shape `(448, 448, 3)`; the backbone maps it to `(None, 14, 14, 2048)`."},
+    {"lines": "8-9", "explanation": "Callout 'Makes our backbone outputs smaller and then flattens the output features': a 3 x 3, stride-2 conv with 512 filters gives `(None, 6, 6, 512)`, flattened to 18,432 values."},
+    {"lines": "10-12", "explanation": "Callout 'Passes our flattened feature maps through two densely connected layers': Dense(2048, relu) with Glorot-normal initialization, Dropout(0.5), then a linear Dense with 6*6*96 = 3,456 outputs."},
+    {"lines": "13", "explanation": "Callout 'Reshapes outputs to a 6 x 6 grid': the flat vector becomes `(6, 6, 96)`."},
+    {"lines": "14-15", "explanation": "Callout 'Split box and class predictions': the first 5 channels are the box (x, y, w, h, confidence), left linear; the remaining 91 go through a softmax."},
+    {"lines": "16-17", "explanation": "Outputs are a dict keyed `\"box\"` and `\"class\"`, and the Functional `keras.Model` is created."}
+   ],
+   "inputs_outputs": "Input: batch of images `(batch, 448, 448, 3)` (preprocessed by the converter). Output: `{\"box\": (batch, 6, 6, 5), \"class\": (batch, 6, 6, 91)}`.",
+   "algorithm": "Backbone feature extraction, spatial downsampling, global fully connected mixing, reshape into a grid, channel split.",
+   "theory_link": "Implements the YOLO paper's 'two dense layers with an activation in between, then split' head (p.361), with an extra strided conv to keep the dense layer manageable (p.363).",
+   "parameters": [
+    {"name": "grid_size = 6", "role": "Number of grid cells per side; 36 candidate boxes per image."},
+    {"name": "num_labels = 91", "role": "Number of class slots (COCO max id + 1)."},
+    {"name": "Conv2D(512, (3, 3), strides=(2, 2))", "role": "Reduces 14 x 14 x 2048 features to 6 x 6 x 512."},
+    {"name": "Dense(2048, activation=\"relu\")", "role": "The hidden fully connected layer; activation in the middle of the two dense layers."},
+    {"name": "kernel_initializer=\"glorot_normal\"", "role": "Initializes the dense weights from a Glorot (Xavier) normal distribution."},
+    {"name": "Dropout(0.5)", "role": "Regularizes the large hidden layer."}
+   ],
+   "pitfalls": [
+    "The grid shape is imposed by `Reshape`, not by the conv output; it is coincidence-by-design that both are 6 x 6. Changing `grid_size` alone still works because the Dense layer is resized, but the conv output would no longer correspond spatially.",
+    "`x[..., :5]` has no activation: x and y should be in [0, 1] and confidence should be in [0, 1], which is dealt with later (p.363, p.366).",
+    "Applying softmax to all 96 channels would wrongly mix box coordinates into the class distribution.",
+    "The output dict keys must match the keys used for targets and losses in `compile`/`fit`."
+   ],
+   "illustrative_code": "# AI-written: confirm output shapes on a dummy batch\nimport numpy as np\nout = model(np.zeros((2, 448, 448, 3), dtype=\"float32\"))\nprint(out[\"box\"].shape, out[\"class\"].shape)  # (2, 6, 6, 5) (2, 6, 6, 91)\nprint(float(out[\"class\"][0, 0, 0].numpy().sum()))  # ~1.0 after softmax"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Model summary (first part; continues on p.363)",
+   "original_code": ">>> model.summary()\nModel: \"functional_3\"\n┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓\n┃ Layer (type)          ┃ Output Shape      ┃     Param # ┃ Connected to       ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩\n│ input_layer_7         │ (None, 448, 448,  │           0 │ -                  │\n│ (InputLayer)          │ 3)                │             │                    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ res_net_backbone_12   │ (None, 14, 14,    │  23,580,512 │ input_layer_7[0][… │\n│ (ResNetBackbone)      │ 2048)             │             │                    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ conv2d_3 (Conv2D)     │ (None, 6, 6, 512) │   9,437,696 │ res_net_backbone_… │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ flatten_3 (Flatten)   │ (None, 18432)     │           0 │ conv2d_3[0][0]     │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ dense_6 (Dense)       │ (None, 2048)      │  37,750,784 │ flatten_3[0][0]    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ dropout_3 (Dropout)   │ (None, 2048)      │           0 │ dense_6[0][0]      │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ dense_7 (Dense)       │ (None, 3456)      │   7,081,344 │ dropout_3[0][0]    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ reshape_3 (Reshape)   │ (None, 6, 6, 96)  │           0 │ dense_7[0][0]      │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ get_item_7 (GetItem)  │ (None, 6, 6, 91)  │           0 │ reshape_3[0][0]    │",
+   "language": "text",
+   "what_it_does": "Shows the layers of the YOLO model with output shapes, parameter counts and connections. This page shows rows up to `get_item_7`; the rest of the table (`get_item_6`, `activation_33`, totals) is on p.363.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Calls `summary()`; the model was auto-named `functional_3` (the suffix depends on how many models were created in the session)."},
+    {"lines": "6-7", "explanation": "Input layer `(None, 448, 448, 3)`, no parameters; `None` is the batch axis."},
+    {"lines": "9-10", "explanation": "The whole ResNet-50 backbone appears as one nested layer with 23,580,512 parameters, output `(None, 14, 14, 2048)` (448 / 32 = 14)."},
+    {"lines": "12", "explanation": "Strided conv: `(None, 6, 6, 512)`, 9,437,696 parameters."},
+    {"lines": "14", "explanation": "Flatten: 6 x 6 x 512 = 18,432 values, no parameters."},
+    {"lines": "16-18", "explanation": "Dense 2048 (37,750,784 parameters) and Dropout (none)."},
+    {"lines": "20", "explanation": "Output dense: 3,456 units, 7,081,344 parameters."},
+    {"lines": "22", "explanation": "Reshape to `(None, 6, 6, 96)`."},
+    {"lines": "24", "explanation": "`get_item_7` is the class slice `x[..., 5:]` with shape `(None, 6, 6, 91)`, feeding the softmax."}
+   ],
+   "inputs_outputs": "Console output; no computation.",
+   "algorithm": "n/a",
+   "theory_link": "Checks the design arithmetic: spatial sizes and parameter counts follow from layer hyperparameters.",
+   "parameters": [],
+   "pitfalls": [
+    "Layer-name suffixes (`_3`, `_7`, `_12`) vary between sessions; do not depend on them.",
+    "Slicing creates `GetItem` layers that may be listed in a different order than in the code (here the class slice appears before the box slice)."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Where the 77.9 million parameters live",
+   "kind": "numerical",
+   "body": "| Part | Parameters | Share |\n|---|---|---|\n| ResNet-50 backbone | 23,580,512 | 30.3% |\n| Strided Conv2D | 9,437,696 | 12.1% |\n| Dense 2048 | 37,750,784 | 48.5% |\n| Dense 3456 | 7,081,344 | 9.1% |\n| **Total** | **77,850,336** | 100% |\n\nNearly half of the model is the single dense layer that connects every one of the 18,432 flattened features to every hidden unit. Without the strided conv, flattening `(14, 14, 2048)` = 401,408 values into 2,048 units would need about 822 million weights (beyond the book's figures, simple arithmetic), which is why the book downsamples first (p.363).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the box output has no activation (yet)",
+   "kind": "step_by_step",
+   "body": "The box slice holds x, y (in [0, 1] relative to the cell), w, h (in [0, 1] relative to the image) and a confidence (ideally in [0, 1]). A softmax would force these five values to sum to 1, which is meaningless. The book leaves them linear here and says they 'need more special consideration' (p.363); the loss on p.366 handles them with a sum-squared error and a special treatment of the confidence.",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Shape flow through listing 12.6",
+   "why": "The model summary on this page traces the tensor from (None, 448, 448, 3) to the (None, 6, 6, 96) grid and its two slices; step through these exact shapes.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "input", "shape": [null, 448, 448, 3]},
+     {"op": "ResNet-50 backbone", "shape": [null, 14, 14, 2048]},
+     {"op": "Conv2D 3x3 stride 2", "shape": [null, 6, 6, 512]},
+     {"op": "Flatten", "shape": [null, 18432]},
+     {"op": "Dense relu + Dropout", "shape": [null, 2048]},
+     {"op": "Dense", "shape": [null, 3456]},
+     {"op": "Reshape", "shape": [null, 6, 6, 96]},
+     {"op": "box slice [..., :5]", "shape": [null, 6, 6, 5]},
+     {"op": "class slice + softmax", "shape": [null, 6, 6, 91]}
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Parameter counts of the dense head",
+   "why": "The summary lists 37,750,784 and 7,081,344 parameters for the two dense layers fed by the 18,432-value flattened features; click the layers to verify prev x units + units.",
+   "widget": "nn_architecture",
+   "params": {
+    "layers": [
+     {"name": "flatten_3", "type": "input", "shape": "(None, 18432)"},
+     {"name": "dense_6", "type": "dense", "units": 2048, "activation": "relu"},
+     {"name": "dropout_3", "type": "dropout", "units": 2048},
+     {"name": "dense_7", "type": "output", "units": 3456, "activation": "linear"}
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The 6 x 6 prediction grid is produced by the convolution, so each cell only sees its own region.",
+   "correction": "The features are flattened and passed through dense layers, then reshaped into 6 x 6. Every cell's prediction depends on the whole image (stated explicitly on p.363)."
+  },
+  {
+   "claim": "The backbone dominates the model's size.",
+   "correction": "The head has about 54.3 million parameters versus 23.6 million in the backbone; the first dense layer alone has 37.8 million."
+  },
+  {
+   "claim": "The softmax is applied to all 96 output channels.",
+   "correction": "Only `x[..., 5:]`, the 91 class channels, goes through the softmax. The five box channels stay linear."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 361, "note": "Listing 12.5 defines `image_size` and `backbone`; the head recipe and 5 + 91 split."},
+   {"page": 358, "note": "91 label slots."},
+   {"page": 360, "note": "Why ResNet with strided downsampling."}
+  ],
+  "later": [
+   {"page": 363, "note": "End of the summary, parameter totals and the explanation of the strided conv and the lack of locality."},
+   {"page": 364, "note": "Targets shaped `(6, 6, 5)` and `(6, 6)` to match the two outputs."},
+   {"page": 366, "note": "Losses for the `box` and `class` outputs."}
+  ],
+  "prerequisites": [
+   {"page": 361, "note": "Listing 12.5."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 361, "note": "Listing 12.5, loading the backbone."},
+   {"page": 364, "note": "Listing 12.7, building targets for these outputs."}
+  ],
+  "related_figures": [
+   {"page": 361, "note": "Figure 12.4, the YOLO output scheme this model implements."}
+  ]
+ },
+ "takeaways": [
+  "The model is backbone -> strided Conv2D -> Flatten -> Dense(2048, relu) -> Dropout(0.5) -> Dense(3456) -> Reshape(6, 6, 96) -> split.",
+  "The box output `(6, 6, 5)` is linear; the class output `(6, 6, 91)` uses a softmax.",
+  "Outputs are returned as a dict with keys `\"box\"` and `\"class\"`, enabling one loss per output.",
+  "The strided conv turns 14 x 14 x 2048 features into 6 x 6 x 512 = 18,432 values per image.",
+  "Most parameters are in the head, especially the 37.75 M-parameter first dense layer."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "math",
+   "question": "Verify the parameter count of `dense_6` in the summary.",
+   "options": [],
+   "answer": "18,432 inputs x 2,048 units + 2,048 biases = 37,748,736 + 2,048 = 37,750,784.",
+   "explanation": "The input size is the flattened 6 x 6 x 512 feature map; each unit has one weight per input plus a bias.",
+   "page_refs": [362]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "What is the output shape of the `Reshape` layer in listing 12.6?",
+   "options": [
+    "(None, 6, 6, 96)",
+    "(None, 6, 6, 91)",
+    "(None, 14, 14, 96)",
+    "(None, 3456)"
+   ],
+   "answer": "(None, 6, 6, 96)",
+   "explanation": "It reshapes the 3,456 outputs to `(grid_size, grid_size, num_labels + 5)`. `(6, 6, 91)` is the class slice after it, `(14, 14, ...)` is the backbone's spatial size, and `(None, 3456)` is the Dense output before reshaping.",
+   "page_refs": [362]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "Why does only `x[..., 5:]` pass through a softmax?",
+   "options": [],
+   "answer": "Those 91 channels are class scores that must form a probability distribution per cell; the first five channels are box coordinates and confidence, which are not mutually exclusive categories and need different treatment.",
+   "explanation": "The code splits the predictions and applies the softmax only to the class part; the book notes the box outputs need special consideration later.",
+   "page_refs": [362, 363]
+  },
+  {
+   "id": "q4",
+   "type": "math",
+   "question": "Using the valid-convolution formula, show why `Conv2D(512, (3, 3), strides=(2, 2))` turns a 14 x 14 input into 6 x 6, and compute its parameter count.",
+   "options": [],
+   "answer": "floor((14 - 3) / 2) + 1 = 5 + 1 = 6. Parameters: 3 x 3 x 2048 x 512 + 512 = 9,437,184 + 512 = 9,437,696.",
+   "explanation": "Conv2D defaults to 'valid' padding. The parameter count matches the summary row for `conv2d_3`.",
+   "page_refs": [362]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Why does listing 12.6 return `{\"box\": ..., \"class\": ...}` rather than a single tensor?",
+   "options": [
+    "So that each output can be paired with its own target and loss during training",
+    "Because Keras models cannot output tensors with more than three dimensions",
+    "Because the backbone requires dictionary outputs",
+    "To make the model run faster at inference"
+   ],
+   "answer": "So that each output can be paired with its own target and loss during training",
+   "explanation": "Multi-output models let Keras apply one loss per named output and sum them (p.366). Keras handles 4-D outputs fine, the backbone's interface is unrelated, and the dict has no speed effect.",
+   "page_refs": [362, 366]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "What would go wrong if you removed the strided `Conv2D` and flattened the backbone output directly into `Dense(2048)`?",
+   "options": [],
+   "answer": "The flattened vector would have 14 x 14 x 2048 = 401,408 values, so the dense layer would need roughly 822 million weights: far too many for memory and for the amount of training data.",
+   "explanation": "The book says 401,408 floats are 'a bit too many to feed into our dense layers' (p.363); the parameter count is simple arithmetic.",
+   "page_refs": [362, 363]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Cover the summary table and write down the output shape of each layer of listing 12.6. Then compare with the printed summary.",
+   "options": [],
+   "answer": "(None, 448, 448, 3) -> (None, 14, 14, 2048) -> (None, 6, 6, 512) -> (None, 18432) -> (None, 2048) -> (None, 2048) -> (None, 3456) -> (None, 6, 6, 96) -> (None, 6, 6, 5) and (None, 6, 6, 91).",
+   "explanation": "If you got all shapes, you understand how each layer transforms the tensor.",
+   "page_refs": [362, 363]
+  }
+ ]
+}

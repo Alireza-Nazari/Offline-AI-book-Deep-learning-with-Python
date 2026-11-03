@@ -1,0 +1,356 @@
+{
+ "page_id": "page_476",
+ "pdf_page": 476,
+ "printed_page": "452",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:53:13Z",
+  "confidence": "high",
+  "review_flags": [
+   "Inconsistency in the book: listing 15.18 sets intermediate_dim = 2056, whereas listing 15.16 (p.473) uses intermediate_dim = 2048 and the text on p.473 says the feedforward block scales up to 2048. 2056 is almost certainly a typo for 2048; the code is reproduced verbatim and the discrepancy is explained in the notes.",
+   "Comparison caveat: this model is trained for epochs=30, while the first Transformer (p.474) and the GRU model (p.459) were trained for epochs=15, so the 67% versus 65%/58% comparison is not at equal training length. The book does not comment on this here (p.478 later notes that the Transformer was still improving after 30 epochs).",
+   "Approximate claim: 'half the parameters of the GRU counterpart'. The GRU model has 34,869,912 parameters (p.459); this model has about 14.45 million (computed, about 41%), so 'less than half' would be more precise."
+  ],
+  "extraction_quality": "Clean. One body line, listing 15.18, a compile/fit snippet and two body paragraphs; all match the page image."
+ },
+ "overview": {
+  "title": "Training the Transformer with positional embeddings",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "15.3.5 Embedding positional information",
+  "main_topic": "Rebuilding the translator with PositionalEmbedding layers, retraining it, and the resulting accuracy and speed advantages over the GRU model",
+  "central_idea": "Swapping the two Embedding layers for PositionalEmbedding layers restores word order and raises next-word accuracy to 67%, beating the GRU model with roughly half its parameters, while training about three times faster per epoch because attention has no sequential loop.",
+  "importance": "It completes the Transformer translator and gives the two practical arguments (accuracy per parameter and parallel training speed) that explain the Transformer's dominance, set up for section 15.4 on scaling and pretraining.",
+  "learning_objectives": [
+   "Identify the only change between listing 15.16 and listing 15.18",
+   "Interpret the 67% accuracy relative to the GRU (65%) and the position-less Transformer (58%)",
+   "Estimate the parameter count of the new model and compare it with the GRU model",
+   "Explain why Transformers train faster than RNNs on GPUs and TPUs",
+   "Recognize the experimental caveats in the comparison (epochs, the 2056 typo)"
+  ],
+  "prerequisites": [
+   "PositionalEmbedding layer (listing 15.17, p.475)",
+   "Listing 15.16 and its summary (p.473-474)",
+   "The GRU translator (p.456-460)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The `PositionalEmbedding` layer from p.475 is used **just like a regular `Embedding` layer**. **Listing 15.18** rebuilds the translator exactly as in listing 15.16 (p.473), except that both `layers.Embedding(vocab_size, hidden_dim)` calls become `PositionalEmbedding(sequence_length, vocab_size, hidden_dim)`: one for the `english` source feeding the `TransformerEncoder`, one for the `spanish` target feeding the `TransformerDecoder`. The rest is unchanged: `hidden_dim = 256`, `num_heads = 8`, padding masks `source != 0`, `Dropout(0.5)` and a 15,000-way softmax. (The listing prints `intermediate_dim = 2056`, which differs from the 2048 used and described on p.473, almost certainly a typo.)\n\nThe model is compiled with the same Adam optimizer, sparse categorical crossentropy and weighted accuracy, and trained for **30 epochs** (twice as many as before).\n\nResults:\n\n- **67% next-word accuracy**, up from 58% without positions and above the GRU model's 65%. The authors find this all the more impressive because the model has **half the parameters** of the GRU counterpart (about 14.4M versus 34.9M on p.459).\n- **Training is noticeably faster**: each epoch takes about **a third of the time** of the RNN's. This would hold even at equal parameter counts. It comes from removing the looped state passing of the `GRU` layers: with attention there is no looping computation during training, so a GPU or TPU can handle the whole attention computation in one go.\n\nThe page thus closes the puzzle from p.474 and introduces the training-efficiency argument that section 15.4 builds on (p.478).",
+ "paragraphs": [
+  {
+   "ref": "p476_e03",
+   "excerpt": "We would use this PositionalEmbedding layer just like a regular Embedding",
+   "what_it_says": "PositionalEmbedding is a drop-in replacement for Embedding; the Transformer is now trained a second time with it.",
+   "what_it_means": "Because the layer maps (batch, length) token IDs to (batch, length, 256) vectors, exactly like Embedding, nothing downstream has to change.",
+   "why_it_matters": "It shows the modularity of the fix: positional information is added at the input without touching the encoder or decoder blocks.",
+   "terminology": [
+    {"term": "Drop-in replacement", "meaning": "A component with the same interface (inputs and output shapes) as the one it replaces."}
+   ],
+   "connections": [
+    "p.475: listing 15.17 defines PositionalEmbedding"
+   ]
+  },
+  {
+   "ref": "p476_e08",
+   "excerpt": "With positional information back in the model, things went much better.",
+   "what_it_says": "Accuracy on next-word prediction reaches 67%, a noticeable improvement over the GRU model, all the more impressive since this model has half the parameters of the GRU counterpart.",
+   "what_it_means": "Restoring word order gains 9 points over the position-less Transformer (58%, p.474) and 2 points over the GRU (65%, p.459). The GRU model has 34,869,912 parameters (p.459), mostly in its 1024-unit GRU layers; this model has about 14.4 million.",
+   "why_it_matters": "It confirms that the earlier weakness was missing order information, not attention itself, and suggests that attention uses parameters more efficiently than recurrence.",
+   "technical_idea": "Beyond the book: with intermediate_dim = 2048 the model has 14,428,824 + 2 x (20 x 256) = 14,439,064 parameters; with the printed 2056 it would be 14,447,272. Either way about 41% of the GRU model's 34.87 million. Note also that this run used 30 epochs versus 15 for the earlier runs.",
+   "terminology": [
+    {"term": "Next-word accuracy", "meaning": "Teacher-forced per-token accuracy, the metric used throughout this chapter (p.459)."}
+   ],
+   "connections": [
+    "p.474: 58% accuracy without positional embeddings",
+    "p.459: the GRU model's 65% accuracy and its 34,869,912 parameters",
+    "p.478: the Transformer's translations are subjectively better than the GRU model's"
+   ]
+  },
+  {
+   "ref": "p476_e09",
+   "excerpt": "There's one other important thing to notice about this training run.",
+   "what_it_says": "Training is noticeably faster than the RNN, about a third of the time per epoch. This would hold even with matched parameter counts; it results from removing the looped state passing of the GRU layers. With attention there is no looping computation during training, so a GPU or TPU can handle the whole attention computation in one go, making the Transformer quicker to train on accelerators.",
+   "what_it_means": "A GRU must compute timestep t before t+1, a chain of sequential operations. Attention computes all pairwise interactions with a few large matrix multiplications, which is the workload accelerators are built for. During training, teacher forcing plus the causal mask lets the decoder process all target positions at once as well.",
+   "why_it_matters": "Parallel training is what made it possible to scale Transformers to huge datasets and parameter counts, the development described at the start of section 15.4 (p.478) and in the chapter summary (p.489).",
+   "technical_idea": "Beyond the book: an RNN layer has O(L) sequential steps for a length-L sequence, whereas self-attention has O(1) sequential depth per layer at the cost of O(L^2) pairwise work, which is cheap for short sequences like the 20-token sentences here. At inference time, generation is still token by token for both models.",
+   "terminology": [
+    {"term": "Looped state passing", "meaning": "The RNN's carry of a hidden state from one timestep to the next, which forces sequential computation."},
+    {"term": "Accelerator", "meaning": "Hardware such as a GPU or TPU optimized for large parallel tensor operations."}
+   ],
+   "connections": [
+    "p.478: no more loops during training, so Transformers scale better",
+    "p.489: summary, 'no sequence-length loops at training time'"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "positional_encoding",
+   "name": "Positional embedding (in use)",
+   "definition": "Learned position vectors added to token embeddings, here via the PositionalEmbedding layer.",
+   "intuition": "The missing seat numbers that let attention tell 'dog bites man' from 'man bites dog'.",
+   "technical": "Both the source and target branches use PositionalEmbedding(sequence_length=20, vocab_size=15000, hidden_dim=256), adding 20 x 256 = 5,120 position weights per branch.",
+   "significance": "Raises accuracy from 58% to 67% at negligible parameter cost.",
+   "example": "Listing 15.18, lines 5 and 11.",
+   "misconception": "That only the source needs positions; the target branch also uses PositionalEmbedding.",
+   "related": ["embedding", "transformer", "permutation_invariance_of_attention"],
+   "source": "book"
+  },
+  {
+   "id": "transformer",
+   "name": "Transformer versus RNN efficiency",
+   "definition": "The Transformer passes information across a sequence by attention alone, without recurrence.",
+   "intuition": "Everyone reads the whole sentence at once instead of passing notes down a line.",
+   "technical": "No sequential loop at training time; attention over all positions is computed in a single batched matrix operation, so each epoch runs about three times faster than the GRU here.",
+   "significance": "Better accuracy per parameter and faster training are the two properties that enabled large-scale pretraining (p.478).",
+   "example": "67% accuracy with about 14.4M parameters versus 65% with 34.9M for the GRU.",
+   "misconception": "That the speed-up comes only from having fewer parameters; the book states it would hold even at matched parameter counts.",
+   "related": ["attention", "rnn", "positional_encoding"],
+   "source": "book"
+  },
+  {
+   "id": "rnn",
+   "name": "Recurrent computation as a bottleneck",
+   "definition": "RNN layers such as GRU process timesteps sequentially, passing a state from one to the next.",
+   "intuition": "A relay race: no runner can start before receiving the baton.",
+   "technical": "Each timestep depends on the previous state, so the L steps cannot be parallelized across time during training.",
+   "significance": "Explains why the GRU epochs take about three times as long as the Transformer's.",
+   "example": "The GRU translator of p.458 with hidden_dim = 1024.",
+   "misconception": "That GPUs speed up all models equally; sequential dependencies limit how much parallel hardware helps.",
+   "related": ["gru", "transformer"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Parameter count of the positional Transformer versus the GRU model",
+   "latex": "\\begin{aligned} N_{\\text{pos}} &= 2\\,(V d + L d) + N_{\\text{enc}} + N_{\\text{dec}} + (d V + V) \\\\ &= 2\\,(3{,}840{,}000 + 5{,}120) + 1{,}315{,}072 + 1{,}578{,}752 + 3{,}855{,}000 = 14{,}439{,}064 \\\\ \\frac{N_{\\text{pos}}}{N_{\\text{GRU}}} &= \\frac{14{,}439{,}064}{34{,}869{,}912} \\approx 0.41 \\end{aligned}",
+   "source_text": "this model has half the parameters of the GRU counterpart",
+   "variables": [
+    {"symbol": "V", "meaning": "vocab_size = 15000"},
+    {"symbol": "d", "meaning": "hidden_dim = 256"},
+    {"symbol": "L", "meaning": "sequence_length = 20 (p.455)"},
+    {"symbol": "N_{\\text{enc}}, N_{\\text{dec}}", "meaning": "Encoder and decoder block parameters from the summary on p.473-474 (with intermediate_dim = 2048)"},
+    {"symbol": "N_{\\text{GRU}}", "meaning": "Total parameters of the GRU translator, 34,869,912 (p.459)"}
+   ],
+   "operations": "Sum of the two PositionalEmbedding layers (token plus position tables), the encoder and decoder blocks and the output Dense layer.",
+   "purpose": "Checks the book's 'half the parameters' claim.",
+   "interpretation": "The Transformer uses about 41% of the GRU model's parameters while scoring 2 points higher.",
+   "intuition": "Positional embeddings are almost free: 10,240 extra weights for a 9-point accuracy gain.",
+   "numerical_example": "With the printed intermediate_dim = 2056 the encoder and decoder become 1,319,176 and 1,582,856 parameters and the total 14,447,272, still about 41%.",
+   "source": "ai_explanation",
+   "book_ref": "p.476"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "15.18",
+   "title": "Building a Transformer model with positional embeddings",
+   "original_code": "hidden_dim = 256\nintermediate_dim = 2056\nnum_heads = 8\n\nsource = keras.Input(shape=(None,), dtype=\"int32\", name=\"english\")\nx = PositionalEmbedding(sequence_length, vocab_size, hidden_dim)(source)\nencoder_output = TransformerEncoder(hidden_dim, intermediate_dim, num_heads)(\n    source=x,\n    source_mask=source != 0,\n)\n\ntarget = keras.Input(shape=(None,), dtype=\"int32\", name=\"spanish\")\nx = PositionalEmbedding(sequence_length, vocab_size, hidden_dim)(target)\nx = TransformerDecoder(hidden_dim, intermediate_dim, num_heads)(\n    target=x,\n    source=encoder_output,\n    source_mask=source != 0,\n)\nx = layers.Dropout(0.5)(x)\ntarget_predictions = layers.Dense(vocab_size, activation=\"softmax\")(x)\ntransformer = keras.Model([source, target], target_predictions)",
+   "language": "python",
+   "what_it_does": "Builds the encoder-decoder translator of listing 15.16 again, replacing both Embedding layers with PositionalEmbedding so the model sees word order in both the English source and the Spanish target.",
+   "line_explanations": [
+    {"lines": "1-3", "explanation": "Hyperparameters: 256-d token vectors, a feedforward inner size (printed 2056; p.473 uses and describes 2048) and 8 attention heads."},
+    {"lines": "5-6", "explanation": "English token IDs of any length are embedded with word plus position vectors."},
+    {"lines": "7-10", "explanation": "The encoder builds context-aware source representations; source != 0 masks padding."},
+    {"lines": "12-13", "explanation": "Spanish (shifted) target IDs are also embedded with positions."},
+    {"lines": "14-18", "explanation": "The decoder applies causal self-attention on the target and cross-attention to the encoder output, masking source padding."},
+    {"lines": "19-21", "explanation": "Dropout(0.5), a per-position softmax over 15,000 Spanish tokens, and the two-input functional model."}
+   ],
+   "inputs_outputs": "Inputs: english and spanish int32 tensors (batch, length), length <= sequence_length = 20. Output: (batch, length, 15000) probabilities.",
+   "algorithm": "Encoder-decoder Transformer with learned positional embeddings, one block each.",
+   "theory_link": "Positional embeddings break attention's permutation symmetry (p.474-475), turning the set model into a sequence model.",
+   "parameters": [
+    {"name": "sequence_length", "role": "Size of the learned position table (20, set on p.455)"},
+    {"name": "vocab_size", "role": "15,000 tokens for both languages"},
+    {"name": "hidden_dim", "role": "Model width, 256"},
+    {"name": "intermediate_dim", "role": "Feedforward inner width; printed as 2056 here, 2048 on p.473"},
+    {"name": "num_heads", "role": "8 attention heads (32 dims each)"}
+   ],
+   "pitfalls": [
+    "Inputs longer than sequence_length would index past the position table.",
+    "intermediate_dim differs from listing 15.16 (2056 vs 2048); this changes the parameter count slightly but not the lesson.",
+    "sequence_length and vocab_size must already be defined (from the data preparation on p.455)."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Retraining the Transformer for 30 epochs",
+   "original_code": "transformer.compile(\n    optimizer=\"adam\",\n    loss=\"sparse_categorical_crossentropy\",\n    weighted_metrics=[\"accuracy\"],\n)\ntransformer.fit(train_ds, epochs=30, validation_data=val_ds)",
+   "language": "python",
+   "what_it_does": "Compiles the positional Transformer exactly as before and trains it for 30 epochs, monitoring validation accuracy.",
+   "line_explanations": [
+    {"lines": "1-5", "explanation": "Same optimizer, loss and weighted accuracy metric as on p.474 and p.459."},
+    {"lines": "6", "explanation": "epochs=30, double the 15 epochs used for the earlier runs."}
+   ],
+   "inputs_outputs": "Same datasets as before; returns a History object. Reported outcome: about 67% validation next-word accuracy.",
+   "algorithm": "Adam on per-token crossentropy with teacher forcing.",
+   "theory_link": "p.478 notes the Transformer was still improving after 30 epochs while the RNN plateaued after about 5, a sign of its data/compute hunger.",
+   "parameters": [
+    {"name": "epochs=30", "role": "Training length; longer than the earlier 15-epoch runs"}
+   ],
+   "pitfalls": [
+    "Comparing with the 15-epoch GRU and Transformer runs mixes the effect of positional embeddings with the effect of longer training; the GRU reportedly plateaued early (p.478), so the comparison is still roughly fair to it."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Three runs side by side",
+   "kind": "breakdown",
+   "body": "| Model | Params | Epochs | Next-word accuracy | Time per epoch |\n|---|---|---|---|---|\n| GRU seq2seq (p.459) | 34,869,912 | 15 | 65% | 1x |\n| Transformer, no positions (p.474) | 14,428,824 | 15 | 58% | about 1/3x (not stated for this run) |\n| Transformer + positions (p.476) | about 14.44M (computed) | 30 | 67% | about 1/3x |\n\nThe parameter count for the positional model is an AI computation from the summaries; the book only says 'half'.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why attention parallelizes and the GRU does not",
+   "kind": "step_by_step",
+   "body": "1. GRU: $h_t = f(h_{t-1}, x_t)$. To compute $h_{20}$ you must first compute $h_1, \\dots, h_{19}$: 20 dependent steps per layer.\n2. Self-attention: all scores $QK^\\top$ for all positions come from one matrix multiplication, followed by a softmax and another multiplication by $V$.\n3. The decoder's causal mask lets all target positions be trained simultaneously with teacher forcing, since each position's inputs (the true previous tokens) are known in advance.\n4. A GPU executes these few big matrix operations far more efficiently than many small sequential ones.\n\nBeyond the book: this is why the book can say the speed-up would remain at equal parameter counts.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "An assembly line versus a team of painters",
+   "kind": "analogy",
+   "body": "The GRU is an assembly line where each station waits for the previous one. The Transformer is a team of painters each working on a different part of the wall at the same time: given enough painters (GPU cores), the whole wall is done in about the time of one part.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Next-word accuracy across the chapter's three translators",
+   "why": "The page reports 67% for the positional Transformer and compares it with the GRU model (65%, p.459) and the position-less Transformer (58%, p.474).",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": ["GRU (p.459)", "Transformer, no positions (p.474)", "Transformer + positions (p.476)"],
+     "datasets": [{"label": "Next-word accuracy (%)", "data": [65, 58, 67]}]
+    },
+    "options": {"scales": {"y": {"min": 0, "max": 100, "title": {"display": true, "text": "accuracy (%)"}}}, "plugins": {"legend": {"display": false}}}
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "Listing 15.18: where the positional embeddings go",
+   "why": "Shows that the only change from listing 15.16 is replacing both Embedding layers with PositionalEmbedding.",
+   "mermaid": "flowchart LR\n  E[english IDs] --> PE1[PositionalEmbedding<br/>tokens + positions]\n  PE1 --> ENC[TransformerEncoder<br/>256 / FFN / 8 heads]\n  S[spanish IDs] --> PE2[PositionalEmbedding<br/>tokens + positions]\n  PE2 --> DEC[TransformerDecoder]\n  ENC --> DEC\n  E -. source != 0 .-> ENC\n  E -. source != 0 .-> DEC\n  DEC --> DR[Dropout 0.5] --> O[Dense 15000 softmax]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "The Transformer's advantage comes mainly from having more parameters.", "correction": "It has fewer, roughly half (about 41%) of the GRU model's parameters, yet scores higher."},
+  {"claim": "Transformers are faster only because they are smaller.", "correction": "The book says the speed-up would hold even at matched parameter counts; it comes from removing the sequential loop."},
+  {"claim": "Transformers generate translations in parallel too.", "correction": "The parallelism is at training time (teacher forcing with a causal mask); generation is still one token at a time (p.477)."},
+  {"claim": "The 2056 in listing 15.18 is a deliberate change.", "correction": "Nothing in the text motivates it; p.473 describes a 2048 intermediate size, so it is most likely a typo."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 475, "note": "Listing 15.17, the PositionalEmbedding layer"},
+   {"page": 474, "note": "58% accuracy without positions"},
+   {"page": 473, "note": "Listing 15.16, identical except for the embeddings (and intermediate_dim = 2048)"},
+   {"page": 459, "note": "GRU model: 65% accuracy, 34,869,912 parameters"},
+   {"page": 455, "note": "vocab_size and sequence_length definitions"}
+  ],
+  "later": [
+   {"page": 477, "note": "Listing 15.19 generates translations with this Transformer"},
+   {"page": 478, "note": "Faster, loop-free training and data hunger motivate large pretrained Transformers"},
+   {"page": 489, "note": "Chapter summary: no sequence-length loops at training time"}
+  ],
+  "prerequisites": [
+   {"page": 468, "note": "TransformerEncoder block"},
+   {"page": 470, "note": "TransformerDecoder block"}
+  ],
+  "related_math": [
+   {"page": 474, "note": "Parameter counts of the first Transformer's layers"}
+  ],
+  "related_code": [
+   {"page": 459, "note": "Same compile call for the GRU model, trained 15 epochs"},
+   {"page": 498, "note": "PositionalEmbedding reused in the mini-GPT"}
+  ],
+  "related_figures": [
+   {"page": 472, "note": "Figure 15.8, encoder and decoder computations"}
+  ]
+ },
+ "takeaways": [
+  "Listing 15.18 differs from 15.16 only in using PositionalEmbedding instead of Embedding (plus a likely typo, 2056 instead of 2048).",
+  "With positions the Transformer reaches 67% next-word accuracy, above the GRU's 65% and the position-less 58%.",
+  "It does so with roughly half (about 41%) of the GRU model's parameters.",
+  "Each epoch trains in about a third of the GRU's time, because attention has no sequential loop and runs in one go on accelerators.",
+  "This run used 30 epochs, twice the earlier runs; keep that in mind when comparing."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What is the essential architectural change from listing 15.16 to listing 15.18?",
+   "options": [
+    "The number of attention heads is doubled",
+    "Both Embedding layers are replaced with PositionalEmbedding layers",
+    "A GRU layer is added after the encoder",
+    "The causal mask is removed from the decoder"
+   ],
+   "answer": "Both Embedding layers are replaced with PositionalEmbedding layers",
+   "explanation": "num_heads stays 8, no GRU is added, and the decoder is unchanged. The only intended change is positional embeddings (the 2056 versus 2048 difference is most likely a typo).",
+   "page_refs": [476, 473]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Why does the Transformer train about three times faster per epoch than the GRU model?",
+   "options": [],
+   "answer": "Attention has no looping state passing, so the whole attention computation can be done in one go on a GPU/TPU, whereas the GRU must process timesteps sequentially.",
+   "explanation": "The book attributes the speed-up to removing the GRU's looped state passing, and says it would hold even at matched parameter counts.",
+   "page_refs": [476]
+  },
+  {
+   "id": "q3",
+   "type": "math",
+   "question": "Using the GRU model's 34,869,912 parameters (p.459) and roughly 14.44 million for this model, what fraction of the GRU's parameters does the Transformer use?",
+   "options": [],
+   "answer": "About 0.41, i.e. roughly 41%.",
+   "explanation": "14,439,064 / 34,869,912 is about 0.414; the book rounds this to 'half'.",
+   "page_refs": [476, 459]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Is the comparison between the 67% Transformer and the 65% GRU perfectly controlled? Name one difference other than the architecture.",
+   "options": [],
+   "answer": "No: the Transformer was trained for 30 epochs, the GRU for 15 (and intermediate_dim changed slightly).",
+   "explanation": "fit(..., epochs=30) here versus epochs=15 on p.459. The book later notes that the GRU plateaued after about 5 epochs (p.478), so extra epochs would likely not have helped it much.",
+   "page_refs": [476, 459, 478]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "How many percentage points does adding positional embeddings gain over the first Transformer?",
+   "options": ["2", "7", "9", "12"],
+   "answer": "9",
+   "explanation": "67% - 58% = 9. 2 is the gain over the GRU (65%), 7 was the GRU's lead over the first Transformer, and 12 matches no comparison.",
+   "page_refs": [476, 474]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "The book says the speed advantage would hold even if parameter counts were matched. Why does parameter count not explain it?",
+   "options": [],
+   "answer": "Speed depends on how parallel the computation is, not just on how much there is. The GRU's sequential dependency forces many small steps; attention uses a few large parallel matrix operations.",
+   "explanation": "A GPU can only exploit parallel work; the RNN's timestep loop is inherently sequential regardless of size.",
+   "page_refs": [476]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Try training listing 15.18 with intermediate_dim = 2048 and then 2056. Do you expect a measurable difference? Why?",
+   "options": [],
+   "answer": "Open answer; a difference of 8 units changes about 8,000 parameters out of 14.4 million, so no meaningful change is expected.",
+   "explanation": "The FFN size difference is tiny; any difference in accuracy would be within run-to-run noise.",
+   "page_refs": [476, 473]
+  }
+ ]
+}

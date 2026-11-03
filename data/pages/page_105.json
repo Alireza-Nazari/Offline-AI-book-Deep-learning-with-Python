@@ -1,0 +1,271 @@
+{
+ "page_id": "page_105",
+ "pdf_page": 105,
+ "printed_page": "81",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:52:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "The decorator example calls `torch.nn.relu`, as printed in the book; in current PyTorch the functional ReLU is `torch.relu` / `torch.nn.functional.relu` (`torch.nn.ReLU` is a module class). Reproduced verbatim and noted as a 'beyond the book' pitfall."
+  ],
+  "extraction_quality": "Good. Element e03 merges two printed paragraphs ('Similarly, previously we needed…' and 'Overall, this may feel a bit confusing…'); each gets its own note with the same ref. Both code snippets match the image. The list of PyTorch's two key strengths begins here; only the first bullet is on this page, the second (Hugging Face support) is on p.106."
+ },
+ "overview": {
+  "title": "model.zero_grad(), torch.compile(), and the start of what makes PyTorch unique",
+  "chapter": "3 Introduction to TensorFlow, PyTorch, JAX, and Keras",
+  "section": "3.4 Introduction to PyTorch",
+  "subsection": "3.4.3 What makes the PyTorch approach unique",
+  "main_topic": "Replacing manual gradient resets with model.zero_grad(), the backward–step–zero_grad 'incantation', compiling Modules and functions with torch.compile() (Dynamo), and PyTorch's first key strength: eager execution",
+  "central_idea": "With a Module and an optimizer, gradients are cleared with model.zero_grad(), and the sequence loss.backward() → optimizer.step() → model.zero_grad() can be treated as a fixed recipe — forgetting zero_grad() is a major, common bug. PyTorch can compile Modules or functions with torch.compile() (its Dynamo compiler), but most PyTorch code runs eagerly, which is one of PyTorch's key strengths because it makes debugging easy.",
+  "importance": "It closes the hands-on PyTorch tour with the rule that prevents the most common training bug, introduces the compilation story that parallels tf.function/XLA (pp.92-93), and starts the framework comparison that helps the reader choose a Keras backend.",
+  "learning_objectives": [
+   "Use model.zero_grad() to reset the gradients of all parameters of a Module",
+   "Recite the PyTorch training-step sequence loss.backward() - optimizer.step() - model.zero_grad() and explain why zero_grad() is essential",
+   "Compile a Module or a function with torch.compile() (object or decorator form) and state what it is supposed to change",
+   "Explain why most PyTorch code runs eagerly",
+   "State PyTorch's first key strength and how it differs from TensorFlow/JAX practice"
+  ],
+  "prerequisites": [
+   "The Module + optimizer training step on p.104",
+   "Gradient accumulation (p.102)",
+   "TensorFlow compilation with tf.function and XLA (pp.92-93)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes the discussion of the simplified training step from p.104. Previously gradients had to be reset by hand with `tensor.grad = None` on each tensor; now `model.zero_grad()` does it for all the model's parameters. The authors admit this can feel confusing: the loss tensor, the optimizer and the `Module` instance all seem aware of each other through a hidden background mechanism — \"spooky action at a distance\". Their advice: treat `loss.backward()` - `optimizer.step()` - `model.zero_grad()` as a magic incantation to recite whenever you write a training step, and never forget `model.zero_grad()` — that would be a major bug, and an unfortunately common one.\n\n**Making PyTorch modules fast using compilation.** Like TensorFlow, PyTorch can compile functions — and even `Module` instances — with `torch.compile()`, which uses PyTorch's own compiler, **Dynamo**. Applied to the linear-regression Module: `compiled_model = torch.compile(model)`. The resulting object should behave identically to the original, except that the forward and backward passes should run faster. `torch.compile` can also be used as a decorator, shown on a `dense(inputs, W, b)` function returning `relu(matmul(inputs, W) + b)`. In practice, however, most PyTorch code does not use compilation and simply runs eagerly: the compiler may not work with all models and may not give a speedup when it does. Unlike TensorFlow and JAX, where compilation was built in from the start, PyTorch's compiler is a relatively recent addition.\n\n**3.4.3 What makes the PyTorch approach unique.** Compared with TensorFlow and JAX (covered next), why use PyTorch or not? The first of two key strengths: PyTorch executes eagerly by default, which makes it easy to debug. TensorFlow and JAX also run eagerly by default, but PyTorch is intended to run eagerly *at all times*, whereas any serious TensorFlow or JAX project will eventually need compilation, which can significantly hurt the debugging experience. The second strength and PyTorch's downsides are on p.106.",
+ "paragraphs": [
+  {
+   "ref": "p105_e03",
+   "excerpt": "Similarly, previously we needed to reset parameter gradients by hand by doing",
+   "what_it_says": "Where the manual version reset each tensor's gradient with `tensor.grad = None`, the Module version just calls `model.zero_grad()`.",
+   "what_it_means": "`zero_grad()` iterates over the Module's registered Parameters (the same ones returned by `model.parameters()`) and clears their `.grad`. It is the Module-level equivalent of the two lines `W.grad = None; b.grad = None` on p.103, completing the correspondence started on p.104 (`optimizer.step()` ↔ the no_grad update).",
+   "why_it_matters": "With many layers, resetting each tensor by hand would be impractical; zero_grad() makes the reset a single, uniform call.",
+   "technical_idea": "Beyond the book: in current PyTorch, `zero_grad()` sets gradients to None by default (`set_to_none=True`), exactly mirroring the book's manual reset. `optimizer.zero_grad()` does the same for the optimizer's parameters.",
+   "terminology": [
+    {"term": "model.zero_grad()", "meaning": "Resets the gradients of all parameters of a Module."}
+   ],
+   "connections": ["p.103: manual W.grad = None, b.grad = None.", "p.104: the simplified training step that calls model.zero_grad()."]
+  },
+  {
+   "ref": "p105_e03",
+   "excerpt": "Overall, this may feel a bit confusing—somehow the loss tensor, the optimizer, and",
+   "what_it_says": "The loss, the optimizer and the Module seem to know about each other through a hidden mechanism — 'spooky action at a distance'. You can treat `loss.backward()` - `optimizer.step()` - `model.zero_grad()` as a magic incantation for every training step; just don't forget `model.zero_grad()`, which would be a major and unfortunately common bug.",
+   "what_it_means": "The hidden mechanism is shared references: the Module registers W and b, the optimizer was given those same tensors via `model.parameters()`, and the loss's computation graph leads back to them. `backward()` writes `.grad` onto them, `step()` reads it, `zero_grad()` clears it. Forgetting `zero_grad()` makes gradients accumulate from step to step (the 6 → 12 effect on p.102), so updates grow and point in stale directions.",
+   "why_it_matters": "The bug is silent: no error is raised, training just behaves badly. Memorizing the three-call sequence is a practical safeguard.",
+   "technical_idea": "The phrase 'spooky action at a distance' is borrowed from Einstein's description of quantum entanglement (beyond the book); here it describes implicit state shared between objects, the opposite of JAX's explicit, stateless style (p.112).",
+   "terminology": [
+    {"term": "Spooky action at a distance", "meaning": "The authors' phrase for objects affecting each other through hidden shared state rather than explicit arguments."}
+   ],
+   "connections": ["p.241: the same three-method interaction (loss.backward(), weight.value.grad, model.zero_grad()) in Keras with the PyTorch backend.", "p.112: JAX makes all state explicit instead."]
+  },
+  {
+   "ref": "p105_e05",
+   "excerpt": "One last thing. Similarly to how TensorFlow lets you compile functions for",
+   "what_it_says": "As TensorFlow does, PyTorch can compile functions or even Module instances for better performance, via `torch.compile()`, which uses PyTorch's own compiler, Dynamo. The book tries it on the linear-regression Module: `compiled_model = torch.compile(model)`.",
+   "what_it_means": "Compilation captures the Python-level tensor operations into a graph and generates optimized code for it, instead of dispatching each operation one by one in eager mode. Note the authors call the Module 'our linear regression Module' — it is the LinearModel trained with MSE, which they also call a linear classifier.",
+   "why_it_matters": "It is PyTorch's counterpart to `@tf.function(jit_compile=True)` (pp.92-93) and to JAX's jit, so all three frameworks offer compilation; they differ in how central it is.",
+   "technical_idea": "Beyond the book: Dynamo (TorchDynamo) traces Python bytecode to extract graphs, falling back to eager Python where it cannot ('graph breaks'); a backend compiler (by default Inductor) then generates the fast kernels.",
+   "terminology": [
+    {"term": "torch.compile()", "meaning": "PyTorch utility that compiles a function or Module for faster execution."},
+    {"term": "Dynamo", "meaning": "PyTorch's own compiler used by torch.compile()."}
+   ],
+   "connections": ["p.92: TensorFlow's tf.function graph mode.", "p.93: XLA compilation with jit_compile=True."]
+  },
+  {
+   "ref": "p105_e08",
+   "excerpt": "The resulting object is intended to work identically to the original—except the",
+   "what_it_says": "The compiled object should work identically to the original, but with faster forward and backward passes. `torch.compile()` can also be used as a function decorator.",
+   "what_it_means": "`compiled_model(torch_inputs)` returns the same predictions as `model(torch_inputs)` and shares its Parameters; the decorator form applies the same compilation to a plain function such as `dense`.",
+   "why_it_matters": "Because the interface is unchanged, compilation can be switched on or off without rewriting the training step — useful when debugging.",
+   "terminology": [
+    {"term": "Decorator", "meaning": "Python syntax @f placed above a def, equivalent to func = f(func)."}
+   ],
+   "connections": ["p.101: the same dense-layer function written without compilation."]
+  },
+  {
+   "ref": "p105_e11",
+   "excerpt": "In practice, most PyTorch code out there does not use compilation and",
+   "what_it_says": "Most PyTorch code runs eagerly without compilation, because the compiler may not work with all models and may not give a speedup when it does work. Unlike TensorFlow and JAX, where compilation was built in from the start, PyTorch's compiler is relatively recent.",
+   "what_it_means": "In PyTorch, eager execution is the normal mode and compilation an optional add-on; in TensorFlow and JAX, compilation is part of the original design. The authors are candid that torch.compile is not yet a dependable default.",
+   "why_it_matters": "It sets up the trade-off discussed on pp.105-106: easy debugging versus speed. p.106 adds that PyTorch is the slowest major framework and that Dynamo is, as of 2025, 'quite ineffective and full of trapdoors'.",
+   "terminology": [
+    {"term": "Eager execution", "meaning": "Running each operation immediately as Python executes it, with no separate compilation step."}
+   ],
+   "connections": ["p.106: PyTorch's speed disadvantage and the state of Dynamo."]
+  },
+  {
+   "ref": "p105_e14",
+   "excerpt": "Compared to TensorFlow and JAX, which we will cover next, what makes",
+   "what_it_says": "Section 3.4.3 asks what makes PyTorch stand out compared with TensorFlow and JAX, and why you should or should not use it, then announces PyTorch's two key strengths.",
+   "what_it_means": "Each framework section of chapter 3 ends with this kind of assessment (TensorFlow's on p.98, JAX's on p.114), so readers can compare them as possible Keras backends.",
+   "why_it_matters": "Keras 3 runs on all three backends; knowing their strengths helps you pick one for a given project.",
+   "terminology": [],
+   "connections": ["p.98: What makes the TensorFlow approach unique.", "p.114: What makes the JAX approach unique."]
+  },
+  {
+   "ref": "p105_e16",
+   "excerpt": "PyTorch code executes eagerly by default, making it easy to debug. Note",
+   "what_it_says": "Strength 1: PyTorch executes eagerly by default, making it easy to debug. TensorFlow and JAX code also runs eagerly by default, but PyTorch is meant to run eagerly at all times, whereas any serious TensorFlow or JAX project will eventually need compilation, which can significantly hurt debugging.",
+   "what_it_means": "In eager mode you can print tensors, set breakpoints and inspect values line by line. Inside a compiled TensorFlow or JAX function, values are symbolic during tracing and errors point into generated code, which is harder to debug. Because PyTorch users rarely compile, they keep the eager debugging experience throughout a project.",
+   "why_it_matters": "Debuggability is a large practical factor in research and prototyping, and is part of why PyTorch became popular; the flip side (speed) appears on p.106.",
+   "terminology": [
+    {"term": "Debugging experience", "meaning": "How easily you can inspect values and locate errors in your code."}
+   ],
+   "connections": ["p.106: the second strength (Hugging Face support) and the downsides.", "p.92: TensorFlow eager vs graph execution."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "training_step",
+   "name": "The backward–step–zero_grad incantation",
+   "definition": "The fixed sequence loss.backward() → optimizer.step() → model.zero_grad() that ends every PyTorch training step after the forward pass.",
+   "intuition": "Compute the slopes, take the step, wipe the slate.",
+   "technical": "backward() fills p.grad for each parameter, step() updates p using p.grad, zero_grad() clears p.grad so the next backward() starts fresh.",
+   "significance": "Forgetting zero_grad() is a major and common bug, because gradients accumulate.",
+   "example": "def training_step(inputs, targets): predictions = model(inputs); loss = ...; loss.backward(); optimizer.step(); model.zero_grad(); return loss (p.104).",
+   "misconception": "That the optimizer clears gradients as part of step(); it does not.",
+   "related": ["gradient_accumulation", "optimizer", "torch_module"],
+   "source": "book"
+  },
+  {
+   "id": "torch_compile",
+   "name": "torch.compile() and Dynamo",
+   "definition": "PyTorch's utility for compiling functions or Module instances, using PyTorch's own compiler, Dynamo.",
+   "intuition": "Turn a sequence of individually executed Python tensor ops into one optimized program.",
+   "technical": "compiled_model = torch.compile(model) or @torch.compile on a function. The compiled object behaves identically, with faster forward and backward passes when compilation succeeds.",
+   "significance": "PyTorch's counterpart to tf.function/XLA and JAX jit, but used by only a small share of PyTorch code.",
+   "example": "@torch.compile def dense(inputs, W, b): return relu(matmul(inputs, W) + b).",
+   "misconception": "That compiling always makes code faster; the book says it may not work for all models and may not speed things up.",
+   "related": ["eager_execution", "xla", "torch_module"],
+   "source": "book"
+  },
+  {
+   "id": "eager_execution",
+   "name": "Eager execution",
+   "definition": "Executing each tensor operation immediately as the Python code runs.",
+   "intuition": "Like running a script in an interactive shell: every line produces a real value you can inspect.",
+   "technical": "Default in PyTorch, TensorFlow and JAX; PyTorch is designed to stay eager, while TensorFlow and JAX projects typically compile (tf.function, jit) for speed.",
+   "significance": "PyTorch's first key strength: easy debugging.",
+   "example": "Printing predictions inside training_step shows concrete numbers in PyTorch; inside a traced tf.function or jax.jit function it shows symbolic placeholders (beyond the book).",
+   "misconception": "That only PyTorch runs eagerly; TensorFlow and JAX also do by default.",
+   "related": ["torch_compile", "graph_mode"],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Compiling a Module",
+   "original_code": "compiled_model = torch.compile(model)",
+   "language": "python",
+   "what_it_does": "Wraps the LinearModel instance in a compiled version that should run forward and backward passes faster.",
+   "line_explanations": [{"lines": "1", "explanation": "torch.compile uses Dynamo; the returned object is used exactly like model (e.g. compiled_model(torch_inputs))."}],
+   "inputs_outputs": "Input: a torch.nn.Module. Output: a compiled module with the same behaviour and the same parameters.",
+   "algorithm": "Graph capture and code generation (just-in-time, on first call).",
+   "theory_link": "Same goal as TensorFlow's tf.function/XLA (pp.92-93).",
+   "parameters": [],
+   "pitfalls": [
+    "The first call is slow because compilation happens then (beyond the book).",
+    "May fail or give no speedup for some models, as the book notes."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "torch.compile as a decorator",
+   "original_code": "@torch.compile\ndef dense(inputs, W, b):\n    return torch.nn.relu(torch.matmul(inputs, W) + b)",
+   "language": "python",
+   "what_it_does": "Defines a compiled dense-layer function: ReLU of an affine transformation.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Decorator form of torch.compile; equivalent to dense = torch.compile(dense)."},
+    {"lines": "2-3", "explanation": "The dense layer from p.101: matmul, add bias, ReLU."}
+   ],
+   "inputs_outputs": "inputs (N, d_in), W (d_in, d_out), b (d_out,) → (N, d_out).",
+   "algorithm": "Affine transform followed by ReLU, compiled.",
+   "theory_link": "Dense layer output = relu(dot(input, W) + b) from chapter 2.",
+   "parameters": [],
+   "pitfalls": ["Beyond the book: in current PyTorch the function is torch.relu or torch.nn.functional.relu; torch.nn.relu as printed does not exist (torch.nn.ReLU is a module class)."],
+   "illustrative_code": "# AI-written: runnable variant\nimport torch\n\n@torch.compile\ndef dense(inputs, W, b):\n    return torch.relu(torch.matmul(inputs, W) + b)\n\nx = torch.randn(4, 3)\nW = torch.randn(3, 2)\nb = torch.zeros(2)\nprint(dense(x, W, b).shape)  # torch.Size([4, 2])"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Compilation across the three frameworks (so far)",
+   "kind": "breakdown",
+   "body": "| | TensorFlow | PyTorch |\n|---|---|---|\n| API | `@tf.function`, `jit_compile=True` (pp.92-93) | `torch.compile()` (this page) |\n| Compiler | graph mode / XLA | Dynamo |\n| Since | built in from inception | relatively recent addition |\n| Typical use | needed in serious projects | most code stays eager |\n\nJAX (from p.106) also has compilation built in from the start, per this page.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "What actually goes wrong without zero_grad()",
+   "kind": "numerical",
+   "body": "Beyond the book, a toy case: suppose the true gradient of W is about 0.3 at every step and lr = 0.1. With zero_grad(), each step moves W by 0.03. Without it, `.grad` holds 0.3, 0.6, 0.9, … so the steps are 0.03, 0.06, 0.09, … — after 10 steps W has moved 1.65 instead of 0.3, overshooting the minimum and typically diverging.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Recipe card analogy",
+   "kind": "analogy",
+   "body": "The 'magic incantation' is like a pilot's checklist: you don't re-derive why each item matters on every flight, you just never skip one. 'zero_grad' is the item that's easy to forget because skipping it doesn't crash anything immediately.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "The training-step incantation as a cycle",
+   "why": "The page tells the reader to recite loss.backward() - optimizer.step() - model.zero_grad(); the cycle shows where skipping zero_grad() causes accumulation.",
+   "mermaid": "flowchart LR\n F[\"forward: predictions, loss\"] --> B[\"loss.backward()\\n(.grad += new gradients)\"]\n B --> S[\"optimizer.step()\\n(update parameters)\"]\n S --> Z[\"model.zero_grad()\\n(.grad cleared)\"]\n Z --> F\n S -. \"forgot zero_grad\" .-> X[\"gradients accumulate → invalid updates\"]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "optimizer.step() clears the gradients after using them.", "correction": "It does not; model.zero_grad() must be called, and forgetting it is a major, common bug."},
+  {"claim": "torch.compile changes what the model computes.", "correction": "The compiled object is intended to work identically; only speed should change."},
+  {"claim": "Most PyTorch code is compiled for speed.", "correction": "Most PyTorch code runs eagerly; the compiler does not always work or help."},
+  {"claim": "Only PyTorch supports eager execution.", "correction": "TensorFlow and JAX also run eagerly by default; the difference is that serious TensorFlow/JAX projects eventually need compilation."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 104, "note": "The simplified training step and optimizer.step()."},
+   {"page": 103, "note": "Manual gradient resets with .grad = None."},
+   {"page": 102, "note": "Gradient accumulation demo (6 → 12)."},
+   {"page": 92, "note": "TensorFlow graph mode with tf.function."},
+   {"page": 93, "note": "XLA compilation with jit_compile=True."},
+   {"page": 101, "note": "The uncompiled dense-layer function."}
+  ],
+  "later": [
+   {"page": 106, "note": "PyTorch's second strength (Hugging Face) and its downsides: API inconsistency, speed, Dynamo's limitations; start of JAX."},
+   {"page": 114, "note": "What makes the JAX approach unique."},
+   {"page": 241, "note": "Keras + PyTorch custom training step with model.zero_grad()."}
+  ],
+  "prerequisites": [
+   {"page": 104, "note": "Module + optimizer API."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 104, "note": "training_step using backward/step/zero_grad."},
+   {"page": 93, "note": "@tf.function(jit_compile=True)."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "model.zero_grad() replaces per-tensor `.grad = None` resets.",
+  "Treat loss.backward() - optimizer.step() - model.zero_grad() as a fixed recipe; never forget zero_grad().",
+  "torch.compile() (Dynamo) compiles a Module or function; the result should behave identically but run faster.",
+  "Most PyTorch code runs eagerly because the compiler doesn't always work or help, and it is a recent addition.",
+  "PyTorch's first key strength: it is meant to run eagerly at all times, which keeps debugging easy."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "Which call, according to the book, is a major (and common) bug to forget in a PyTorch training step?", "options": ["loss.backward()", "optimizer.step()", "model.zero_grad()", "torch.compile(model)"], "answer": "model.zero_grad()", "explanation": "The book explicitly warns not to forget model.zero_grad(). Forgetting backward() or step() would also break training, but visibly (no learning); forgetting zero_grad() silently accumulates gradients. torch.compile is optional.", "page_refs": [105]},
+  {"id": "q2", "type": "short", "question": "What does model.zero_grad() replace from the manual training step?", "options": [], "answer": "Setting tensor.grad = None on each parameter by hand (W.grad = None, b.grad = None).", "explanation": "First paragraph of the page; compare p.103.", "page_refs": [103, 105]},
+  {"id": "q3", "type": "conceptual", "question": "What is the 'spooky action at a distance' the authors mention, and what really connects the loss, the optimizer and the Module?", "options": [], "answer": "The three objects seem aware of each other without being passed to one another. In fact they share references to the same parameter tensors: the Module registers them, the optimizer received them via model.parameters(), and the loss graph leads back to them, so backward() writes .grad that step() reads and zero_grad() clears.", "explanation": "The book names the phenomenon; the mechanism is an AI explanation building on p.104's optimizer construction.", "page_refs": [104, 105]},
+  {"id": "q4", "type": "mcq", "question": "What is the name of PyTorch's compiler used by torch.compile()?", "options": ["XLA", "Dynamo", "Inductor-only", "TorchScript"], "answer": "Dynamo", "explanation": "The page: 'This API uses PyTorch's very own compiler, named Dynamo.' XLA is TensorFlow/JAX's compiler; TorchScript is an older PyTorch mechanism not mentioned here; Inductor (beyond the book) is a backend Dynamo hands graphs to.", "page_refs": [105]},
+  {"id": "q5", "type": "short", "question": "Give the book's two reasons why most PyTorch code does not use compilation.", "options": [], "answer": "The compiler may not work with all models, and it may not give a speedup even when it does work.", "explanation": "Stated in the paragraph after the decorator example; the authors add that PyTorch's compiler is relatively recent.", "page_refs": [105]},
+  {"id": "q6", "type": "conceptual", "question": "TensorFlow and JAX also execute eagerly by default. Why, then, is eager execution presented as a PyTorch strength?", "options": [], "answer": "Because PyTorch is intended to run eagerly at all times, whereas serious TensorFlow or JAX projects inevitably need compilation, which significantly hurts debugging.", "explanation": "First key strength in section 3.4.3.", "page_refs": [105]},
+  {"id": "q7", "type": "self", "question": "Can you write a PyTorch training step from memory, including the three-call incantation, and say what would happen if you swapped the order of step() and zero_grad()?", "options": [], "answer": "forward → loss → loss.backward() → optimizer.step() → model.zero_grad(). If zero_grad() came before step(), the gradients would be cleared before the update, so step() would do nothing (or skip parameters whose grad is None).", "explanation": "Tests understanding of what each call reads and writes (the swap consequence is beyond the book).", "page_refs": [104, 105]}
+ ]
+}

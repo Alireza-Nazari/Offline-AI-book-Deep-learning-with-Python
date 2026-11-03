@@ -1,0 +1,143 @@
+{
+ "page_id": "page_211", "pdf_page": 211, "printed_page": "187", "book_id": "dlwp3",
+ "generation": {"status": "complete", "model": "claude-opus-5-5", "generated_at": "2026-11-03T07:28:11Z",
+   "confidence": "high", "review_flags": [], "extraction_quality": "Clean extraction matching the image; the weight-pruning bullet is cut at the page break and continues on p.212."},
+ "overview": {
+   "title": "Deploying in the browser and optimizing inference models",
+   "chapter": "6 The universal workflow of machine learning",
+   "section": "6.3 Deploying your model",
+   "subsection": "6.3.2 Shipping an inference model",
+   "main_topic": "Running models directly in the browser or in desktop JavaScript apps (TensorFlow.js, ONNX's JavaScript runtime), and the start of inference-time optimization (weight pruning).",
+   "central_idea": "Running a model in the user's browser saves server cost, keeps data local, avoids the network round trip and works offline. It requires a model small enough for consumer hardware and one that need not stay confidential, and the model should be optimized (e.g., pruned) before it is shipped.",
+   "importance": "It completes the survey of deployment targets with the JavaScript/browser option. It also adds a security point that is easy to miss: a downloaded model can leak information about its training data. Finally, it begins the discussion of making models smaller and faster for inference.",
+   "learning_objectives": [
+     "State the four situations in which in-browser deployment is preferable to a REST API",
+     "Explain the two caveats: resource usage on the user's device, and model confidentiality and training-data leakage",
+     "Name the JavaScript deployment tools: TensorFlow.js (originally WebKeras) and ONNX's JavaScript runtime",
+     "Explain why inference optimization should happen before conversion to TensorFlow.js or TensorFlow Lite",
+     "Describe the idea behind weight pruning"
+   ],
+   "prerequisites": [
+     "REST API deployment and its ~500 ms round trip (p.209)",
+     "On-device deployment with TensorFlow Lite and ONNX (p.210)",
+     "Weight tensors and parameters of layers (chapters 2–3)"
+   ],
+   "page_kind": "content"
+ },
+ "summary": "The page covers the third deployment target, **deploying a model in the browser**. Deep learning is common in browser-based and desktop JavaScript applications. Such apps *can* call a remote model over REST, but running the model directly in the browser on the user's computer (using the GPU if one is available) has key advantages. The authors recommend it when:\n\n- you want to **offload compute** to the end user, which can dramatically cut server costs;\n- the **input data must stay** on the user's computer or phone, as with the web and desktop versions of the spam-detection chat app, a cross-platform JavaScript app;\n- you have **strict latency** requirements: the local model may be slower than a big server GPU, but there is no extra ~100 ms network round trip;\n- the app must **keep working offline** once the model has been downloaded and cached.\n\nThere are two caveats. The model must be small enough not to *hog* the user's CPU, GPU or RAM. And because the entire model is downloaded, **nothing about it can be confidential**. The authors also warn that a trained model usually lets someone recover *some information about its training data*, so a model trained on sensitive data should not be made public.\n\nOn tooling, the TensorFlow ecosystem has **TensorFlow.js**, and ONNX has a native JavaScript runtime. TensorFlow.js implements almost all of the Keras API (its working name was *WebKeras*) plus many lower-level TensorFlow APIs, and a saved Keras model can be imported into it for use in a browser app or an Electron desktop app.\n\nThe next subsection, **Inference model optimization**, argues that optimization matters most under tight power and memory budgets (phones, embedded devices) or low-latency requirements, and should always happen *before* importing into TensorFlow.js or exporting to TensorFlow Lite. The first of two techniques, **weight pruning**, begins at the bottom of the page. Not every coefficient in a weight tensor contributes equally, so keeping only the most significant ones considerably reduces the parameter count. The text continues on p.212, which also introduces weight quantization.",
+ "paragraphs": [
+   {"ref": "p211_e04", "excerpt": "Deep learning is often used in browser-based or desktop-based JavaScript applications.",
+    "what_it_says": "JavaScript apps in the browser or on the desktop often use deep learning. They could query a remote model via REST, but running the model in the browser on the user's machine, using the GPU if available, has key advantages.",
+    "what_it_means": "The browser is a deployment target in its own right. Modern browsers expose GPU compute (WebGL, WebGPU), so client-side inference can be fast enough for real applications.",
+    "why_it_matters": "It shows that the REST-vs-local choice also applies to web apps, not only native mobile ones.",
+    "technical_idea": "Beyond the book: TensorFlow.js uses WebGL/WebGPU or WebAssembly backends to run tensor operations on the client.",
+    "terminology": [{"term": "Desktop-based JavaScript application", "meaning": "A desktop app built with web technologies, e.g., using Electron."}],
+    "connections": ["p.209: the REST API alternative", "p.210: on-device deployment for native apps"]},
+   {"ref": "p211_e06", "excerpt": "You want to offload compute to the end user, which can",
+    "what_it_says": "First reason: offloading compute to the user can dramatically reduce server costs.",
+    "what_it_means": "With millions of users, each running inference locally, your servers no longer pay for the GPU time those predictions take.",
+    "why_it_matters": "Cost is a criterion that did not appear for device deployment on p.210, and it can decide the matter for consumer web products.",
+    "terminology": [{"term": "Offloading compute", "meaning": "Moving computation from your infrastructure to the client's hardware."}],
+    "connections": ["p.210: managed services handle scaling, but you still pay for it"]},
+   {"ref": "p211_e07", "excerpt": "The input data needs to stay on the end user’s computer or",
+    "what_it_says": "Second reason: the data must stay on the user's device. The web and desktop versions of the spam-detection chat app, written as a cross-platform JavaScript app, should use a locally run model.",
+    "what_it_means": "The privacy argument from p.210 carries over. End-to-end encrypted messages must be classified where they are decrypted, which for the web client is the browser.",
+    "why_it_matters": "It shows a single product (the chat app) using several deployment targets: TensorFlow Lite on phones and in-browser JavaScript on web and desktop.",
+    "terminology": [{"term": "Cross-platform app", "meaning": "One codebase (here JavaScript) that runs on several operating systems or environments."}],
+    "connections": ["p.210: spam model runs on the smartphone because of end-to-end encryption", "p.197: the encryption constraint discovered during problem framing"]},
+   {"ref": "p211_e08", "excerpt": "Your application has strict latency constraints: while a model running on the",
+    "what_it_says": "Third reason: strict latency. A local model is probably slower than one on a large server GPU, but it avoids the extra ~100 ms network round trip.",
+    "what_it_means": "Total latency is network time plus compute time. A slower local computation can still beat a fast remote one once the network is counted.",
+    "why_it_matters": "Latency is an end-to-end property, so look at the full path, not just the hardware.",
+    "technical_idea": "Latency budget: $t_{\\text{remote}} = t_{\\text{network}} + t_{\\text{server}}$ vs. $t_{\\text{local}} = t_{\\text{client}}$; local wins when $t_{\\text{client}} < t_{\\text{network}} + t_{\\text{server}}$ (our formalization).",
+    "terminology": [{"term": "Network round trip", "meaning": "The time for a request to reach the server and the answer to come back."}],
+    "connections": ["p.209: the full REST request/inference/answer cycle takes around 500 ms"]},
+   {"ref": "p211_e09", "excerpt": "You need your app to keep working without connectivity, after the model",
+    "what_it_says": "Fourth reason: the app should keep working offline once the model has been downloaded and cached.",
+    "what_it_means": "The model is downloaded once, like any other web asset, and after that inference needs no network.",
+    "why_it_matters": "Offline capability is impossible with a pure REST design (p.209).",
+    "terminology": [{"term": "Cached", "meaning": "Stored locally by the browser so it need not be downloaded again."}],
+    "connections": ["p.209: REST apps don't work in airplane mode"]},
+   {"ref": "p211_e10", "excerpt": "Of course, you should only go with this option if your model",
+    "what_it_says": "Caveats: the model must be small enough not to hog the user's CPU, GPU or RAM. Since the entire model is downloaded, nothing about it should need to stay confidential, and because a trained model usually reveals some information about its training data, a model trained on sensitive data should not be made public.",
+    "what_it_means": "Shipping weights to clients makes them public. Anyone can inspect, copy or attack the model. Beyond the book: research on membership inference and model inversion attacks shows that training examples can sometimes be detected or partially reconstructed from a model.",
+    "why_it_matters": "Client-side deployment moves privacy concerns from the inputs to the model itself. It protects user inputs but can expose the training data.",
+    "terminology": [
+      {"term": "Model confidentiality", "meaning": "Keeping a model's weights and architecture secret, e.g., as intellectual property."},
+      {"term": "Training-data leakage", "meaning": "The ability to infer facts about the training examples from a trained model."}
+    ],
+    "connections": ["p.210: similar size constraints for on-device deployment"]},
+   {"ref": "p211_e11", "excerpt": "To deploy a model in JavaScript, the TensorFlow ecosystem includes TensorFlow .js",
+    "what_it_says": "For JavaScript deployment there is TensorFlow.js and ONNX's native JavaScript runtime. TensorFlow.js implements almost all of the Keras API (its working name was WebKeras) and many lower-level TensorFlow APIs, and a saved Keras model can be imported into it for browser or Electron apps.",
+    "what_it_means": "The Keras API is close to platform-neutral. A model built in Python Keras has a close counterpart in JavaScript, which makes conversion straightforward.",
+    "why_it_matters": "It completes the toolchain: TensorFlow Serving/ONNX for servers, TensorFlow Lite/ONNX for devices, TensorFlow.js/ONNX JS for browsers.",
+    "terminology": [
+      {"term": "TensorFlow.js", "meaning": "A JavaScript library for running (and training) TensorFlow/Keras models in browsers and Node.js."},
+      {"term": "Electron", "meaning": "A framework for building desktop apps with web technologies (JavaScript, HTML, CSS)."},
+      {"term": "WebKeras", "meaning": "The original working name of TensorFlow.js, reflecting its Keras-like API."}
+    ],
+    "connections": ["p.209: export() to TensorFlow/ONNX formats", "p.210: TensorFlow Lite and ONNX runtime on mobile", "p.115: Keras backends and TensorFlow's inference tooling"]},
+   {"ref": "p211_e13", "excerpt": "Optimizing your model for inference is especially important when deploying in an",
+    "what_it_says": "Inference optimization is especially important under strict power and memory constraints (phones, embedded devices) or low-latency requirements. Always optimize before importing into TensorFlow.js or exporting to TensorFlow Lite.",
+    "what_it_means": "The optimization happens in Keras on the trained model, and only then is the result converted for the target runtime.",
+    "why_it_matters": "This is the inference-only optimization room promised on p.208: once training is over, you can trade a little accuracy for large size and speed gains.",
+    "terminology": [{"term": "Inference model optimization", "meaning": "Transforming a trained model to reduce its size, memory use or latency for prediction-only use."}],
+    "connections": ["p.208: inference-only models leave room for optimizations", "p.212: weight quantization with model.quantize(\"int8\")"]},
+   {"ref": "p211_e15", "excerpt": "Weight pruning—Not every coefficient in a weight tensor contributes equally to",
+    "what_it_says": "Weight pruning: coefficients in a weight tensor contribute unequally to predictions, so you can greatly reduce the number of parameters by keeping only the most significant ones. (The sentence continues on p.212: this reduces memory and compute footprint at a small cost in performance, and the amount of pruning controls the size/accuracy tradeoff.)",
+    "what_it_means": "Many weights are close to zero and barely affect the outputs. Removing them, typically by setting them to zero and storing the result sparsely, shrinks the model with little loss.",
+    "why_it_matters": "It is one of the two standard tools for making models fit device constraints.",
+    "technical_idea": "Beyond the book: the most common criterion is magnitude pruning (drop weights with smallest $|w|$), often followed by brief fine-tuning to recover accuracy.",
+    "terminology": [{"term": "Weight pruning", "meaning": "Removing the least significant weights of a model to reduce its parameter count."}],
+    "connections": ["p.212: continuation of the pruning bullet and the weight quantization technique"]}
+ ],
+ "concepts": [
+   {"id": "browser_deployment", "name": "In-browser model deployment", "definition": "Running a model directly in the user's browser or desktop JavaScript app instead of on a server.", "intuition": "The website ships the model along with its code, and the user's machine does the thinking.", "technical": "Via TensorFlow.js (near-complete Keras API) or ONNX's JavaScript runtime; can use the user's GPU.", "significance": "Cuts server costs, keeps data local, removes ~100 ms network latency, works offline after caching.", "example": "The web/desktop version of the encrypted chat app classifying spam locally.", "misconception": "That the browser model must be faster than the server. It only needs to beat server time plus the network round trip.", "related": ["on_device_deployment", "rest_api_deployment", "tensorflow_js"], "source": "book"},
+   {"id": "tensorflow_js", "name": "TensorFlow.js", "definition": "TensorFlow's JavaScript library for running models in browsers and Electron apps.", "intuition": "Keras, rewritten for JavaScript.", "technical": "Implements almost all of the Keras API and many lower-level TensorFlow APIs; saved Keras models can be imported. Originally called WebKeras.", "significance": "The main route from Keras to the browser.", "example": "Importing a saved Keras model and querying it in a browser app.", "misconception": "That you must rebuild your model by hand in JavaScript. You import the saved Keras model.", "related": ["browser_deployment", "tensorflow_lite", "onnx"], "source": "book"},
+   {"id": "training_data_leakage", "name": "Training-data leakage from models", "definition": "Recovering some information about the training data from a trained model.", "intuition": "A model is a compressed summary of its data, and summaries can give details away.", "technical": "The book warns that this is usually possible; beyond the book, known attacks include membership inference and model inversion.", "significance": "Don't publish (or ship to clients) models trained on sensitive data.", "example": "A model trained on private medical records deployed in a public web page could reveal facts about patients.", "misconception": "That releasing only weights, not data, is automatically safe.", "related": ["browser_deployment"], "source": "book"},
+   {"id": "inference_optimization", "name": "Inference model optimization", "definition": "Shrinking or speeding up a trained model for prediction-only use.", "intuition": "Packing light for a trip: keep only what you need at the destination.", "technical": "Done before conversion to TensorFlow.js or TensorFlow Lite; techniques are weight pruning and weight quantization (p.212).", "significance": "Essential for power-, memory- or latency-constrained deployment.", "example": "Pruning a model, then quantizing it to int8 before exporting to TF Lite.", "misconception": "That optimization happens in the target runtime. The book says to do it before importing/exporting.", "related": ["weight_pruning", "weight_quantization", "on_device_deployment"], "source": "book"},
+   {"id": "weight_pruning", "name": "Weight pruning", "definition": "Keeping only the most significant coefficients in weight tensors to lower parameter count.", "intuition": "Trimming the branches of a tree that bear no fruit.", "technical": "Reduces memory and compute footprint at a small accuracy cost; the pruning amount controls the tradeoff (continued on p.212).", "significance": "Lets larger models fit device constraints.", "example": "Zeroing out the 80% of weights with smallest magnitude in each Dense layer (illustrative).", "misconception": "That all weights matter equally.", "related": ["inference_optimization", "weight_quantization"], "source": "book"}
+ ],
+ "math": [],
+ "code": [],
+ "deeper": [
+   {"title": "Latency arithmetic: when slower hardware wins", "kind": "numerical", "body": "Illustrative numbers (not from the book): a server GPU computes a prediction in 10 ms, the user's laptop in 40 ms. Remote: 100 ms round trip (the book's figure) + 10 ms = **110 ms**. Local: **40 ms**. The local model is 4× slower at computing but almost 3× faster end to end.", "source": "ai_explanation"},
+   {"title": "One product, three deployment targets", "kind": "breakdown", "body": "The spam-detection chat app shows how one model can be shipped several ways: **TensorFlow Lite** (or the ONNX runtime) inside the native iOS/Android apps (p.210), and **TensorFlow.js** (or ONNX JS) inside the web and Electron desktop apps (this page). End-to-end encryption rules out REST entirely, so every client must carry its own copy of the model. (Our synthesis of pp. 210–211.)", "source": "inference"},
+   {"title": "Magnitude pruning, concretely", "kind": "step_by_step", "body": "Beyond the book: (1) train the model; (2) for each weight tensor, rank coefficients by $|w|$; (3) set the smallest fraction $s$ (the sparsity, e.g. 50–90%) to zero; (4) fine-tune briefly so the remaining weights compensate; (5) store the tensor sparsely or compress it. Gradually raising $s$ during fine-tuning often works better than pruning all at once.", "source": "ai_explanation"},
+   {"title": "Analogy: handing out the recipe", "kind": "analogy", "body": "Running the model in the browser is like printing your secret recipe on the menu so customers can cook at home. It saves your kitchen work, but the recipe is no longer secret, and a sharp reader might work out which suppliers (training data) you used.", "source": "analogy"}
+ ],
+ "visualizations": [
+   {"id": "v1", "type": "mermaid", "title": "From Keras model to browser app", "why": "The page prescribes the order: optimize first, then import into TensorFlow.js (or use ONNX JS) for browser or Electron apps.", "mermaid": "flowchart LR\n  A[Trained Keras model] --> B[Inference optimization<br/>weight pruning, quantization p.212]\n  B --> C[Saved Keras model]\n  C --> D[TensorFlow.js import]\n  C --> E[ONNX export]\n  E --> F[ONNX JavaScript runtime]\n  D --> G[Browser app<br/>uses user's GPU if available]\n  D --> H[Electron desktop app]\n  F --> G\n  B --> I[TensorFlow Lite export p.210]"}
+ ],
+ "misconceptions": [
+   {"claim": "A model running in the browser has lower latency only if the user's hardware is faster than the server.", "correction": "The book notes that the local model is likely slower to compute but avoids the ~100 ms network round trip, which can make it faster end to end."},
+   {"claim": "Shipping the model to the client is safe as long as the training data isn't shipped.", "correction": "Given a trained model it is usually possible to recover some information about the training data, so don't make a model public if it was trained on sensitive data."},
+   {"claim": "TensorFlow.js only supports a tiny subset of Keras.", "correction": "The book says TensorFlow.js implements almost all of the Keras API plus many lower-level TensorFlow APIs."},
+   {"claim": "You should convert to TensorFlow Lite first and then optimize.", "correction": "The book says to always optimize the model before importing it into TensorFlow.js or exporting it to TensorFlow Lite."}
+ ],
+ "connections": {
+   "earlier": [{"page": 209, "note": "REST API deployment and its round-trip latency."}, {"page": 210, "note": "On-device deployment conditions and TensorFlow Lite/ONNX runtime."}, {"page": 208, "note": "Inference-only models leave room for optimization."}, {"page": 197, "note": "The end-to-end encryption constraint of the spam project."}],
+   "later": [{"page": 212, "note": "End of the pruning bullet; weight quantization with model.quantize(\"int8\"); monitoring in the wild."}, {"page": 213, "note": "Chapter summary of deployment."}],
+   "prerequisites": [{"page": 115, "note": "Keras and its backend ecosystems."}, {"page": 126, "note": "Using a model for inference after training."}],
+   "related_math": [],
+   "related_code": [{"page": 209, "note": "export() snippets for TF Serving and ONNX."}],
+   "related_figures": []
+ },
+ "takeaways": [
+   "Run a model in the browser to offload compute, keep data local, avoid ~100 ms network latency, or work offline after caching.",
+   "Only do this if the model won't hog the user's CPU/GPU/RAM and nothing about it needs to stay confidential.",
+   "Trained models can leak information about their training data, so don't publish models trained on sensitive data.",
+   "TensorFlow.js (formerly WebKeras) implements almost all of Keras; ONNX also has a native JavaScript runtime.",
+   "Optimize models for inference before converting to TensorFlow.js or TensorFlow Lite.",
+   "Weight pruning keeps only the most significant coefficients to shrink the model (continued on p.212)."
+ ],
+ "questions": [
+   {"id": "q1", "type": "mcq", "question": "Which of the following is NOT listed on the page as a reason to run a model in the browser?", "options": ["Reducing server costs by offloading compute", "Keeping input data on the user's device", "Getting higher accuracy than a server model", "Working without connectivity after the model is cached"], "answer": "Getting higher accuracy than a server model", "explanation": "The page lists cost, data locality, latency and offline use. Accuracy is not a reason: local models are typically smaller and slower than server models.", "page_refs": [211]},
+   {"id": "q2", "type": "short", "question": "What was the original working name of TensorFlow.js, and what does it suggest about its API?", "options": [], "answer": "WebKeras. It implements almost all of the Keras API.", "explanation": "Stated in the JavaScript-deployment paragraph.", "page_refs": [211]},
+   {"id": "q3", "type": "conceptual", "question": "Why should you avoid deploying a model trained on sensitive data in the browser even if user inputs never leave the device?", "options": [], "answer": "The whole model is downloaded to the user's device and so becomes public, and from a trained model it is usually possible to recover some information about its training data.", "explanation": "The caveat paragraph makes both points.", "page_refs": [211]},
+   {"id": "q4", "type": "conceptual", "question": "A browser model takes 40 ms on a laptop; the server model takes 10 ms on a GPU. Using the book's network figure, which is faster end to end?", "options": [], "answer": "The browser model: 40 ms vs. about 100 + 10 = 110 ms for the server path.", "explanation": "The book cites an extra ~100 ms network round trip for remote inference. The compute times are illustrative.", "page_refs": [211]},
+   {"id": "q5", "type": "mcq", "question": "According to the book, when should you optimize a model for inference?", "options": ["After importing it into TensorFlow.js", "Before importing it into TensorFlow.js or exporting it to TensorFlow Lite", "Only when deploying via REST", "During the first epoch of training"], "answer": "Before importing it into TensorFlow.js or exporting it to TensorFlow Lite", "explanation": "The book says: 'You should always seek to optimize your model before importing it into TensorFlow.js or exporting it to TensorFlow Lite.' Optimization is not REST-specific, and it applies to a trained model, not to the first epoch.", "page_refs": [211]},
+   {"id": "q6", "type": "short", "question": "What is the key observation that makes weight pruning possible?", "options": [], "answer": "Not every coefficient in a weight tensor contributes equally to the predictions, so the less significant ones can be removed.", "explanation": "This is the opening of the pruning bullet.", "page_refs": [211, 212]},
+   {"id": "q7", "type": "self", "question": "Can you explain why the chat app from the spam project ends up using both TensorFlow Lite and TensorFlow.js?", "options": [], "answer": "End-to-end encryption forces local inference on every client. Native phone apps use TensorFlow Lite (p.210), while the JavaScript web and desktop versions use TensorFlow.js or ONNX JS (p.211).", "explanation": "This connects pp. 210 and 211.", "page_refs": [210, 211]}
+ ]
+}

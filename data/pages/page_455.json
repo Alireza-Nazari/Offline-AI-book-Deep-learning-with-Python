@@ -1,0 +1,423 @@
+{
+ "page_id": "page_455",
+ "pdf_page": 455,
+ "printed_page": "431",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T11:20:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Listing 15.9 strips string.punctuation plus the inverted question mark ¿, but not the inverted exclamation mark ¡, which is also not in string.punctuation. Spanish exclamations such as '¡Hola!' would therefore become '¡hola' tokens. The text's own point ('Punctuation is different from language to language!') suggests ¡ should be added to strip_chars as well."
+  ],
+  "extraction_quality": "Clean. The extraction splits 'Text Vectorization' across a line break in e04 (printed as TextVectorization with a hyphenated break). The final body element (e08) continues on p.456, read for context. Code checked against the image (blank lines in the image are dropped in the extracted code)."
+ },
+ "overview": {
+  "title": "Custom standardization and tokenizers for translation",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.2 Sequence-to-sequence learning",
+  "subsection": "15.2.1 English-to-Spanish translation",
+  "main_topic": "Why the Spanish tokenizer needs a custom standardization (keep [ and ], strip ¿), Listing 15.9 building English and Spanish TextVectorization layers (15,000-token vocabularies, length 20 and 21) and adapting them on the training pairs, and the planned (inputs, target, sample_weights) dataset format",
+  "central_idea": "Each language gets its own tokenizer. The Spanish one uses a custom standardization that lowercases and removes punctuation except the brackets of [start]/[end], and also removes ¿; its output length is 21 so it can be split into a 20-token decoder input and a 20-token target shifted by one.",
+  "importance": "Preprocessing choices here determine what the decoder can read and generate; the off-by-one length and the sample weights set up teacher-forced training for both the RNN and Transformer translators.",
+  "learning_objectives": [
+   "Explain why [ and ] must be excluded from the stripped characters",
+   "Explain why ¿ must be added for Spanish",
+   "Read the custom_standardization function and its regex",
+   "Explain why the Spanish output_sequence_length is sequence_length + 1",
+   "Describe the (inputs, target, sample_weights) structure and the role of sample_weights"
+  ],
+  "prerequisites": [
+   "The text_pairs and train_pairs from p.454",
+   "TextVectorization: standardize, split, index, adapt (chapter 14)",
+   "Language-model offset-by-one labels (p.447)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page continues the list of reasons the tokenizers must be customized (introduced at the bottom of p.454):\n\n- **Keep the brackets.** By default `TextVectorization` strips `[` and `]`, which would turn `\"[start]\"` into `\"start\"` and make it indistinguishable from the ordinary word *start*.\n- **Punctuation differs by language.** If punctuation is stripped for Spanish, the inverted question mark **¿** must be stripped too, since it isn't in Python's `string.punctuation`.\n\nFor a non-toy translator one would keep punctuation as separate tokens so the model can generate correctly punctuated sentences; here, for simplicity, all punctuation is removed.\n\n**Listing 15.9**:\n\n- `strip_chars = string.punctuation + \"¿\"`, then `[` and `]` are removed from it.\n- `custom_standardization` lowercases with `tf.strings.lower` and deletes every character in `strip_chars` with `tf.strings.regex_replace(lowercase, f\"[{re.escape(strip_chars)}]\", \"\")`.\n- `vocab_size = 15000`, `sequence_length = 20`.\n- `english_tokenizer`: `TextVectorization(max_tokens=vocab_size, output_mode=\"int\", output_sequence_length=sequence_length)` with the default standardization.\n- `spanish_tokenizer`: the same but with `output_sequence_length=sequence_length + 1` and `standardize=custom_standardization`.\n- Both are `adapt`ed on the **training** texts only (`train_english_texts`, `train_spanish_texts`).\n\nFinally the authors describe the `tf.data` pipeline to come (Listing 15.10, p.456): it yields `(inputs, target, sample_weights)`, where `inputs` is a dict with keys `\"english\"` and `\"spanish\"` (tokenized sentences), `target` is the Spanish sentence offset by one step ahead, and `sample_weights` tells Keras which label positions count in the loss and metrics, so that zero-padded positions are ignored (p.456).",
+ "paragraphs": [
+  {
+   "ref": "p455_e03",
+   "excerpt": "We need to preserve the `\"[start]\"` and `\"[end]\"` tokens that we’ve inserted.",
+   "what_it_says": "The [start] and [end] markers must survive standardization. By default [ and ] would be stripped, but we keep them to distinguish the word \"start\" from the token \"[start]\".",
+   "what_it_means": "The default standardization, lower_and_strip_punctuation, would map \"[start]\" to \"start\". A sentence like \"[start] start the car [end]\" would then contain the same token for the marker and the real word, and the decoder could not tell the beginning of a sentence from a word. Keeping the brackets gives the markers their own vocabulary entries.",
+   "why_it_matters": "The decoder's seed and stop signals must be unambiguous, or generation could stop on the word 'end' or be seeded incorrectly.",
+   "terminology": [
+    {
+     "term": "Standardization",
+     "meaning": "The normalization step of tokenization, here lowercasing and removing punctuation."
+    }
+   ],
+   "connections": [
+    "p.454: the markers were added to every Spanish sentence",
+    "p.453: Figure 15.1, seed and stop tokens"
+   ]
+  },
+  {
+   "ref": "p455_e04",
+   "excerpt": "Punctuation is different from language to language!",
+   "what_it_says": "If punctuation is stripped in the Spanish TextVectorization layer, the character ¿ must be stripped as well.",
+   "what_it_means": "Python's `string.punctuation` contains only ASCII punctuation; Spanish uses ¿ at the start of questions (as in the p.454 example \"¿Quién está...\"). Without adding it, \"¿quién\" would be a different token from \"quién\".",
+   "why_it_matters": "Unstripped language-specific punctuation fragments the vocabulary into duplicate variants of the same word.",
+   "technical_idea": "Beyond the book: the inverted exclamation mark ¡ has the same issue and is not added in Listing 15.9 (see review flag).",
+   "terminology": [
+    {
+     "term": "string.punctuation",
+     "meaning": "Python constant with the 32 ASCII punctuation characters !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~."
+    }
+   ],
+   "connections": [
+    "p.454: the sample pair containing ¿"
+   ]
+  },
+  {
+   "ref": "p455_e05",
+   "excerpt": "Note that for a non-toy translation model, we would treat punctuation characters as",
+   "what_it_says": "A real translation model would keep punctuation as separate tokens to generate correctly punctuated sentences; here all punctuation is removed for simplicity.",
+   "what_it_means": "Stripping punctuation shrinks the vocabulary and simplifies the task, at the cost of outputs without punctuation (e.g. 'quién está en esta habitación' instead of '¿Quién está en esta habitación?').",
+   "why_it_matters": "It is a deliberate trade-off; evaluating outputs should keep it in mind.",
+   "terminology": [],
+   "connections": [
+    "p.480: subword tokenizers of pretrained models handle punctuation and any character"
+   ]
+  },
+  {
+   "ref": "p455_e08",
+   "excerpt": "Finally, we can turn our data into a `tf.data` pipeline.",
+   "what_it_says": "The data will become a tf.data pipeline returning (inputs, target, sample_weights): inputs is a dict with \"english\" and \"spanish\" tokenized sentences, target is the Spanish sentence offset by one step ahead, and sample_weights (continuing on p.456) tells Keras which labels to use when computing loss and metrics.",
+   "what_it_means": "From the 21 Spanish IDs, the decoder input is IDs 0-19 and the target is IDs 1-20. The encoder gets the 20 English IDs. On p.456 the authors explain that padded (zero) label positions get weight 0 so they don't count.",
+   "why_it_matters": "This is teacher forcing: the decoder is trained to predict token t+1 given the true tokens up to t, exactly the language-model setup of 15.1 plus the source sentence.",
+   "terminology": [
+    {
+     "term": "sample_weights",
+     "meaning": "Per-label weights passed to Keras; a weight of 0 removes that position from the loss and metrics."
+    },
+    {
+     "term": "Teacher forcing",
+     "meaning": "Training a decoder on the ground-truth previous tokens rather than its own predictions (term not used on this page)."
+    }
+   ],
+   "connections": [
+    "p.456: Listing 15.10 implements this",
+    "p.447: labels offset by one in the Shakespeare model"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "custom_standardization",
+   "name": "Custom standardization function",
+   "definition": "A callable passed to TextVectorization(standardize=...) that normalizes raw strings before splitting.",
+   "intuition": "Your own cleaning rules instead of Keras's defaults.",
+   "technical": "Takes a string tensor; here applies tf.strings.lower and a regex character class deleting the characters in strip_chars.",
+   "significance": "Lets the Spanish tokenizer keep [start]/[end] and remove ¿.",
+   "example": "'[start] ¿Quién está aquí? [end]' -> '[start] quién está aquí [end]'.",
+   "misconception": "It doesn't split or index; those remain TextVectorization's job.",
+   "related": [
+    "tokenization",
+    "special_tokens"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "tokenization",
+   "name": "Per-language vocabularies",
+   "definition": "Separate TextVectorization layers, each adapted on one language's training text.",
+   "intuition": "Two dictionaries, one per language.",
+   "technical": "Each has at most 15,000 entries (including padding and [UNK]); adapt() counts tokens and keeps the most frequent.",
+   "significance": "The decoder's output softmax ranges over the Spanish vocabulary only.",
+   "example": "english_tokenizer.adapt(train_english_texts).",
+   "misconception": "Adapting on validation/test text would leak information.",
+   "related": [
+    "custom_standardization"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "sample_weights",
+   "name": "Sample weights for padded targets",
+   "definition": "Per-position weights so padded label positions are ignored in loss and metrics.",
+   "intuition": "Don't grade the blank lines.",
+   "technical": "Weight 1 for real tokens, 0 for padding ID 0 (p.456).",
+   "significance": "Prevents the model from being rewarded for predicting padding.",
+   "example": "A 6-token target padded to 20 positions contributes only 6 positions to the loss.",
+   "misconception": "sample_weights here are per label position, not per training example.",
+   "related": [
+    "cross_entropy",
+    "language_model"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "15.9",
+   "title": "Learning token vocabularies for English and Spanish text",
+   "original_code": "import string\nimport re\nstrip_chars = string.punctuation + \"¿\"\nstrip_chars = strip_chars.replace(\"[\", \"\")\nstrip_chars = strip_chars.replace(\"]\", \"\")\ndef custom_standardization(input_string):\n    lowercase = tf.strings.lower(input_string)\n    return tf.strings.regex_replace(\n        lowercase, f\"[{re.escape(strip_chars)}]\", \"\"\n    )\nvocab_size = 15000\nsequence_length = 20\nenglish_tokenizer = layers.TextVectorization(\n    max_tokens=vocab_size,\n    output_mode=\"int\",\n    output_sequence_length=sequence_length,\n)\nspanish_tokenizer = layers.TextVectorization(\n    max_tokens=vocab_size,\n    output_mode=\"int\",\n    output_sequence_length=sequence_length + 1,\n    standardize=custom_standardization,\n)\ntrain_english_texts = [pair[0] for pair in train_pairs]\ntrain_spanish_texts = [pair[1] for pair in train_pairs]\nenglish_tokenizer.adapt(train_english_texts)\nspanish_tokenizer.adapt(train_spanish_texts)",
+   "language": "python",
+   "what_it_does": "Defines the set of characters to strip, a custom standardization function, two TextVectorization layers, and adapts them on the training sentences.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "string for the punctuation constant, re for escaping."
+    },
+    {
+     "lines": "3-5",
+     "explanation": "ASCII punctuation plus ¿, minus [ and ] (31 characters)."
+    },
+    {
+     "lines": "6-10",
+     "explanation": "Lowercase, then delete any character in the class [<escaped strip_chars>]. re.escape protects characters such as ^, ] and \\ that are special inside a regex class."
+    },
+    {
+     "lines": "11-12",
+     "explanation": "Vocabulary of 15,000 tokens; sentences padded/truncated to 20 tokens."
+    },
+    {
+     "lines": "13-17",
+     "explanation": "English tokenizer: default standardization (lowercase and strip punctuation), 20 integer IDs."
+    },
+    {
+     "lines": "18-23",
+     "explanation": "Spanish tokenizer: 21 IDs (one extra for the offset) and the custom standardization."
+    },
+    {
+     "lines": "24-27",
+     "explanation": "Extract training texts per language and learn each vocabulary with adapt()."
+    }
+   ],
+   "inputs_outputs": "Input: train_pairs. Output: two adapted tokenizers mapping strings to int tensors of length 20 (English) and 21 (Spanish).",
+   "algorithm": "Standardize -> whitespace split -> frequency-ranked vocabulary (top 15,000) -> integer indexing with padding/truncation.",
+   "theory_link": "The +1 length enables input = tokens[:-1], target = tokens[1:] for the decoder (p.456).",
+   "parameters": [
+    {
+     "name": "vocab_size",
+     "role": "15,000 maximum vocabulary size per language."
+    },
+    {
+     "name": "sequence_length",
+     "role": "20 tokens; reassigns the name used for 100 in section 15.1."
+    },
+    {
+     "name": "standardize",
+     "role": "custom_standardization for Spanish; default for English."
+    },
+    {
+     "name": "output_sequence_length",
+     "role": "Pads with 0 / truncates to a fixed length."
+    }
+   ],
+   "pitfalls": [
+    "¡ (inverted exclamation mark) is not stripped.",
+    "Sentences longer than 20 (English) or 21 (Spanish, including markers) tokens are truncated; a truncated Spanish target loses its [end] token.",
+    "sequence_length shadows the earlier value (100) from the Shakespeare example if run in the same notebook."
+   ],
+   "illustrative_code": "# AI-written check (not in the book)\nprint(custom_standardization(\"[start] ¿Quién está aquí? [end]\").numpy().decode())\n# -> [start] quién está aquí [end]\nprint(spanish_tokenizer([\"[start] hola [end]\"]).shape)  # (1, 21)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "What the regex looks like",
+   "kind": "breakdown",
+   "body": "`strip_chars` holds the 30 ASCII punctuation characters other than `[` and `]`, plus `¿`. `re.escape` backslash-escapes the characters that are special in regular expressions (such as `\\`, `^`, `-`), so the f-string builds a valid character class `[...]` matching any one of them. `tf.strings.regex_replace` (RE2 syntax) replaces every match with the empty string. Because `[` and `]` are not in the class, `[start]` and `[end]` survive standardization.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why 21 Spanish tokens",
+   "kind": "step_by_step",
+   "body": "Example: '[start] quién está aquí [end]' -> IDs `[2, 51, 9, 88, 3, 0, ..., 0]` (21 long; IDs invented for illustration). Decoder input = first 20: `[2, 51, 9, 88, 3, 0, ...]`; target = last 20: `[51, 9, 88, 3, 0, ...]`. At each position the target is the next token of the input, the same offset as the Shakespeare model.",
+   "source": "inference"
+  },
+  {
+   "title": "Analogy: two dictionaries and a style guide",
+   "kind": "analogy",
+   "body": "The two tokenizers are two dictionaries; custom_standardization is a Spanish style guide that says 'ignore ¿, but never erase the bracketed stage directions [start] and [end]'.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Tokenizing a Spanish target",
+   "why": "Shows how a standardized Spanish sentence with its markers becomes a sequence of integer IDs, as Listing 15.9's spanish_tokenizer does (words as tokens after whitespace splitting).",
+   "widget": "token_sequence",
+   "params": {
+    "text": "[start] quién está en esta habitación [end]",
+    "mode": "word"
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "Planned dataset structure",
+   "why": "The last paragraph describes the (inputs, target, sample_weights) tuple built in Listing 15.10.",
+   "mermaid": "flowchart LR\n  E[English text] -->|english_tokenizer, 20 ids| I1[inputs: english]\n  S[Spanish text] -->|spanish_tokenizer, 21 ids| T21[21 ids]\n  T21 -->|first 20| I2[inputs: spanish]\n  T21 -->|last 20| Y[target]\n  Y -->|nonzero = 1, padding = 0| W[sample_weights]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Default TextVectorization keeps [start] intact.",
+   "correction": "Its default standardization strips [ and ], producing 'start'."
+  },
+  {
+   "claim": "string.punctuation covers Spanish punctuation.",
+   "correction": "It is ASCII only; ¿ (and ¡) are not included."
+  },
+  {
+   "claim": "The Spanish sequence is 21 long because Spanish sentences are longer.",
+   "correction": "The extra position is for the one-step offset between decoder input and target."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 454,
+    "note": "text_pairs, the [start]/[end] markers and train_pairs."
+   },
+   {
+    "page": 448,
+    "note": "TextVectorization with standardize=None for characters; here a custom function."
+   },
+   {
+    "page": 447,
+    "note": "Offset-by-one labels for language modeling."
+   }
+  ],
+  "later": [
+   {
+    "page": 456,
+    "note": "Listing 15.10: tokenizing and building the (inputs, target, sample_weights) dataset."
+   },
+   {
+    "page": 480,
+    "note": "RoBERTa's subword tokenizer as the non-toy alternative."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 423,
+    "note": "TextVectorization and adapt()."
+   },
+   {
+    "page": 408,
+    "note": "Standardization, splitting, indexing."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 454,
+    "note": "Data loading and splitting."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 453,
+    "note": "Figure 15.1."
+   }
+  ]
+ },
+ "takeaways": [
+  "Keep [ and ] so [start]/[end] stay distinct tokens.",
+  "Strip language-specific punctuation such as ¿ for Spanish.",
+  "Real translators keep punctuation as tokens; this toy strips it.",
+  "Separate 15,000-token vocabularies; English length 20, Spanish 21 for the offset.",
+  "Adapt tokenizers on training data only.",
+  "The dataset yields (inputs dict, shifted target, sample_weights masking padding)."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why are [ and ] removed from strip_chars?",
+   "options": [
+    "They are not punctuation",
+    "So [start] and [end] remain distinct from the words start and end",
+    "Because re.escape cannot handle them",
+    "Because Spanish does not use brackets"
+   ],
+   "answer": "So [start] and [end] remain distinct from the words start and end",
+   "explanation": "Stated on the page. They are in string.punctuation, re.escape handles them fine, and Spanish usage of brackets is irrelevant.",
+   "page_refs": [
+    455
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Why is the Spanish output_sequence_length sequence_length + 1?",
+   "options": [],
+   "answer": "So the 21 tokens can be split into a 20-token decoder input and a 20-token target offset by one step.",
+   "explanation": "Target is 'the Spanish sentence offset by one step ahead'.",
+   "page_refs": [
+    455,
+    456
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "What are sample_weights used for in this pipeline?",
+   "options": [],
+   "answer": "To tell Keras which label positions count in loss and metrics, ignoring zero-padded positions.",
+   "explanation": "Targets have different lengths and are padded with zeros (p.456).",
+   "page_refs": [
+    455,
+    456
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "Which standardization does the English tokenizer use?",
+   "options": [
+    "custom_standardization",
+    "None",
+    "The default (lowercase and strip punctuation)",
+    "Character splitting"
+   ],
+   "answer": "The default (lowercase and strip punctuation)",
+   "explanation": "No standardize argument is passed, so Keras's default applies. custom_standardization is only for Spanish; None and character splitting were used for Shakespeare (p.448).",
+   "page_refs": [
+    455
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "Why adapt the tokenizers on train_english_texts / train_spanish_texts rather than all pairs?",
+   "options": [],
+   "answer": "To avoid leaking validation/test information into the vocabulary.",
+   "explanation": "Standard practice: preprocessing state is learned from training data only.",
+   "page_refs": [
+    455
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "What would a production translator do differently with punctuation, and why?",
+   "options": [],
+   "answer": "Keep punctuation characters as separate tokens so it can generate correctly punctuated output.",
+   "explanation": "Stated in the note after the bullets.",
+   "page_refs": [
+    455
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you predict what custom_standardization returns for '[start] ¡Hola! [end]'?",
+   "options": [],
+   "answer": "'[start] ¡hola [end]': the ! is removed but ¡ is not in strip_chars.",
+   "explanation": "Tests understanding of string.punctuation and the listing's limitation.",
+   "page_refs": [
+    455
+   ]
+  }
+ ]
+}

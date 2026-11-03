@@ -1,0 +1,311 @@
+{
+ "page_id": "page_426",
+ "pdf_page": 426,
+ "printed_page": "402",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:46:07Z",
+  "confidence": "high",
+  "review_flags": [
+   "Minor typo in the book: the sidebar says \"tf.data works by running text preprocessing in parallel multiple CPU cores\"; a preposition is missing (\"in parallel on/across multiple CPU cores\"). The notes quote the text as printed and explain the intended meaning."
+  ],
+  "extraction_quality": "Clean. The sidebar \"Preprocessing text efficiently\" was split by the extractor into three elements: p426_e08 (sidebar: the first three printed paragraphs plus the start of the fourth), p426_e09 (mislabelled as body; it is a fragment of the sidebar's fourth paragraph) and p426_e10 (sidebar: the end of the fourth paragraph plus the fifth paragraph). The notes follow the printed paragraphs."
+ },
+ "overview": {
+  "title": "Test accuracy of the bag-of-words model, and efficient text preprocessing",
+  "chapter": "14 Text classification",
+  "section": "14.4 Set models",
+  "subsection": "14.4.1 Training a bag-of-words model",
+  "main_topic": "Evaluating the bag-of-words (unigram) linear classifier on the IMDb test set, justifying word-level tokenization, and a sidebar on keeping CPU text preprocessing from starving the GPU",
+  "central_idea": "A 20,001-parameter linear model over multi-hot word vectors reaches about 88% test accuracy on IMDb sentiment. Because text must be tokenized on the CPU, the preprocessing pipeline only needs to be \"fast enough\" to keep the accelerator busy, which is what tf.data's parallel map achieves, on any Keras backend.",
+  "importance": "The 88% figure is the baseline that every later model in the chapter (bigrams on p.427-428, the LSTM on p.430-432, embeddings on p.433-444) is compared against. The sidebar explains the input-pipeline design used throughout the chapter.",
+  "learning_objectives": [
+   "Read the output of model.evaluate() and interpret the 0.88388 test accuracy",
+   "Explain why word tokenization (not character or subword) is the sensible choice for this bag-of-words model",
+   "Explain why text preprocessing must run on the CPU and how this can bottleneck a GPU or TPU",
+   "Compare precomputing tokenized inputs with tokenizing on the fly",
+   "Describe how tf.data's parallel map keeps accelerators fed and why it works with JAX, PyTorch and TensorFlow backends"
+  ],
+  "prerequisites": [
+   "The TextVectorization multi-hot pipeline of listing 14.12 (p.423)",
+   "The linear classifier of listing 14.13 and its training in listing 14.14 (p.424-425)",
+   "Character, word and subword tokenization (p.411-418)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes subsection 14.4.1. **Listing 14.15** evaluates the bag-of-words model trained on p.424-425 with `model.evaluate(bag_of_words_test_ds)`; the printed test accuracy is **0.88388**. The authors stress that this 88% accuracy comes from a training job light enough to run efficiently on a single CPU: the model is one `Dense(1, activation=\"sigmoid\")` layer over a 20,000-dimensional multi-hot vector (20,001 parameters, p.424).\n\nThey then justify **word tokenization**. A \"bag\" of characters would say almost nothing about a review's content, because nearly every review uses nearly every character. Subword tokenization with a big enough vocabulary would also work, but there is little need for it here: the model is tiny, and a word vocabulary is quick to learn and makes each weight correspond to an actual English word. That makes the model easy to interpret.\n\nThe sidebar **\"Preprocessing text efficiently\"** makes five points:\n\n1. Preprocessing speed matters because accelerators are expensive, and you don't want a GPU sitting idle waiting for input.\n2. Text preprocessing must run on the CPU, because GPUs only handle numeric input. You *can* precompute token IDs, since tokenization doesn't depend on model weights, but tokenizing on the fly allows faster experimentation and is unavoidable at inference time on unseen inputs.\n3. The goal is to be **\"fast enough\"**: if the GPU always has a fresh batch waiting, the GPU is the bottleneck and faster tokenization gains nothing.\n4. `tf.data` is built to keep the CPU from bottlenecking the accelerator. In this chapter, `keras.utils.text_dataset_from_directory()` produces a `tf.data.Dataset`, and `map()` applies the `TextVectorization` layer, running in parallel over several CPU cores.\n5. The code is still multi-backend. The chapter's outputs were generated with JAX, and Keras converts the `tf.data` tensors to whatever format the backend needs.",
+ "paragraphs": [
+  {
+   "ref": "p426_e05",
+   "excerpt": "We can correctly predict the sentiment of a review 88% of the time",
+   "what_it_says": "The bag-of-words model classifies the sentiment of test reviews correctly 88% of the time, and training it is light enough to run efficiently on one CPU.",
+   "what_it_means": "The 0.88388 from listing 14.15 is rounded to 88%. That result needs no GPU: the forward pass is one dot product between a 20,000-dimensional multi-hot vector and a weight vector, plus a bias and a sigmoid.",
+   "why_it_matters": "It sets a strong, cheap baseline. Any more complex model later in the chapter has to beat about 88% to justify its extra cost. Starting with the simplest model that could work is a recurring principle of the book.",
+   "technical_idea": "This model is logistic regression on binary word-presence features: $p(\\text{positive}) = \\sigma(\\mathbf{w}^\\top \\mathbf{x} + b)$ with $\\mathbf{x} \\in \\{0,1\\}^{20000}$.",
+   "terminology": [
+    {"term": "test accuracy", "meaning": "Fraction of held-out test reviews whose predicted label (sigmoid output thresholded at 0.5) matches the true label."}
+   ],
+   "connections": [
+    "p.424: the model has 20,001 parameters, one per vocabulary word plus a bias",
+    "p.425: validation accuracy levels off rather than declining, because the model is too simple to overfit much"
+   ]
+  },
+  {
+   "ref": "p426_e06",
+   "excerpt": "It is worth noting our choice of word tokenization in this example.",
+   "what_it_says": "Character-level tokenization is a poor fit because a bag of all characters in a review says little about its content. Subword tokenization with a large enough vocabulary would be fine but isn't needed. For a model this small it is convenient to use a vocabulary that is quick to train and whose weights map to real English words.",
+   "what_it_means": "In a set model the tokenizer decides what the features *are*. Characters as an unordered set are almost the same for every review (most reviews contain all letters), so the features carry almost no signal. Words such as \"terrible\" or \"riveting\" (p.422) carry sentiment directly. Word vocabularies are also cheap to learn (just count words), while learning BPE merge rules takes much longer (p.418).",
+   "why_it_matters": "Tokenization is a modelling decision, not just a preprocessing detail. The best choice depends on the model. Interpretability is a real bonus here: you can sort the 20,000 learned weights and read off the most positive and most negative words.",
+   "technical_idea": "Beyond the book: with word features, the weight $w_j$ is the change in log-odds of a positive review when word $j$ is present, holding all other words fixed. Inspecting the largest and smallest $w_j$ is a classic way to explain linear text classifiers.",
+   "terminology": [
+    {"term": "character-level tokenization", "meaning": "Splitting text into individual characters; a small vocabulary but very long sequences (p.411-414)."},
+    {"term": "subword tokenization", "meaning": "Splitting words into frequent pieces learned by merge rules (byte-pair encoding, p.414-418)."}
+   ],
+   "connections": [
+    "p.419: a word-level approach is easy to interpret because each input corresponds to a word a human would read",
+    "p.418: learning a subword vocabulary is noticeably slower than counting words"
+   ]
+  },
+  {
+   "ref": "p426_e08",
+   "excerpt": "In all applied machine learning, the speed and efficiency of preprocessing are important concerns.",
+   "what_it_says": "Preprocessing speed always matters, and more so because accelerators (GPUs and TPUs) are expensive. You don't want a GPU idling while input is prepared.",
+   "what_it_means": "Training throughput is limited by the slowest stage of the pipeline. If the CPU-side input pipeline delivers batches more slowly than the GPU can consume them, you pay for GPU time you aren't using.",
+   "why_it_matters": "It frames the sidebar: the goal isn't fast preprocessing for its own sake but full use of the most expensive hardware.",
+   "terminology": [
+    {"term": "accelerator", "meaning": "Specialized hardware for tensor arithmetic, such as a GPU or TPU."}
+   ],
+   "connections": []
+  },
+  {
+   "ref": "p426_e08",
+   "excerpt": "Text preprocessing is unique because it must always run on a CPU.",
+   "what_it_says": "GPUs only handle numeric inputs, so tokenization must happen before the GPU's train step. You could precompute token IDs and save them as integer sequences, because tokenization doesn't depend on model weights. But this isn't always practical: tokenizing on the fly allows faster experimentation, and at inference time on an unseen example you must tokenize and then run a forward pass right away.",
+   "what_it_means": "Unlike image resizing or augmentation, which have GPU-friendly numeric versions, turning strings into token IDs involves string operations (splitting, dictionary lookups) that accelerators don't do. So there are two strategies: precompute (an offline cost paid once) or tokenize on the fly (an online cost paid every epoch and every request).",
+   "why_it_matters": "It explains the design trade-off the chapter makes. Listing 14.12 (p.423) tokenizes on the fly with `map()`, which is flexible. Later, on p.441, the book caches the preprocessed dataset because there the model is so simple that preprocessing is the bottleneck.",
+   "technical_idea": "Precomputation works because tokenization is a deterministic function of the text and the (fixed) vocabulary. It must be redone whenever the vocabulary or tokenizer settings change, which is why on-the-fly tokenization is better during experimentation.",
+   "terminology": [
+    {"term": "on-the-fly preprocessing", "meaning": "Transforming raw inputs into model inputs as they are streamed into training or inference, instead of storing transformed copies."}
+   ],
+   "connections": [
+    "p.441: cache() stores the preprocessed dataset in memory because the CBOW training is bottlenecked on preprocessing"
+   ]
+  },
+  {
+   "ref": "p426_e08",
+   "excerpt": "The name of the game when preprocessing text input on the fly is",
+   "what_it_says": "The target is to be \"fast enough\": the GPU should always have a new preprocessed batch to ingest. Then the GPU is the bottleneck, and faster tokenization brings no benefit.",
+   "what_it_means": "This is a bottleneck argument. With CPU preprocessing time $t_{cpu}$ per batch and GPU step time $t_{gpu}$, overlapped (pipelined) execution takes roughly $\\max(t_{cpu}, t_{gpu})$ per step. Once $t_{cpu} \\le t_{gpu}$, cutting $t_{cpu}$ further doesn't change throughput.",
+   "why_it_matters": "It keeps you from wasting effort on preprocessing optimizations that can't pay off, and tells you when they *do* pay off (when the GPU is waiting).",
+   "technical_idea": "Note (not in the book): the per-step time formula assumes the CPU prepares the next batch while the GPU processes the current one (prefetching). Without overlap the cost is $t_{cpu} + t_{gpu}$.",
+   "terminology": [
+    {"term": "bottleneck", "meaning": "The slowest stage of a pipeline, which sets the throughput of the whole pipeline."}
+   ],
+   "connections": []
+  },
+  {
+   "ref": "p426_e08",
+   "excerpt": "We’ve seen tf.data in previous chapters, and an important reason we use it",
+   "what_it_says": "tf.data, used in earlier chapters, is designed so that the CPU does not become a bottleneck for a GPU or TPU. The book uses it throughout this chapter: keras.utils.text_dataset_from_directory() loads a tf.data.Dataset and map() transforms the inputs, for example by applying a TextVectorization layer. tf.data runs text preprocessing in parallel on multiple CPU cores, which is usually enough to avoid bottlenecking accelerators.",
+   "what_it_means": "This printed paragraph spans elements p426_e08, p426_e09 and p426_e10. The parallelism is visible in listing 14.12 (p.423), where each `map()` call passes `num_parallel_calls=8`, so eight CPU workers vectorize batches at the same time. (The printed text reads \"in parallel multiple CPU cores\"; a word such as \"on\" or \"across\" is missing.)",
+   "why_it_matters": "It connects the abstract advice to the concrete code the reader has just run, and explains why `num_parallel_calls` is in the listings.",
+   "technical_idea": "Beyond the book: tf.data also offers `prefetch()` to overlap preprocessing with training and `cache()` to keep results after the first epoch; `num_parallel_calls=tf.data.AUTOTUNE` lets the runtime choose the degree of parallelism.",
+   "terminology": [
+    {"term": "tf.data.Dataset", "meaning": "TensorFlow's streaming input-pipeline object, which supports map, batch, shuffle, cache and prefetch."},
+    {"term": "text_dataset_from_directory", "meaning": "Keras utility that builds a labelled text dataset from a folder of class subdirectories (used for IMDb on p.420)."}
+   ],
+   "connections": [
+    "p.423: listing 14.12 maps text_vectorization over the datasets with num_parallel_calls=8",
+    "p.420: the IMDb dataset is loaded with text_dataset_from_directory"
+   ]
+  },
+  {
+   "ref": "p426_e10",
+   "excerpt": "It is important to note that the code in this chapter is still multi-backend",
+   "what_it_says": "Although it uses tf.data, the chapter's code is multi-backend; the authors generated the chapter's outputs with JAX. tf.data works with PyTorch, JAX or TensorFlow, and Keras automatically converts input tensors to the right format for the backend.",
+   "what_it_means": "tf.data is used here only as a CPU-side data loader. The model math runs on whatever backend Keras 3 is configured with; Keras converts each batch (for example to NumPy or JAX arrays, or torch tensors) before the train step.",
+   "why_it_matters": "It reassures readers that using tf.data doesn't tie them to TensorFlow, and explains why the printed outputs may differ slightly from a reader's run on another backend.",
+   "terminology": [
+    {"term": "multi-backend Keras", "meaning": "Keras 3 can run the same model code on JAX, TensorFlow or PyTorch."}
+   ],
+   "connections": []
+  }
+ ],
+ "concepts": [
+  {
+   "id": "bag_of_words",
+   "name": "Bag-of-words model",
+   "definition": "A text model that discards word order and represents a document by which vocabulary terms it contains (here multi-hot), then learns one weight per term.",
+   "intuition": "Each word gets a vote for positive or negative; the review's score is the sum of the votes of the words present.",
+   "technical": "Input $\\mathbf{x}\\in\\{0,1\\}^{20000}$ from TextVectorization(output_mode=\"multi_hot\"); output $\\sigma(\\mathbf{w}^\\top\\mathbf{x}+b)$ trained with binary crossentropy.",
+   "significance": "Reaches 88% test accuracy on IMDb with 20,001 parameters; the baseline for the chapter.",
+   "example": "A review containing \"riveting\" and \"masterpiece\" adds their (positive) weights to the logit.",
+   "misconception": "That ignoring word order makes a model useless. For sentiment, word presence alone carries most of the signal.",
+   "related": ["multi_hot_encoding", "tokenization", "ngram"],
+   "source": "book"
+  },
+  {
+   "id": "tokenization",
+   "name": "Choice of tokenization",
+   "definition": "Splitting text into units (characters, words or subwords) that are mapped to integer IDs.",
+   "intuition": "The tokenizer decides what the model's features are; for a set model, the units must carry meaning on their own.",
+   "technical": "Character bags are almost the same for every document. Word vocabularies are learned by counting, are fast to build and are interpretable. Subword (BPE) vocabularies handle rare words but take longer to learn (p.418).",
+   "significance": "Word tokenization is chosen here for speed and interpretability.",
+   "example": "The character set of almost any review is {a..z, space, punctuation}: useless as features.",
+   "misconception": "That subword tokenization is always best. It dominates for large language models (p.419) but brings little to a tiny bag-of-words model.",
+   "related": ["bag_of_words", "subword_tokenization"],
+   "source": "book"
+  },
+  {
+   "id": "input_pipeline_bottleneck",
+   "name": "Input-pipeline bottleneck",
+   "definition": "The situation where the CPU-side preparation of batches is slower than the accelerator's training step, so the accelerator waits.",
+   "intuition": "A fast chef (GPU) stuck waiting for a slow vegetable chopper (CPU).",
+   "technical": "Pipelined step time is about $\\max(t_{cpu}, t_{gpu})$. Preprocessing only needs to satisfy $t_{cpu} \\le t_{gpu}$ (\"fast enough\").",
+   "significance": "Determines whether to optimize preprocessing (parallel map, caching, precomputation) or the model.",
+   "example": "On p.441 the CBOW model is bottlenecked on preprocessing, so caching makes later epochs more than three times faster.",
+   "misconception": "That faster tokenization always speeds up training. It does nothing once the GPU is the bottleneck.",
+   "related": ["tf_data", "tokenization"],
+   "source": "book"
+  },
+  {
+   "id": "tf_data",
+   "name": "tf.data pipelines",
+   "definition": "A streaming data API whose Dataset objects support parallel map, batching, caching and prefetching.",
+   "intuition": "An assembly line of CPU workers preparing batches ahead of time.",
+   "technical": "dataset.map(fn, num_parallel_calls=8) runs fn on several CPU threads; Keras 3 converts the yielded tensors for the JAX, PyTorch or TensorFlow backend.",
+   "significance": "Used throughout chapter 14 to apply TextVectorization without starving the accelerator.",
+   "example": "bag_of_words_train_ds = train_ds.map(lambda x, y: (text_vectorization(x), y), num_parallel_calls=8) on p.423.",
+   "misconception": "That using tf.data requires the TensorFlow backend for the model.",
+   "related": ["input_pipeline_bottleneck", "keras_layer"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Prediction of the bag-of-words classifier (implied by the model being evaluated)",
+   "latex": "\\hat{y} = \\sigma\\left(\\sum_{j=1}^{20000} w_j x_j + b\\right), \\qquad x_j \\in \\{0,1\\}",
+   "source_text": "Not printed on this page; the model is Dense(1, activation=\"sigmoid\") over a multi-hot input (listing 14.13, p.424).",
+   "variables": [
+    {"symbol": "x_j", "meaning": "1 if vocabulary word j appears in the review, else 0 (multi-hot encoding)"},
+    {"symbol": "w_j", "meaning": "learned weight of word j"},
+    {"symbol": "b", "meaning": "bias term (the 20,001st parameter)"},
+    {"symbol": "\\sigma", "meaning": "sigmoid, $\\sigma(z)=1/(1+e^{-z})$"},
+    {"symbol": "\\hat{y}", "meaning": "predicted probability that the review is positive"}
+   ],
+   "operations": "Sum the weights of the words present, add the bias, squash with the sigmoid; predict positive when $\\hat{y} > 0.5$.",
+   "purpose": "Makes explicit what model.evaluate() is scoring in listing 14.15.",
+   "interpretation": "Accuracy 0.88388 means about 88.4% of test reviews end up on the correct side of the threshold $\\hat{y} = 0.5$.",
+   "intuition": "Each present word pushes the logit up or down by its weight.",
+   "numerical_example": "If a review contains only words with weights 1.2 (\"riveting\"), -0.3 and 0.4, and $b = -0.1$: $z = 1.2 - 0.3 + 0.4 - 0.1 = 1.2$, $\\sigma(1.2) \\approx 0.77$, so the prediction is positive.",
+   "source": "ai_explanation",
+   "book_ref": "p.424"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "14.15",
+   "title": "Evaluating the bag-of-words regression model",
+   "original_code": ">>> test_loss, test_acc = model.evaluate(bag_of_words_test_ds)\n>>> test_acc\n0.88388",
+   "language": "python",
+   "what_it_does": "Runs the trained bag-of-words classifier over the multi-hot encoded IMDb test set and returns the test loss (binary crossentropy) and test accuracy; the accuracy printed is 0.88388.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "model.evaluate iterates once over bag_of_words_test_ds (built in listing 14.12, p.423), computes the compiled loss and metrics, and returns them in order [loss, accuracy], unpacked into two variables. Because EarlyStopping used restore_best_weights=True (p.424), these are the weights from the best validation epoch."},
+    {"lines": "2-3", "explanation": "Displays the test accuracy: 0.88388, i.e. about 88%."}
+   ],
+   "inputs_outputs": "Input: a tf.data.Dataset of (multi-hot vector of shape (batch, 20000), label of shape (batch, 1)) pairs. Output: scalar loss and scalar accuracy.",
+   "algorithm": "Forward pass only (no weight updates) over every test batch; metrics are averaged over all test samples.",
+   "theory_link": "The test set is touched only once, after model selection on the validation set, to get an unbiased estimate of generalization.",
+   "parameters": [
+    {"name": "bag_of_words_test_ds", "role": "the test reviews encoded by the same adapted TextVectorization layer used for training"}
+   ],
+   "pitfalls": [
+    "The exact value (0.88388) varies slightly with the random seed, backend (the book used JAX) and data shuffling.",
+    "The test data must be encoded with the vocabulary learned from the training data, never by re-adapting on test data."
+   ],
+   "illustrative_code": "# AI-written: inspect the most indicative words learned by the model\nimport numpy as np\nweights = model.layers[-1].get_weights()[0][:, 0]   # shape (20000,)\nvocab = text_vectorization.get_vocabulary()\norder = np.argsort(weights)\nprint(\"most negative:\", [vocab[i] for i in order[:10]])\nprint(\"most positive:\", [vocab[i] for i in order[-10:]])"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why a bag of characters carries almost no information",
+   "kind": "numerical",
+   "body": "Treat a review as the **set** of its characters. With lowercase letters, digits, space and punctuation, any review longer than a few sentences contains nearly all of them, so the multi-hot vectors of almost all reviews are nearly identical. A linear model can't separate classes whose inputs look the same. Word sets, by contrast, differ a lot from review to review, and individual words (\"awful\", \"brilliant\") correlate strongly with the label. This is the authors' \"pretty obvious\" point made concrete.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "\"Fast enough\": a back-of-the-envelope pipeline model",
+   "kind": "step_by_step",
+   "body": "1. Let the GPU need $t_{gpu}$ ms per training step and a single CPU worker need $t_1$ ms to vectorize one batch.\n2. With $k$ parallel workers (`num_parallel_calls=k`), CPU time per batch is about $t_1/k$ (if work divides evenly).\n3. With prefetching, step time is about $\\max(t_1/k,\\ t_{gpu})$.\n4. Example: $t_1 = 40$ ms, $t_{gpu} = 10$ ms. With $k=1$ the GPU is idle 75% of the time; with $k=8$, $t_1/k = 5$ ms < 10 ms, so the GPU becomes the bottleneck and further tokenizer speed-ups don't help.\n\nFor the tiny bag-of-words model, $t_{gpu}$ is very small, which is why the book notes (p.425) that tokenization costs more than the parameter updates.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Kitchen analogy",
+   "kind": "analogy",
+   "body": "The GPU is a very expensive cook who can only work with chopped ingredients; the CPU threads are kitchen assistants doing the chopping (tokenization). You hire enough assistants that a tray of chopped ingredients is always waiting. Beyond that point, faster chopping doesn't get dinner out any sooner.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "CPU text preprocessing feeding the accelerator",
+   "why": "The sidebar describes text being loaded by text_dataset_from_directory, vectorized by TextVectorization inside map() on several CPU cores, and handed to a GPU on any Keras backend.",
+   "mermaid": "flowchart LR\n  A[Text files on disk] --> B[text_dataset_from_directory\\n tf.data.Dataset of strings]\n  B --> C[map: TextVectorization\\n parallel CPU workers]\n  C --> D[Batches of integer / multi-hot tensors]\n  D --> E[Keras converts to backend format\\n JAX / PyTorch / TensorFlow]\n  E --> F[GPU or TPU train step]\n  C -. must be fast enough .-> F"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "Tokenization can be moved onto the GPU like other preprocessing.", "correction": "The book states that text preprocessing must always run on a CPU: GPUs only handle numeric inputs, so strings must become integers before the train step."},
+  {"claim": "Faster tokenization always means faster training.", "correction": "Only while the GPU is waiting for data. Once batches are always ready, the GPU is the bottleneck and tokenizer speed-ups gain nothing."},
+  {"claim": "Using tf.data means the model must run on TensorFlow.", "correction": "The chapter's outputs were generated with JAX; Keras converts tf.data tensors for the JAX, PyTorch or TensorFlow backend."},
+  {"claim": "A bag-of-words model is too crude to be useful.", "correction": "It reaches about 88% test accuracy on IMDb with 20,001 parameters and trains on a CPU."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 422, "note": "Set models introduced: reviews become unordered bags of tokens and each word gets a weight."},
+   {"page": 423, "note": "Listing 14.12 builds bag_of_words_test_ds with TextVectorization(output_mode=\"multi_hot\") and map(..., num_parallel_calls=8)."},
+   {"page": 424, "note": "Listing 14.13 defines the 20,001-parameter linear classifier; listing 14.14 trains it with EarlyStopping."},
+   {"page": 425, "note": "Figure 14.2: validation accuracy levels off; tokenization is more expensive than the parameter updates."},
+   {"page": 419, "note": "Discussion of word vs. subword vs. character tokenization and interpretability of word-level inputs."}
+  ],
+  "later": [
+   {"page": 427, "note": "14.4.2 adds bigrams to inject local word order into the same set-based model."},
+   {"page": 430, "note": "14.5.1 trains a recurrent sequence model to compare against this baseline."},
+   {"page": 441, "note": "Caching the preprocessed dataset when preprocessing is the bottleneck (CBOW training)."}
+  ],
+  "prerequisites": [
+   {"page": 411, "note": "Character and word tokenization."},
+   {"page": 414, "note": "Subword tokenization."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 423, "note": "Listing 14.12: the parallel tf.data map that the sidebar refers to."},
+   {"page": 424, "note": "Listing 14.13: build_linear_classifier."}
+  ],
+  "related_figures": [
+   {"page": 425, "note": "Figure 14.2: training and validation accuracy of the bag-of-words model."}
+  ]
+ },
+ "takeaways": [
+  "The bag-of-words linear classifier reaches 0.88388 (about 88%) test accuracy on IMDb, cheap enough to train on one CPU.",
+  "Word tokenization suits this model: character bags are uninformative, subwords are unnecessary, and word weights are interpretable.",
+  "Text tokenization must run on the CPU before the accelerator's train step.",
+  "Precomputing token IDs is possible but limits experimentation and is impossible for unseen inference inputs.",
+  "Preprocessing only needs to be fast enough to keep the GPU busy; tf.data's parallel map usually achieves this.",
+  "tf.data works with every Keras backend; the chapter's outputs were produced with JAX."
+ ],
+ "questions": [
+  {"id": "q1", "type": "short", "question": "What test accuracy does listing 14.15 report for the bag-of-words model, and what does model.evaluate return?", "options": [], "answer": "0.88388 (about 88%). model.evaluate returns the loss and the compiled metrics, here [test_loss, test_acc].", "explanation": "The model was compiled with loss=\"binary_crossentropy\" and metrics=[\"accuracy\"] (p.424), so evaluate returns those two values in that order; the printed accuracy is 0.88388.", "page_refs": [426, 424]},
+  {"id": "q2", "type": "mcq", "question": "Why do the authors avoid character-level tokenization for the bag-of-words model?", "options": ["Character vocabularies are too large to fit in memory", "A bag of all the characters in a review tells you very little about its content", "TextVectorization cannot split into characters", "Character tokenization cannot run on a CPU"], "answer": "A bag of all the characters in a review tells you very little about its content", "explanation": "That is the reason given on the page. Character vocabularies are tiny (about 64 terms for Moby Dick, p.414), so the first option is wrong. TextVectorization does support character splitting (p.423), and all tokenization runs on the CPU anyway.", "page_refs": [426, 414]},
+  {"id": "q3", "type": "conceptual", "question": "Why must text preprocessing run on a CPU, and what are the two options for when to do it?", "options": [], "answer": "GPUs only handle numeric inputs, so strings must be turned into integer tokens before the train step. You can precompute and save the token IDs before training (possible because tokenization doesn't depend on the model weights), or tokenize on the fly as data is streamed in.", "explanation": "The sidebar adds that on-the-fly tokenization allows faster experimentation and is required at inference time, where unseen inputs can't be pre-tokenized.", "page_refs": [426]},
+  {"id": "q4", "type": "mcq", "question": "According to the sidebar, when does making your tokenizer faster stop helping training speed?", "options": ["When the vocabulary has more than 20,000 terms", "When the GPU always has a new preprocessed batch ready, so the GPU is the bottleneck", "When you switch from JAX to TensorFlow", "Never; faster tokenization always helps"], "answer": "When the GPU always has a new preprocessed batch ready, so the GPU is the bottleneck", "explanation": "Preprocessing only needs to be \"fast enough\". Vocabulary size and backend choice are not the criterion, and the last option contradicts the page.", "page_refs": [426]},
+  {"id": "q5", "type": "math", "question": "A GPU step takes 12 ms. One CPU worker needs 60 ms to vectorize a batch. Assuming perfect parallelism and prefetching, what is the minimum num_parallel_calls that makes the GPU the bottleneck?", "options": [], "answer": "5 workers (60/5 = 12 ms ≤ 12 ms).", "explanation": "With k workers, CPU time per batch is about 60/k ms. We need 60/k ≤ 12, so k ≥ 5. This applies the \"fast enough\" idea from the sidebar (the arithmetic model is an AI-added simplification).", "page_refs": [426]},
+  {"id": "q6", "type": "short", "question": "The chapter uses tf.data, yet the authors say the code is multi-backend. Which backend generated the chapter's outputs, and how does Keras make this work?", "options": [], "answer": "JAX. Keras automatically converts the input tensors coming out of tf.data to the right format for the active backend (PyTorch, JAX or TensorFlow).", "explanation": "Stated in the last paragraph of the sidebar.", "page_refs": [426]},
+  {"id": "q7", "type": "self", "question": "Can you explain, in your own words, why a 20,001-parameter model trained on a CPU is the right first experiment, and what number the following models must beat?", "options": [], "answer": "It is cheap, fast, can't really overfit (p.425), and gives an interpretable baseline of about 88% test accuracy that the bigram and sequence models must improve on.", "explanation": "Check that you can relate the parameter count (p.424), the plateauing validation curve (p.425) and the 0.88388 test accuracy.", "page_refs": [424, 425, 426]}
+ ]
+}

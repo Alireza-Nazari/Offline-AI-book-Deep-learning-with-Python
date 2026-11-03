@@ -1,0 +1,456 @@
+{
+  "page_id": "page_113",
+  "pdf_page": 113,
+  "printed_page": "89",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:55:00Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean. Four code blocks and their callouts match the page image. The training-loop code announced in the last paragraph is on the next page (p.114)."
+  },
+  "overview": {
+    "title": "The pure-JAX linear classifier: model, loss and a stateless training step",
+    "chapter": "3 Introduction to TensorFlow, PyTorch, JAX, and Keras",
+    "section": "3.5 Introduction to JAX",
+    "subsection": "3.5.4 An end-to-end example: A linear classifier in pure JAX",
+    "main_topic": "Implementing the linear classifier in JAX: a linear model function, an MSE loss, a `compute_loss(state, inputs, targets)` wrapper, `jax.value_and_grad`, and a jitted, stateless `training_step` that returns the updated `W` and `b`.",
+    "central_idea": "Everything from p.110-112 comes together: package the loss so that the parameters `(W, b)` form the first argument, build `grad_fn = jax.value_and_grad(compute_loss)`, and write a `@jax.jit` training step that computes loss and gradients in one go and *returns* new `W` and `b` instead of mutating them.",
+    "importance": "This is the canonical shape of every low-level JAX training step, and the same pattern underlies Keras's JAX backend (p.242). Comparing it with the TensorFlow (p.93) and PyTorch (p.102) versions shows what statelessness changes in practice.",
+    "learning_objectives": [
+      "Write the linear model `matmul(inputs, W) + b` and the MSE loss in `jnp`.",
+      "Package the loss in `compute_loss(state, inputs, targets)` with `state = (W, b)` first.",
+      "Use `jax.value_and_grad(compute_loss)` to get the loss and gradients with respect to W and b.",
+      "Write a jitted, stateless training step that performs a gradient-descent update and returns `loss, W, b`.",
+      "Explain why `learning_rate` can be treated as part of the function and when it would need to be an argument."
+    ],
+    "prerequisites": [
+      "jax.value_and_grad and state tuples (p.111)",
+      "@jax.jit and the statelessness requirement (p.112)",
+      "Gradient descent and MSE (chapter 2)",
+      "The linear classifier problem from section 3.3.2 (p.93)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page builds the JAX version of the chapter's linear classifier.\n\n**Model and loss.** `model(inputs, W, b)` returns `jnp.matmul(inputs, W) + b`, an affine transform with no activation. `mean_squared_error(targets, predictions)` squares the per-sample differences and averages them with `jnp.mean`. As the authors say at the bottom of p.112, these \"should look familiar\" from the TensorFlow and PyTorch versions.\n\n**Packaging the loss.** To compute gradients, the loss is wrapped in a single `compute_loss(state, inputs, targets)` that returns the total loss as a **scalar** and takes `state` as its **first argument**, here a tuple `(W, b)` of all tensors needing gradients. It unpacks `W, b = state`, runs the model and computes the MSE.\n\n**Gradient function.** `grad_fn = jax.value_and_grad(compute_loss)` gives a function with the same arguments that returns both the loss and the gradients with respect to the elements of `state`.\n\n**Training step.** With `learning_rate = 0.1`, `training_step(inputs, targets, W, b)` is decorated with `@jax.jit` to use XLA compilation. It calls `grad_fn((W, b), inputs, targets)`, which \"computes the forward pass and backward pass in one go\", unpacks `grad_wrt_W, grad_wrt_b`, applies the gradient-descent updates `W = W - grad_wrt_W * learning_rate` and `b = b - grad_wrt_b * learning_rate`, and **returns `loss, W, b`**. Unlike the TensorFlow and PyTorch equivalents, it must be stateless, so it must return the new values (callout: \"Make sure to return the new values of W and b in addition to the loss!\").\n\nBecause the learning rate is fixed in this example, it is treated as part of the function rather than as model state; if you wanted to change it during training you would have to pass it in as well. The page ends by announcing the training loop, which initializes `W` and `b` and repeatedly updates them via stateless calls to `training_step()` (code on p.114).",
+  "paragraphs": [
+    {
+      "ref": "p113_e04",
+      "excerpt": "To compute gradients, we need to package loss computation in a single",
+      "what_it_says": "Gradient computation requires a single `compute_loss()` function that returns the total loss as a scalar and takes `state`, a tuple of all tensors needing gradients, as its first argument.",
+      "what_it_means": "This applies the two rules from p.110 to the real model: the parameters `(W, b)` become the differentiated first argument, while `inputs` and `targets` are ordinary inputs.",
+      "why_it_matters": "`model` and `mean_squared_error` separately do not fit the `jax.grad` contract; composing them into one function of the parameters does.",
+      "technical_idea": "Function composition: $L(W, b) = \\text{MSE}(t, \\text{model}(X, W, b))$.",
+      "terminology": [
+        {"term": "state", "meaning": "Here the tuple `(W, b)`."}
+      ],
+      "connections": ["p.110: loss function requirements (scalar output, state first).", "p.111: the compute_loss(state, x, y) template."]
+    },
+    {
+      "ref": "p113_e06",
+      "excerpt": "Calling `jax.value_and_grad()` on this function gives us a new function, with the",
+      "what_it_says": "`jax.value_and_grad(compute_loss)` returns a function with the same arguments as `compute_loss` that outputs both the loss and its gradients with respect to the elements of `state`.",
+      "what_it_means": "Calling `grad_fn((W, b), inputs, targets)` returns `(loss, (dL/dW, dL/db))`, with the gradient tuple mirroring `state`.",
+      "why_it_matters": "One call gives both the number to log and the directions to update.",
+      "technical_idea": "Beyond the book: for this linear model with MSE, $\\partial L/\\partial W = \\tfrac{2}{N k} X^\\top (P - T)$ and $\\partial L/\\partial b = \\tfrac{2}{N k}\\sum_i (P_i - T_i)$, where $N$ is the batch size and $k$ the number of output columns; `jax.value_and_grad` derives this automatically.",
+      "terminology": [],
+      "connections": ["p.111: value_and_grad returns (loss, grads)."]
+    },
+    {
+      "ref": "p113_e08",
+      "excerpt": "Next, we can set up our training step function. It looks straightforward. Be",
+      "what_it_says": "The training step looks straightforward, but unlike its TensorFlow and PyTorch equivalents it must be stateless and therefore must return the updated `W` and `b`.",
+      "what_it_means": "In TensorFlow the step called `W.assign_sub(...)` on variables and in PyTorch it updated tensors in place; nothing needed to be returned except perhaps the loss. In JAX, `W = W - ...` inside the function only rebinds a local name, so the caller sees the new values only if they are returned.",
+      "why_it_matters": "Forgetting to return `W` and `b` is the classic JAX bug: the loop runs, the loss is computed, but the model never learns.",
+      "technical_idea": "The step is a pure function $(X, T, W, b) \\mapsto (L, W', b')$.",
+      "terminology": [
+        {"term": "training step", "meaning": "One iteration of: forward pass, loss, gradients, parameter update."}
+      ],
+      "connections": ["p.103: PyTorch's training step with loss.backward() and in-place updates.", "p.112: jitted functions must return any tensors they update."]
+    },
+    {
+      "ref": "p113_e10",
+      "excerpt": "Because we won’t change the `learning_rate` during our example, we can consider it",
+      "what_it_says": "Since the learning rate stays constant, it can be considered part of the function rather than model state. To change it during training, you would have to pass it in too.",
+      "what_it_means": "`training_step` reads the global `learning_rate` when JAX traces it; under `@jax.jit` that value is baked into the compiled code as a constant. Changing the Python variable later would not affect the compiled function.",
+      "why_it_matters": "This is the rule for anything that varies across steps (learning-rate schedules, step counters, PRNG keys): it must be an argument.",
+      "technical_idea": "Beyond the book: passing `learning_rate` as a JAX array argument lets you change it without recompilation; passing it as a Python float marked static would trigger recompilation for each new value.",
+      "terminology": [
+        {"term": "learning_rate", "meaning": "Step size of the gradient-descent update, 0.1 here."}
+      ],
+      "connections": []
+    },
+    {
+      "ref": "p113_e11",
+      "excerpt": "Finally, we’re ready to run the full training loop. We initialize `W` and",
+      "what_it_says": "The full training loop initializes `W` and `b` and repeatedly updates them via stateless calls to `training_step()`; the code follows on the next page.",
+      "what_it_means": "The loop is where state lives: it holds the current `W` and `b` and replaces them with the values returned by each step, `loss, W, b = training_step(inputs, targets, W, b)`.",
+      "why_it_matters": "This separation (pure step function, stateful loop outside) is the general JAX architecture.",
+      "technical_idea": null,
+      "terminology": [],
+      "connections": ["p.114: the training loop code and section 3.5.5, What makes the JAX approach unique."]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "stateless_training_step",
+      "name": "Stateless training step",
+      "definition": "A training-step function that takes parameters as inputs and returns updated parameters (and the loss) rather than modifying them in place.",
+      "intuition": "Hand in the old parameters, get back new ones; the function itself remembers nothing.",
+      "technical": "`training_step(inputs, targets, W, b) -> (loss, W, b)`, decorated with `@jax.jit`; the caller rebinds `W, b` each iteration.",
+      "significance": "Required for jit compilation in JAX (p.112); the model for Keras's JAX backend training step (p.242).",
+      "example": "The `training_step` on this page.",
+      "misconception": "That assigning `W = W - ...` inside the function updates the caller's `W`; it only rebinds a local name.",
+      "related": ["stateless_computation", "jit_compilation", "gradient_descent"],
+      "source": "book"
+    },
+    {
+      "id": "gradient_descent",
+      "name": "Gradient descent update",
+      "definition": "Moving each parameter a small step against its gradient: $\\theta \\leftarrow \\theta - \\eta\\,\\partial L/\\partial\\theta$.",
+      "intuition": "Take a step downhill, sized by the learning rate.",
+      "technical": "Here applied to `W` and `b` with $\\eta = 0.1$.",
+      "significance": "The core learning rule from chapter 2, implemented now in JAX.",
+      "example": "`W = W - grad_wrt_W * learning_rate`.",
+      "misconception": "That the step size is the gradient alone; it is the gradient times the learning rate.",
+      "related": ["learning_rate", "mse", "value_and_grad"],
+      "source": "book"
+    },
+    {
+      "id": "mse",
+      "name": "Mean squared error",
+      "definition": "Average of squared differences between targets and predictions.",
+      "intuition": "Penalizes large errors much more than small ones.",
+      "technical": "`jnp.mean(jnp.square(targets - predictions))`, averaged over all elements.",
+      "significance": "The loss used for the chapter's linear classifier in all three frameworks.",
+      "example": "Targets [0, 1], predictions [0.2, 0.6]: (0.04 + 0.16)/2 = 0.1.",
+      "misconception": "That MSE is the standard loss for classification; it works for this simple linear example, but crossentropy is usually preferred (chapter 2 used it for MNIST).",
+      "related": ["loss_function", "gradient_descent"],
+      "source": "book"
+    },
+    {
+      "id": "jit_compilation",
+      "name": "JIT compilation with @jax.jit",
+      "definition": "Compiling a stateless JAX function with XLA.",
+      "intuition": "Translate the whole training step once, then run the fast translation every iteration.",
+      "technical": "Applied to `training_step` (callout: 'to take advantage of XLA compilation'). Global Python values read inside, such as `learning_rate`, become compile-time constants.",
+      "significance": "Makes the training loop fast.",
+      "example": "`@jax.jit def training_step(...)`.",
+      "misconception": "That changing the global `learning_rate` later will affect the compiled step.",
+      "related": ["stateless_training_step"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Linear model",
+      "latex": "P = X W + b",
+      "source_text": "jnp.matmul(inputs, W) + b",
+      "variables": [
+        {"symbol": "X", "meaning": "`inputs`, shape (N, input_dim)."},
+        {"symbol": "W", "meaning": "Weights, shape (input_dim, output_dim)."},
+        {"symbol": "b", "meaning": "Bias, shape (output_dim,), broadcast over rows."},
+        {"symbol": "P", "meaning": "`predictions`, shape (N, output_dim)."}
+      ],
+      "operations": "Matrix product plus broadcast addition.",
+      "purpose": "The model whose parameters are learned.",
+      "interpretation": "No activation: the prediction is a linear (affine) function of the input.",
+      "intuition": "With 2-D inputs and one output, $P = w_1 x_1 + w_2 x_2 + b$ defines a plane; the decision boundary is where it crosses a threshold.",
+      "numerical_example": "$x = [1, 2]$, $W = [[0.5],[0.25]]$, $b = 0.1$: $P = 0.5 + 0.5 + 0.1 = 1.1$ (illustrative values).",
+      "source": "book",
+      "book_ref": "p.113"
+    },
+    {
+      "id": "m2",
+      "title": "Mean squared error",
+      "latex": "L = \\frac{1}{M}\\sum_{j=1}^{M} (t_j - p_j)^2",
+      "source_text": "per_sample_losses = jnp.square(targets - predictions); return jnp.mean(per_sample_losses)",
+      "variables": [
+        {"symbol": "t_j", "meaning": "Target values (elements of `targets`)."},
+        {"symbol": "p_j", "meaning": "Predicted values."},
+        {"symbol": "M", "meaning": "Total number of elements averaged by `jnp.mean` (N × output_dim)."}
+      ],
+      "operations": "Element-wise difference, square, mean.",
+      "purpose": "Scalar loss for `jax.value_and_grad`.",
+      "interpretation": "Average squared distance between predictions and targets.",
+      "intuition": "Zero only when every prediction is exact.",
+      "numerical_example": "$t = [0, 1, 1]$, $p = [0.1, 0.8, 1.3]$: squared errors $0.01, 0.04, 0.09$, mean $= 0.0467$.",
+      "source": "book",
+      "book_ref": "p.113"
+    },
+    {
+      "id": "m3",
+      "title": "Gradient-descent update in training_step",
+      "latex": "W \\leftarrow W - \\eta\\,\\frac{\\partial L}{\\partial W}, \\qquad b \\leftarrow b - \\eta\\,\\frac{\\partial L}{\\partial b}, \\qquad \\eta = 0.1",
+      "source_text": "W = W - grad_wrt_W * learning_rate; b = b - grad_wrt_b * learning_rate",
+      "variables": [
+        {"symbol": "\\eta", "meaning": "`learning_rate` = 0.1."},
+        {"symbol": "\\partial L/\\partial W", "meaning": "`grad_wrt_W`, same shape as W."},
+        {"symbol": "\\partial L/\\partial b", "meaning": "`grad_wrt_b`, same shape as b."}
+      ],
+      "operations": "Scalar multiplication and subtraction, element-wise.",
+      "purpose": "Moves parameters downhill on the loss surface.",
+      "interpretation": "The new values are returned, not written in place.",
+      "intuition": "A step of size proportional to the slope, in the downhill direction.",
+      "numerical_example": "If $W = [[0.5],[0.25]]$ and $\\partial L/\\partial W = [[0.2],[-0.4]]$, then $W' = [[0.48],[0.29]]$.",
+      "source": "book",
+      "book_ref": "p.113"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Model and mean squared error",
+      "original_code": "def model(inputs, W, b):\n    return jnp.matmul(inputs, W) + b\ndef mean_squared_error(targets, predictions):\n    per_sample_losses = jnp.square(targets - predictions)\n    return jnp.mean(per_sample_losses)",
+      "language": "python",
+      "what_it_does": "Defines the linear model and the MSE loss as pure functions.",
+      "line_explanations": [
+        {"lines": "1-2", "explanation": "Affine model: matrix product plus bias, no activation."},
+        {"lines": "3-4", "explanation": "Squared error for each element."},
+        {"lines": "5", "explanation": "Average to a single scalar."}
+      ],
+      "inputs_outputs": "model: (N, d_in) -> (N, d_out). MSE: two same-shaped arrays -> scalar.",
+      "algorithm": "Forward pass and loss.",
+      "theory_link": "Same model and loss as the TensorFlow (p.93) and PyTorch (p.102) versions.",
+      "parameters": [
+        {"name": "W, b", "role": "Model parameters, passed explicitly."}
+      ],
+      "pitfalls": [
+        "`targets` and `predictions` must have matching shapes, e.g. both (N, 1); a (N,) vs (N, 1) mismatch would broadcast to (N, N) silently (beyond the book)."
+      ],
+      "illustrative_code": null
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Packaging the loss with state first",
+      "original_code": "def compute_loss(state, inputs, targets):\n    W, b = state\n    predictions = model(inputs, W, b)\n    loss = mean_squared_error(targets, predictions)\n    return loss",
+      "language": "python",
+      "what_it_does": "Composes the model and loss into a scalar function of the parameter tuple.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "`state` first, so it is what gets differentiated; `inputs`, `targets` are data."},
+        {"lines": "2", "explanation": "Unpack the tuple `(W, b)`."},
+        {"lines": "3-4", "explanation": "Forward pass and MSE."},
+        {"lines": "5", "explanation": "Return a scalar."}
+      ],
+      "inputs_outputs": "Inputs: (W, b), inputs, targets. Output: scalar loss.",
+      "algorithm": "Loss as a function of parameters.",
+      "theory_link": "Satisfies both jax.grad requirements (p.110).",
+      "parameters": [],
+      "pitfalls": [
+        "Swapping the argument order (data first) would make JAX differentiate with respect to the inputs."
+      ],
+      "illustrative_code": null
+    },
+    {
+      "id": "c3",
+      "listing": null,
+      "title": "Building the value-and-gradient function",
+      "original_code": "grad_fn = jax.value_and_grad(compute_loss)",
+      "language": "python",
+      "what_it_does": "Creates a function returning `(loss, (grad_wrt_W, grad_wrt_b))`.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Metaprogramming: a new function with the same arguments as compute_loss."}
+      ],
+      "inputs_outputs": "Function in, function out.",
+      "algorithm": "Reverse-mode autodiff transformation.",
+      "theory_link": "p.111 value_and_grad.",
+      "parameters": [],
+      "pitfalls": [],
+      "illustrative_code": null
+    },
+    {
+      "id": "c4",
+      "listing": null,
+      "title": "A jitted, stateless training step",
+      "original_code": "learning_rate = 0.1\n@jax.jit\ndef training_step(inputs, targets, W, b):\n    loss, grads = grad_fn((W, b), inputs, targets)\n    grad_wrt_W, grad_wrt_b = grads\n    W = W - grad_wrt_W * learning_rate\n    b = b - grad_wrt_b * learning_rate\n    return loss, W, b",
+      "language": "python",
+      "what_it_does": "Computes loss and gradients, performs one gradient-descent update, and returns the loss with the new W and b.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Fixed learning rate, treated as part of the function rather than state."},
+        {"lines": "2", "explanation": "Callout: 'We use the jax.jit decorator to take advantage of XLA compilation.'"},
+        {"lines": "3", "explanation": "Parameters come in as arguments."},
+        {"lines": "4", "explanation": "Callout: 'Computes the forward pass and backward pass in one go.' State is passed as the tuple `(W, b)`."},
+        {"lines": "5", "explanation": "Gradients have the same structure as state: a 2-tuple."},
+        {"lines": "6-7", "explanation": "Callout: 'Updates W and b.' These create new arrays and rebind local names."},
+        {"lines": "8", "explanation": "Callout: 'Make sure to return the new values of W and b in addition to the loss!'"}
+      ],
+      "inputs_outputs": "Inputs: batch inputs, targets, current W, b. Outputs: loss (scalar), new W, new b.",
+      "algorithm": "One step of full-batch gradient descent.",
+      "theory_link": "Stateless function as required by @jax.jit (p.112).",
+      "parameters": [
+        {"name": "learning_rate", "role": "Step size 0.1, a compile-time constant here."},
+        {"name": "W, b", "role": "Current parameters in, updated parameters out."}
+      ],
+      "pitfalls": [
+        "Forgetting to return W and b: the caller would keep the old parameters.",
+        "Changing the global `learning_rate` after the first call has no effect on the compiled step (it was captured at trace time); pass it as an argument instead.",
+        "The caller must rebind: `loss, W, b = training_step(inputs, targets, W, b)`."
+      ],
+      "illustrative_code": "# AI-written sketch of the loop (the book's loop is on p.114)\nW = jnp.zeros((2, 1))\nb = jnp.zeros((1,))\nfor step in range(40):\n    loss, W, b = training_step(inputs, targets, W, b)\n    print(f\"Loss at step {step}: {loss:.4f}\")"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "The same training step in three frameworks",
+      "kind": "alternative",
+      "body": "- **TensorFlow (p.93)**: variables + `GradientTape`; `W.assign_sub(grad * lr)` mutates in place; the step returns the loss.\n- **PyTorch (p.102-103)**: tensors with `requires_grad=True`; `loss.backward()` fills `.grad`; updates are done in place, outside the backward pass.\n- **JAX (this page)**: plain arrays; `jax.value_and_grad` gives gradients; the step returns `loss, W, b`.\n\nOnly the JAX step is a pure function, which is what makes it directly jittable. (Summaries of the TF/PyTorch steps recall those pages; the PyTorch details are from the p.103 passage.)",
+      "source": "inference"
+    },
+    {
+      "title": "Where does the state live?",
+      "kind": "breakdown",
+      "body": "In JAX, state does not disappear; it moves *out* of the functions and into the caller. The training loop (p.114) owns `W` and `b` as ordinary Python variables and passes them in each step. `training_step` is a pure transformation from old parameters to new parameters. This is the same idea as the NumPy `apply_noise(x, seed)` example on p.108, where the caller owned the seed.",
+      "source": "inference"
+    },
+    {
+      "title": "Assembly line analogy",
+      "kind": "analogy",
+      "body": "`training_step` is a machine on an assembly line: a part (`W`, `b`) comes in, gets machined (one gradient step), and goes out the other end. The machine keeps nothing. If you forget to put the output back on the conveyor (`return loss, W, b`), the next station receives the unmodified part.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "Data flow of the stateless training_step",
+      "why": "Shows how W and b flow into training_step and come back out, as the page requires.",
+      "mermaid": "flowchart LR\n  W0[\"W, b (held by the loop)\"] --> TS\n  D[\"inputs, targets\"] --> TS\n  subgraph TS[\"@jax.jit training_step\"]\n    G[\"grad_fn((W, b), inputs, targets)\\nforward + backward in one go\"] --> U[\"W - grad_wrt_W * 0.1\\nb - grad_wrt_b * 0.1\"]\n  end\n  TS --> L[\"loss\"]\n  TS --> W1[\"new W, new b\"]\n  W1 -->|\"next iteration\"| W0"
+    },
+    {
+      "id": "v2",
+      "type": "widget",
+      "title": "Gradient descent with learning_rate = 0.1",
+      "why": "The MSE of a linear model is a convex, bowl-shaped function of its parameters; this shows the update `W = W - grad * learning_rate` with the page's learning rate of 0.1 and how other rates compare.",
+      "widget": "gradient_descent",
+      "params": {"surface": "bowl", "lr": 0.1, "start": [2.5, -2], "steps": 25, "compare_lrs": [0.02, 0.1, 0.5]}
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "`W = W - grad_wrt_W * learning_rate` inside `training_step` updates the model's weights.",
+      "correction": "It creates a new local array; the caller gets it only because the function returns `loss, W, b`."
+    },
+    {
+      "claim": "`grad_fn` returns gradients with respect to inputs and targets too.",
+      "correction": "Only the first argument `(W, b)` is differentiated."
+    },
+    {
+      "claim": "You can change `learning_rate` between steps by reassigning the global variable.",
+      "correction": "The book treats it as part of the function; to vary it you must pass it as an argument (and under jit the global value is captured at trace time)."
+    },
+    {
+      "claim": "The JAX training step needs a separate call to compute the loss for logging.",
+      "correction": "`value_and_grad` returns the loss along with the gradients in one go."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 112, "note": "@jax.jit, the statelessness rule, and the two differences of the JAX classifier."},
+      {"page": 111, "note": "value_and_grad and the compute_loss(state, x, y) template."},
+      {"page": 93, "note": "The same linear classifier in pure TensorFlow."},
+      {"page": 102, "note": "The same linear classifier in pure PyTorch."},
+      {"page": 108, "note": "Managing state (the seed) outside the function, the same pattern used for W and b here."}
+    ],
+    "later": [
+      {"page": 114, "note": "The training loop calling training_step, and what makes the JAX approach unique."},
+      {"page": 242, "note": "A JAX training step for Keras models using stateless_call."}
+    ],
+    "prerequisites": [
+      {"page": 110, "note": "The rules for loss functions used with jax.grad."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 103, "note": "PyTorch training step with loss.backward() and .grad."}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "The JAX classifier's model is `jnp.matmul(inputs, W) + b` and its loss is the mean of squared errors.",
+    "`compute_loss(state, inputs, targets)` takes `(W, b)` first and returns a scalar.",
+    "`grad_fn = jax.value_and_grad(compute_loss)` returns the loss and gradients for W and b in one go.",
+    "The `@jax.jit` training step must be stateless: it returns `loss, W, b`.",
+    "A constant learning rate can live inside the function; anything that changes during training must be passed in.",
+    "The training loop owns the state and rebinds W and b after each step."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "Why does `training_step` return `W` and `b` in addition to the loss?",
+      "options": [
+        "For logging purposes only",
+        "Because the function is stateless, so the updated values are only available to the caller if returned",
+        "Because jax.jit requires every function to return three values",
+        "Because value_and_grad needs them for the next call"
+      ],
+      "answer": "Because the function is stateless, so the updated values are only available to the caller if returned",
+      "explanation": "The page says the step must be stateless and must return the updated W and b. It is not just logging, jit does not impose a return count, and value_and_grad gets W and b as arguments from the caller.",
+      "page_refs": [112, 113]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "What is `state` in `compute_loss(state, inputs, targets)`, and why is it the first argument?",
+      "options": [],
+      "answer": "The tuple `(W, b)`; it is first because jax.value_and_grad differentiates with respect to the first argument, and we need gradients for W and b.",
+      "explanation": "The page describes state as 'a tuple of all the tensors we need gradients for'.",
+      "page_refs": [110, 113]
+    },
+    {
+      "id": "q3",
+      "type": "math",
+      "question": "With learning_rate = 0.1, b = [0.3] and grad_wrt_b = [-0.5], what is the new b?",
+      "options": [],
+      "answer": "[0.35]",
+      "explanation": "$b' = 0.3 - 0.1 \\times (-0.5) = 0.35$; a negative gradient increases the parameter.",
+      "page_refs": [113]
+    },
+    {
+      "id": "q4",
+      "type": "math",
+      "question": "Compute `mean_squared_error(targets, predictions)` for targets [1, 0] and predictions [0.5, 0.5].",
+      "options": [],
+      "answer": "0.25",
+      "explanation": "Squared errors 0.25 and 0.25; their mean is 0.25.",
+      "page_refs": [113]
+    },
+    {
+      "id": "q5",
+      "type": "conceptual",
+      "question": "Under what condition would `learning_rate` have to become an argument of `training_step`?",
+      "options": [],
+      "answer": "If you wanted to modify the learning rate during training.",
+      "explanation": "The page: 'If we wanted to modify our learning rate during training, we'd need to pass it through as well.' Under jit, a global value is fixed when the function is traced.",
+      "page_refs": [113]
+    },
+    {
+      "id": "q6",
+      "type": "mcq",
+      "question": "What does the line `loss, grads = grad_fn((W, b), inputs, targets)` do, according to the callout?",
+      "options": [
+        "Only the forward pass",
+        "Only the backward pass",
+        "The forward pass and backward pass in one go",
+        "The parameter update"
+      ],
+      "answer": "The forward pass and backward pass in one go",
+      "explanation": "The callout says so explicitly; the update happens in the next lines ('Updates W and b').",
+      "page_refs": [113]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you write, without looking, the training loop that uses `training_step` for 40 steps and prints the loss?",
+      "options": [],
+      "answer": "`for step in range(40): loss, W, b = training_step(inputs, targets, W, b); print(step, loss)`",
+      "explanation": "The key is rebinding `W, b` from the return values. Compare with the book's loop on p.114.",
+      "page_refs": [113, 114]
+    }
+  ]
+}

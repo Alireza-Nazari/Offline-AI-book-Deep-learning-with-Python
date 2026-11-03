@@ -1,0 +1,162 @@
+{
+ "page_id": "page_273", "pdf_page": 273, "printed_page": "249", "book_id": "dlwp3",
+ "generation": {"status": "complete", "model": "claude-opus-5-5", "generated_at": "2026-11-03T07:46:00Z",
+   "confidence": "high", "review_flags": [],
+   "extraction_quality": "Clean: three listings (8.11-8.13) with their printed outputs, a three-item bullet list and two short body paragraphs, all matching the page image."},
+ "overview": {
+   "title": "Iterating, batching and mapping a Dataset",
+   "chapter": "8 Image classification",
+   "section": "8.2 Training a convnet from scratch on a small dataset",
+   "subsection": "8.2.4 Data preprocessing",
+   "main_topic": "Hands-on use of the tf.data.Dataset API on the toy dataset from listing 8.10: iteration, .batch(), .shuffle(), .prefetch() and .map()",
+   "central_idea": "The toy dataset yields single (16,) samples; .batch(32) groups them into (32, 16) tensors; shuffle, prefetch and map are further transformations, and map(function, num_parallel_calls) — demonstrated by reshaping each sample to (4, 4) with 8 parallel calls — is the workhorse for per-element preprocessing.",
+   "importance": "These few methods are enough to build realistic input pipelines; the image datasets of this chapter, and the text pipelines of later chapters, are built from exactly these operations.",
+   "learning_objectives": [
+     "Iterate over a Dataset and inspect element shapes",
+     "Explain how .batch(n) changes element shapes",
+     "Describe what .shuffle(buffer_size), .prefetch(buffer_size) and .map(callable) do",
+     "Use .map() with num_parallel_calls to apply a transformation to every element"
+   ],
+   "prerequisites": [
+     "Listing 8.10: the toy dataset of 1,000 vectors of size 16 (p.272)",
+     "Python enumerate and lambda functions",
+     "Tensor reshaping"
+   ],
+   "page_kind": "content"
+ },
+ "summary": "Continuing the toy example of p.272 (a `Dataset` built from a `(1000, 16)` NumPy array), the page shows the basic `Dataset` operations.\n\n- **Listing 8.11** iterates over the dataset with `enumerate`, printing the shape of the first three elements and breaking: each element is a single sample of shape `(16,)`.\n- **Listing 8.12** calls `dataset.batch(32)`; the new `batched_dataset` yields tensors of shape `(32, 16)` — 32 samples stacked along a new leading batch axis.\n\nThe authors then list other useful methods:\n\n- `.shuffle(buffer_size)` shuffles elements within a buffer;\n- `.prefetch(buffer_size)` prefetches a buffer of elements in GPU memory for better device utilization;\n- `.map(callable)` applies an arbitrary transformation to each element (the callable receives a single element yielded by the dataset).\n\n`.map(function, num_parallel_calls)` is singled out as one you will use often. **Listing 8.13** uses it to reshape every toy element from `(16,)` to `(4, 4)` via `lambda x: tf.reshape(x, (4, 4))`, running up to 8 calls in parallel; iterating shows three elements of shape `(4, 4)`.\n\nThese operations are lazy and chainable: each call returns a new dataset, leaving the original unchanged — which is why `dataset` can still be mapped in listing 8.13 after being batched in 8.12. Note that the order matters: mapping before batching applies the function to single samples, mapping after batching would apply it to whole batches. The next page (p.274) returns to the image datasets and fits the model.",
+ "paragraphs": [
+   {"ref": "p273_e05", "excerpt": "You can use the .batch() method to batch the data.",
+    "what_it_says": "Introduces .batch() for grouping elements into batches (listing 8.12).",
+    "what_it_means": "batch(32) stacks 32 consecutive elements of shape (16,) into one tensor of shape (32, 16). With 1,000 samples, there are 31 full batches and a final batch of 8 (unless drop_remainder=True).",
+    "why_it_matters": "Models are trained on mini-batches; this is exactly what image_dataset_from_directory does internally with batch_size.",
+    "technical_idea": "Batching adds a leading axis: (d,) → (n, d).",
+    "terminology": [{"term": "batch axis", "meaning": "The new first dimension indexing samples within a batch."}],
+    "connections": ["p.271: batch_size = 64 for the image datasets"]},
+   {"ref": "p273_e08", "excerpt": "More broadly, you have access to a range of useful dataset methods",
+    "what_it_says": "Introduces a list of further Dataset methods: shuffle, prefetch and map.",
+    "what_it_means": "These, together with batch, cover most practical pipeline needs: randomization, performance and per-element transformation.",
+    "why_it_matters": "A typical training pipeline is ds.shuffle(...).map(...).batch(...).prefetch(...).",
+    "terminology": [],
+    "connections": []},
+   {"ref": "p273_e09", "excerpt": ".shuffle(buffer_size) will shuffle elements within a buffer.",
+    "what_it_says": "shuffle randomizes element order using a buffer of the given size.",
+    "what_it_means": "The dataset fills a buffer with buffer_size elements and randomly samples from it, replacing each drawn element with the next one from the stream. A buffer as large as the dataset gives a perfect shuffle; a small buffer only shuffles locally.",
+    "why_it_matters": "Training on ordered data (all cats, then all dogs) would harm SGD; shuffling decorrelates consecutive batches.",
+    "technical_idea": "Beyond the book: the buffer trade-off is memory vs. randomness quality.",
+    "terminology": [{"term": "buffer_size", "meaning": "Number of elements held in memory from which random samples are drawn."}],
+    "connections": []},
+   {"ref": "p273_e10", "excerpt": ".prefetch(buffer_size) will prefetch a buffer of elements in GPU memory",
+    "what_it_says": "prefetch prepares a buffer of upcoming elements in GPU memory for better device utilization.",
+    "what_it_means": "This is the asynchronous prefetching described on p.272: while the model consumes one batch, the next ones are already ready.",
+    "why_it_matters": "Usually the last call in a pipeline; avoids accelerator idle time.",
+    "technical_idea": "Beyond the book: tf.data.AUTOTUNE lets TensorFlow choose the buffer size dynamically.",
+    "terminology": [{"term": "device utilization", "meaning": "The fraction of time the GPU/TPU is doing useful computation."}],
+    "connections": ["p.272: asynchronous data prefetching"]},
+   {"ref": "p273_e11", "excerpt": ".map(callable) will apply an arbitrary transformation to each element of the dataset",
+    "what_it_says": "map applies a user-supplied function to each element; the function takes a single element yielded by the dataset.",
+    "what_it_means": "If the dataset yields (image, label) pairs, the callable receives those two arguments; if it yields single tensors, it receives one tensor. Its return value becomes the new element.",
+    "why_it_matters": "Decoding, resizing, augmentation and tokenization are all typically done with map.",
+    "technical_idea": "Note (not in the book): the function is traced into a TensorFlow graph, so it should use TensorFlow ops (like tf.reshape) rather than arbitrary Python/NumPy code.",
+    "terminology": [{"term": "callable", "meaning": "Any Python object that can be called like a function, e.g. a lambda."}],
+    "connections": []},
+   {"ref": "p273_e12", "excerpt": "The method .map(function, num_parallel_calls) in particular is one that you will use often.",
+    "what_it_says": "map with num_parallel_calls is singled out as frequently used; the example reshapes the toy elements from (16,) to (4, 4).",
+    "what_it_means": "num_parallel_calls lets several elements be processed concurrently on different CPU cores — the 'parallelization of the preprocessing logic' mentioned on p.272.",
+    "why_it_matters": "Expensive per-element preprocessing becomes much faster when parallelized.",
+    "technical_idea": "Reshape preserves element count: 16 = 4·4.",
+    "terminology": [{"term": "num_parallel_calls", "meaning": "How many elements map may process concurrently."}],
+    "connections": ["p.274: 'You're about to see more map() action over the next chapters.'"]}
+ ],
+ "concepts": [
+   {"id": "tf_data_dataset", "name": "tf.data.Dataset transformations", "definition": "Chainable methods (batch, shuffle, prefetch, map) that return new datasets.", "intuition": "Lego blocks for building an input pipeline.", "technical": "Each method wraps the previous dataset; work happens lazily when iterating.", "significance": "Shown on the toy dataset before being used on images.", "example": "dataset.batch(32) → elements (32, 16).", "misconception": "Calling dataset.batch(32) does not modify dataset in place.", "related": ["dataset_batching", "dataset_map"], "source": "book"},
+   {"id": "dataset_batching", "name": ".batch()", "definition": "Groups consecutive elements into batches with a new leading axis.", "intuition": "Packing items into boxes of 32.", "technical": "(16,) → (32, 16); the last batch may be smaller.", "significance": "Implements step 5 of the preprocessing list (p.271).", "example": "1,000 samples / 32 = 31 full batches + one of 8.", "misconception": "The batch axis is not the feature axis; features stay last.", "related": ["tf_data_dataset"], "source": "book"},
+   {"id": "dataset_map", "name": ".map()", "definition": "Applies a function to every element, optionally in parallel.", "intuition": "An assembly-line station applied to each item.", "technical": "dataset.map(fn, num_parallel_calls=8); fn receives one element.", "significance": "The main tool for per-element preprocessing.", "example": "lambda x: tf.reshape(x, (4, 4)).", "misconception": "Mapping after batching applies the function to whole batches, not samples.", "related": ["tf_data_dataset"], "source": "book"},
+   {"id": "dataset_shuffle", "name": ".shuffle(buffer_size)", "definition": "Randomizes element order within a buffer.", "intuition": "Drawing cards at random from a hand of buffer_size cards, refilling from the deck.", "technical": "Perfect shuffle only when buffer_size ≥ dataset size.", "significance": "Decorrelates batches for SGD.", "example": "dataset.shuffle(1000) fully shuffles the toy dataset.", "misconception": "A small buffer does not give a uniformly random order.", "related": ["tf_data_dataset"], "source": "book"},
+   {"id": "prefetching", "name": ".prefetch(buffer_size)", "definition": "Prepares upcoming elements ahead of time.", "intuition": "The next batch is waiting before it's asked for.", "technical": "Overlaps input processing with model execution.", "significance": "Improves device utilization.", "example": "ds.prefetch(2)", "misconception": "It does not add data; it only changes timing.", "related": ["tf_data_dataset"], "source": "book"}
+ ],
+ "math": [],
+ "code": [
+   {"id": "c1", "listing": "8.11", "title": "Iterating on a dataset",
+    "original_code": ">>> for i, element in enumerate(dataset):\n>>>     print(element.shape)\n>>>     if i >= 2:\n>>>         break\n(16,)\n(16,)\n(16,)",
+    "language": "python",
+    "what_it_does": "Loops over the toy dataset and prints the shapes of the first three elements.",
+    "line_explanations": [
+      {"lines": "1", "explanation": "A Dataset is iterable; enumerate gives an index alongside each element."},
+      {"lines": "2", "explanation": "Print the element's shape."},
+      {"lines": "3-4", "explanation": "Stop after three elements (i = 0, 1, 2)."},
+      {"lines": "5-7", "explanation": "Each element is one sample: shape (16,)."}
+    ],
+    "inputs_outputs": "Input: dataset from listing 8.10. Output: three printed shapes.",
+    "algorithm": "Plain iteration.",
+    "theory_link": "Confirms from_tensor_slices yields single samples (p.272).",
+    "parameters": [],
+    "pitfalls": ["The book prints '>>>' on continuation lines here; in a real REPL these would be '...'. Listing 8.13 uses '...'."]},
+   {"id": "c2", "listing": "8.12", "title": "Batching a dataset",
+    "original_code": ">>> batched_dataset = dataset.batch(32)\n>>> for i, element in enumerate(batched_dataset):\n>>>     print(element.shape)\n>>>     if i >= 2:\n>>>         break\n(32, 16)\n(32, 16)\n(32, 16)",
+    "language": "python",
+    "what_it_does": "Creates a batched view of the dataset and prints the first three batch shapes.",
+    "line_explanations": [
+      {"lines": "1", "explanation": "batch(32) returns a new dataset yielding groups of 32 elements."},
+      {"lines": "2-5", "explanation": "Same iteration pattern as listing 8.11."},
+      {"lines": "6-8", "explanation": "Each element is now (32, 16)."}
+    ],
+    "inputs_outputs": "Output: batches of shape (32, 16); the 32nd batch would be (8, 16).",
+    "algorithm": "Stack n consecutive elements along a new axis 0.",
+    "theory_link": "Mini-batch training.",
+    "parameters": [{"name": "32", "role": "batch size"}],
+    "pitfalls": ["The final partial batch can break code that assumes a fixed batch size; use drop_remainder=True if needed."]},
+   {"id": "c3", "listing": "8.13", "title": "Applying a transformation to Dataset elements using map()",
+    "original_code": ">>> reshaped_dataset = dataset.map(\n...     lambda x: tf.reshape(x, (4, 4)),\n...     num_parallel_calls=8)\n>>> for i, element in enumerate(reshaped_dataset):\n...     print(element.shape)\n...     if i >= 2:\n...         break\n(4, 4)\n(4, 4)\n(4, 4)",
+    "language": "python",
+    "what_it_does": "Reshapes every (16,) sample into a (4, 4) matrix using up to 8 parallel calls, then prints the first three shapes.",
+    "line_explanations": [
+      {"lines": "1-3", "explanation": "map with a lambda that calls tf.reshape; num_parallel_calls=8 processes up to 8 elements concurrently."},
+      {"lines": "4-7", "explanation": "Iterate and print the first three shapes."},
+      {"lines": "8-10", "explanation": "Elements are now (4, 4)."}
+    ],
+    "inputs_outputs": "Input: unbatched toy dataset. Output: dataset of 1,000 (4, 4) tensors.",
+    "algorithm": "Per-element function application, parallelized.",
+    "theory_link": "The parallel preprocessing feature described on p.272.",
+    "parameters": [{"name": "num_parallel_calls", "role": "Degree of parallelism (8 here; tf.data.AUTOTUNE is a common choice)."}],
+    "pitfalls": ["Applied to the unbatched dataset; on batched_dataset you'd need tf.reshape(x, (-1, 4, 4)).", "Parallel map may produce elements out of order unless deterministic ordering is kept (the default is deterministic)."],
+    "illustrative_code": "# AI-written: a typical full chain\npipeline = (tf.data.Dataset.from_tensor_slices(random_numbers)\n            .shuffle(1000)\n            .map(lambda x: tf.reshape(x, (4, 4)), num_parallel_calls=tf.data.AUTOTUNE)\n            .batch(32)\n            .prefetch(tf.data.AUTOTUNE))\nfor batch in pipeline.take(1):\n    print(batch.shape)   # (32, 4, 4)"}
+ ],
+ "deeper": [
+   {"title": "Order of operations in a pipeline", "kind": "step_by_step", "body": "Beyond the book: a common recipe is shuffle → map → batch → prefetch. (1) Shuffle individual samples so batches mix classes; (2) map per-sample preprocessing (it's simpler on single elements); (3) batch; (4) prefetch last so that complete batches are ready. Shuffling after batching would only shuffle whole batches, and prefetching before batching would buffer single samples rather than batches.", "source": "ai_explanation"},
+   {"title": "Shape bookkeeping across the three listings", "kind": "breakdown", "body": "From the page: dataset → (16,); dataset.batch(32) → (32, 16); dataset.map(reshape to (4, 4)) → (4, 4). Combining (AI note): dataset.map(...).batch(32) → (32, 4, 4).", "source": "inference"}
+ ],
+ "visualizations": [
+   {"id": "v1", "type": "widget", "title": "Element shapes through batch and map", "why": "Follows the shapes printed in listings 8.11–8.13, plus the combined chain.", "widget": "tensor_shapes",
+    "params": {"steps": [{"op": "element (8.11)", "shape": [16]}, {"op": "map reshape (8.13)", "shape": [4, 4]}, {"op": "batch(32)", "shape": [32, 4, 4]}]}},
+   {"id": "v2", "type": "mermaid", "title": "Dataset methods on this page", "why": "Shows how batch, shuffle, map and prefetch each derive a new dataset from the toy dataset.",
+    "mermaid": "flowchart LR\n  D[\"dataset\\n(16,) elements\"] -->|\".batch(32)\"| B[\"(32, 16)\"]\n  D -->|\".map(reshape, num_parallel_calls=8)\"| M[\"(4, 4)\"]\n  D -->|\".shuffle(buffer_size)\"| S[\"(16,) random order\"]\n  D -->|\".prefetch(buffer_size)\"| P[\"(16,) prepared ahead\"]"}
+ ],
+ "misconceptions": [
+   {"claim": "dataset.batch(32) changes dataset itself.", "correction": "It returns a new dataset; listing 8.13 still maps the original unbatched dataset, which yields (16,) elements."},
+   {"claim": "shuffle(buffer_size) always gives a fully random permutation.", "correction": "Only if buffer_size is at least the number of elements; otherwise the shuffle is local within the buffer."},
+   {"claim": "The function passed to map receives a whole batch.", "correction": "It receives a single element yielded by the dataset — which is a batch only if batch() was applied before map()."}
+ ],
+ "connections": {
+   "earlier": [{"page": 272, "note": "Listing 8.10 created the toy dataset; the sidebar introduced parallel preprocessing and prefetching."}],
+   "later": [{"page": 274, "note": "Inspecting the image dataset batches and fitting the model; more map() in later chapters."}],
+   "prerequisites": [{"page": 272, "note": "from_tensor_slices and what a Dataset is."}],
+   "related_math": [], "related_code": [{"page": 272, "note": "Listing 8.10."}], "related_figures": []
+ },
+ "takeaways": [
+   "Iterating over the toy dataset yields single (16,) samples.",
+   "batch(32) yields (32, 16) tensors — a new leading batch axis.",
+   "shuffle(buffer_size) randomizes within a buffer; prefetch(buffer_size) prepares elements ahead for better device utilization.",
+   "map(function, num_parallel_calls) applies a function to every element in parallel; e.g. reshape (16,) → (4, 4).",
+   "Dataset methods return new datasets and can be chained."
+ ],
+ "questions": [
+   {"id": "q1", "type": "mcq", "question": "What shape do elements of dataset.batch(32) have for the toy dataset?", "options": ["(32, 16)", "(16, 32)", "(16,)", "(1000, 16)"], "answer": "(32, 16)", "explanation": "Batching stacks 32 samples of shape (16,) along a new first axis. (16, 32) puts the axes in the wrong order, (16,) is unbatched, and (1000, 16) is the whole array.", "page_refs": [273]},
+   {"id": "q2", "type": "short", "question": "What does num_parallel_calls=8 do in listing 8.13?", "options": [], "answer": "It lets map process up to 8 elements concurrently, parallelizing the transformation across CPU cores.", "explanation": "This is the parallel preprocessing feature described on p.272.", "page_refs": [273, 272]},
+   {"id": "q3", "type": "conceptual", "question": "Why does listing 8.13 print (4, 4) and not (32, 4, 4)?", "options": [], "answer": "map is applied to the original unbatched dataset, whose elements are (16,); batch() returned a separate dataset and did not modify dataset.", "explanation": "Dataset methods return new datasets.", "page_refs": [273]},
+   {"id": "q4", "type": "mcq", "question": "Which method would you use to keep the GPU busy while the next batch is prepared?", "options": [".prefetch(buffer_size)", ".shuffle(buffer_size)", ".batch(32)", ".map(callable)"], "answer": ".prefetch(buffer_size)", "explanation": "The page says prefetch prepares a buffer of elements in GPU memory for better device utilization. Shuffle randomizes order, batch groups elements and map transforms them.", "page_refs": [273]},
+   {"id": "q5", "type": "short", "question": "How many batches does dataset.batch(32) produce for 1,000 samples, and what is the shape of the last one?", "options": [], "answer": "32 batches: 31 of shape (32, 16) and a last one of shape (8, 16).", "explanation": "1,000 = 31·32 + 8; by default the remainder is kept. (Computation beyond the page.)", "page_refs": [273]},
+   {"id": "q6", "type": "conceptual", "question": "What would go wrong if you used a shuffle buffer of size 10 on a dataset where all cat images come before all dog images?", "options": [], "answer": "Shuffling would only mix nearby elements, so batches would still be almost entirely cats early in the epoch and dogs later.", "explanation": "shuffle works within a buffer; a small buffer gives only local randomness.", "page_refs": [273]},
+   {"id": "q7", "type": "self", "question": "Can you write a pipeline that shuffles, reshapes to (4, 4), batches by 32 and prefetches the toy dataset?", "options": [], "answer": "dataset.shuffle(1000).map(lambda x: tf.reshape(x, (4, 4)), num_parallel_calls=8).batch(32).prefetch(2)", "explanation": "Chains the four methods introduced on the page.", "page_refs": [273]}
+ ]
+}

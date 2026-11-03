@@ -1,0 +1,283 @@
+{
+ "page_id": "page_503",
+ "pdf_page": 503,
+ "printed_page": "479",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T09:40:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. Element p503_e06 merges three printed paragraphs ('Every time you run fit()...', 'The easy solution here...', 'Instead, we can avoid recompiling...'); they get separate notes. The callout 'Pads tokens to the full sequence length' points at the line tokens = tokens + [0] * (max_length - prompt_length). The timing result for Listing 16.10 is on p.504."
+ },
+ "overview": {
+  "title": "Greedy output, slowness, and compiled generation",
+  "chapter": "16 Text generation",
+  "section": "16.2 Training a mini-GPT",
+  "subsection": "16.2.3 Generative decoding",
+  "main_topic": "Running Listing 16.9 on the prompt 'A piece of advice' (repetitive output, minutes of runtime), why direct model calls are slow (no compilation), and Listing 16.10, which uses predict() on a fixed-length zero-padded sequence to avoid recompilation",
+  "central_idea": "Calling the model directly runs the forward pass eagerly and unoptimized, so greedy generation takes minutes. predict() compiles the computation, but compilation is tied to an input shape; padding the sequence to a constant max_length and reading the prediction at position i - 1 keeps the shape fixed so the compiled function is reused at every step.",
+  "importance": "Shows a practical performance lesson that applies to any Keras/JAX/TensorFlow inference loop (compile once, keep shapes static) and sets up the sampling-strategy experiments, which all use compiled_generate.",
+  "learning_objectives": [
+   "Recognize the repetitive greedy output of mini-GPT and connect it to greedy decoding",
+   "Explain why a direct model call is slow on the JAX and TensorFlow backends",
+   "Explain why compilation is specific to an input shape and why a growing sequence triggers recompilation",
+   "Trace Listing 16.10: zero padding, the loop index i, and why the prediction is read at i - 1",
+   "Explain why the causal mask makes the padding harmless"
+  ],
+  "prerequisites": [
+   "Listing 16.9 (p.502)",
+   "Causal masking in the Transformer decoder (p.470, p.497)",
+   "fit()/predict() and backend compilation (chapter 3)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page first runs `generate()` from Listing 16.9 on the prompt **\"A piece of advice\"**. The output is fluent but quickly gets stuck: \"...you can get a sense of what you are doing. You can get a sense of what you are doing, and you can get a sense of what\" (the repetition is analyzed on p.504-505).\n\nTwo problems are noted, and this page addresses the first: speed. Generation **takes minutes**, which is puzzling because training processed about **200,000 tokens per second** on the authors' reference hardware. The main reason, at least on the **JAX and TensorFlow backends**, is that the computation is **uncompiled**. Every time you run `fit()` or `predict()`, Keras compiles the per-batch computation: the `keras.ops` are lifted out of Python and heavily optimized by the backend, slow for the first batch but massively faster afterwards. A direct call such as `mini_gpt(...)` instead runs the forward pass live and unoptimized at each step.\n\nThe easy fix is `predict()`, with one gotcha: TensorFlow and JAX compile a function **for a specific input shape**, which lets the backend optimize for the hardware knowing exactly how many processor instructions each tensor operation needs. Listing 16.9 feeds a sequence that **grows by one token per step**, which would trigger a recompilation on every `predict()` call. The solution is to **pad the input to a fixed length**.\n\n**Listing 16.10**, `compiled_generate(prompt, max_length=64)`, pads the token list with zeros up to `max_length`, loops `i` from `prompt_length` to `max_length - 1`, calls `mini_gpt.predict(np.array([tokens]), verbose=0)` on the constant-shape `(1, 64)` input, reads the logits at position `i - 1` (the prediction for token `i`), and writes the argmax into `tokens[i]`. The page ends by announcing a timing test (result on p.504: under half a second).",
+ "paragraphs": [
+  {
+   "ref": "p503_e05",
+   "excerpt": "The first thing you will notice when running this is that it takes minutes",
+   "what_it_says": "Running generate() takes minutes, which is puzzling since training processed about 200,000 tokens per second on the reference hardware. The generative loop may add time, but not this much. The biggest reason, at least on the JAX and TensorFlow backends, is that the computation is uncompiled.",
+   "what_it_means": "Generating 64 tokens from a 4-token prompt requires 60 forward passes over at most 64 tokens, a few thousand token-positions in total, which at training throughput should take a fraction of a second. The gap is overhead: in eager mode each of the hundreds of operations in eight decoder blocks is dispatched one by one from Python, with no kernel fusion or graph-level optimization, and with a batch of one the GPU sits mostly idle between launches.",
+   "why_it_matters": "It teaches a recurring lesson: training speed tells you little about naive inference speed; how you invoke the model matters.",
+   "terminology": [
+    {"term": "Compiled computation", "meaning": "A traced graph of operations optimized as a whole by the backend (XLA for JAX/TensorFlow) before execution."},
+    {"term": "Eager execution", "meaning": "Running each operation immediately from Python as it is encountered."},
+    {"term": "Throughput", "meaning": "Tokens processed per second; ~200,000 during training here."}
+   ],
+   "connections": [
+    "p.502: Listing 16.9 calls mini_gpt(...) directly",
+    "p.504: the compiled version takes ~0.49 s"
+   ]
+  },
+  {
+   "ref": "p503_e06",
+   "excerpt": "Every time you run `fit()` or `predict()`, Keras compiles the computation that runs on",
+   "what_it_says": "fit() and predict() make Keras compile the per-batch computation: the keras.ops are lifted out of Python and optimized by the backend. This is slow for one batch but much faster for every later call. Calling the model directly makes the backend run the forward pass live and unoptimized each step.",
+   "what_it_means": "On JAX, Keras wraps the step function in jax.jit; on TensorFlow, in tf.function (with XLA when enabled). Tracing records the sequence of operations once; the compiler then fuses operations, plans memory and emits optimized kernels. The first call pays the compilation cost; subsequent calls with the same shapes reuse the compiled program.",
+   "why_it_matters": "It explains why the same model can be orders of magnitude faster or slower depending on whether you call model(x) or model.predict(x) in a loop.",
+   "terminology": [
+    {"term": "Tracing", "meaning": "Running the Python function once with symbolic inputs to record its operations as a graph."}
+   ],
+   "connections": [
+    "p.96: TensorFlow and its compilation via tf.function are introduced in chapter 3"
+   ]
+  },
+  {
+   "ref": "p503_e06",
+   "excerpt": "The easy solution here is to lean on `predict()`. With `predict()`, Keras will handle",
+   "what_it_says": "Using predict() lets Keras handle compilation, but TensorFlow and JAX compile for a specific input shape, which lets them optimize for the hardware knowing exactly how many processor instructions each tensor operation needs. Because the generation loop feeds a sequence that changes length every step, each predict() call would recompile.",
+   "what_it_means": "A compiled program is specialized to the shapes it saw while tracing. Shape (1, 5), then (1, 6), then (1, 7)... are all new programs, so you would pay compilation cost 60 times and gain nothing. Static shapes are a core constraint of XLA-style compilers.",
+   "why_it_matters": "This 'shape-stability' gotcha shows up whenever you mix compiled code with variable-length data (text, audio), and is why batching code often pads to fixed or bucketed lengths.",
+   "terminology": [
+    {"term": "Recompilation", "meaning": "Re-tracing and recompiling a function because it is called with input shapes (or types) it has not seen."},
+    {"term": "Static shape", "meaning": "A tensor shape known and fixed at compile time."}
+   ],
+   "connections": [
+    "p.496: training batches were fixed-length (256 tokens) for the same reason, via rebatch with drop_remainder=True"
+   ]
+  },
+  {
+   "ref": "p503_e06",
+   "excerpt": "Instead, we can avoid recompiling the `predict()` function if we pad our input",
+   "what_it_says": "Recompilation can be avoided by padding the input so the sequence always has the same length.",
+   "what_it_means": "The model is always called on a (1, max_length) array. The causal mask guarantees that the output at position i - 1 depends only on tokens 0..i-1, so whatever padding sits after it cannot change that prediction. Padding trades extra compute (processing all 64 positions every step) for one-time compilation, a good trade here.",
+   "why_it_matters": "It is the trick that turns minutes into under a second (p.504).",
+   "terminology": [
+    {"term": "Padding", "meaning": "Filling a sequence with placeholder tokens (here id 0) to reach a fixed length."}
+   ],
+   "connections": [
+    "p.497: the GPT model is decoder-only with causal (left-to-right) information flow"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "jit_compilation",
+   "name": "Compilation of the forward pass",
+   "definition": "Turning a model's Python-level operations into an optimized backend program before running it.",
+   "intuition": "Write the recipe once, have a chef optimize the whole kitchen workflow, then cook many times quickly.",
+   "technical": "Keras compiles train/predict step functions (jax.jit, tf.function/XLA). Compiled programs are specialized to input shapes and dtypes; new shapes trigger retracing.",
+   "significance": "Responsible for the minutes-to-under-a-second speed-up between Listing 16.9 and Listing 16.10.",
+   "example": "mini_gpt(x) in a loop runs eagerly; mini_gpt.predict(x) compiles once per input shape.",
+   "misconception": "Compilation is not free: the first call is slower, and shape changes force it again.",
+   "related": ["keras_model"],
+   "source": "book"
+  },
+  {
+   "id": "static_shapes",
+   "name": "Fixed input shapes and padding",
+   "definition": "Keeping the input tensor shape constant across calls, padding when the real data is shorter.",
+   "intuition": "Use one mold size for every cast so the factory never needs retooling.",
+   "technical": "Listing 16.10 pads to max_length with zeros; the model always sees shape (1, 64).",
+   "significance": "Essential for compiled inference on variable-length text.",
+   "example": "Prompt of 4 tokens -> tokens = 4 real ids + 60 zeros.",
+   "misconception": "Padding does not corrupt predictions for earlier positions, because the causal mask hides later positions.",
+   "related": ["jit_compilation", "causal_mask"],
+   "source": "book"
+  },
+  {
+   "id": "causal_mask",
+   "name": "Causal mask",
+   "definition": "An attention mask that prevents each position from attending to later positions.",
+   "intuition": "Each word can read only what came before it.",
+   "technical": "Output at position t is a function of tokens 0..t only, so in Listing 16.10 the logits at i - 1 ignore the zeros at positions >= i.",
+   "significance": "Makes the padding trick correct and also enables key/value caching (p.504).",
+   "example": "Changing tokens[10] cannot affect prediction[0, 9].",
+   "misconception": "Padding tokens are not ignored by the model in general; they are only irrelevant to earlier positions.",
+   "related": ["self_attention", "transformer"],
+   "source": "inference"
+  },
+  {
+   "id": "greedy_decoding",
+   "name": "Greedy decoding",
+   "definition": "Always choosing the single most likely next token.",
+   "intuition": "Always say the most predictable next word.",
+   "technical": "np.argmax over the next-token logits; deterministic.",
+   "significance": "The repetitive 'get a sense of what you are doing' output on this page is the motivating failure for sampling strategies (p.504-505).",
+   "example": "'A piece of advice' -> '... you can get a sense of what you are doing ...' repeated.",
+   "misconception": "Repetition is not a bug in the code; p.505 calls it a consequence of the training objective.",
+   "related": ["language_model"],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Greedy generation with Listing 16.9 on a prompt",
+   "original_code": ">>> prompt = \"A piece of advice\"\n>>> generate(prompt)\nA piece of advice, and the best way to get a feel for yourself is to get a sense\nof what you are doing.\nIf you are a business owner, you can get a sense of what you are doing. You can\nget a sense of what you are doing, and you can get a sense of what",
+   "language": "python",
+   "what_it_does": "Calls the uncompiled greedy generate() function and prints a 64-token continuation of 'A piece of advice'.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Defines the prompt reused throughout 16.2 (and later with Gemma on p.510)."},
+    {"lines": "2", "explanation": "Runs Listing 16.9 with the default max_length=64 tokens."},
+    {"lines": "3-6", "explanation": "Output: grammatical English that drifts into a loop on 'get a sense of what you are doing'. It ends mid-phrase because generation stops at exactly 64 tokens."}
+   ],
+   "inputs_outputs": "Input: the prompt string. Output: prompt plus 60 or so generated tokens as text. Runtime: minutes.",
+   "algorithm": "Greedy autoregressive decoding (Listing 16.9).",
+   "theory_link": "Greedy decoding chooses high-probability continuations and easily falls into self-reinforcing loops; once a phrase appears, repeating it becomes the most likely continuation.",
+   "parameters": [
+    {"name": "prompt", "role": "Starting text."}
+   ],
+   "pitfalls": [
+    "Your exact output will differ: it depends on the trained weights of your own run (p.504 says 'on our particular training run').",
+    "It is slow because the model is called directly (explained below the output)."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "16.10",
+   "title": "A compiled generation function for the mini-GPT model",
+   "original_code": "def compiled_generate(prompt, max_length=64):\n    tokens = list(ops.convert_to_numpy(tokenizer(prompt)))\n    prompt_length = len(tokens)\n    tokens = tokens + [0] * (max_length - prompt_length)\n    for i in range(prompt_length, max_length):\n        prediction = mini_gpt.predict(np.array([tokens]), verbose=0)\n        prediction = prediction[0, i - 1]\n        tokens[i] = np.argmax(prediction).item()\n    return tokenizer.detokenize(tokens)",
+   "language": "python",
+   "what_it_does": "Greedy generation that keeps the model input at a constant shape (1, max_length) so that predict() compiles once and is reused for every generated token.",
+   "line_explanations": [
+    {"lines": "1-3", "explanation": "Same tokenization as Listing 16.9."},
+    {"lines": "4", "explanation": "Callout: pads tokens to the full sequence length by appending zeros, so the list always has max_length entries."},
+    {"lines": "5", "explanation": "i is the index of the slot to fill next, from the first position after the prompt to the last slot."},
+    {"lines": "6", "explanation": "predict() on a (1, max_length) NumPy array: compiled on the first call, reused afterwards because the shape never changes. verbose=0 suppresses the progress bar that would otherwise print every step. Returns NumPy logits of shape (1, 64, 32000)."},
+    {"lines": "7", "explanation": "The logits at position i - 1 predict the token at position i (the model was trained with targets shifted by one, p.496). Positions >= i hold padding but cannot influence position i - 1 thanks to the causal mask."},
+    {"lines": "8", "explanation": "Greedy choice, written into the slot instead of appended."},
+    {"lines": "9", "explanation": "Detokenize the full list; after the loop every padding slot has been replaced."}
+   ],
+   "inputs_outputs": "Input: prompt string, max_length (default 64). Output: generated text of max_length tokens. On the authors' hardware about 0.49 s per call (p.504) versus minutes for Listing 16.9.",
+   "algorithm": "Fixed-shape autoregressive greedy decoding: for i = prompt_length..max_length-1: logits = f(tokens); tokens[i] = argmax(logits[i-1]).",
+   "theory_link": "Relies on the causal mask (output at t depends only on positions <= t) and on shape-specialized compilation.",
+   "parameters": [
+    {"name": "max_length", "role": "Fixed input length; also the total output length. Changing it triggers one new compilation."},
+    {"name": "verbose=0", "role": "Silences predict()'s per-call progress output."}
+   ],
+   "pitfalls": [
+    "Using prediction[0, -1] (as in Listing 16.9) would be wrong here: the last position is padding until the final step.",
+    "Each step still processes all 64 positions to use one; key/value caching (p.504) removes this waste.",
+    "The padding id 0 must be a valid token id for the embedding; its identity does not matter because of the causal mask.",
+    "If prompt_length >= max_length the padding list is empty and nothing is generated."
+   ],
+   "illustrative_code": "# AI-written: check that padding content does not change the prediction\nimport numpy as np\nids = list(ops.convert_to_numpy(tokenizer(\"A piece of advice\")))\nn = len(ids)\na = np.array([ids + [0] * (64 - n)])\nb = np.array([ids + [123] * (64 - n)])   # different padding\npa = mini_gpt.predict(a, verbose=0)[0, n - 1]\npb = mini_gpt.predict(b, verbose=0)[0, n - 1]\nprint(np.allclose(pa, pb, atol=1e-3))   # True thanks to the causal mask"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why prediction[0, i - 1] and not prediction[0, i]",
+   "kind": "step_by_step",
+   "body": "During training (p.496), inputs were `x[:-1]` and targets `x[1:]`: the output at position $t$ was trained to predict the token at position $t+1$. In Listing 16.10 the next empty slot is `i`, so the prediction for it is the output at position `i - 1`, the last real token. Example with a 4-token prompt: `prompt_length = 4`, first iteration `i = 4`, read `prediction[0, 3]` (output after the 4th prompt token), write `tokens[4]`. Next iteration reads position 4 (the token just written) and fills slot 5, and so on.",
+   "source": "inference"
+  },
+  {
+   "title": "Compile once vs. compile every step: a cost model",
+   "kind": "numerical",
+   "body": "Let $c$ be the one-time compile cost and $r$ the compiled run time per call, with $e \\gg r$ the eager per-call time. For 60 generated tokens: eager $\\approx 60e$; predict() on growing shapes $\\approx 60(c + r)$, possibly worse than eager since $c$ is large; padded predict() $\\approx c + 60r$. With the book's measurement of ~0.49 s for the padded version (p.504) averaged over 10 runs (the compile cost is paid once and amortized), $r$ is under 10 ms per step, while the eager loop took minutes. (Illustrative reasoning, not measurements from the book except the 0.49 s.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the PyTorch backend is mentioned as an exception",
+   "kind": "breakdown",
+   "body": "The authors hedge 'at least on the Jax and TensorFlow backends'. JAX and TensorFlow rely on whole-graph compilation (XLA) for speed, so eager calls are especially slow there. PyTorch's eager mode is its normal, well-optimized execution path, and Keras on PyTorch does not compile by default, so the gap between direct calls and predict() is smaller. (Background beyond the book.)",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "svg",
+   "title": "The fixed-length token buffer in Listing 16.10",
+   "why": "Illustrates the callout 'Pads tokens to the full sequence length' and the read-at-i-1 / write-at-i pattern, with the causal mask making the padding invisible to the prediction.",
+   "svg": "<svg viewBox=\"0 0 560 170\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"12\" fill=\"currentColor\"><text x=\"10\" y=\"18\">tokens (always length max_length = 64)</text><g stroke=\"currentColor\" fill=\"none\"><rect x=\"10\" y=\"30\" width=\"40\" height=\"30\"/><rect x=\"50\" y=\"30\" width=\"40\" height=\"30\"/><rect x=\"90\" y=\"30\" width=\"40\" height=\"30\"/><rect x=\"130\" y=\"30\" width=\"40\" height=\"30\"/><rect x=\"170\" y=\"30\" width=\"40\" height=\"30\"/><rect x=\"210\" y=\"30\" width=\"40\" height=\"30\" stroke-width=\"3\"/><rect x=\"250\" y=\"30\" width=\"40\" height=\"30\" stroke-dasharray=\"4 3\"/><rect x=\"290\" y=\"30\" width=\"40\" height=\"30\" stroke-dasharray=\"4 3\"/><rect x=\"330\" y=\"30\" width=\"40\" height=\"30\" stroke-dasharray=\"4 3\"/><rect x=\"410\" y=\"30\" width=\"40\" height=\"30\" stroke-dasharray=\"4 3\"/></g><text x=\"22\" y=\"50\">A</text><text x=\"56\" y=\"50\">piece</text><text x=\"103\" y=\"50\">of</text><text x=\"133\" y=\"50\">advice</text><text x=\"185\" y=\"50\">,</text><text x=\"225\" y=\"50\">?</text><text x=\"265\" y=\"50\">0</text><text x=\"305\" y=\"50\">0</text><text x=\"345\" y=\"50\">0</text><text x=\"380\" y=\"50\">...</text><text x=\"425\" y=\"50\">0</text><text x=\"10\" y=\"80\">prompt (prompt_length)</text><text x=\"170\" y=\"80\">generated</text><text x=\"260\" y=\"80\">zero padding</text><text x=\"180\" y=\"110\">read prediction[0, i-1]</text><path d=\"M190 64 L190 96\" stroke=\"currentColor\"/><text x=\"300\" y=\"110\">write tokens[i]</text><path d=\"M230 64 L300 98\" stroke=\"currentColor\"/><text x=\"10\" y=\"140\">Causal mask: the output at position i-1 depends only on positions 0..i-1,</text><text x=\"10\" y=\"158\">so the zeros to the right never affect it. Input shape stays (1, 64): compile once.</text></svg>"
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "Three ways to run the generation loop",
+   "why": "Summarizes the page's argument: direct calls are uncompiled, predict() on a growing sequence recompiles each step, predict() on a padded sequence compiles once.",
+   "mermaid": "flowchart LR\n  A[\"mini_gpt(x) on growing x (Listing 16.9)\"] --> A1[\"eager, unoptimized every step: minutes\"]\n  B[\"predict(x) on growing x\"] --> B1[\"new shape every step: recompile every step\"]\n  C[\"predict(x) on padded x (Listing 16.10)\"] --> C1[\"shape (1, 64) fixed: compile once, ~0.5 s\"]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "predict() is always faster than calling the model directly.", "correction": "Only if the compiled function is reused. If the input shape changes every call, predict() recompiles every time and gains nothing."},
+  {"claim": "Padding with zeros corrupts the model's predictions.", "correction": "With a causal decoder, the output at position i - 1 cannot see positions >= i, so the padding is invisible to the prediction that is used."},
+  {"claim": "The repetitive output means generation code has a bug.", "correction": "The code works; repetition is a known behaviour of greedy decoding with this model, analyzed on p.504-505."},
+  {"claim": "Since training ran at 200,000 tokens/s, generation must be fast automatically.", "correction": "Training ran through compiled fit() on large batches; the naive generation loop is eager, batch size 1, one token at a time."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 502, "note": "Listing 16.9, the uncompiled generate() being run and replaced here."},
+   {"page": 497, "note": "GPT is decoder-only, information flows left to right."},
+   {"page": 496, "note": "Training targets are the inputs shifted by one, which is why position i - 1 predicts token i."},
+   {"page": 96, "note": "Chapter 3 introduces TensorFlow and its compilation."}
+  ],
+  "later": [
+   {"page": 504, "note": "Timing: compiled_generate takes ~0.49 s; key/value caching; repetition problem introduced."},
+   {"page": 505, "note": "compiled_generate gains a sample_fn argument for pluggable sampling strategies."},
+   {"page": 507, "note": "Top-K sampling with compiled_generate."},
+   {"page": 510, "note": "Gemma's CausalLM.generate() handles compiled generation for you."}
+  ],
+  "prerequisites": [
+   {"page": 470, "note": "The Transformer decoder block and its causal masking (15.3.3)."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 502, "note": "Listing 16.9 for a line-by-line comparison."},
+   {"page": 505, "note": "The refactored compiled_generate(prompt, sample_fn, ...)."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "Greedy decoding with mini-GPT gives fluent but repetitive text ('get a sense of what you are doing').",
+  "Calling the model directly in a loop runs eagerly and unoptimized; on JAX/TensorFlow that makes generation take minutes.",
+  "fit() and predict() compile the computation, which is slow once and fast afterwards.",
+  "Compiled functions are specialized to input shapes; a growing sequence would force recompilation at every step.",
+  "Listing 16.10 pads to a fixed length and reads the prediction at i - 1; the causal mask makes the padding harmless."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "Why would simply replacing mini_gpt(x) with mini_gpt.predict(x) in Listing 16.9 not fix the speed problem?", "options": ["predict() cannot handle integer inputs", "The input shape grows each step, so predict() would recompile on every call", "predict() always runs on CPU", "predict() applies a softmax that changes the argmax"], "answer": "The input shape grows each step, so predict() would recompile on every call", "explanation": "The page explains that TensorFlow/JAX compile for a specific input shape; a sequence that changes shape after each prediction triggers recompilation each time. predict() handles integer inputs, uses the GPU, and adds no softmax.", "page_refs": [503]},
+  {"id": "q2", "type": "short", "question": "In Listing 16.10, why is the logit read from position i - 1 rather than -1?", "options": [], "answer": "Because the array is padded to max_length: position -1 is padding until the last step. The output at position i - 1 (the last real token) is the prediction for slot i.", "explanation": "The model predicts token t+1 at position t (targets shifted by one), so slot i is predicted from position i - 1.", "page_refs": [503]},
+  {"id": "q3", "type": "conceptual", "question": "Why does the zero padding not change the predictions used by compiled_generate?", "options": [], "answer": "The decoder uses causal attention: each position attends only to itself and earlier positions, so the output at i - 1 is independent of tokens at positions >= i.", "explanation": "GPT-style models let information flow only left to right (p.497); later tokens, including padding, cannot affect earlier outputs.", "page_refs": [503, 497]},
+  {"id": "q4", "type": "mcq", "question": "According to the page, what happens the first time fit() or predict() runs on a batch?", "options": ["It is fast, and gets slower over time", "Keras compiles the computation: slow for the first batch, much faster afterwards", "Keras converts the model to PyTorch", "The model weights are re-initialized"], "answer": "Keras compiles the computation: slow for the first batch, much faster afterwards", "explanation": "The page says the keras.ops are lifted out of Python and optimized; it's slow for one batch but massively faster for each subsequent call. No backend conversion or re-initialization happens.", "page_refs": [503]},
+  {"id": "q5", "type": "conceptual", "question": "The greedy output loops on 'get a sense of what you are doing'. Is this a speed problem, a code bug, or something else?", "options": [], "answer": "Something else: it is a behaviour of greedy decoding with this model, deterministic choice of the most probable continuation, unrelated to compilation; p.504-505 address it with sampling strategies.", "explanation": "Listing 16.10 only changes speed and produces the same greedy output; changing how the next token is chosen is what fixes repetition.", "page_refs": [503, 504, 505]},
+  {"id": "q6", "type": "short", "question": "What is the cost of the padding approach, and which technique on p.504 removes it?", "options": [], "answer": "Every step processes all max_length positions even though only one output is used; key/value caching lets each step process only the new token.", "explanation": "p.504 notes the sequence only changes by one token between steps and that caching keys and values gives an RNN-like state.", "page_refs": [503, 504]},
+  {"id": "q7", "type": "self", "question": "Can you explain to someone why model(x) in a Python loop can be 100x slower than model.predict(x) on JAX, and what condition must hold for predict() to stay fast?", "options": [], "answer": "Eager vs. compiled execution; the input shape (and dtype) must stay the same across calls.", "explanation": "These are the two ideas the page builds Listing 16.10 on.", "page_refs": [503]}
+ ]
+}

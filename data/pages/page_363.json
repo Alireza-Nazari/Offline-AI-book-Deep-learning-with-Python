@@ -1,0 +1,396 @@
+{
+ "page_id": "page_363",
+ "pdf_page": 363,
+ "printed_page": "339",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:01:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. The top code element is the tail of the model summary started on p.362. The extractor merged three printed paragraphs ('Next, we can add…', 'Finally, we reshape…', 'Looking good!…') into p363_e05; notes are written per printed paragraph. The `from_grid` function begins here and continues on p.364 (only its first line is on this page)."
+ },
+ "overview": {
+  "title": "Why the head is shaped this way, and encoding boxes relative to the grid",
+  "chapter": "12 Object detection",
+  "section": "12.2 Training a YOLO model from scratch",
+  "subsection": "12.2.3 Readying the COCO data for the YOLO model",
+  "main_topic": "Interpreting the model summary totals and the design of the head (strided downsampling, dense layers, reshape, softmax, no locality constraint); then the YOLO box encoding (x, y relative to the responsible cell, w, h relative to the image) and the `to_grid` / `from_grid` utilities",
+  "central_idea": "The head downsamples 401,408 backbone floats to 18,432, mixes them with dense layers so every grid cell sees the whole image, and reshapes the result to a 6 x 6 grid. To train it, each ground-truth box is assigned to the grid cell containing its center, and its center is re-expressed as an offset in [0, 1] within that cell while width and height stay relative to the whole image.",
+  "importance": "The encoding defined here is what the model's box outputs mean. Every later step (targets on p.364, visualization on p.365, loss on p.366, inference on p.368-370) converts between image coordinates and grid coordinates with these two utilities.",
+  "learning_objectives": [
+   "Read the model summary totals and explain the trainable vs. non-trainable split.",
+   "Explain why the backbone output is downscaled before the dense layers (401,408 vs. 18,432 floats).",
+   "Explain why the head has no locality constraint and why that is intentional.",
+   "State the YOLO box encoding: which cell is responsible for a box, and what x, y, w, h mean.",
+   "Trace `to_grid` on a concrete box and explain how `from_grid` inverts it."
+  ],
+  "prerequisites": [
+   "Listing 12.6 and the first part of its summary (p.362)",
+   "Boxes stored as top-left (x, y) plus (w, h) in a unit square (p.357)",
+   "Integer truncation with `int()` and Python tuple unpacking"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page first finishes the **model summary** from p.362: `get_item_6` is the box slice `(None, 6, 6, 5)` and `activation_33` is the softmax over the class slice `(None, 6, 6, 91)`. In total the model has **77,850,336 parameters (296.98 MB)**, of which 77,797,088 are trainable and 53,248 are non-trainable.\n\nThe authors then explain the head. The backbone outputs `(batch_size, 14, 14, 2048)`, i.e. **401,408 floats per image**, too many for dense layers, so a **strided conv** reduces them to `(batch_size, 6, 6, 512)`, **18,432 floats**. The flattened map goes through a `Dense` with `relu` and a final `Dense` with exactly the number of predictions needed: 5 for box and confidence plus 91 class scores per grid location. The output is reshaped to **6 x 6**, split, and a **softmax** is applied to the class part as usual; the box outputs \"will need more special consideration\" later. Because the whole feature map is flattened, **every grid detector can use the entire image's features**: there is no locality constraint, by design, since large objects do not stay inside one cell.\n\n**Section 12.2.3** aligns the data with the prediction grid. **Each grid detector is responsible for the boxes whose center falls inside its cell.** The model outputs five floats per cell, `(x, y, w, h, confidence)`: `x` and `y` are the object's **center relative to the bounds of the grid cell** (0 to 1), while `w` and `h` are the object's **size relative to the image**. The `w` and `h` in the data are already correct, but `x` and `y` must be translated to and from the grid, using two utilities. `to_grid(box)` computes the center in grid units, `cx, cy = (x + w/2) * grid_size, (y + h/2) * grid_size`, takes the integer cell indices `ix, iy`, and returns `((ix, iy), (cx - ix, cy - iy, w, h))`. `from_grid(loc, box)` starts here and, on p.364, converts back to a top-left box in image coordinates.",
+ "paragraphs": [
+  {
+   "ref": "p363_e04",
+   "excerpt": "Our backbone outputs have shape (batch_size, 14, 14, 2048). That is 401,408 output floats",
+   "what_it_says": "The backbone produces `(batch_size, 14, 14, 2048)` = 401,408 floats per image, too many for dense layers, so a strided conv downsamples to `(batch_size, 6, 6, 512)` = 18,432 floats.",
+   "what_it_means": "This justifies the extra `Conv2D(512, (3, 3), strides=(2, 2))` in listing 12.6, which is not part of the 'two dense layers' recipe from the paper. It reduces both spatial size (14 to 6) and channel depth (2048 to 512), a 21.8x reduction.",
+   "why_it_matters": "The size of the flattened vector directly sets the weight count of the first dense layer: 18,432 x 2,048 is already 37.7 M weights; 401,408 x 2,048 would be about 822 M.",
+   "technical_idea": "14 x 14 x 2048 = 401,408; 6 x 6 x 512 = 18,432.",
+   "terminology": [
+    {"term": "strided conv", "meaning": "Convolution with stride > 1, used here as a learned downsampler."}
+   ],
+   "connections": [
+    "p.362: the Conv2D row in the summary has 9,437,696 parameters.",
+    "p.360: strided convolutions preserve spatial location better than pooling."
+   ]
+  },
+  {
+   "ref": "p363_e05",
+   "excerpt": "Next, we can add our two densely connected layers. We flatten the entire feature map",
+   "what_it_says": "The feature map is flattened, passed through a `Dense` with `relu`, then through a final `Dense` with exactly the number of outputs needed: 5 for the box and confidence and 91 for the classes, at each grid location.",
+   "what_it_means": "The output layer's width is set by the target format, 6 x 6 x (5 + 91) = 3,456, not by a design preference; it is a linear layer whose outputs are given meaning by the reshape and split that follow.",
+   "why_it_matters": "It shows the general recipe for structured outputs: produce a flat vector of the right length, then reshape it into the structure you need.",
+   "terminology": [
+    {"term": "relu", "meaning": "The activation 'in the middle' of the two dense layers."}
+   ],
+   "connections": [
+    "p.361: the paper's head recipe.",
+    "p.362: `Dense(2048, activation=\"relu\")` and `Dense(grid_size * grid_size * (num_labels + 5))`."
+   ]
+  },
+  {
+   "ref": "p363_e05",
+   "excerpt": "Finally, we reshape the outputs back to a 6 × 6 grid and split our box",
+   "what_it_says": "The outputs are reshaped to 6 x 6 and split into box and class predictions; the class part gets a softmax as usual, while the box outputs need special consideration covered later.",
+   "what_it_means": "The softmax makes each cell's 91 class values a probability distribution, suitable for sparse categorical crossentropy. The five box values are left as unconstrained linear outputs for now.",
+   "why_it_matters": "Flags that the box output, particularly the confidence, will be handled specially in the loss (p.366).",
+   "terminology": [],
+   "connections": [
+    "p.366: the box loss and the special treatment of confidence."
+   ]
+  },
+  {
+   "ref": "p363_e05",
+   "excerpt": "Looking good! Note that because we flatten the entire feature map through the classification layer",
+   "what_it_says": "Because the whole feature map is flattened through the dense layers, every grid detector can use features from the entire image: there is no locality constraint, by design, since large objects will not stay within one grid cell.",
+   "what_it_means": "A cell's output is a function of all 18,432 features. This differs from a convolutional head, where each output cell would see only a local receptive field. A cell responsible for the center of a large object (say a bus covering half the image) needs to see the object's extent to predict its w and h.",
+   "why_it_matters": "It explains a key property of the original YOLO and a trade-off: global context and the ability to predict large boxes, at the cost of many parameters and no built-in translation equivariance.",
+   "technical_idea": "Dense head = global receptive field per output; convolutional head = local receptive field with weight sharing across positions (beyond the book).",
+   "terminology": [
+    {"term": "grid detector", "meaning": "The set of outputs belonging to one grid cell."},
+    {"term": "locality constraint", "meaning": "A restriction that an output depends only on nearby input positions, as in convolutions."}
+   ],
+   "connections": [
+    "p.362: Flatten followed by Dense layers in listing 12.6."
+   ]
+  },
+  {
+   "ref": "p363_e07",
+   "excerpt": "Our model is relatively simple, but we still need to preprocess our inputs",
+   "what_it_says": "The data must be aligned with the prediction grid. Each grid detector is responsible for boxes whose center falls inside its cell. The model outputs five floats per box, `(x, y, w, h, confidence)`: `x`, `y` are the object's center relative to the grid cell's bounds (0 to 1), and `w`, `h` are the object's size relative to the image.",
+   "what_it_means": "Two changes from the dataset's format: (1) the reference point moves from the box's top-left corner to its center, and (2) the center is measured within the responsible cell rather than within the whole image. The size stays in image units because a box can be much larger than a cell.",
+   "why_it_matters": "This assignment rule is what makes training well-defined: each ground-truth box has exactly one responsible cell, which gets the box target and confidence 1 (p.364).",
+   "technical_idea": "Cell-relative offsets bound x and y to [0, 1), making the regression target well-scaled regardless of where the cell is.",
+   "terminology": [
+    {"term": "responsible cell", "meaning": "The grid cell containing the box center; it alone predicts that box."},
+    {"term": "cell-relative coordinates", "meaning": "Offsets of the center within its cell, from 0 (left/top edge) to 1 (right/bottom edge)."}
+   ],
+   "connections": [
+    "p.357: boxes are stored as top-left x, y and w, h in the unit square.",
+    "p.364: listing 12.7 uses `to_grid` to fill the box targets."
+   ]
+  },
+  {
+   "ref": "p363_e08",
+   "excerpt": "We already have the right w and h values in our training data.",
+   "what_it_says": "`w` and `h` are already in the right units; only `x` and `y` must be translated to and from the grid, so two utilities are defined.",
+   "what_it_means": "Since boxes were rescaled to the unit square in listing 12.2, `w` and `h` are fractions of the image size, exactly what the model should predict. The conversion is needed in both directions: image to grid for building targets, grid to image for drawing predictions.",
+   "why_it_matters": "`to_grid` is used in listing 12.7 (p.364) and `from_grid` in listing 12.8 (p.365) and at inference.",
+   "terminology": [],
+   "connections": [
+    "p.364: the rest of `from_grid`.",
+    "p.365: `draw_prediction` calls `from_grid((xi, yi), box)`."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "yolo_box_encoding",
+   "name": "YOLO box encoding",
+   "definition": "Each box is represented by the cell containing its center plus (x, y, w, h): the center's offset within that cell (0 to 1) and the box's width and height relative to the image.",
+   "intuition": "'Which square is it in, and where in that square is its middle?' plus 'how big is it compared with the photo?'",
+   "technical": "For grid size $S$ and top-left box $(x_0, y_0, w, h)$: $c_x = S(x_0 + w/2)$, $i_x = \\lfloor c_x \\rfloor$, offset $c_x - i_x$; similarly for y.",
+   "significance": "Defines what the model's 5 box outputs mean and how targets are built.",
+   "example": "With $S = 6$, the cat box `[0.12, 0.27, 0.57, 0.33]` from p.358 goes to cell (2, 2) with offsets (0.43, 0.61).",
+   "misconception": "w and h are not relative to the cell; they are relative to the whole image.",
+   "related": ["yolo", "bounding_box", "confidence_score"],
+   "source": "book"
+  },
+  {
+   "id": "global_receptive_field_head",
+   "name": "No locality constraint in the YOLO head",
+   "definition": "Because the head flattens the feature map into dense layers, each grid cell's prediction depends on the entire image's features.",
+   "intuition": "Every cell can 'look around' the whole picture before saying what is centered in it.",
+   "technical": "Every output unit of `Dense(3456)` is connected (through `Dense(2048)`) to all 18,432 features.",
+   "significance": "Lets a cell predict a large box extending far beyond its own region.",
+   "example": "A person spanning several rows of cells is predicted by the single cell holding the person's center.",
+   "misconception": "That a cell is 'responsible' for a box does not mean it only sees its own pixels.",
+   "related": ["detection_head", "dense_layer"],
+   "source": "book"
+  },
+  {
+   "id": "non_trainable_params",
+   "name": "Trainable vs. non-trainable parameters",
+   "definition": "Trainable parameters are updated by gradient descent; non-trainable ones are model state not updated by gradients.",
+   "intuition": "Weights you learn versus running statistics you just keep track of.",
+   "technical": "The summary shows 77,797,088 trainable and 53,248 non-trainable parameters. The non-trainable ones are most likely the batch-normalization moving means and variances in ResNet-50 (inference, not stated in the book).",
+   "significance": "Shows that the backbone is not frozen here: its weights are trained along with the head.",
+   "example": "77,850,336 x 4 bytes = 311,401,344 bytes = 296.98 MiB, matching the printed size.",
+   "misconception": "'Non-trainable' does not mean the backbone is frozen.",
+   "related": ["batch_normalization", "transfer_learning"],
+   "source": "inference"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Image coordinates to grid coordinates (to_grid)",
+   "latex": "\\begin{aligned} c_x &= \\left(x + \\tfrac{w}{2}\\right) S, \\quad c_y = \\left(y + \\tfrac{h}{2}\\right) S \\\\ i_x &= \\lfloor c_x \\rfloor, \\quad i_y = \\lfloor c_y \\rfloor \\\\ \\text{to\\_grid}(x, y, w, h) &= \\big((i_x, i_y),\\ (c_x - i_x,\\ c_y - i_y,\\ w,\\ h)\\big) \\end{aligned}",
+   "source_text": "cx, cy = (x + w / 2) * grid_size, (y + h / 2) * grid_size\nix, iy = int(cx), int(cy)\nreturn (ix, iy), (cx - ix, cy - iy, w, h)",
+   "variables": [
+    {"symbol": "x, y", "meaning": "Top-left corner of the box in the unit-square image (p.357)."},
+    {"symbol": "w, h", "meaning": "Box width and height as fractions of the image size."},
+    {"symbol": "S", "meaning": "`grid_size`, here 6."},
+    {"symbol": "c_x, c_y", "meaning": "Box center measured in grid-cell units (0 to S)."},
+    {"symbol": "i_x, i_y", "meaning": "Column and row index of the responsible cell (`int` truncates toward zero, equal to floor for non-negative values)."}
+   ],
+   "operations": "Shift from top-left to center, scale to grid units, split into integer cell index and fractional offset.",
+   "purpose": "Builds the targets: which cell gets the box and what x, y it should predict.",
+   "interpretation": "The fractional parts are the center's position inside the responsible cell, in [0, 1).",
+   "intuition": "Like writing 2.43 as 'cell 2, 43% of the way across'.",
+   "numerical_example": "Cat box from p.358: $(x, y, w, h) = (0.12, 0.27, 0.57, 0.33)$, $S = 6$.\n- $c_x = (0.12 + 0.285) \\cdot 6 = 2.43$, $c_y = (0.27 + 0.165) \\cdot 6 = 2.61$\n- $i_x = 2$, $i_y = 2$\n- result: cell $(2, 2)$, box $(0.43, 0.61, 0.57, 0.33)$.",
+   "source": "book",
+   "book_ref": "p.363"
+  },
+  {
+   "id": "m2",
+   "title": "Grid coordinates back to image coordinates (from_grid)",
+   "latex": "x = \\frac{i_x + \\hat{x}}{S} - \\frac{w}{2}, \\qquad y = \\frac{i_y + \\hat{y}}{S} - \\frac{h}{2}",
+   "source_text": "x = (xi + x) / grid_size - w / 2\ny = (yi + y) / grid_size - h / 2   (body of from_grid, on p.364)",
+   "variables": [
+    {"symbol": "\\hat{x}, \\hat{y}", "meaning": "Cell-relative center offsets (the `x`, `y` passed to `from_grid`)."},
+    {"symbol": "i_x, i_y", "meaning": "Cell indices `xi`, `yi`."},
+    {"symbol": "x, y", "meaning": "Recovered top-left corner in image coordinates."}
+   ],
+   "operations": "Exact inverse of to_grid: add cell index, divide by S, subtract half the size.",
+   "purpose": "Turn model predictions (or targets) back into drawable boxes.",
+   "interpretation": "Round-tripping a box through to_grid then from_grid returns the original box (up to floating-point error).",
+   "intuition": "Undo each step of to_grid in reverse order.",
+   "numerical_example": "From cell (2, 2), offsets (0.43, 0.61), w = 0.57, h = 0.33: $x = 2.43/6 - 0.285 = 0.405 - 0.285 = 0.12$, $y = 2.61/6 - 0.165 = 0.435 - 0.165 = 0.27$.",
+   "source": "book",
+   "book_ref": "p.364"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "End of the model summary (continued from p.362)",
+   "original_code": "├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ get_item_6 (GetItem)  │ (None, 6, 6, 5)   │           0 │ reshape_3[0][0]    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ activation_33         │ (None, 6, 6, 91)  │           0 │ get_item_7[0][0]   │\n│ (Activation)          │                   │             │                    │\n└───────────────────────┴───────────────────┴─────────────┴────────────────────┘\n Total params: 77,850,336 (296.98 MB)\n Trainable params: 77,797,088 (296.77 MB)\n Non-trainable params: 53,248 (208.00 KB)",
+   "language": "text",
+   "what_it_does": "Completes the `model.summary()` table that begins on p.362: the box slice, the softmax over the class slice, and the parameter totals.",
+   "line_explanations": [
+    {"lines": "2", "explanation": "`get_item_6` is `x[..., :5]`, the box output `(None, 6, 6, 5)`, taken from `reshape_3`."},
+    {"lines": "4-5", "explanation": "`activation_33` is the softmax applied to `get_item_7` (the class slice), output `(None, 6, 6, 91)`."},
+    {"lines": "7", "explanation": "Total parameters 77,850,336 = backbone 23,580,512 + head 54,269,824; at 4 bytes each, 296.98 MB (MiB)."},
+    {"lines": "8-9", "explanation": "Almost everything is trainable; 53,248 non-trainable values (208 KB) remain, most likely batch-normalization statistics in ResNet-50."}
+   ],
+   "inputs_outputs": "Console output.",
+   "algorithm": "n/a",
+   "theory_link": "Confirms the two outputs have the intended shapes and that the backbone is fine-tuned together with the head.",
+   "parameters": [],
+   "pitfalls": [
+    "The top rows of this table are on p.362; read both pages together.",
+    "Memory during training is much larger than 297 MB because of activations, gradients and optimizer state."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "to_grid and the start of from_grid (from_grid continues on p.364)",
+   "original_code": "def to_grid(box):\n    x, y, w, h = box\n    cx, cy = (x + w / 2) * grid_size, (y + h / 2) * grid_size\n    ix, iy = int(cx), int(cy)\n    return (ix, iy), (cx - ix, cy - iy, w, h)\n\ndef from_grid(loc, box):\n    (xi, yi), (x, y, w, h) = loc, box",
+   "language": "python",
+   "what_it_does": "`to_grid` converts a top-left unit-square box into (cell indices, cell-relative center offsets plus w, h). `from_grid` begins by unpacking a cell location and a grid-encoded box; its remaining three lines, which compute the top-left image coordinates and return them, are on p.364.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Unpacks the box `(x, y, w, h)` with x, y the top-left corner in image fractions."},
+    {"lines": "3", "explanation": "Computes the center (x + w/2, y + h/2) and scales it by `grid_size` into grid units."},
+    {"lines": "4", "explanation": "`int` truncation yields the column `ix` and row `iy` of the responsible cell."},
+    {"lines": "5", "explanation": "Returns the location tuple and the encoded box: fractional offsets within the cell, plus unchanged w, h."},
+    {"lines": "7-8", "explanation": "`from_grid` takes `loc = (xi, yi)` and `box = (x, y, w, h)` in grid encoding and unpacks both in one statement. Continued on p.364."}
+   ],
+   "inputs_outputs": "`to_grid`: input a 4-sequence `[x, y, w, h]` in [0, 1]; output `((ix, iy), (dx, dy, w, h))`. `from_grid`: input `((xi, yi), (dx, dy, w, h))`; output (on p.364) `(x, y, w, h)` in image coordinates.",
+   "algorithm": "Coordinate change: translate to center, scale by S, split integer and fractional parts.",
+   "theory_link": "Implements the rule that the cell containing the box center is responsible for it.",
+   "parameters": [
+    {"name": "grid_size", "role": "Global defined in listing 12.6 (6); number of cells per side."}
+   ],
+   "pitfalls": [
+    "Note the order: `ix` is the column (from x) and `iy` the row (from y). Arrays are later indexed `[yi, xi]` (row first, p.364).",
+    "A center exactly at 1.0 would give index 6, outside the 6 x 6 grid; this cannot happen for boxes with positive size inside the image but is worth knowing.",
+    "Both functions depend on the global `grid_size`; changing it requires rebuilding the targets."
+   ],
+   "illustrative_code": "# AI-written: round-trip check using the cat box from p.358\n# (requires the full from_grid from p.364)\nbox = [0.12, 0.27, 0.57, 0.33]\nloc, grid_box = to_grid(box)\nprint(loc, [round(v, 2) for v in grid_box])  # (2, 2) [0.43, 0.61, 0.57, 0.33]\nprint([round(v, 2) for v in from_grid(loc, grid_box)])  # [0.12, 0.27, 0.57, 0.33]"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why offsets within a cell instead of absolute centers?",
+   "kind": "breakdown",
+   "body": "If every cell predicted the absolute center (0 to 1 over the whole image), each cell would have to output a different typical value (the cell at column 5 would always predict about 0.92). With cell-relative offsets, every cell solves the same kind of problem with targets in [0, 1), and the cell's identity supplies the coarse position. This is a form of target normalization that makes regression easier. Width and height cannot be cell-relative in a useful way because objects can be many cells wide.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Global vs. local heads",
+   "kind": "alternative",
+   "body": "The book's head is global (dense layers over the flattened map), which the authors explicitly choose so that large objects can be predicted by one cell. A common alternative (used by later YOLO versions and by RetinaNet's heads, beyond the book's description) is a convolutional head: a few conv layers applied at every position of the feature map, with each output position predicting boxes for its location. Such heads have far fewer parameters, are translation-equivariant, and rely on deep backbones' large receptive fields to see big objects.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "svg",
+   "title": "Assigning a box to its responsible grid cell",
+   "why": "The page states that each grid detector is responsible for boxes whose center falls in its cell and that x, y are offsets within the cell. This diagram applies to_grid to the cat box [0.12, 0.27, 0.57, 0.33] from p.358 on the 6 x 6 grid.",
+   "svg": "<svg viewBox=\"0 0 470 320\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"11\" fill=\"none\" stroke=\"currentColor\"><g stroke-opacity=\"0.35\"><path d=\"M10 10h300v300h-300z\"/><path d=\"M60 10v300M110 10v300M160 10v300M210 10v300M260 10v300M10 60h300M10 110h300M10 160h300M10 210h300M10 260h300\"/></g><rect x=\"110\" y=\"110\" width=\"50\" height=\"50\" fill=\"currentColor\" fill-opacity=\"0.15\" stroke-width=\"2\"/><rect x=\"46\" y=\"91\" width=\"171\" height=\"99\" stroke-width=\"2\" stroke-dasharray=\"6 3\"/><circle cx=\"131.5\" cy=\"140.5\" r=\"4\" fill=\"currentColor\"/><path d=\"M110 140.5h21.5M131.5 110v30.5\" stroke-width=\"1\"/><text x=\"46\" y=\"86\" fill=\"currentColor\" stroke=\"none\">box (0.12, 0.27, 0.57, 0.33)</text><text x=\"320\" y=\"30\" fill=\"currentColor\" stroke=\"none\">grid_size = 6</text><text x=\"320\" y=\"55\" fill=\"currentColor\" stroke=\"none\">center = (0.405, 0.435)</text><text x=\"320\" y=\"80\" fill=\"currentColor\" stroke=\"none\">cx, cy = (2.43, 2.61)</text><text x=\"320\" y=\"105\" fill=\"currentColor\" stroke=\"none\">cell (ix, iy) = (2, 2)</text><text x=\"320\" y=\"130\" fill=\"currentColor\" stroke=\"none\">offsets = (0.43, 0.61)</text><text x=\"320\" y=\"155\" fill=\"currentColor\" stroke=\"none\">w, h unchanged</text><text x=\"320\" y=\"190\" fill=\"currentColor\" stroke=\"none\">shaded = responsible cell</text><text x=\"320\" y=\"210\" fill=\"currentColor\" stroke=\"none\">dot = box center</text><text x=\"320\" y=\"230\" fill=\"currentColor\" stroke=\"none\">dashed = ground-truth box</text></svg>"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The model's x and y outputs are the box's top-left corner in image coordinates.",
+   "correction": "They are the box center's offsets within the responsible grid cell, from 0 to 1. Only w and h are in image units."
+  },
+  {
+   "claim": "A box is assigned to every cell it overlaps.",
+   "correction": "For the box output, only the cell containing the box's center is responsible. (The class map on p.364 does mark every overlapping cell, but that is a separate target.)"
+  },
+  {
+   "claim": "Since each cell is responsible for a small region, it only needs local features.",
+   "correction": "The book deliberately removes the locality constraint: dense layers let every grid detector use the whole image, because large objects extend beyond one cell."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 357, "note": "Boxes rescaled to the unit square with top-left x, y."},
+   {"page": 358, "note": "Example boxes in `metadata[435]`, used for the numerical example."},
+   {"page": 362, "note": "Listing 12.6 and the first part of the summary."}
+  ],
+  "later": [
+   {"page": 364, "note": "The rest of `from_grid` and listing 12.7, which builds the targets with `to_grid`."},
+   {"page": 365, "note": "Listing 12.8 uses `from_grid` to draw boxes."},
+   {"page": 366, "note": "The special handling of the box outputs in the loss."}
+  ],
+  "prerequisites": [
+   {"page": 357, "note": "Listing 12.2, box format."}
+  ],
+  "related_math": [
+   {"page": 364, "note": "The inverse formulas in `from_grid`."}
+  ],
+  "related_code": [
+   {"page": 362, "note": "Listing 12.6 defines `grid_size`."},
+   {"page": 364, "note": "Listing 12.7 uses `to_grid`."}
+  ],
+  "related_figures": [
+   {"page": 365, "note": "Figure 12.5 visualizes the resulting grid targets."}
+  ]
+ },
+ "takeaways": [
+  "The model has 77,850,336 parameters (296.98 MB), nearly all trainable: the backbone is fine-tuned.",
+  "A strided conv cuts the backbone's 401,408 floats per image to 18,432 before the dense layers.",
+  "The dense head gives every grid cell access to the whole image; this lack of locality is intentional for large objects.",
+  "Each box is the responsibility of the grid cell containing its center.",
+  "Box encoding: x, y = center offset within the cell (0 to 1); w, h = size relative to the image.",
+  "`to_grid` and `from_grid` convert between image and grid coordinates and are exact inverses."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "math",
+   "question": "Apply `to_grid` with `grid_size = 6` to the box `[0.0, 0.15, 0.79, 0.69]` (the bench box from p.358).",
+   "options": [],
+   "answer": "Center = (0.395, 0.495); cx = 2.37, cy = 2.97; cell (2, 2); encoded box (0.37, 0.97, 0.79, 0.69).",
+   "explanation": "cx = (0 + 0.395) x 6 = 2.37, cy = (0.15 + 0.345) x 6 = 2.97; int gives 2 and 2; offsets are the fractional parts; w and h are unchanged.",
+   "page_refs": [363, 358]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "In the book's YOLO encoding, what are `w` and `h` relative to?",
+   "options": [
+    "The size of the whole image",
+    "The size of the responsible grid cell",
+    "The size of the backbone feature map in pixels",
+    "The size of the largest box in the image"
+   ],
+   "answer": "The size of the whole image",
+   "explanation": "The page states that `w` and `h` represent the object's size relative to the image size; only `x` and `y` are relative to the grid cell. The feature map and other boxes play no role in the encoding.",
+   "page_refs": [363]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "Why does the model downscale the backbone feature maps with a strided conv before the dense layers?",
+   "options": [],
+   "answer": "The backbone output (14, 14, 2048) is 401,408 floats per image, too many to feed into dense layers; the strided conv reduces it to (6, 6, 512), 18,432 floats.",
+   "explanation": "Stated in the first paragraph after the summary; the size of the flattened vector determines the first dense layer's parameter count.",
+   "page_refs": [363]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "The book says there is 'no locality constraint' in the head and that this is by design. Explain what this means and why it is desirable here.",
+   "options": [],
+   "answer": "Because the entire feature map is flattened into dense layers, each grid cell's predictions depend on features from the whole image. This is desirable because large objects extend beyond a single cell, and the cell responsible for an object's center must be able to see its full extent to predict w and h.",
+   "explanation": "Direct paraphrase of the last paragraph before section 12.2.3, with the w/h reasoning as an elaboration.",
+   "page_refs": [363]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Which grid cell is responsible for predicting a given ground-truth box?",
+   "options": [
+    "The cell in which the box's center falls",
+    "The cell containing the box's top-left corner",
+    "Every cell the box overlaps",
+    "The cell with the highest predicted confidence"
+   ],
+   "answer": "The cell in which the box's center falls",
+   "explanation": "'Each grid detector will be responsible for detecting any boxes whose center falls inside the grid box.' The top-left corner is the dataset's storage format, overlap is used only for the class map (p.364), and the assignment is fixed by the data, not by predictions.",
+   "page_refs": [363]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "What do the 53,248 non-trainable parameters in the summary tell you about how the backbone is used?",
+   "options": [],
+   "answer": "Almost all parameters (77,797,088) are trainable, so the backbone is fine-tuned along with the head rather than frozen; the small non-trainable remainder is model state such as (most likely) batch-normalization statistics.",
+   "explanation": "The trainable/non-trainable split is printed on the page; attributing the remainder to batch-norm statistics is an inference.",
+   "page_refs": [363]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Without looking at the code, write `to_grid` yourself and then derive `from_grid` as its inverse. Check your version against p.363-364.",
+   "options": [],
+   "answer": "to_grid: center = (x + w/2, y + h/2) x S; index = int(center); offset = center - index. from_grid: x = (xi + dx)/S - w/2, y = (yi + dy)/S - h/2.",
+   "explanation": "Being able to derive the inverse confirms you understand the encoding.",
+   "page_refs": [363, 364]
+  }
+ ]
+}

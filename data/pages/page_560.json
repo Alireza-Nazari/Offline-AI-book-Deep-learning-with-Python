@@ -1,0 +1,268 @@
+{
+ "page_id": "page_560",
+ "pdf_page": 560,
+ "printed_page": "536",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:00:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Figure 17.17 prints six images, but the code on the same page calls interpolate_text_embeddings(..., num=9), which yields nine embeddings and therefore nine images. The figure presumably shows a subset (or came from a different run); the notes point this out to the reader."
+  ],
+  "extraction_quality": "Good. The first body paragraph (e03) continues a sentence begun on p.559 ('directly linearly interpolating / between these two points ...'). The second paragraph was split around the figure caption: e04 ends with 'interpolat' and e06 holds 'ing as if we were on a line.'; both are covered by one note. The Figure 17.16 caption is split into e05 and e07. The code callout ('Zooms in to the middle of the overall interpolation from [0, 1]') was extracted separately and is used in the code notes."
+ },
+ "overview": {
+  "title": "Spherical interpolation and morphing between two prompts",
+  "chapter": "17 Image generation",
+  "section": "17.3 Text-to-image models",
+  "subsection": "17.3.1 Exploring the latent space of a text-to-image model",
+  "main_topic": "Why slerp (spherical linear interpolation) is used to walk between text embeddings, and using it to morph a dog into a tentacled creature with Stable Diffusion",
+  "central_idea": "Straight-line interpolation between two embedding points cuts through the inside of the roughly sphere-shaped embedding manifold, where points have abnormally small norm and carry little meaning for the denoiser; interpolating along the sphere keeps intermediate points on the manifold. Walking that path between the embeddings of two prompts, and denoising at each step, produces a gradual visual morph from one image to the other.",
+  "importance": "This is the payoff of the whole chapter and a concrete demonstration of a thesis the book has repeated since chapter 5: deep learning models learn smooth, interpolable latent manifolds. Here you can literally see the in-between points as images.",
+  "learning_objectives": [
+   "Explain why linear interpolation between two embedding vectors leaves the embedding manifold, using the sphere picture of figure 17.16.",
+   "State what slerp does and why it is an appropriate approximation even though the real manifold is only 'sphere-like'.",
+   "Read the morphing code: which helpers it calls, what start/stop/num mean, and what each loop iteration produces.",
+   "Connect the visible morph of figure 17.17 to the idea that intermediate latent points have intermediate meaning."
+  ],
+  "prerequisites": [
+   "Listing 17.10 (slerp and interpolate_text_embeddings) on p.559",
+   "The decomposed Stable Diffusion generation helpers built just before it in section 17.3.1",
+   "Embeddings and vector norms; dot product and angle between vectors",
+   "The idea of a latent manifold and interpolation on it (chapter 5, p.169)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes the motivation for **slerp** begun on p.559. Picture the text-embedding manifold as a sphere and the embeddings of two prompts as two points on its surface. A straight line between them (the green chord in **figure 17.16**) passes *inside* the sphere: its intermediate points are no longer on the surface. The book's point is that we want to stay on the smooth manifold learned by the text encoder, because that is where embedding points mean something to the denoising model. Slerp moves along the arc of the sphere instead (the orange points), so every intermediate point keeps the same rough magnitude as the endpoints.\n\nThe authors then add an honest caveat: the real manifold is not a sphere. It is, however, a smooth surface of vectors that all have roughly the same magnitude, so it is *sphere-like*, and interpolating as if on a sphere approximates it better than interpolating along a line.\n\nWith the interpolation defined, the page runs the experiment. Two prompts are embedded with `get_text_embeddings`: *\"A friendly dog looking up in a field of flowers\"* and *\"A horrifying, tentacled creature hovering over a field of flowers\"*. Then `interpolate_text_embeddings(e1, e2, start=0.5, stop=0.6, num=9)` produces nine interpolated embedding tuples with $t$ evenly spaced from 0.5 to 0.6. Each one is passed through `denoise_with_text_embeddings`, which runs the full diffusion process conditioned on that embedding, and the result is rescaled for display with `scale_output`. The authors restrict $t$ to $[0.5, 0.6]$ to zoom in on the stretch where the morph becomes visually obvious. **Figure 17.17** shows the result: a dog in a flower field gradually turns into a purple tentacled creature while the flower field stays put. (The figure prints six images, although `num=9` would produce nine.)\n\nThe main lesson is that the text encoder has learned a continuous space. Points between two prompts are themselves meaningful conditioning signals, and the diffusion model turns them into coherent in-between images.",
+ "paragraphs": [
+  {
+   "ref": "p560_e03",
+   "excerpt": "between these two points would land us inside the sphere. We would no longer",
+   "what_it_says": "Finishing the sentence from p.559: if the text manifold is imagined as a sphere and two prompts as points on it, linear interpolation between them would land inside the sphere, off its surface. We want to stay on the surface of the smooth manifold learned by the text embedding, because that is where points have meaning for the denoising model (figure 17.16).",
+   "what_it_means": "The denoiser was trained only on embeddings the text encoder actually produces for real prompts. Those embeddings occupy a particular region of the space, roughly a shell of nearly constant norm. A point on the chord between two such embeddings is a valid vector, but it lies in a region the denoiser never saw during training, most notably with a smaller norm. Conditioning on such an off-manifold vector gives the model an input it was never trained on, which tends to produce washed-out or incoherent images.",
+   "why_it_matters": "It explains why the choice of interpolation path matters. Interpolating latent points is not just arithmetic; you want every intermediate point to be in-distribution for the downstream model.",
+   "technical_idea": "For two unit vectors at angle $\\theta$, the midpoint of the chord has norm $\\cos(\\theta/2)$. In high dimensions, two unrelated embeddings tend to be nearly orthogonal ($\\theta \\approx 90^\\circ$), so the linear midpoint has only about $0.71\\times$ the endpoints' norm, a large drop for a model that expects a specific magnitude.",
+   "terminology": [
+    {"term": "Manifold", "meaning": "A smooth, lower-dimensional surface inside a high-dimensional space on which the meaningful data points lie."},
+    {"term": "Linear interpolation (lerp)", "meaning": "$(1-t)\\,v_1 + t\\,v_2$: a straight-line path between two vectors."}
+   ],
+   "connections": [
+    "p.559: Listing 17.10 defines slerp and interpolate_text_embeddings; this sentence completes the motivation that starts there.",
+    "p.169: chapter 5 explains that interpolation on the latent manifold differs from linear interpolation in the parent space (figure 5.8)."
+   ]
+  },
+  {
+   "ref": "p560_e04",
+   "excerpt": "Of course, the manifold learned by our text embedding model is not actually spherical.",
+   "what_it_says": "The authors qualify the sphere picture: the learned manifold is not literally a sphere, but it is a smooth surface of vectors with roughly the same magnitude, i.e. sphere-like. Interpolating as if on a sphere is therefore a better approximation than interpolating along a line. (The sentence ends in element e06, 'ing as if we were on a line.')",
+   "what_it_means": "Slerp is a heuristic. It enforces one property we know the manifold has (roughly constant norm) and does not try to follow its exact curvature. That is enough to avoid the worst failure of lerp, which is collapsing toward the origin, while staying cheap and simple.",
+   "why_it_matters": "It sets realistic expectations. Slerp does not guarantee that every intermediate point is a 'real' prompt embedding, only that it is closer to the manifold than the chord would be. Readers should not leave thinking text embeddings live on an exact hypersphere.",
+   "technical_idea": "Beyond the book: the same reasoning is why slerp is widely used to interpolate Gaussian noise latents in GANs and diffusion models. High-dimensional Gaussian samples concentrate on a thin shell of radius about $\\sqrt{d}$, so lerp between two of them passes through low-norm, atypical regions.",
+   "terminology": [
+    {"term": "Sphere-like", "meaning": "The book's term (italicized on the page) for a surface whose points share approximately the same norm, without being an exact sphere."}
+   ],
+   "connections": [
+    "p.486: Transformer embedding spaces are described as semantically continuous and interpolative, the property this experiment exploits."
+   ]
+  },
+  {
+   "ref": "p560_e08",
+   "excerpt": "With our interpolation defined, let’s try walking between the text embeddings for two prompts",
+   "what_it_says": "Now the experiment: walk between the text embeddings of two prompts and generate an image at each interpolated point. The slerp parameter is run from 0.5 to 0.6 (out of the full 0 to 1) to zoom in on the middle of the interpolation, where the morph becomes visually obvious (figure 17.17).",
+   "what_it_means": "The full path from t=0 (pure prompt 1) to t=1 (pure prompt 2) is long, and much of it would look like 'dog' or 'creature' with little visible change. The authors found that the switch happens around the middle, so they sample nine points densely in [0.5, 0.6] to show the transition frame by frame.",
+   "why_it_matters": "It shows a practical habit for latent-space exploration: first find where along a path the output changes, then sample densely there. It also shows that a small change in conditioning can produce a large change in output near a 'decision boundary' between concepts.",
+   "technical_idea": "np.linspace(0.5, 0.6, 9) gives t = 0.5, 0.5125, 0.525, ..., 0.6, a step of 0.0125. Only the positive-prompt sequence and pooled vector (indices 0 and 2 of the embedding tuple) are slerped. The negative-prompt entries (1 and 3) are copied from e1 (see p.559).",
+   "terminology": [
+    {"term": "Morph", "meaning": "A gradual, continuous visual transformation of one image into another."}
+   ],
+   "connections": [
+    "p.557: the section's premise is that the text encoder learns a continuous manifold on which each intermediate point has semantic meaning.",
+    "p.533: figure 17.1's idea of sampling 'the in-betweens of the training images' from a latent space."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "slerp",
+   "name": "Spherical linear interpolation (slerp)",
+   "definition": "An interpolation between two vectors that moves along the great-circle arc joining them, rotating by a fraction t of the angle between them, instead of along the straight chord.",
+   "intuition": "Instead of tunnelling through the Earth from Paris to Tokyo, you fly along the surface. Every waypoint is still 'on the ground'.",
+   "technical": "With $\\theta_0 = \\arccos(\\hat v_1\\cdot\\hat v_2)$, slerp$(t) = \\frac{\\sin((1-t)\\theta_0)}{\\sin\\theta_0} v_1 + \\frac{\\sin(t\\theta_0)}{\\sin\\theta_0} v_2$. For unit vectors the result always has unit norm. Listing 17.10 (p.559) implements exactly this with keras.ops.",
+   "significance": "It keeps interpolated text embeddings near the sphere-like manifold, so the denoiser receives in-distribution conditioning and produces coherent in-between images.",
+   "example": "Between (1,0) and (0,1), slerp at t=0.5 gives (0.707, 0.707), with norm 1. Lerp gives (0.5, 0.5), with norm 0.707.",
+   "misconception": "That slerp follows the true manifold exactly. It only preserves angular structure and norm. The book notes that the real manifold is merely sphere-like.",
+   "related": ["latent_space", "embedding", "interpolation", "text_to_image_model"],
+   "source": "book"
+  },
+  {
+   "id": "latent_space_interpolation",
+   "name": "Latent-space interpolation",
+   "definition": "Generating outputs from points along a path between two latent (or embedding) points to see how a model's output changes continuously between them.",
+   "intuition": "If the space is well organized, halfway between 'dog' and 'monster' should look like something halfway between a dog and a monster.",
+   "technical": "Choose endpoints $z_1, z_2$, a path $z(t)$ (lerp or slerp) and a decoder $G$. Render $G(z(t_k))$ for a grid of $t_k$. Here $z$ is the text-embedding tuple and $G$ is the whole diffusion sampling process.",
+   "significance": "It shows directly that the model has learned a continuous, interpolative representation, the property the book identifies as the root of generalization in deep learning.",
+   "example": "Figure 17.17: dog in flowers turning into a tentacled creature in flowers.",
+   "misconception": "That interpolating in pixel space would give the same effect. Averaging the pixels of two images gives a ghostly double exposure, not a coherent intermediate object (compare figure 5.8 on p.169).",
+   "related": ["slerp", "manifold_hypothesis", "vae", "diffusion_model"],
+   "source": "book"
+  },
+  {
+   "id": "text_to_image_model",
+   "name": "Text-conditioned diffusion (text-to-image model)",
+   "definition": "A diffusion model whose denoiser also receives text embeddings of a prompt, so the image it generates from noise follows the description.",
+   "intuition": "The prompt embedding is a steering signal applied at every denoising step.",
+   "technical": "Here the conditioning is a tuple of four tensors (positive and negative prompt token sequences and pooled vectors, p.559). Changing only the conditioning while keeping the noise seed fixed isolates the effect of the text.",
+   "significance": "Because the conditioning space is continuous, you can steer generation smoothly, not just by choosing among discrete prompts.",
+   "example": "denoise_with_text_embeddings(et) for each interpolated et.",
+   "misconception": "That the image morph comes from the denoiser blending two finished images. In fact each frame is generated from scratch, conditioned on one intermediate embedding.",
+   "related": ["diffusion_model", "embedding", "slerp"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Slerp formula (implemented in Listing 17.10)",
+   "latex": "\\operatorname{slerp}(t; v_1, v_2) = \\frac{\\sin\\big((1-t)\\,\\theta_0\\big)}{\\sin\\theta_0}\\, v_1 + \\frac{\\sin(t\\,\\theta_0)}{\\sin\\theta_0}\\, v_2, \\qquad \\theta_0 = \\arccos\\!\\left(\\frac{v_1\\cdot v_2}{\\lVert v_1\\rVert\\,\\lVert v_2\\rVert}\\right)",
+   "source_text": "Not printed as an equation; implemented in code on p.559: theta_0 = ops.arccos(dot); s0 = ops.sin(theta_0 - theta_t) / sin_theta_0; s1 = sin_theta_t / sin_theta_0; return s0 * v1 + s1 * v2",
+   "variables": [
+    {"symbol": "t", "meaning": "Interpolation fraction in [0, 1] (0.5 to 0.6 on this page)."},
+    {"symbol": "v_1, v_2", "meaning": "The two embedding tensors (flattened for the angle computation)."},
+    {"symbol": "\\theta_0", "meaning": "Angle between v_1 and v_2."},
+    {"symbol": "s_0, s_1", "meaning": "The weights on v_1 and v_2 (s0 and s1 in the code)."}
+   ],
+   "operations": "Compute the angle between the vectors from their normalized dot product, then mix them with sine-based weights instead of the linear weights (1-t) and t.",
+   "purpose": "Interpolate along the arc between two points so intermediate points keep the endpoints' norm (for equal-norm endpoints) rather than shrinking toward the center as on the chord of figure 17.16.",
+   "interpretation": "At t=0 the weights are (1, 0); at t=1 they are (0, 1). In between, the point rotates at constant angular speed from v_1 to v_2.",
+   "intuition": "Lerp's weights sum to 1, which pulls the midpoint toward the origin when the vectors point in different directions. Slerp's weights sum to more than 1 in the middle, which exactly compensates.",
+   "numerical_example": "$v_1=(1,0)$, $v_2=(0,1)$, so $\\theta_0=\\pi/2$. At $t=0.5$: $s_0=s_1=\\sin(\\pi/4)/\\sin(\\pi/2)\\approx0.707$, so slerp $=(0.707,0.707)$ with norm $1$. Lerp gives $(0.5,0.5)$ with norm $\\approx0.707$, about 29% shorter.",
+   "source": "ai_explanation",
+   "book_ref": "p.559"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Morphing between two prompts by interpolating their text embeddings",
+   "original_code": "prompt1 = \"A friendly dog looking up in a field of flowers\"\nprompt2 = \"A horrifying, tentacled creature hovering over a field of flowers\"\ne1 = get_text_embeddings(prompt1)\ne2 = get_text_embeddings(prompt2)\nimages = []\nfor et in interpolate_text_embeddings(e1, e2, start=0.5, stop=0.6, num=9):\n    image = denoise_with_text_embeddings(et)\n    images.append(scale_output(image))\ndisplay(images)",
+   "language": "python",
+   "what_it_does": "Encodes two prompts into Stable Diffusion's text-embedding tuples, generates nine interpolated embeddings between them with slerp (t from 0.5 to 0.6), runs the diffusion denoising process once per interpolated embedding, and displays the resulting images side by side.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "The two end-state descriptions. They deliberately share the setting ('a field of flowers'), so the interpolation mostly changes the subject and the background stays stable."},
+    {"lines": "3-4", "explanation": "get_text_embeddings (one of the helpers from decomposing generate(), before Listing 17.10) runs the text encoders and returns the four-tensor tuple: positive and negative token sequences, positive and negative pooled vectors (p.559)."},
+    {"lines": "5", "explanation": "Accumulator for the generated frames."},
+    {"lines": "6", "explanation": "interpolate_text_embeddings (Listing 17.10) returns a list of tuples, one per t in np.linspace(0.5, 0.6, 9). Per the printed callout, the range zooms in to the middle of the overall [0, 1] interpolation."},
+    {"lines": "7", "explanation": "denoise_with_text_embeddings runs the full iterative denoising from noise, conditioned on the interpolated tuple et."},
+    {"lines": "8", "explanation": "scale_output converts the model's output range into displayable pixel values."},
+    {"lines": "9", "explanation": "display shows the frames in a row (figure 17.17)."}
+   ],
+   "inputs_outputs": "Inputs: two strings. Output: a list of nine images (the printed figure shows six). Each element of the interpolated list is a 4-tuple of tensors in the same format as e1 and e2.",
+   "algorithm": "For k = 0..8: t_k = 0.5 + 0.0125k; c_k = (slerp(t_k, e1[0], e2[0]), e1[1], slerp(t_k, e1[2], e2[2]), e1[3]); image_k = Diffusion(c_k).",
+   "theory_link": "Each frame is an independent sample conditioned on a different point of the text manifold. Smoothness of the output sequence shows smoothness of the learned mapping from text manifold to image space.",
+   "parameters": [
+    {"name": "start / stop", "role": "The sub-range of t sampled; [0.5, 0.6] is where the dog-to-creature transition is visible."},
+    {"name": "num", "role": "Number of interpolation points (and generated images); 9 here."}
+   ],
+   "pitfalls": [
+    "Smooth morphs require the same initial noise for every frame. If denoise_with_text_embeddings drew fresh random noise per call, frames would jump around even with tiny changes in t. The book's helper is built for this demo; if you write your own, fix the seed.",
+    "Each frame is a full diffusion run, so nine frames cost nine times a single generation. Expect this cell to be slow without a GPU.",
+    "Where the visible transition happens depends on the prompts; the 0.5 to 0.6 window is specific to this pair.",
+    "The figure shows six images even though num=9; do not be surprised to get nine."
+   ],
+   "illustrative_code": "# AI-written: compare norms of lerp vs slerp midpoints for random high-dim vectors\nimport numpy as np\nrng = np.random.default_rng(0)\nv1, v2 = rng.normal(size=4096), rng.normal(size=4096)\nv1 /= np.linalg.norm(v1); v2 /= np.linalg.norm(v2)\ntheta = np.arccos(np.dot(v1, v2))          # close to pi/2 in high dimensions\nlerp = 0.5 * v1 + 0.5 * v2\nslerp = (np.sin(0.5 * theta) * v1 + np.sin(0.5 * theta) * v2) / np.sin(theta)\nprint(np.degrees(theta), np.linalg.norm(lerp), np.linalg.norm(slerp))\n# ~90.0  ~0.707  1.0"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why high dimensions make lerp especially bad",
+   "kind": "numerical",
+   "body": "In $d$ dimensions, two random directions have cosine similarity of order $1/\\sqrt d$, so they are nearly orthogonal. For unit vectors at angle $\\theta$, the lerp point at parameter $t$ has norm $\\sqrt{(1-t)^2 + t^2 + 2t(1-t)\\cos\\theta}$. With $\\theta=90^\\circ$ that is $\\sqrt{(1-t)^2+t^2}$, which falls to $0.707$ at $t=0.5$. Real prompt embeddings are more correlated than random vectors, so the dip is smaller, but it still exists. Slerp keeps the norm at exactly 1 for unit endpoints. (Beyond the book.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the morph is not a cross-fade",
+   "kind": "breakdown",
+   "body": "A video cross-fade blends two finished images pixel by pixel, so a ghost dog overlaps a ghost monster. Here, every frame is generated anew: the diffusion model starts from noise and is told 'something between these two descriptions'. Because the conditioning space is continuous, the model produces a *single* coherent creature that is part dog, part tentacled thing, as in the purple middle frames of figure 17.17. This is the distinction chapter 5 draws between interpolation in the parent space and on the latent manifold (p.169).",
+   "source": "inference"
+  },
+  {
+   "title": "Great-circle travel",
+   "kind": "analogy",
+   "body": "Flights follow great-circle routes along the Earth's surface rather than a straight line through the planet. Slerp is the great-circle route for embeddings: every intermediate point stays 'at ground level', at the same distance from the centre, which is the region the denoiser knows.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Norm of interpolated point: lerp vs slerp (orthogonal unit vectors)",
+   "why": "Figure 17.16 shows the chord dipping inside the sphere; this plots exactly how far it dips as t goes from 0 to 1, with the page's 0.5-0.6 window in the deepest part.",
+   "chart": {
+    "type": "line",
+    "data": {
+     "labels": ["0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1"],
+     "datasets": [
+      {"label": "lerp ||(1-t)v1 + t v2||", "data": [1, 0.906, 0.825, 0.762, 0.721, 0.707, 0.721, 0.762, 0.825, 0.906, 1]},
+      {"label": "slerp norm", "data": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}
+     ]
+    },
+    "options": {
+     "scales": {
+      "x": {"title": {"display": true, "text": "interpolation parameter t"}},
+      "y": {"min": 0.6, "max": 1.05, "title": {"display": true, "text": "norm of interpolated vector"}}
+     }
+    }
+   }
+  }
+ ],
+ "misconceptions": [
+  {"claim": "Slerp is needed because the text-embedding space is literally a sphere.", "correction": "The book explicitly says the manifold is not spherical. It is a smooth surface of vectors with roughly equal magnitude, and slerp is a better approximation than a line, not an exact path."},
+  {"claim": "The morph in figure 17.17 is made by blending the dog image and the monster image.", "correction": "Each frame is a separate diffusion generation conditioned on an interpolated text embedding; no image blending happens."},
+  {"claim": "All four tensors of the embedding tuple are interpolated.", "correction": "Only the positive-prompt sequence and vector (indices 0 and 2) are slerped. The negative-prompt entries are copied from e1 (p.559)."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 559, "note": "Listing 17.10 defines slerp and interpolate_text_embeddings and starts the sphere argument this page finishes."},
+   {"page": 557, "note": "Section 17.3.1 explains why the text encoder's continuous manifold makes prompt-to-prompt morphing possible."},
+   {"page": 555, "note": "How text-to-image diffusion models condition the denoiser on text embeddings."},
+   {"page": 533, "note": "Latent spaces where any point decodes to a valid image; sampling the in-betweens."}
+  ],
+  "later": [
+   {"page": 561, "note": "The authors' closing reflection: deep neural networks are interpolation machines, followed by the chapter summary."}
+  ],
+  "prerequisites": [
+   {"page": 169, "note": "Interpolation on the latent manifold vs linear interpolation in the parent space (figure 5.8)."},
+   {"page": 486, "note": "Transformer embedding spaces are semantically continuous and interpolative."}
+  ],
+  "related_math": [
+   {"page": 559, "note": "Code implementation of the slerp formula."}
+  ],
+  "related_code": [
+   {"page": 559, "note": "interpolate_text_embeddings, which this page's loop iterates over."}
+  ],
+  "related_figures": [
+   {"page": 169, "note": "Figure 5.8: linear vs manifold interpolation of MNIST digits."},
+   {"page": 533, "note": "Figure 17.1: sampling new images from a latent vector space."}
+  ]
+ },
+ "takeaways": [
+  "Linear interpolation between two embeddings cuts inside the sphere-like manifold and produces lower-norm, off-distribution points; slerp follows the surface.",
+  "The text manifold is not a true sphere, but its points have roughly constant magnitude, so slerp is the better approximation.",
+  "Each interpolated embedding is fed to a full diffusion run; the resulting sequence of images morphs smoothly from one prompt to the other.",
+  "Sampling densely in t = 0.5 to 0.6 focuses on the region where the visible concept switch happens.",
+  "The smooth morph is visual evidence that the text encoder and denoiser together learned a continuous, interpolative latent space."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "According to the page, why is linear interpolation between two text embeddings undesirable?", "options": ["It is too slow to compute on a GPU", "Its intermediate points land inside the sphere, off the manifold where embeddings are meaningful to the denoiser", "It can only interpolate between exactly two prompts", "It changes the negative prompt embeddings"], "answer": "Its intermediate points land inside the sphere, off the manifold where embeddings are meaningful to the denoiser", "explanation": "The page says linear interpolation 'would land us inside the sphere' and that we want to stay on the manifold's surface where points have meaning for the denoiser. Lerp is cheap, slerp also handles exactly two points, and neither method touches the negative-prompt entries (they are copied from e1 in Listing 17.10).", "page_refs": [560, 559]},
+  {"id": "q2", "type": "math", "question": "Two unit-norm embeddings are orthogonal. What are the norms of the lerp midpoint and of the slerp midpoint (t = 0.5)?", "options": [], "answer": "Lerp: about 0.707 (1/√2). Slerp: 1.", "explanation": "Lerp gives 0.5·v1 + 0.5·v2 with norm √(0.25+0.25) = 0.707. Slerp with θ0 = π/2 gives weights sin(π/4)/sin(π/2) ≈ 0.707 each, so the norm is √(0.5+0.5) = 1.", "page_refs": [560, 559]},
+  {"id": "q3", "type": "short", "question": "What values of t does interpolate_text_embeddings(e1, e2, start=0.5, stop=0.6, num=9) use, and why did the authors choose this range?", "options": [], "answer": "t = 0.5, 0.5125, 0.525, ..., 0.6 (nine evenly spaced values, step 0.0125). The range zooms in on the middle of the interpolation, where the morph becomes visually obvious.", "explanation": "interpolate_text_embeddings uses np.linspace(start, stop, num) (p.559). The text and callout say the window zooms into the middle of the [0, 1] interpolation.", "page_refs": [560, 559]},
+  {"id": "q4", "type": "conceptual", "question": "The authors admit the text-embedding manifold is not a sphere. Why is slerp still justified?", "options": [], "answer": "The manifold is a smooth surface of vectors with roughly the same magnitude, so it is sphere-like. Interpolating along a sphere preserves that magnitude and is a better approximation than a straight line, which shrinks the norm in the middle.", "explanation": "This is the argument of the second paragraph: sphere-like is enough for slerp to beat lerp, even though slerp does not follow the true curvature.", "page_refs": [560]},
+  {"id": "q5", "type": "conceptual", "question": "Why does figure 17.17 show a single coherent creature in the middle frames instead of a double-exposure of a dog and a monster?", "options": [], "answer": "Each frame is generated from scratch by the diffusion model, conditioned on one intermediate embedding. The model maps that in-between point on the text manifold to a coherent image; it never blends pixels.", "explanation": "The loop calls denoise_with_text_embeddings(et) for each interpolated et. Interpolation happens in the conditioning (latent) space, not in pixel space; compare figure 5.8 on p.169.", "page_refs": [560, 169]},
+  {"id": "q6", "type": "mcq", "question": "Which parts of the embedding tuple are interpolated in this experiment?", "options": ["All four tensors", "Only the negative prompt's sequence and vector", "Only the positive prompt's sequence (index 0) and pooled vector (index 2)", "Only the pooled vectors of both prompts"], "answer": "Only the positive prompt's sequence (index 0) and pooled vector (index 2)", "explanation": "Listing 17.10 slerps e1[0]/e2[0] and e1[2]/e2[2] and copies e1[1] and e1[3], the negative-prompt entries, which the callout says are unused. 'Only pooled vectors' misses the sequence, and the other options interpolate the wrong entries.", "page_refs": [559, 560]},
+  {"id": "q7", "type": "self", "question": "Could you explain figure 17.16 to a friend in two sentences, including what the green chord and the orange arc points represent?", "options": [], "answer": "The circle is the embedding manifold, the endpoints are two prompt embeddings. The green chord's points (lerp) fall inside the circle, off the manifold, while slerp's points along the arc stay on the surface where the denoiser expects its inputs.", "explanation": "If you can state this and why 'on the surface' matters (in-distribution conditioning), you have the page's key idea.", "page_refs": [560]}
+ ]
+}

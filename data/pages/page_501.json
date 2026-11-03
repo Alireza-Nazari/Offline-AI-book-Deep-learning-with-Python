@@ -1,0 +1,335 @@
+{
+ "page_id": "page_501",
+ "pdf_page": 501,
+ "printed_page": "477",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T09:10:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. Figure 16.2 is an image (learning rate vs. train step, linear ramp to 0.0002 at step 1,000, then flat to ~4,900); read from the page image. Listing 16.8 matches the image; the printed listing itself uses a typographic low quote in metrics=[„ accuracy\"] (kept verbatim; a plain \"accuracy\" string is intended). The two-line callout 'Set these to a lower value if you don't want to wait for training.' sits beside the steps_per_epoch and validation_steps lines."
+ },
+ "overview": {
+  "title": "Warmup curve and launching mini-GPT pretraining",
+  "chapter": "16 Text generation",
+  "section": "16.2 Training a mini-GPT",
+  "subsection": "16.2.2 Pretraining the model",
+  "main_topic": "Figure 16.2 (the plotted warmup learning-rate schedule) and Listing 16.8, which compiles mini-GPT with Adam on the warmup schedule and a from-logits sparse cross-entropy loss and runs one pass over about a billion tokens split into eight 'epochs'",
+  "central_idea": "The warmup schedule ramps the learning rate linearly from 0 to 2e-4 over the first 1,000 steps and then holds it constant. Mini-GPT is then trained for a single pass over its ~1 billion training tokens, chopped into eight pseudo-epochs so that validation loss and accuracy can be checked periodically. This is the most expensive training run in the book.",
+  "importance": "This is the moment where everything built in 16.2 (data pipeline, tokenizer, decoder stack, warmup schedule) comes together into an actual pretraining run, the same recipe, at miniature scale, that is used to pretrain real LLMs (p.508).",
+  "learning_objectives": [
+   "Read figure 16.2 and relate it to the WarmupSchedule of Listing 16.7",
+   "Explain why one pass over the data is split into eight epochs with steps_per_epoch and validation_steps",
+   "Compute steps per epoch, total steps and tokens processed from the dataset sizes given on p.497",
+   "Explain each compile() argument: Adam with a schedule object, SparseCategoricalCrossentropy(from_logits=True), accuracy",
+   "Put the cost of this run in perspective against GPT-1"
+  ],
+  "prerequisites": [
+   "The data pipeline and train/validation split (p.496-497)",
+   "The mini-GPT model of Listing 16.6 (p.499-500)",
+   "The WarmupSchedule of Listing 16.7 (p.500)",
+   "compile() and fit() with validation_data (p.135)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with **Figure 16.2**, the plot produced by the snippet at the bottom of p.500: the learning rate rises in a straight line from 0 at step 0 to **0.0002** at step **1,000**, then stays flat (the plot is drawn up to step ~4,900). The caption states the purpose: warmup makes updates to the parameters smaller at the beginning of training and can help with stability.\n\nThe authors then describe the training plan. The model will see **one pass over the ~1 billion tokens** of the C4 subset, but that pass is **split across eight epochs** purely so that validation loss and accuracy are reported periodically. They put the run in perspective: mini-GPT has about **3× fewer parameters than GPT-1** and uses **100× fewer training steps**; it is two orders of magnitude cheaper than the smallest GPT, yet this `fit()` call is still **the most computationally expensive training run in the whole book** (readers are told to start it and take a break).\n\n**Listing 16.8** sets `num_epochs = 8`, `steps_per_epoch = num_train_batches // num_epochs` and `validation_steps = num_val_batches` (a callout suggests lowering these if you do not want to wait). It compiles `mini_gpt` with `keras.optimizers.Adam(schedule)` (the `WarmupSchedule` instance as the learning rate), `SparseCategoricalCrossentropy(from_logits=True)` as loss (the model outputs raw logits; explained in the sidebar on p.502) and an accuracy metric, then calls `fit()` on the infinitely repeating `train_ds`, with `val_ds` as validation data. With 28,873 training batches of 128 × 256 tokens (p.497), each epoch is 3,609 steps and the whole run about 28,872 steps, so warmup occupies only the first ~3.5% of training.",
+ "paragraphs": [
+  {
+   "ref": "p501_e03",
+   "excerpt": "Figure 16.2 Warmup makes our updates to model parameters smaller at the beginning",
+   "what_it_says": "The figure plots the learning rate returned by WarmupSchedule against the training step: a linear rise from 0 to 0.0002 over the first 1,000 steps, then a constant 0.0002. The caption says warmup makes parameter updates smaller at the start of training and can help stability.",
+   "what_it_means": "The plot is a sanity check of Listing 16.7 (p.500): rate * min(step / 1000, 1). At step 500 the learning rate is 1e-4, half the peak; from step 1,000 on it is exactly 2e-4. Plotting a schedule before an hours-long run is cheap insurance against a typo (e.g. a wrong number of warmup steps) that would only show up as a mysteriously bad loss curve.",
+   "why_it_matters": "In the first steps of training the randomly initialized Transformer produces large, poorly scaled gradients, and Adam's running estimates of gradient moments are still based on very few samples. Small steps during this phase keep the model from being knocked into a bad region before the optimizer statistics settle.",
+   "technical_idea": "Piecewise-linear schedule: linear warmup followed by a constant learning rate (no decay). Many LLM recipes add a decay phase (cosine or linear) after warmup; the book keeps it simple.",
+   "terminology": [
+    {"term": "Warmup", "meaning": "Starting training with a small learning rate that is increased to its full value over a fixed number of steps."},
+    {"term": "Train step", "meaning": "One gradient update, i.e. one batch processed by the optimizer (not one epoch)."}
+   ],
+   "connections": [
+    "p.500: Listing 16.7 defines WarmupSchedule with rate 2e-4 and warmup_steps 1,000, and the plotting snippet that draws this figure",
+    "p.500: the motivation is exploding gradients in deep Transformer stacks"
+   ]
+  },
+  {
+   "ref": "p501_e04",
+   "excerpt": "We will train our model using one pass over our 1 billion tokens, split",
+   "what_it_says": "Training will be a single pass over the roughly 1 billion tokens, split into eight epochs so the validation loss and accuracy can be checked from time to time.",
+   "what_it_means": "Here an \"epoch\" is not a full pass over the data; it is one-eighth of a pass. Because `train_ds` was made infinite with `.repeat()` (p.497), Keras has no natural epoch boundary, so `steps_per_epoch` defines one. The end of each pseudo-epoch is when Keras runs validation and prints metrics. The model therefore sees each training token only once, which is typical of LLM pretraining: with this much data, repeated passes are less useful than fresh text, and overfitting is not the main concern; under-training is.",
+   "why_it_matters": "It shows that \"epoch\" is a bookkeeping convention in Keras. With huge datasets you choose the reporting interval, not the number of passes.",
+   "terminology": [
+    {"term": "Epoch (in Keras)", "meaning": "The unit after which fit() runs validation, callbacks and logging; with steps_per_epoch set it is a fixed number of batches rather than a full pass over the data."},
+    {"term": "Single-pass training", "meaning": "Every training example is seen once; common in LLM pretraining."}
+   ],
+   "connections": [
+    "p.497: 29,373 batches of 128 x 256 tokens, 'just under a billion tokens', with 500 batches held out for validation",
+    "p.502: validation loss keeps dropping each epoch, a sign the model is undertrained"
+   ]
+  },
+  {
+   "ref": "p501_e05",
+   "excerpt": "We are training a miniature version of GPT, using 3× fewer parameters than GPT-1",
+   "what_it_says": "Mini-GPT uses about 3x fewer parameters than GPT-1 and 100x fewer training steps; although two orders of magnitude cheaper than the smallest GPT, this fit() call is the most computationally expensive training run in the book. Readers running the code should start it and take a break.",
+   "what_it_means": "41 million parameters (p.500) versus GPT-1's roughly 117 million (a figure from the GPT-1 paper, not stated on this page) gives the ~3x ratio. Training compute scales roughly with parameters x tokens processed, so even a 'miniature' run is heavy: as a rule of thumb (not from the book), training costs about 6 x parameters x tokens FLOPs, here about 6 x 41e6 x 0.95e9, roughly 2.3e17 floating-point operations.",
+   "why_it_matters": "It sets realistic expectations for the generated text that follows (p.502-508): the model is tiny and briefly trained compared with any real LLM, and p.508 states that reaching today's scale would require at least 100x more parameters and 1,000x more steps.",
+   "terminology": [
+    {"term": "GPT-1", "meaning": "OpenAI's 2018 Generative Pretrained Transformer, a decoder-only Transformer pretrained on next-token prediction (introduced on p.493)."},
+    {"term": "Order of magnitude", "meaning": "A factor of 10; 'two orders of magnitude' means about 100x."}
+   ],
+   "connections": [
+    "p.493: GPT-1 combined next-token pretraining, the Transformer and a large book corpus",
+    "p.500: mini-GPT has 41 million parameters",
+    "p.508: scaling up needs 100x parameters and 1,000x steps"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "learning_rate_warmup",
+   "name": "Learning-rate warmup",
+   "definition": "A schedule that starts the learning rate near zero and increases it (here linearly) to its target value over a fixed number of steps.",
+   "intuition": "Do not sprint before you know where you are: early gradients from a random network are unreliable and can be huge, so take small steps until training settles.",
+   "technical": "Figure 16.2 plots lr(t) = 2e-4 * min(t / 1000, 1). For Adam, warmup also compensates for second-moment estimates that are noisy in the first steps, which can make the effective per-parameter step unexpectedly large.",
+   "significance": "Warmup is a standard ingredient of Transformer and LLM training and a cheap fix for early divergence.",
+   "example": "At step 250 the learning rate is 5e-5; at step 1,000 and beyond it is 2e-4.",
+   "misconception": "Warmup is not a decay schedule; it only affects the beginning of training. The book's schedule never decreases the learning rate.",
+   "related": ["learning_rate", "adam", "transformer"],
+   "source": "book"
+  },
+  {
+   "id": "steps_per_epoch",
+   "name": "steps_per_epoch / validation_steps",
+   "definition": "fit() arguments that fix how many batches make up one epoch of training and of validation.",
+   "intuition": "When the dataset is an endless stream, you have to tell Keras where to draw the line between 'epochs'.",
+   "technical": "Required when train_ds and val_ds are infinite (created with .repeat(), p.497). Here steps_per_epoch = 28,873 // 8 = 3,609 and validation_steps = 500.",
+   "significance": "Lets you control how often validation runs and how long training lasts independently of the dataset length.",
+   "example": "8 epochs x 3,609 steps = 28,872 training steps, about one pass over the 28,873 training batches.",
+   "misconception": "Reducing num_epochs alone does not shorten training here, because steps_per_epoch = num_train_batches // num_epochs grows to compensate.",
+   "related": ["validation_set", "epoch"],
+   "source": "book"
+  },
+  {
+   "id": "logits",
+   "name": "Logits and from_logits=True",
+   "definition": "Unnormalized scores output by the model; passing from_logits=True tells the loss to apply the softmax itself.",
+   "intuition": "The model hands over raw scores and the loss function turns them into probabilities internally.",
+   "technical": "SparseCategoricalCrossentropy(from_logits=True) computes -z_y + log(sum_j exp z_j) with a numerically stable log-sum-exp, which avoids taking the log of a softmax output that has underflowed to zero.",
+   "significance": "Mini-GPT's output is the reverse embedding (p.500) without softmax, so the loss must be told it receives logits. The p.502 sidebar explains the concept.",
+   "example": "Logits [2.0, 1.0, 0.1] correspond to probabilities [0.66, 0.24, 0.10].",
+   "misconception": "Forgetting from_logits=True when the model has no softmax does not crash; it silently trains on a wrong loss.",
+   "related": ["softmax", "cross_entropy", "loss_function"],
+   "source": "book"
+  },
+  {
+   "id": "language_model",
+   "name": "Next-token pretraining",
+   "definition": "Training a model to predict each next token of real text, using the sequence shifted by one position as the target.",
+   "intuition": "Fill in the next word billions of times and the model absorbs grammar, facts and style.",
+   "technical": "Targets are x[1:] for inputs x[:-1] (p.496), so a batch of 128 sequences of 256 tokens yields 32,768 next-token classification problems, each over a 32,000-token vocabulary, averaged by the sparse cross-entropy loss.",
+   "significance": "This is the objective used by GPT-1 and by modern LLMs; the book stresses on p.508 that the recipe is the same, only the scale differs.",
+   "example": "For the input 'the cat sat', the targets are 'cat sat on'.",
+   "misconception": "The 'accuracy' reported is the exact-match rate of the top-1 next token, not a measure of text quality.",
+   "related": ["cross_entropy", "transformer", "tokenization"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "The warmup schedule plotted in figure 16.2",
+   "latex": "\\eta(t) = \\eta_{\\max}\\cdot \\min\\!\\left(\\frac{t}{T_w},\\, 1\\right),\\qquad \\eta_{\\max}=2\\times 10^{-4},\\; T_w = 1000",
+   "source_text": "return self.rate * scale, with scale = ops.minimum(step / self.warmup_steps, 1.0) (Listing 16.7, p.500)",
+   "variables": [
+    {"symbol": "t", "meaning": "Training step (number of optimizer updates so far)"},
+    {"symbol": "\\eta(t)", "meaning": "Learning rate used by Adam at step t"},
+    {"symbol": "\\eta_{\\max}", "meaning": "Peak learning rate, self.rate = 2e-4"},
+    {"symbol": "T_w", "meaning": "Number of warmup steps, self.warmup_steps = 1,000"}
+   ],
+   "operations": "Divide the step by the warmup length, cap at 1, multiply by the peak rate.",
+   "purpose": "Defines the curve in figure 16.2 and the learning rate Adam uses in Listing 16.8.",
+   "interpretation": "Linear growth until step 1,000, then a plateau at 2e-4 for the rest of training.",
+   "intuition": "A ramp onto the highway: accelerate gradually, then cruise.",
+   "numerical_example": "$\\eta(0)=0$, $\\eta(250)=5\\times10^{-5}$, $\\eta(500)=10^{-4}$, $\\eta(1000)=\\eta(4900)=\\eta(28872)=2\\times10^{-4}$. Of the ~28,872 total steps, warmup is $1000/28872 \\approx 3.5\\%$.",
+   "source": "book",
+   "book_ref": "p.500"
+  },
+  {
+   "id": "m2",
+   "title": "Training budget of Listing 16.8",
+   "latex": "\\begin{aligned} N_{\\text{train}} &= 29373 - 500 = 28873 \\text{ batches}\\\\ S_{\\text{epoch}} &= \\lfloor 28873 / 8 \\rfloor = 3609\\\\ S_{\\text{total}} &= 8 \\times 3609 = 28872\\\\ \\text{tokens} &\\approx 28872 \\times 128 \\times 256 \\approx 9.46\\times 10^{8} \\end{aligned}",
+   "source_text": "steps_per_epoch = num_train_batches // num_epochs",
+   "variables": [
+    {"symbol": "N_{\\text{train}}", "meaning": "num_train_batches = num_batches - num_val_batches (p.497)"},
+    {"symbol": "S_{\\text{epoch}}", "meaning": "steps_per_epoch (integer division)"},
+    {"symbol": "S_{\\text{total}}", "meaning": "Total optimizer updates across the 8 epochs"},
+    {"symbol": "128 \\times 256", "meaning": "batch_size x sequence_length (p.496): tokens predicted per step"}
+   ],
+   "operations": "Integer division and multiplication using the numbers from p.496-497.",
+   "purpose": "Makes concrete what 'one pass over our 1 billion tokens' means in steps.",
+   "interpretation": "One batch is dropped by the integer division (28,872 of 28,873), so the run is almost exactly one pass. Each epoch also runs 500 validation batches (~16.4M tokens), the same 500 batches every time since val_ds repeats the first 500 batches.",
+   "intuition": "Eight check-ins spaced ~3,600 steps apart along one long journey through the data.",
+   "numerical_example": "At ~200,000 tokens per second (the throughput the authors mention on p.503), $9.46\\times10^8$ tokens take roughly $4{,}700$ s, about 80 minutes of pure training on their reference hardware, plus validation time.",
+   "source": "inference",
+   "book_ref": "p.497"
+  },
+  {
+   "id": "m3",
+   "title": "Sparse categorical cross-entropy from logits (beyond the book)",
+   "latex": "\\mathcal{L}(z, y) = -\\log \\frac{e^{z_y}}{\\sum_{j=1}^{V} e^{z_j}} = -z_y + \\log \\sum_{j=1}^{V} e^{z_j}",
+   "source_text": "keras.losses.SparseCategoricalCrossentropy(from_logits=True)",
+   "variables": [
+    {"symbol": "z", "meaning": "Logit vector of length V output by mini-GPT at one position"},
+    {"symbol": "y", "meaning": "Integer id of the true next token (sparse label)"},
+    {"symbol": "V", "meaning": "Vocabulary size, 32,000"}
+   ],
+   "operations": "Log-softmax of the logits, evaluated at the true token, negated; averaged over all positions and sequences in the batch.",
+   "purpose": "The loss minimized in Listing 16.8.",
+   "interpretation": "A loss of $\\log V = \\log 32000 \\approx 10.37$ corresponds to uniform guessing; lower values mean the model puts more probability on the true next token.",
+   "intuition": "Penalizes the model by how surprised it was by the actual next token.",
+   "numerical_example": "If the model assigns probability 0.36 to the correct token, the loss at that position is $-\\ln 0.36 \\approx 1.02$.",
+   "source": "ai_explanation",
+   "book_ref": "p.502"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "16.8",
+   "title": "Training the mini-GPT model",
+   "original_code": "num_epochs = 8\nsteps_per_epoch = num_train_batches // num_epochs\nvalidation_steps = num_val_batches\nmini_gpt.compile(\n    optimizer=keras.optimizers.Adam(schedule),\n    loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),\n    metrics=[„accuracy\"],\n)\nmini_gpt.fit(\n    train_ds,\n    validation_data=val_ds,\n    epochs=num_epochs,\n    steps_per_epoch=steps_per_epoch,\n    validation_steps=validation_steps,\n)",
+   "language": "python",
+   "what_it_does": "Configures and launches pretraining of mini-GPT: Adam driven by the warmup schedule, a next-token cross-entropy loss on logits, an accuracy metric, and eight pseudo-epochs that together make one pass over the training batches, with validation on 500 held-out batches after each epoch.",
+   "line_explanations": [
+    {"lines": "1-3", "explanation": "num_epochs = 8 sets the number of reporting intervals. steps_per_epoch = num_train_batches // num_epochs = 28,873 // 8 = 3,609 batches per epoch. validation_steps = num_val_batches = 500. The callout says to lower these values if you do not want to wait for training."},
+    {"lines": "4-5", "explanation": "Adam receives the schedule object (schedule = WarmupSchedule(), created in the plotting snippet on p.500) instead of a float; Keras calls schedule(step) at every update to get the current learning rate."},
+    {"lines": "6", "explanation": "Sparse cross-entropy: targets are integer token ids, not one-hot vectors. from_logits=True because the model's last operation is the reverse embedding with no softmax (p.500, sidebar on p.502)."},
+    {"lines": "7-8", "explanation": "Track accuracy: for integer targets Keras resolves 'accuracy' to sparse categorical accuracy, the fraction of positions where the argmax of the logits equals the true next token. The printed quote before accuracy is a typographic low quote; use a normal string \"accuracy\"."},
+    {"lines": "9-15", "explanation": "fit() on the infinite train_ds; validation_data=val_ds with validation_steps bounded; epochs and steps_per_epoch together define 28,872 training steps."}
+   ],
+   "inputs_outputs": "Inputs: train_ds and val_ds yielding (x, y) pairs of shape (128, 256) int token ids, y being x shifted by one (p.496). Output: a trained mini_gpt (weights updated in place) and a History object with loss, accuracy, val_loss and val_accuracy per epoch. The authors report about 36% validation next-token accuracy after training (p.502).",
+   "algorithm": "Mini-batch gradient descent with Adam. Each step: forward pass on 128 sequences, per-position softmax cross-entropy over 32,000 tokens, backpropagation through 8 decoder blocks, Adam update with lr = schedule(step). Every 3,609 steps: evaluate 500 validation batches.",
+   "theory_link": "Implements the self-supervised next-token objective that defines GPT-style pretraining (p.493), stabilized with warmup (p.500).",
+   "parameters": [
+    {"name": "num_epochs", "role": "Number of reporting/validation intervals; does not change total steps because steps_per_epoch is derived from it."},
+    {"name": "steps_per_epoch", "role": "Batches per epoch; the real knob for training length. Required because train_ds repeats forever."},
+    {"name": "validation_steps", "role": "Batches evaluated per validation pass; required because val_ds repeats forever."},
+    {"name": "schedule", "role": "LearningRateSchedule instance giving the learning rate at each step (warmup to 2e-4)."},
+    {"name": "from_logits", "role": "Tells the loss that predictions are raw logits so it applies log-softmax internally."}
+   ],
+   "pitfalls": [
+    "The listing's metrics line uses a typographic quote („) that Python rejects; type metrics=[\"accuracy\"].",
+    "Lowering only num_epochs makes each epoch longer and does not reduce total training time; lower steps_per_epoch (or set it to a fixed small number) to train faster.",
+    "Omitting steps_per_epoch or validation_steps with repeated datasets makes fit() run forever (or raise an error), since the datasets are infinite.",
+    "Using from_logits=False (the default) with a logit-producing model trains on an incorrect loss.",
+    "The schedule variable must exist; it was defined in the plotting snippet on p.500, not inside Listing 16.7."
+   ],
+   "illustrative_code": "# AI-written: a quick smoke test before committing to the full run\nmini_gpt.fit(\n    train_ds,\n    validation_data=val_ds,\n    epochs=2,\n    steps_per_epoch=50,      # 100 steps total instead of ~28,872\n    validation_steps=10,\n)\n# Note: with only 100 steps the warmup (1,000 steps) never completes,\n# so the learning rate never reaches its 2e-4 peak."
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why the 'eight epochs' are really one",
+   "kind": "step_by_step",
+   "body": "1. p.497 counts **29,373** batches and holds out the first **500** for validation, leaving **28,873** training batches.\n2. Both datasets are `.repeat()`ed, so they never end.\n3. `steps_per_epoch = 28873 // 8 = 3609`, so after 8 epochs Keras has drawn $8 \\times 3609 = 28{,}872$ batches from `train_ds`, one short of the full set.\n4. Every epoch Keras pulls 500 batches from `val_ds`; because it repeats the same 500 batches, validation numbers are comparable epoch to epoch.\n\nSo the run is effectively **one epoch in the classical sense**, with seven intermediate check-ins.",
+   "source": "inference"
+  },
+  {
+   "title": "What warmup protects against, in Adam terms",
+   "kind": "breakdown",
+   "body": "Adam's update is roughly $\\eta \\, \\hat m / (\\sqrt{\\hat v} + \\epsilon)$. In the first few steps, $\\hat v$ (the running average of squared gradients) is estimated from very few samples and can be unrepresentatively small for some parameters, so the normalized step $\\hat m/\\sqrt{\\hat v}$ can be large. Combined with the large, poorly scaled gradients of a freshly initialized deep Transformer, this can push the model into a region from which the loss never recovers (the 'exploding gradients' mentioned on p.500). Multiplying $\\eta$ by a factor that starts at 0 makes those early steps tiny. By step 1,000 the moment estimates are stable and the full rate is safe. (Beyond the book: this is one common explanation; warmup's benefits are also linked to how layer normalization placement affects early gradient magnitudes.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "How expensive is 'the most expensive run in the book'?",
+   "kind": "numerical",
+   "body": "A widely used rule of thumb (not from the book) puts training compute at about $6ND$ FLOPs for $N$ parameters and $D$ tokens. With $N \\approx 4.1\\times10^7$ and $D \\approx 9.5\\times10^8$: $6 \\times 4.1\\times10^7 \\times 9.5\\times10^8 \\approx 2.3\\times10^{17}$ FLOPs. A modern GPU sustaining $10^{14}$ FLOP/s on this workload would need about 40 minutes; in practice utilization is lower, which matches the authors' advice to 'take a breather'. The mixed-precision setting turned on at p.499 is there to speed exactly this up.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Figure 16.2's schedule over the whole training run",
+   "why": "Figure 16.2 only shows steps 0-4,900. Extending the same WarmupSchedule to all ~28,872 steps of Listing 16.8 shows how short the warmup phase is relative to the run.",
+   "chart": {
+    "type": "line",
+    "data": {
+     "datasets": [
+      {
+       "label": "Learning rate (WarmupSchedule)",
+       "data": [{"x": 0, "y": 0}, {"x": 1000, "y": 0.0002}, {"x": 3609, "y": 0.0002}, {"x": 7218, "y": 0.0002}, {"x": 14436, "y": 0.0002}, {"x": 28872, "y": 0.0002}],
+       "borderWidth": 2,
+       "pointRadius": 3,
+       "fill": false,
+       "tension": 0
+      }
+     ]
+    },
+    "options": {
+     "parsing": true,
+     "scales": {
+      "x": {"type": "linear", "title": {"display": true, "text": "Train step (points mark epoch ends 1, 2, 4, 8)"}, "min": 0, "max": 28872},
+      "y": {"title": {"display": true, "text": "Learning rate"}, "min": 0, "max": 0.00022}
+     },
+     "plugins": {"legend": {"display": true}}
+    }
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "What fit() in Listing 16.8 does",
+   "why": "Shows the loop structure implied by epochs, steps_per_epoch and validation_steps on this page.",
+   "mermaid": "flowchart TD\n  A[\"Start: step = 0\"] --> B[\"Draw batch (128 x 256) from train_ds\"]\n  B --> C[\"Forward pass: logits (128, 256, 32000)\"]\n  C --> D[\"Sparse CE loss from logits\"]\n  D --> E[\"Adam update with lr = schedule(step)\"]\n  E --> F{\"3,609 steps done in this epoch?\"}\n  F -- no --> B\n  F -- yes --> G[\"Evaluate 500 batches of val_ds: val_loss, val_accuracy\"]\n  G --> H{\"8 epochs done?\"}\n  H -- no --> B\n  H -- yes --> I[\"Trained mini_gpt\"]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "Training for 8 epochs means the model sees each training token 8 times.", "correction": "Because steps_per_epoch = num_train_batches // 8, the 8 epochs together cover the training set about once. The epochs are reporting intervals."},
+  {"claim": "Setting num_epochs = 2 will make training four times faster.", "correction": "With steps_per_epoch derived from num_epochs, each epoch simply becomes four times longer. You must lower steps_per_epoch to cut training time."},
+  {"claim": "Warmup keeps the learning rate low throughout training.", "correction": "Figure 16.2 shows the rate reaching its peak of 2e-4 after 1,000 steps (about 3.5% of this run) and staying there."},
+  {"claim": "from_logits=True changes what the model outputs.", "correction": "It only changes how the loss interprets the model's outputs. The model was already producing logits; the flag makes the loss apply the softmax."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 500, "note": "Listing 16.7 defines WarmupSchedule and the plotting snippet that produces figure 16.2 and the schedule variable used here."},
+   {"page": 497, "note": "Batch count (29,373), 500 validation batches, and the repeated train_ds/val_ds used by fit()."},
+   {"page": 496, "note": "batch_size = 128, sequence_length = 256 and the shifted-by-one (x, y) targets."},
+   {"page": 499, "note": "Mixed precision is enabled to make this expensive run faster."},
+   {"page": 493, "note": "GPT-1, the model that mini-GPT is compared against."}
+  ],
+  "later": [
+   {"page": 502, "note": "Sidebar explaining logits and from_logits=True; ~36% validation accuracy after training; the model is undertrained."},
+   {"page": 508, "note": "Reaching modern scale needs 100x more parameters and 1,000x more steps; same recipe."},
+   {"page": 580, "note": "Chapter 18 explains the floating-point precision behind the mixed-precision speed-up."}
+  ],
+  "prerequisites": [
+   {"page": 135, "note": "Passing validation_data to fit() to monitor validation metrics each epoch."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 500, "note": "Listing 16.6 (end) builds mini_gpt; Listing 16.7 builds the schedule."}
+  ],
+  "related_figures": [
+   {"page": 501, "note": "Figure 16.2 on this page."}
+  ]
+ },
+ "takeaways": [
+  "Figure 16.2 confirms the warmup schedule: linear from 0 to 2e-4 over 1,000 steps, then constant.",
+  "The model is trained for a single pass over ~1 billion tokens, split into eight pseudo-epochs of 3,609 steps only to get periodic validation reports.",
+  "With infinite (repeated) datasets, steps_per_epoch and validation_steps define what an epoch is.",
+  "Adam accepts a LearningRateSchedule object as its learning rate.",
+  "SparseCategoricalCrossentropy(from_logits=True) is used because mini-GPT outputs raw logits, not probabilities.",
+  "Despite being ~100x cheaper than the smallest GPT, this is the most expensive training run in the book."
+ ],
+ "questions": [
+  {"id": "q1", "type": "math", "question": "Using the numbers from p.497 (29,373 batches, 500 for validation) compute steps_per_epoch, the total number of training steps, and the approximate number of training tokens processed (batch 128, sequence length 256).", "options": [], "answer": "28,873 // 8 = 3,609 steps per epoch; 8 x 3,609 = 28,872 steps; 28,872 x 128 x 256 = about 9.46 x 10^8 tokens (just under a billion).", "explanation": "num_train_batches = 29,373 - 500 = 28,873. Integer division by 8 gives 3,609 (remainder 1). Each step processes 128 sequences of 256 next-token predictions = 32,768 tokens.", "page_refs": [501, 497]},
+  {"id": "q2", "type": "mcq", "question": "In Listing 16.8, you change num_epochs from 8 to 2 and leave the rest unchanged. What happens to the total training time?", "options": ["It drops to about a quarter", "It stays about the same, because each epoch gets four times as many steps", "It doubles, because validation runs less often", "Training fails because steps_per_epoch becomes invalid"], "answer": "It stays about the same, because each epoch gets four times as many steps", "explanation": "steps_per_epoch = num_train_batches // num_epochs, so 2 epochs x 14,436 steps is still ~28,872 steps. Only validation runs less often (slightly less time, not a quarter). Nothing becomes invalid. To shorten training you must lower steps_per_epoch, as the callout suggests.", "page_refs": [501]},
+  {"id": "q3", "type": "short", "question": "Read figure 16.2: what learning rate does Adam use at step 500, and at step 3,000?", "options": [], "answer": "1e-4 at step 500 (half the peak) and 2e-4 at step 3,000.", "explanation": "The schedule is 2e-4 x min(step/1000, 1): 2e-4 x 0.5 = 1e-4 at step 500; after step 1,000 it is capped at 2e-4.", "page_refs": [501, 500]},
+  {"id": "q4", "type": "conceptual", "question": "Why does the authors' training split one pass over the data into eight epochs instead of running a single epoch?", "options": [], "answer": "So that Keras runs validation and reports loss and accuracy periodically during the long run, instead of only once at the end.", "explanation": "The page says the split lets them 'occasionally check our validation set loss and accuracy'. In Keras, validation and logging happen at epoch boundaries, so shorter pseudo-epochs give more frequent feedback without changing the total amount of training.", "page_refs": [501]},
+  {"id": "q5", "type": "mcq", "question": "Why is the loss created with from_logits=True?", "options": ["Because the targets are one-hot vectors", "Because mini-GPT's final layer outputs unnormalized scores without a softmax", "Because mixed precision requires it", "Because the warmup schedule produces logits"], "answer": "Because mini-GPT's final layer outputs unnormalized scores without a softmax", "explanation": "The model ends with the reverse embedding (p.500), which produces logits; the p.502 sidebar explains that from_logits=True moves the softmax into the loss. Targets are integer ids (hence 'Sparse'), not one-hot; the flag is unrelated to mixed precision or to the schedule.", "page_refs": [501, 502]},
+  {"id": "q6", "type": "conceptual", "question": "What role does warmup play according to figure 16.2's caption and p.500, and why might it be especially helpful for a stack of eight Transformer decoders?", "options": [], "answer": "It makes early parameter updates small, helping stability; deep Transformer stacks are prone to exploding gradients early in training, so small initial steps keep the loss from diverging.", "explanation": "The caption says warmup makes updates smaller at the beginning and can help stability; p.500 links this to exploding gradients when many Transformer layers are stacked.", "page_refs": [501, 500]},
+  {"id": "q7", "type": "self", "question": "Can you explain, without looking, what each argument of compile() and fit() in Listing 16.8 does and which earlier listing each variable (schedule, train_ds, val_ds, num_train_batches) comes from?", "options": [], "answer": "schedule from p.500's plotting snippet; train_ds, val_ds, num_train_batches, num_val_batches from p.497; mini_gpt from Listing 16.6.", "explanation": "If you can trace every name back to its definition, you understand how the whole 16.2 pipeline is wired together.", "page_refs": [501, 500, 497]}
+ ]
+}

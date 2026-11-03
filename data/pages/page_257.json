@@ -1,0 +1,281 @@
+{
+ "page_id": "page_257",
+ "pdf_page": 257,
+ "printed_page": "233",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:56:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. Listing 8.2's summary table matches the image. The sidebar 'Image data formats in deep learning frameworks' was split by the extractor into five elements (e09-e13, some mislabeled as body); it is two printed paragraphs, noted under refs p257_e09 and p257_e11."
+ },
+ "overview": {
+  "title": "ConvNet input shape and model.summary() of the first ConvNet",
+  "chapter": "8 Image classification",
+  "section": "8.1 Introduction to ConvNets",
+  "subsection": "",
+  "main_topic": "The (height, width, channels) input convention, Listing 8.2's model summary with output shapes and parameter counts, and the channels-last versus channels-first sidebar.",
+  "central_idea": "A ConvNet consumes rank-3 image tensors (height, width, channels), excluding the batch axis. As data passes through Conv2D and MaxPooling2D layers, height and width shrink while the number of channels, set by each Conv2D's filters argument, grows. Keras defaults to channels-last; channels-first is a configurable convention.",
+  "importance": "Reading a model summary, predicting each layer's output shape and parameter count, is a core skill for designing ConvNets, and the channel-axis convention is a frequent source of bugs when moving between ecosystems.",
+  "learning_objectives": [
+   "State the input shape a Keras ConvNet expects and what each axis means.",
+   "Explain every row of the model summary in Listing 8.2, including why pooling layers have 0 parameters.",
+   "Compute Conv2D parameter counts and output sizes for 3x3 valid convolutions and 2x2 pooling.",
+   "Explain how depth (channels) and spatial size evolve through the network.",
+   "Explain channels_last versus channels_first and the two ways to switch in Keras."
+  ],
+  "prerequisites": [
+   "Listing 8.1 (p.256)",
+   "Tensors, axes and shapes (chapter 2)",
+   "Dense layer parameter count: inputs x units + units"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page explains what the ConvNet of Listing 8.1 consumes and produces. A ConvNet takes input tensors of shape `(image_height, image_width, image_channels)`, *not including the batch dimension*; for MNIST this is `(28, 28, 1)`.\n\n**Listing 8.2** calls `model.summary()` on the model, named `\"functional\"`:\n\n| Layer | Output shape | Params |\n|---|---|---|\n| input_layer | (None, 28, 28, 1) | 0 |\n| conv2d | (None, 26, 26, 64) | 640 |\n| max_pooling2d | (None, 13, 13, 64) | 0 |\n| conv2d_1 | (None, 11, 11, 128) | 73,856 |\n| max_pooling2d_1 | (None, 5, 5, 128) | 0 |\n| conv2d_2 | (None, 3, 3, 256) | 295,168 |\n| global_average_pooling2d | (None, 256) | 0 |\n| dense | (None, 10) | 2,570 |\n\nTotal params: **372,234** (1.42 MB), all trainable. `None` is the batch axis of unknown size.\n\nThe authors point out that the output of every `Conv2D` and `MaxPooling2D` layer is a 3D tensor `(height, width, channels)`; **width and height shrink** deeper in the model, and the **number of channels is set by the first argument of `Conv2D`** (64, 128, 256).\n\nThe sidebar **Image data formats in deep learning frameworks** notes that some libraries, notably much of the PyTorch ecosystem, put channels first: `(channels, height, width)`. This is purely a convention and is configurable in Keras, globally with `keras.config.set_image_data_format(\"channels_first\")` or per layer with the `data_format` argument of conv and pooling layers. Generally, keep the default unless you specifically need `\"channels_first\"`.\n\nBeyond the book: the parameter counts follow from $(k^2 C_{in} + 1) C_{out}$ for a $k\\times k$ convolution (see the math section), and the shapes from the valid 3x3 convolution shrinking each side by 2 and the 2x2 pooling halving it with rounding down.",
+ "paragraphs": [
+  {
+   "ref": "p257_e03",
+   "excerpt": "Importantly, a ConvNet takes as input tensors of shape (image_height, image_width,",
+   "what_it_says": "ConvNet inputs are (image_height, image_width, image_channels), excluding the batch axis; for MNIST, (28, 28, 1).",
+   "what_it_means": "Each sample is a rank-3 tensor; a batch is rank 4, (batch, 28, 28, 1). Grayscale images have one channel, RGB images three.",
+   "why_it_matters": "Feeding the flattened (784,) MNIST vectors of chapter 2 to this model would fail; the data must be reshaped to (28, 28, 1).",
+   "terminology": [
+    {"term": "channels", "meaning": "The last axis of an image tensor: color components at the input (1 for grayscale) and learned feature maps deeper in the network."},
+    {"term": "batch dimension", "meaning": "The leading axis indexing samples; shown as None in the summary."}
+   ],
+   "connections": ["p.256: Listing 8.1 sets keras.Input(shape=(28, 28, 1))"]
+  },
+  {
+   "ref": "p257_e06",
+   "excerpt": ">>> model.summary() Model: \"functional\"",
+   "what_it_says": "The summary lists each layer's output shape and parameter count; total 372,234 trainable parameters (1.42 MB).",
+   "what_it_means": "Only Conv2D and Dense layers have weights. Pooling layers, the input layer and global average pooling have none. Most parameters sit in the deepest convolution (295,168), because its parameter count scales with input channels times output channels.",
+   "why_it_matters": "Lets you check that the model is wired as intended and estimate its size; 372,234 float32 parameters at 4 bytes each are about 1.42 MiB, matching the printed size.",
+   "technical_idea": "Conv2D params = (k*k*C_in + 1) * C_out; Dense params = n_in * n_out + n_out.",
+   "terminology": [
+    {"term": "None", "meaning": "Placeholder for the batch size, unknown until data is passed."}
+   ],
+   "connections": ["p.256: the code that defines these layers"]
+  },
+  {
+   "ref": "p257_e07",
+   "excerpt": "You can see that the output of every Conv2D and MaxPooling2D",
+   "what_it_says": "Conv2D and MaxPooling2D outputs are 3D (height, width, channels); height and width shrink with depth; channel count is the first Conv2D argument (64, 128, 256).",
+   "what_it_means": "The network trades spatial resolution for feature richness: fewer positions, more feature types per position.",
+   "why_it_matters": "This shrinking-space, growing-depth pattern is typical of ConvNets and comes up again in the following sections.",
+   "terminology": [
+    {"term": "feature map", "meaning": "A (height, width, channels) output of a conv or pooling layer."}
+   ],
+   "connections": ["p.258: why convolution shrinks the map (border effects) is explained in 8.1.1", "p.263: max pooling halves the size"]
+  },
+  {
+   "ref": "p257_e09",
+   "excerpt": "Some deep learning libraries flip the location of channels in image",
+   "what_it_says": "Some libraries, notably much of the PyTorch ecosystem, use (channels, height, width) instead of (height, width, channels).",
+   "what_it_means": "The same image can be stored with the channel axis first or last; models and data must agree on the convention.",
+   "why_it_matters": "Mixing conventions (e.g. loading channels-first data into a channels-last model) is a common source of shape errors or silent misinterpretation.",
+   "terminology": [
+    {"term": "channels_last", "meaning": "(height, width, channels): the Keras default."},
+    {"term": "channels_first", "meaning": "(channels, height, width): common in the PyTorch ecosystem."}
+   ],
+   "connections": []
+  },
+  {
+   "ref": "p257_e11",
+   "excerpt": "This is purely a matter of convention, and in Keras is configurable.",
+   "what_it_says": "Keras can switch convention globally with keras.config.set_image_data_format(\"channels_first\") or per layer via data_format; usually keep the default.",
+   "what_it_means": "The choice does not change what the model can learn; it only changes how tensors are laid out.",
+   "why_it_matters": "Knowing both switches helps when interoperating with channels-first data or pretrained code.",
+   "terminology": [
+    {"term": "data_format", "meaning": "Argument of Keras conv and pooling layers selecting channels_last or channels_first."}
+   ],
+   "connections": []
+  }
+ ],
+ "concepts": [
+  {
+   "id": "image_tensor",
+   "name": "Image tensor (height, width, channels)",
+   "definition": "The rank-3 per-sample representation of an image used by Keras ConvNets; batches add a leading axis.",
+   "intuition": "A stack of 2-D grids, one per channel.",
+   "technical": "MNIST: (28, 28, 1). Channels-first alternative: (1, 28, 28).",
+   "significance": "Defines what every conv and pooling layer consumes and produces.",
+   "example": "A batch of 64 MNIST images: (64, 28, 28, 1).",
+   "misconception": "That the batch axis is part of keras.Input(shape=...); it is not.",
+   "related": ["convnet", "tensor"],
+   "source": "book"
+  },
+  {
+   "id": "conv_param_count",
+   "name": "Conv2D parameter count",
+   "definition": "Number of trainable weights in a Conv2D layer: one k x k x C_in kernel plus one bias per output channel.",
+   "intuition": "Each filter looks at every input channel over a small window; the count does not depend on image size.",
+   "technical": "(k^2 * C_in + 1) * C_out. For conv2d_1: (9*64+1)*128 = 73,856.",
+   "significance": "Explains why parameters concentrate in deep, wide conv layers.",
+   "example": "First conv: (9*1+1)*64 = 640.",
+   "misconception": "That a larger image means more conv parameters; it only increases computation and output size.",
+   "related": ["convolution"],
+   "source": "ai_explanation"
+  },
+  {
+   "id": "channels_first_last",
+   "name": "channels_last vs channels_first",
+   "definition": "Two conventions for where the channel axis goes in image tensors.",
+   "intuition": "Same data, different axis order.",
+   "technical": "Keras default channels_last; switch via keras.config.set_image_data_format or data_format per layer.",
+   "significance": "Interoperability with the PyTorch ecosystem.",
+   "example": "(28, 28, 1) vs (1, 28, 28).",
+   "misconception": "That one convention gives better models; the book says it is purely a matter of convention.",
+   "related": ["image_tensor"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Parameter count of a Conv2D layer",
+   "latex": "P_{\\text{conv}} = (k \\cdot k \\cdot C_{\\text{in}} + 1)\\, C_{\\text{out}}",
+   "source_text": "Not printed as a formula; the counts 640, 73,856 and 295,168 appear in the Param # column of Listing 8.2.",
+   "variables": [
+    {"symbol": "k", "meaning": "Kernel size (3 here)."},
+    {"symbol": "C_{\\text{in}}", "meaning": "Number of input channels."},
+    {"symbol": "C_{\\text{out}}", "meaning": "Number of filters (output channels)."},
+    {"symbol": "+1", "meaning": "One bias per filter."}
+   ],
+   "operations": "Multiply the kernel volume by the number of filters and add one bias per filter.",
+   "purpose": "Reproduce and check the Param # column.",
+   "interpretation": "Each filter has k*k*C_in weights; the count is independent of image size.",
+   "intuition": "Parameters grow with the product of input and output channels, so later, wider layers dominate.",
+   "numerical_example": "- conv2d: $(3\\cdot3\\cdot1+1)\\cdot64 = 640$\n- conv2d_1: $(3\\cdot3\\cdot64+1)\\cdot128 = 73{,}856$\n- conv2d_2: $(3\\cdot3\\cdot128+1)\\cdot256 = 295{,}168$\n- dense: $256\\cdot10+10 = 2{,}570$\n- total: $640+73{,}856+295{,}168+2{,}570 = 372{,}234$ (matches the summary)",
+   "source": "ai_explanation",
+   "book_ref": "p.257"
+  },
+  {
+   "id": "m2",
+   "title": "Output size of valid 3x3 convolution and 2x2 max pooling",
+   "latex": "H_{\\text{conv}} = H_{\\text{in}} - k + 1, \\qquad H_{\\text{pool}} = \\left\\lfloor \\frac{H_{\\text{in}}}{2} \\right\\rfloor",
+   "source_text": "Not printed as a formula; the shapes 28 -> 26 -> 13 -> 11 -> 5 -> 3 appear in the Output Shape column.",
+   "variables": [
+    {"symbol": "H_{\\text{in}}", "meaning": "Input height (width behaves the same)."},
+    {"symbol": "k", "meaning": "Kernel size, 3."},
+    {"symbol": "H_{\\text{conv}}, H_{\\text{pool}}", "meaning": "Output height after convolution (stride 1, no padding) or after 2x2 pooling (stride 2)."}
+   ],
+   "operations": "Subtract k-1 for convolution; halve and round down for pooling.",
+   "purpose": "Predict the Output Shape column.",
+   "interpretation": "A 3x3 window fits in H-2 positions per axis; 2x2 pooling keeps one value per 2x2 block.",
+   "intuition": "Convolution trims the border; pooling downsamples.",
+   "numerical_example": "$28 - 2 = 26$, $\\lfloor 26/2 \\rfloor = 13$, $13 - 2 = 11$, $\\lfloor 11/2 \\rfloor = 5$, $5 - 2 = 3$: exactly the sequence 28, 26, 13, 11, 5, 3 in the Output Shape column.",
+   "source": "ai_explanation",
+   "book_ref": "p.257"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "8.2",
+   "title": "Displaying the model's summary",
+   "original_code": ">>> model.summary()\nModel: \"functional\"\n┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓\n┃ Layer (type)                      ┃ Output Shape             ┃       Param # ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩\n│ input_layer (InputLayer)          │ (None, 28, 28, 1)        │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ conv2d (Conv2D)                   │ (None, 26, 26, 64)       │           640 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ max_pooling2d (MaxPooling2D)      │ (None, 13, 13, 64)       │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ conv2d_1 (Conv2D)                 │ (None, 11, 11, 128)      │        73,856 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ max_pooling2d_1 (MaxPooling2D)    │ (None, 5, 5, 128)        │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ conv2d_2 (Conv2D)                 │ (None, 3, 3, 256)        │       295,168 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ global_average_pooling2d          │ (None, 256)              │             0 │\n│ (GlobalAveragePooling2D)          │                          │               │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ dense (Dense)                     │ (None, 10)               │         2,570 │\n└───────────────────────────────────┴──────────────────────────┴───────────────┘\n Total params: 372,234 (1.42 MB)\n Trainable params: 372,234 (1.42 MB)\n Non-trainable params: 0 (0.00 B)",
+   "language": "text",
+   "what_it_does": "Prints the architecture of the ConvNet from Listing 8.1: layer names and types, output shapes and parameter counts.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Calls summary(); the Functional model's default name is \"functional\"."},
+    {"lines": "6", "explanation": "Input layer: (None, 28, 28, 1), no parameters."},
+    {"lines": "8", "explanation": "First Conv2D: 64 channels, 26x26; 640 parameters."},
+    {"lines": "10", "explanation": "Pooling halves to 13x13; no parameters."},
+    {"lines": "12-14", "explanation": "Second Conv2D (11x11x128, 73,856 params) and pooling (5x5x128)."},
+    {"lines": "16", "explanation": "Third Conv2D: 3x3x256, 295,168 params, the largest layer."},
+    {"lines": "18-19", "explanation": "Global average pooling collapses the spatial axes: (None, 256)."},
+    {"lines": "21", "explanation": "Dense classifier: 2,570 params."},
+    {"lines": "23-25", "explanation": "Totals: 372,234 parameters, all trainable, about 1.42 MB in float32."}
+   ],
+   "inputs_outputs": "Input: the model object. Output: printed table.",
+   "algorithm": "Keras walks the layer graph and reports each layer's output shape and weight count.",
+   "theory_link": "Shape transformations of convolution and pooling (8.1.1, 8.1.2).",
+   "parameters": [],
+   "pitfalls": [
+    "Layer names like conv2d_1 depend on how many layers of that type were created in the session; they may differ when you re-run code."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Where the parameters are",
+   "kind": "numerical",
+   "body": "Beyond the book: of 372,234 parameters, about 79% (295,168) are in the last Conv2D, about 20% (73,856) in the second, and under 1% in the first conv and the classifier. Compare chapter 2's dense MNIST model, whose first Dense(512) layer alone had 784*512+512 = 401,920 parameters: the ConvNet is smaller yet, as p.256 promises, more accurate. Global average pooling helps by feeding only 256 values to the classifier instead of 3*3*256 = 2,304.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Converting between channel conventions",
+   "kind": "application",
+   "body": "Beyond the book: with NumPy, `np.transpose(x, (0, 3, 1, 2))` turns a channels-last batch (N, H, W, C) into channels-first (N, C, H, W), and `(0, 2, 3, 1)` converts back. Use this when bringing data from a channels-first pipeline into a default Keras model.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Parameters per layer in Listing 8.2",
+   "why": "The Param # column shows parameters concentrated in the deepest Conv2D; the bar chart makes the imbalance visible.",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": ["conv2d", "conv2d_1", "conv2d_2", "dense"],
+     "datasets": [{"label": "Parameters", "data": [640, 73856, 295168, 2570]}]
+    },
+    "options": {"plugins": {"legend": {"display": false}}, "scales": {"y": {"title": {"display": true, "text": "Param #"}}}}
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "The MNIST input tensor (28, 28, 1)",
+   "why": "The page says ConvNets take (height, width, channels) tensors; explore the layout (shown small, with one channel as for MNIST).",
+   "widget": "image_tensor",
+   "params": {"height": 4, "width": 4, "channels": 1}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "MaxPooling2D layers add trainable parameters.", "correction": "The summary shows 0 parameters for all pooling layers."},
+  {"claim": "The batch size must be included in the input shape.", "correction": "The input shape excludes the batch dimension; the summary shows it as None."},
+  {"claim": "Channels-first is required for good performance.", "correction": "The sidebar says it is purely a convention; keep the default unless you need channels_first."},
+  {"claim": "The number of channels shrinks along with height and width.", "correction": "Height and width shrink, but channels grow (64, 128, 256) as set by the Conv2D filters argument."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 256, "note": "Listing 8.1 defines the model summarized here."}
+  ],
+  "later": [
+   {"page": 258, "note": "8.1.1 explains the convolution operation and why output maps are smaller."},
+   {"page": 263, "note": "8.1.2 explains max pooling."},
+   {"page": 269, "note": "8.2.3 builds a larger ConvNet for a small dataset."}
+  ],
+  "prerequisites": [
+   {"page": 219, "note": "Functional API models, whose summary() format is reused here."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 256, "note": "Listing 8.1."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "A Keras ConvNet takes (height, width, channels) inputs, without the batch axis; MNIST is (28, 28, 1).",
+  "Spatial size shrinks (28 -> 26 -> 13 -> 11 -> 5 -> 3) while channels grow (64 -> 128 -> 256).",
+  "The model has 372,234 trainable parameters; pooling layers have none.",
+  "Channel count is the first argument (filters) of Conv2D.",
+  "channels_first vs channels_last is a convention; Keras defaults to channels_last and can be switched globally or per layer."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "What is the output shape of max_pooling2d_1 in Listing 8.2?", "options": ["(None, 11, 11, 128)", "(None, 5, 5, 128)", "(None, 6, 6, 128)", "(None, 3, 3, 256)"], "answer": "(None, 5, 5, 128)", "explanation": "2x2 pooling of 11x11 gives 5x5 (rounding down). 11x11 is the conv output before pooling, 6x6 would require rounding up, and 3x3x256 is the next conv.", "page_refs": [257]},
+  {"id": "q2", "type": "math", "question": "Verify the 73,856 parameters of conv2d_1.", "options": [], "answer": "(3*3*64 + 1) * 128 = 577 * 128 = 73,856.", "explanation": "3x3 kernels over 64 input channels, 128 filters, plus one bias each.", "page_refs": [257]},
+  {"id": "q3", "type": "short", "question": "Which argument of Conv2D controls the number of channels in its output?", "options": [], "answer": "The first argument, filters (64, 128 or 256 here).", "explanation": "Stated in the paragraph after the summary.", "page_refs": [257, 256]},
+  {"id": "q4", "type": "mcq", "question": "How can you make a single Keras conv layer use channels-first tensors?", "options": ["Pass data_format to the layer", "Reshape the kernel", "Set kernel_size to (1, 3, 3)", "It is impossible in Keras"], "answer": "Pass data_format to the layer", "explanation": "The sidebar names data_format per layer, or keras.config.set_image_data_format globally. Kernel reshaping or kernel_size changes are unrelated.", "page_refs": [257]},
+  {"id": "q5", "type": "math", "question": "If the input were (32, 32, 3) instead of (28, 28, 1), what would conv2d's output shape and parameter count be?", "options": [], "answer": "(None, 30, 30, 64) with (3*3*3+1)*64 = 1,792 parameters.", "explanation": "Valid 3x3 convolution trims 2 per axis; parameters depend on input channels but not on image size.", "page_refs": [257]},
+  {"id": "q6", "type": "conceptual", "question": "Why does the model's summary show None as the first dimension of every output shape?", "options": [], "answer": "It is the batch axis, whose size is not fixed when the model is defined.", "explanation": "The input shape excludes the batch dimension; Keras adds it as None.", "page_refs": [257]},
+  {"id": "q7", "type": "conceptual", "question": "Describe the general trend of tensor shapes through this ConvNet and why it is useful.", "options": [], "answer": "Height and width shrink while channel count grows: the network trades spatial resolution for more, richer features per location.", "explanation": "The trend is stated on the page; the interpretation is an explanation beyond it.", "page_refs": [257]},
+  {"id": "q8", "type": "self", "question": "Can you reproduce the total of 372,234 parameters by computing each layer's count yourself?", "options": [], "answer": "640 + 73,856 + 295,168 + 2,570 = 372,234.", "explanation": "See the math section.", "page_refs": [257]}
+ ]
+}

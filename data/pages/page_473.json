@@ -1,0 +1,560 @@
+{
+ "page_id": "page_473",
+ "pdf_page": 473,
+ "printed_page": "449",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T11:40:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. Listing 15.16 (e05) matches the image (blank lines restored). The model summary (e07) is cut at the page bottom after `not_equal_5` and continues on p.474 (embedding_6 3,840,000; transformer_decoder_1 1,578,752; dropout_9; dense_11 3,855,000; total 14,428,824). All parameter counts were verified arithmetically."
+ },
+ "overview": {
+  "title": "Building the Transformer translator (Listing 15.16)",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "15.3.4 Sequence-to-sequence learning with a Transformer",
+  "main_topic": "Assembling the encoder-decoder Transformer for English-to-Spanish translation with the functional API (hidden size 256, feedforward size 2048, 8 heads), and reading the first rows of its summary",
+  "central_idea": "The Transformer translator mirrors the GRU translator: token embeddings for each language, one `TransformerEncoder` over the English, one `TransformerDecoder` that self-attends causally over the Spanish prefix and cross-attends to the encoder output, then dropout and a softmax over 15,000 Spanish tokens. Padding in the source is masked with `source != 0`. The width is 256 everywhere except inside the feedforward block, which expands to 2048.",
+  "importance": "This page turns the building blocks of pp.468-472 into a trainable model and sets up a controlled comparison with the RNN (p.474). The summary also shows where the parameters live.",
+  "learning_objectives": [
+   "Read Listing 15.16 and explain every layer and argument",
+   "Explain the 256 → 2048 → 256 feedforward expansion",
+   "Explain why `source_mask=source != 0` is passed to both blocks and why it appears as `NotEqual` layers in the summary",
+   "Verify the 3,840,000 and 1,315,072 parameter counts",
+   "Notice what is still missing, namely any information about word order"
+  ],
+  "prerequisites": [
+   "TransformerEncoder (Listing 15.14, p.469) and TransformerDecoder (Listing 15.15, p.471)",
+   "The RNN translator for comparison (pp.458-459)",
+   "Keras functional API with multiple inputs"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page completes the plan from p.472: use the same setup as the RNN model and replace the `GRU` layers with `TransformerEncoder` and `TransformerDecoder`. The model uses **256** as the embedding/hidden size everywhere except in the feedforward block, which scales up to **2048** before the nonlinearity and back down to 256 afterward. The authors note that \"this large intermediate dimension works well in practice.\"\n\n**Listing 15.16** (functional API):\n- Hyperparameters: `hidden_dim = 256`, `intermediate_dim = 2048`, `num_heads = 8` (so each head has `256 // 8 = 32` dims, per Listing 15.14).\n- Encoder side: integer `Input(shape=(None,), name=\"english\")` → `Embedding(vocab_size, 256)` → `TransformerEncoder(...)(source=x, source_mask=source != 0)`. The mask marks real (non-zero, non-padding) tokens.\n- Decoder side: `Input(..., name=\"spanish\")` → `Embedding(vocab_size, 256)` → `TransformerDecoder(...)(target=x, source=encoder_output, source_mask=source != 0)`. The decoder's self-attention is causally masked internally (p.471), and its cross-attention ignores English padding.\n- `Dropout(0.5)` → `Dense(vocab_size, activation=\"softmax\")` → `keras.Model([source, target], target_predictions)`.\n\n**Summary (first part)**: `english` input `(None, None)`; `embedding_5` `(None, None, 256)` with **3,840,000** params (15,000 × 256); `not_equal_4` (the `source != 0` op, 0 params); `spanish` input; `transformer_encoder_1` `(None, None, 256)` with **1,315,072** params, connected to the embedding and the mask; `not_equal_5`, a second `NotEqual` because `source != 0` is written twice. The rest (decoder 1,578,752; output Dense 3,855,000; total 14,428,824) is on p.474.\n\nNote (not stated on this page): nothing in this model encodes token *positions*. That is the flaw revealed on p.474.",
+ "paragraphs": [
+  {
+   "ref": "p473_e03",
+   "excerpt": "use 256 as the embedding size throughout the model, except in the",
+   "what_it_says": "(Continuing from p.472.) The model uses 256 as the embedding size throughout, except in the feedforward block, where the size is scaled up to 2048 before the nonlinearity and back to the hidden size afterward. This large intermediate dimension works well in practice.",
+   "what_it_means": "All residual additions (`x + residual`) require matching widths, so every sublayer must output 256. Inside the feedforward block, `Dense(2048, relu)` followed by `Dense(256)` gives each token a wide hidden layer in which to compute nonlinear features. This is where most of each block's parameters live (1,050,880 of 1,315,072 in the encoder). The 8× ratio (2048/256) is larger than the 4× ratio of the original Transformer (d_model = 512, d_ff = 2048; outside knowledge), which most later models also use.",
+   "why_it_matters": "The feedforward block is the only per-token nonlinearity in a Transformer (p.469). Making it wide gives the model capacity without changing the attention cost.",
+   "technical_idea": "$\\operatorname{FFN}(x) = W_2\\,\\operatorname{relu}(W_1 x + b_1) + b_2$ with $W_1 \\in \\mathbb R^{2048\\times256}$, $W_2 \\in \\mathbb R^{256\\times2048}$, applied independently at every position.",
+   "terminology": [
+    {
+     "term": "hidden_dim",
+     "meaning": "Width of the token representations throughout the model (also called d_model)."
+    },
+    {
+     "term": "intermediate_dim",
+     "meaning": "Width of the feedforward block's hidden layer (d_ff)."
+    }
+   ],
+   "connections": [
+    "p.469: why the feedforward block is needed (attention alone is linear in the values).",
+    "p.472: start of the sentence."
+   ]
+  },
+  {
+   "ref": "p473_e06",
+   "excerpt": "Let’s take a look at the summary of our Transformer model:",
+   "what_it_says": "The authors print the model summary.",
+   "what_it_means": "The table lists layers in topological order with output shapes, parameter counts and inputs. Here `(None, None)` means variable batch size and variable sequence length. The `NotEqual` rows show that `source != 0` on a symbolic Keras tensor creates an operation node in the graph, and since the expression appears twice in the listing, it creates two nodes (`not_equal_4`, `not_equal_5`).",
+   "why_it_matters": "Comparing with the RNN summary on pp.458-459: the Transformer has 14.4M parameters versus 34.9M. The two Transformer blocks together (2.9M) are smaller than the RNN's bidirectional GRU encoder alone (7.9M).",
+   "terminology": [
+    {
+     "term": "NotEqual layer",
+     "meaning": "Keras's graph node for the elementwise `!=` operation, here producing a boolean padding mask."
+    }
+   ],
+   "connections": [
+    "p.474: rest of the summary and total parameters.",
+    "p.459: RNN totals for comparison."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "transformer",
+   "name": "Encoder-decoder Transformer for translation",
+   "definition": "A seq2seq model where a Transformer encoder reads the source and a causally masked Transformer decoder generates the target while cross-attending to the encoder output.",
+   "intuition": "Same two-part design as the RNN translator, but both parts move information with attention instead of recurrence.",
+   "technical": "english → Embedding(15000, 256) → Encoder; spanish → Embedding(15000, 256) → Decoder(target, source=encoder_output) → Dropout(0.5) → Dense(15000, softmax). The loss is sparse categorical crossentropy on the shifted targets.",
+   "significance": "A direct, fair comparison to the GRU model (p.474).",
+   "example": "Batch of 64 English sentences (64, 20) and Spanish prefixes (64, 20) → predictions (64, 20, 15000).",
+   "misconception": "That this model already knows word order. It has no positional information yet (pp.474-475).",
+   "related": [
+    "multi_head_attention",
+    "causal_mask",
+    "self_attention",
+    "seq2seq"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "feedforward_block",
+   "name": "Position-wise feedforward block",
+   "definition": "Two Dense layers with a ReLU in between, applied to each token independently inside every Transformer block.",
+   "intuition": "After attention lets tokens exchange information, each token 'thinks' about it on its own in a wider hidden space.",
+   "technical": "256 → Dense(2048, relu) → Dense(256). Parameters 256·2048 + 2048 + 2048·256 + 256 = 1,050,880.",
+   "significance": "It supplies the nonlinearity that attention lacks and holds about 80% of the encoder block's parameters.",
+   "example": "`feed_forward_1 = layers.Dense(intermediate_dim, activation=\"relu\")`, `feed_forward_2 = layers.Dense(hidden_dim)` (p.469).",
+   "misconception": "That it mixes information across positions. It does not. Only attention does.",
+   "related": [
+    "transformer",
+    "dense_layer",
+    "relu"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "padding_mask",
+   "name": "Source padding mask (`source != 0`)",
+   "definition": "A boolean tensor marking real tokens (True) versus padding zeros (False) in the English input.",
+   "intuition": "Tells attention 'don't look at the blank filler at the end of short sentences.'",
+   "technical": "Shape (batch, s). The blocks upgrade it to (batch, 1, s) (`source_mask[:, None, :]`) and pass it as `attention_mask` to the encoder self-attention and the decoder cross-attention.",
+   "significance": "Without it, padding vectors would receive attention weight and dilute the representations.",
+   "example": "'you know that' padded to 20 → mask [T, T, T, F, …, F].",
+   "misconception": "That the Embedding layer handles padding automatically. Here `mask_zero` is not used, so the mask is passed explicitly.",
+   "related": [
+    "attention_mask",
+    "causal_mask"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "15.16",
+   "title": "Building a Transformer model",
+   "original_code": "hidden_dim = 256\nintermediate_dim = 2048\nnum_heads = 8\n\nsource = keras.Input(shape=(None,), dtype=\"int32\", name=\"english\")\nx = layers.Embedding(vocab_size, hidden_dim)(source)\nencoder_output = TransformerEncoder(hidden_dim, intermediate_dim, num_heads)(\n    source=x,\n    source_mask=source != 0,\n)\n\ntarget = keras.Input(shape=(None,), dtype=\"int32\", name=\"spanish\")\nx = layers.Embedding(vocab_size, hidden_dim)(target)\nx = TransformerDecoder(hidden_dim, intermediate_dim, num_heads)(\n    target=x,\n    source=encoder_output,\n    source_mask=source != 0,\n)\nx = layers.Dropout(0.5)(x)\ntarget_predictions = layers.Dense(vocab_size, activation=\"softmax\")(x)\ntransformer = keras.Model([source, target], target_predictions)",
+   "language": "python",
+   "what_it_does": "Defines a two-input functional Keras model: the English token ids are embedded and encoded by one TransformerEncoder; the Spanish prefix ids are embedded and decoded by one TransformerDecoder that cross-attends to the encoder output; dropout and a softmax Dense layer produce next-token probabilities at every target position.",
+   "line_explanations": [
+    {
+     "lines": "1-3",
+     "explanation": "Model width 256, feedforward width 2048, 8 attention heads (32 dims each)."
+    },
+    {
+     "lines": "5",
+     "explanation": "Variable-length int32 input named `\"english\"`, matching the dict key produced by the dataset (p.456)."
+    },
+    {
+     "lines": "6",
+     "explanation": "Learned token embeddings: 15,000 × 256 = 3,840,000 parameters."
+    },
+    {
+     "lines": "7-10",
+     "explanation": "One encoder block. `source != 0` builds the padding mask (0 is the padding id) so self-attention ignores padding."
+    },
+    {
+     "lines": "12-13",
+     "explanation": "Spanish input (decoder prefix, `[start] …`) with its own separate embedding table."
+    },
+    {
+     "lines": "14-18",
+     "explanation": "One decoder block: causal self-attention over `target`, then cross-attention to `encoder_output` using the same English padding mask."
+    },
+    {
+     "lines": "19",
+     "explanation": "Heavy dropout (50%) before the classifier, as in the RNN model."
+    },
+    {
+     "lines": "20",
+     "explanation": "Per-position softmax over the 15,000 Spanish tokens: 256 × 15,000 + 15,000 = 3,855,000 parameters."
+    },
+    {
+     "lines": "21",
+     "explanation": "The model maps `[english, spanish]` to predictions of shape (batch, target_len, 15000)."
+    }
+   ],
+   "inputs_outputs": "Inputs: english ids (batch, s) and spanish ids (batch, t). Output: (batch, t, 15000) probabilities, where position i predicts target token i+1.",
+   "algorithm": "Embed → encode (self-attention + FFN) → embed target → decode (causal self-attention + cross-attention + FFN) → dropout → softmax classifier.",
+   "theory_link": "This is the Vaswani et al. encoder-decoder (figure 15.8) with N = 1 and no positional encoding, plugged into the same training setup as the GRU seq2seq model so that only the sequence-mixing mechanism differs.",
+   "parameters": [
+    {
+     "name": "hidden_dim = 256",
+     "role": "Embedding and residual-stream width."
+    },
+    {
+     "name": "intermediate_dim = 2048",
+     "role": "Feedforward hidden width."
+    },
+    {
+     "name": "num_heads = 8",
+     "role": "Attention heads per MultiHeadAttention layer (key_dim = 32)."
+    },
+    {
+     "name": "source_mask",
+     "role": "Boolean padding mask of the English input."
+    },
+    {
+     "name": "Dropout(0.5)",
+     "role": "Regularization before the output layer."
+    }
+   ],
+   "pitfalls": [
+    "No positional information is added: the embeddings carry token identity only, so the model is blind to word order. This explains the 58% accuracy on p.474 and is fixed in 15.3.5.",
+    "`source != 0` is written twice, creating two identical `NotEqual` nodes. Computing it once (`mask = source != 0`) is cleaner.",
+    "The decoder's self-attention does not mask Spanish padding. This is harmless because padding comes at the end, the causal mask stops real tokens from seeing later padding, and the loss ignores padded labels through sample weights (p.456).",
+    "The input names `\"english\"` and `\"spanish\"` must match the dataset dict keys, or `fit` will fail to route the inputs."
+   ],
+   "illustrative_code": "# AI-written (not from the book): verify the parameter counts in the summary.\nhidden, inter, heads, vocab = 256, 2048, 8, 15000\nkey_dim = hidden // heads                                  # 32\nmha = 3 * (hidden * heads * key_dim + heads * key_dim) \\\n      + (heads * key_dim * hidden + hidden)                # Q,K,V + output = 263,168\nln = 2 * hidden                                            # gamma + beta = 512\nffn = (hidden * inter + inter) + (inter * hidden + hidden) # 526,336 + 524,544\nencoder = mha + ln + ffn + ln                              # 1,315,072\ndecoder = 2 * mha + 3 * ln + ffn                           # 1,578,752\nembedding = vocab * hidden                                 # 3,840,000 (each)\ndense_out = hidden * vocab + vocab                         # 3,855,000\ntotal = 2 * embedding + encoder + decoder + dense_out\nprint(encoder, decoder, total)                             # 1315072 1578752 14428824"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "transformer.summary() (first part)",
+   "original_code": ">>> transformer.summary()\nModel: \"functional_3\"\n┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓\n┃ Layer (type)          ┃ Output Shape      ┃     Param # ┃ Connected to       ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩\n│ english (InputLayer)  │ (None, None)      │           0 │ -                  │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ embedding_5           │ (None, None, 256) │   3,840,000 │ english[0][0]      │\n│ (Embedding)           │                   │             │                    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ not_equal_4           │ (None, None)      │           0 │ english[0][0]      │\n│ (NotEqual)            │                   │             │                    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ spanish (InputLayer)  │ (None, None)      │           0 │ -                  │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ transformer_encoder_1 │ (None, None, 256) │   1,315,072 │ embedding_5[0][0], │\n│ (TransformerEncoder)  │                   │             │ not_equal_4[0][0]  │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ not_equal_5           │ (None, None)      │           0 │ english[0][0]      │\n│ (NotEqual)            │                   │             │                    │",
+   "language": "text",
+   "what_it_does": "Shows the first six rows of the model summary. The remaining rows and totals are on p.474.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "Call and auto-generated model name `functional_3`."
+    },
+    {
+     "lines": "6",
+     "explanation": "`english` InputLayer: (None, None), batch and length both variable."
+    },
+    {
+     "lines": "8-9",
+     "explanation": "`embedding_5`: (None, None, 256), 3,840,000 = 15,000 × 256 params."
+    },
+    {
+     "lines": "11-12",
+     "explanation": "`not_equal_4`: the first `source != 0`, a boolean mask with no params."
+    },
+    {
+     "lines": "14",
+     "explanation": "`spanish` InputLayer."
+    },
+    {
+     "lines": "16-17",
+     "explanation": "`transformer_encoder_1`: output (None, None, 256), 1,315,072 params = attention 263,168 + 2 LayerNorms 1,024 + FFN 1,050,880. Inputs: the embedding and the mask."
+    },
+    {
+     "lines": "19-20",
+     "explanation": "`not_equal_5`: the second `source != 0`, used by the decoder."
+    }
+   ],
+   "inputs_outputs": "Console table: layer name/type, output shape, parameter count, inbound connections.",
+   "algorithm": "N/A (summary output).",
+   "theory_link": "The encoder count: MultiHeadAttention = 4 × (256 × 256 + 256) = 263,168 (Q, K, V and output projections across 8 heads of 32), LayerNorm = 512 each, FFN = 526,336 + 524,544.",
+   "parameters": [],
+   "pitfalls": [
+    "Layer suffix numbers (`_5`, `_4`, `_1`) depend on how many layers were created earlier in the session and will differ in your run."
+   ],
+   "illustrative_code": null
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Where the encoder's 1,315,072 parameters come from",
+   "kind": "numerical",
+   "body": "| Sublayer | Computation | Params |\n|---|---|---|\n| Q, K, V projections | 3 × (256 × 256 + 256) | 197,376 |\n| Attention output projection | 256 × 256 + 256 | 65,792 |\n| LayerNorm × 2 | 2 × (256 γ + 256 β) | 1,024 |\n| FFN layer 1 | 256 × 2048 + 2048 | 526,336 |\n| FFN layer 2 | 2048 × 256 + 256 | 524,544 |\n| **Total** | | **1,315,072** |\n\nThe decoder adds a second attention layer (263,168) and a third LayerNorm (512): 1,315,072 + 263,680 = 1,578,752, matching p.474. Whole model: 2 × 3,840,000 + 1,315,072 + 1,578,752 + 3,855,000 = 14,428,824.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Transformer vs. GRU translator at a glance",
+   "kind": "breakdown",
+   "body": "- Same: tokenizers, dataset, input names, embeddings size 256, Dropout(0.5), Dense softmax, loss, metric.\n- Different: the sequence mixers. GRU model: Bidirectional GRU encoder (7.9M) + GRU decoder (3.9M) with a 1,024-dim state. Transformer: one encoder block (1.3M) + one decoder block (1.6M) with width 256.\n- Parameters: 34.9M (RNN, p.459) vs 14.4M (Transformer). Most of both models is vocabulary-sized layers (embeddings and output).\n\nSo the comparison on p.474 is not 'bigger model wins'. The Transformer is smaller, and its initial underperformance is due to the missing word-order information.",
+   "source": "inference"
+  },
+  {
+   "title": "Spot the missing ingredient before turning the page",
+   "kind": "step_by_step",
+   "body": "Follow a single English token through the encoder. Its embedding depends only on the token id. Self-attention computes weights from dot products between token vectors, which don't depend on where the tokens are. The FFN acts on each position independently. So permuting the English words permutes the encoder outputs and leaves the cross-attention sums unchanged. The model therefore cannot tell 'dog bites man' from 'man bites dog'. The authors pose exactly this puzzle on p.474.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Tensor shapes through Listing 15.16",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "english ids",
+      "shape": [
+       null,
+       20
+      ]
+     },
+     {
+      "op": "Embedding(15000, 256)",
+      "shape": [
+       null,
+       20,
+       256
+      ]
+     },
+     {
+      "op": "TransformerEncoder",
+      "shape": [
+       null,
+       20,
+       256
+      ]
+     },
+     {
+      "op": "spanish ids (prefix)",
+      "shape": [
+       null,
+       20
+      ]
+     },
+     {
+      "op": "Embedding + TransformerDecoder",
+      "shape": [
+       null,
+       20,
+       256
+      ]
+     },
+     {
+      "op": "Dense softmax",
+      "shape": [
+       null,
+       20,
+       15000
+      ]
+     }
+    ]
+   },
+   "why": "Follows the shapes in the summary for 20-token sentences: the width stays 256 through both blocks, and only the final Dense expands to the 15,000-token vocabulary."
+  },
+  {
+   "id": "v2",
+   "type": "chart",
+   "title": "Where the 14.4M parameters are",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": [
+      "English Embedding",
+      "Spanish Embedding",
+      "TransformerEncoder",
+      "TransformerDecoder",
+      "Output Dense"
+     ],
+     "datasets": [
+      {
+       "label": "Parameters",
+       "data": [
+        3840000,
+        3840000,
+        1315072,
+        1578752,
+        3855000
+       ]
+      }
+     ]
+    },
+    "options": {
+     "indexAxis": "y",
+     "plugins": {
+      "legend": {
+       "display": false
+      },
+      "title": {
+       "display": true,
+       "text": "Transformer translator: 14,428,824 parameters"
+      }
+     },
+     "scales": {
+      "x": {
+       "title": {
+        "display": true,
+        "text": "parameters"
+       }
+      }
+     }
+    }
+   },
+   "why": "Parameter counts from the summary on this page and its continuation on p.474. The vocabulary-sized layers dominate, and the two Transformer blocks are under 3M together."
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The Transformer translator is bigger than the RNN translator.",
+   "correction": "It has 14.4M parameters versus 34.9M for the GRU model (p.459)."
+  },
+  {
+   "claim": "The `NotEqual` rows are trainable layers.",
+   "correction": "They are graph nodes for the `source != 0` comparison, with 0 parameters. There are two because the expression is written twice."
+  },
+  {
+   "claim": "The decoder's `source_mask` hides future Spanish tokens.",
+   "correction": "`source_mask` marks English padding for cross-attention. Hiding future Spanish tokens is done by the causal mask inside the decoder (p.471)."
+  },
+  {
+   "claim": "Embedding layers encode word position.",
+   "correction": "A plain `Embedding` maps token ids to vectors regardless of position. Positional information must be added separately (p.475)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 472,
+    "note": "Causal mask, Figure 15.8, and the plan to swap GRUs for Transformer blocks."
+   },
+   {
+    "page": 471,
+    "note": "Listing 15.15 TransformerDecoder."
+   },
+   {
+    "page": 469,
+    "note": "Listing 15.14 TransformerEncoder and the feedforward block."
+   },
+   {
+    "page": 458,
+    "note": "The GRU seq2seq model with the same overall structure."
+   }
+  ],
+  "later": [
+   {
+    "page": 474,
+    "note": "Rest of the summary (14,428,824 params), training, 58% accuracy, and the word-order puzzle."
+   },
+   {
+    "page": 475,
+    "note": "15.3.5 Embedding positional information to fix the model."
+   },
+   {
+    "page": 477,
+    "note": "Generating translations with the Transformer."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 470,
+    "note": "attention_mask for padding."
+   },
+   {
+    "page": 456,
+    "note": "Dataset dict keys `english`/`spanish` and sample weights."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 459,
+    "note": "RNN model summary for comparison."
+   },
+   {
+    "page": 474,
+    "note": "`transformer.compile(...)` and `fit`."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 472,
+    "note": "Figure 15.8, the architecture this listing instantiates (with N = 1)."
+   }
+  ]
+ },
+ "takeaways": [
+  "The Transformer translator keeps the RNN model's structure and replaces the GRUs with one TransformerEncoder and one TransformerDecoder.",
+  "Width 256 throughout, expanded to 2048 only inside the feedforward block. 8 heads of 32 dims.",
+  "`source != 0` gives the English padding mask, used by encoder self-attention and decoder cross-attention.",
+  "Encoder block = 1,315,072 params. Most of it is the FFN. The total model is 14.4M vs 34.9M for the RNN.",
+  "Nothing in this model encodes token position, the flaw exposed on p.474."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why must every sublayer in the Transformer block output vectors of size 256 (hidden_dim)?",
+   "options": [
+    "Because residual connections add the sublayer output to its input",
+    "Because MultiHeadAttention only supports size 256",
+    "Because the vocabulary size is divisible by 256",
+    "Because Dropout requires a fixed width"
+   ],
+   "answer": "Because residual connections add the sublayer output to its input",
+   "explanation": "`x = x + residual` requires matching shapes. The FFN therefore expands to 2048 and projects back to 256. The other options are false: MHA supports any size, vocabulary size is irrelevant, and Dropout works on any shape.",
+   "page_refs": [
+    473,
+    469
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Verify the 3,840,000 parameters of `embedding_5` and the 3,855,000 of the output Dense layer.",
+   "options": [],
+   "answer": "Embedding: 15,000 × 256 = 3,840,000. Dense: 256 × 15,000 weights + 15,000 biases = 3,855,000.",
+   "explanation": "Embeddings have no bias. Dense layers do.",
+   "page_refs": [
+    473,
+    474
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What does `source_mask=source != 0` represent, and which attention layers use it?",
+   "options": [],
+   "answer": "A boolean mask that is True for real English tokens and False for padding (id 0). It is used by the encoder's self-attention and the decoder's cross-attention.",
+   "explanation": "See Listings 15.14/15.15 (pp.469, 471).",
+   "page_refs": [
+    473,
+    469,
+    471
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why does the summary show two NotEqual layers?",
+   "options": [],
+   "answer": "The expression `source != 0` appears twice in Listing 15.16 (for the encoder and for the decoder), and each use on a symbolic tensor creates a separate graph node.",
+   "explanation": "They compute the same mask. Assigning it to a variable once would leave a single node.",
+   "page_refs": [
+    473
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "math",
+   "question": "Break down the encoder's 1,315,072 parameters into attention, layer norms and feedforward.",
+   "options": [],
+   "answer": "Attention 4 × 65,792 = 263,168; LayerNorms 2 × 512 = 1,024; FFN 526,336 + 524,544 = 1,050,880; total 1,315,072.",
+   "explanation": "Each attention projection is 256 × 256 + 256 (8 heads × 32 = 256).",
+   "page_refs": [
+    473
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Before reading p.474, predict a weakness of this model compared with the GRU model.",
+   "options": [],
+   "answer": "It has no notion of token order: embeddings, attention and per-token FFNs are all position-independent, so shuffling the words gives the same result. It will likely underperform until positional information is added.",
+   "explanation": "On p.474 it reaches 58% vs 65% for the RNN, and the authors explain this order blindness.",
+   "page_refs": [
+    473,
+    474,
+    475
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you write Listing 15.16 from memory given the encoder and decoder classes?",
+   "options": [],
+   "answer": "Self-check: two Inputs, two Embeddings, encoder(source=x, source_mask), decoder(target=x, source=encoder_output, source_mask), Dropout, Dense softmax, Model([source, target], …).",
+   "explanation": "Compare with the RNN model on p.458 to see the parallel structure.",
+   "page_refs": [
+    473
+   ]
+  }
+ ]
+}

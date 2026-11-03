@@ -1,0 +1,292 @@
+{
+ "page_id": "page_078",
+ "pdf_page": 78,
+ "printed_page": "54",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-fable-5-1",
+  "generated_at": "2026-11-03T04:19:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. All four code fragments match the image (blank lines restored). The first fragment is the end of the NaiveDense listing from p.77 and the last is the start of BatchGenerator, which continues on p.79."
+ },
+ "overview": {
+  "title": "NaiveSequential: chaining layers into a mock Keras model",
+  "chapter": "2 The mathematical building blocks of neural networks",
+  "section": "2.5 Looking back at our first example",
+  "subsection": "2.5.1 Reimplementing our first example from scratch",
+  "main_topic": "The weights property of NaiveDense, the NaiveSequential class that chains layers and collects their weights, the mock MNIST model 784 -> 512 (relu) -> 10 (softmax), and the start of a batch generator",
+  "central_idea": "A sequential model is just a list of layers applied in order, plus a way to gather all their parameters. With NaiveDense and NaiveSequential, the Keras model from p.76 becomes a plain Python object whose four weight tensors (W and b of each layer) are explicitly listed, ready to be updated by a hand-written training step.",
+  "importance": "Collecting the weights into one list is what makes a generic training step possible: gradients will be computed with respect to model.weights and applied to model.weights (p.79-p.80). The mock model reproduces exactly the architecture of the first example.",
+  "learning_objectives": [
+   "Explain the purpose of the weights property in NaiveDense and NaiveSequential.",
+   "Trace how NaiveSequential.__call__ composes layers.",
+   "Build the mock MNIST model and explain why it has exactly 4 weight tensors and what their shapes are.",
+   "Explain why a batch generator is needed to iterate over MNIST in mini-batches."
+  ],
+  "prerequisites": [
+   "NaiveDense, keras.Variable and the Dense formula (p.77)",
+   "Function composition / chain of layers (p.76)",
+   "Mini-batches (p.49, p.68)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the last three lines of `NaiveDense` (begun on p.77): a `weights` property returning `[self.W, self.b]`, which the callout calls *the convenience method for retrieving the layer's weights*.\n\n**A simple Sequential class.** `NaiveSequential` chains layers. Its constructor stores a list of layers; its `__call__()` starts from `x = inputs` and replaces `x` by `layer(x)` for each layer in order, returning the final `x`. A `weights` property loops over the layers and concatenates their `weights` lists, so the model's parameters can be tracked easily.\n\n**The mock Keras model.** With the two classes, the authors rebuild the first example's architecture:\n\n- `NaiveDense(input_size=28 * 28, output_size=512, activation=ops.relu)`\n- `NaiveDense(input_size=512, output_size=10, activation=ops.softmax)`\n\nand check `assert len(model.weights) == 4`: two layers times (W, b). The shapes are (784, 512), (512,), (512, 10) and (10,), i.e. 407,050 scalars in total (count computed for these notes).\n\n**A batch generator.** Next comes a way to iterate over MNIST in mini-batches, described as easy. The page shows only the start, `import math` and `class BatchGenerator:` with `def __init__(self, images, labels, batch_size=128):`; the body continues on p.79, where it stores the data, an index and `num_batches = math.ceil(len(images) / batch_size)`, and a `next()` method slices out the next batch.\n\nCompared with Keras, the mock model must be told input sizes explicitly and keeps its weights in a hand-assembled list, but conceptually it is the same object as `keras.Sequential([...])` on p.76.",
+ "paragraphs": [
+  {
+   "ref": "p078_e05",
+   "excerpt": "Now, let’s create a NaiveSequential class to chain these layers. It wraps",
+   "what_it_says": "NaiveSequential wraps a list of layers, exposes a __call__() method that calls the underlying layers on the inputs in order, and has a weights property to keep track of the layers' parameters.",
+   "what_it_means": "The model is the composition f(x) = layer_n(...layer_2(layer_1(x))). Because each NaiveDense is itself callable, the model does not need to know anything about what a layer computes, only that it maps a tensor to a tensor. The weights property flattens the per-layer lists [W1, b1] and [W2, b2] into one list [W1, b1, W2, b2], which is the form the gradient computation and the update step need.",
+   "why_it_matters": "This is the minimal structure of every Keras model: a forward computation plus an enumerable set of trainable variables. Training code can be written once against model(x) and model.weights, independently of the architecture.",
+   "technical_idea": "The list concatenation `weights += layer.weights` preserves order, so gradients returned for model.weights later line up one-to-one with the variables.",
+   "terminology": [
+    {"term": "property", "meaning": "A Python method decorated with @property, accessed like an attribute (model.weights, not model.weights())."},
+    {"term": "composition", "meaning": "Applying functions one after another, each to the previous one's output."}
+   ],
+   "connections": ["p.76: keras.Sequential, the high-level counterpart.", "p.79: one_training_step uses model(images_batch) and model.weights.", "p.216: the Sequential class revisited in chapter 7."]
+  },
+  {
+   "ref": "p078_e07",
+   "excerpt": "Using this NaiveDense class and this NaiveSequential class, we can create a",
+   "what_it_says": "With NaiveDense and NaiveSequential a mock Keras model can be created.",
+   "what_it_means": "The code that follows mirrors keras.Sequential([layers.Dense(512, activation=\"relu\"), layers.Dense(10, activation=\"softmax\")]) from p.76, with the input sizes (28 * 28 = 784 and 512) written out because NaiveDense cannot infer them. The assertion confirms that the model exposes exactly 4 weight tensors.",
+   "why_it_matters": "It shows that the 'real' model is equivalent to a few lines of plain Python around four tensors, reinforcing p.76's claim that the knowledge lives in the weights.",
+   "terminology": [
+    {"term": "mock model", "meaning": "A simplified stand-in that behaves like the real Keras model for the purpose of the example."}
+   ],
+   "connections": ["p.76: the original architecture.", "p.119: chapter 3 explains how real Keras layers infer input_size automatically through build()."]
+  },
+  {
+   "ref": "p078_e10",
+   "excerpt": "Next, we need a way to iterate over the MNIST data in mini-batches.",
+   "what_it_says": "A way to iterate over MNIST in mini-batches is needed, and it is easy to write.",
+   "what_it_means": "fit(batch_size=128) handled batching automatically; the from-scratch version needs an object that hands out consecutive slices of 128 images and labels. The class BatchGenerator begins here and is completed on p.79.",
+   "why_it_matters": "Batching is step 1 of mini-batch SGD (draw a batch of samples and targets, p.68).",
+   "terminology": [
+    {"term": "batch generator", "meaning": "An object that yields successive mini-batches of (inputs, targets) from a dataset."}
+   ],
+   "connections": ["p.49: the notion of data batches.", "p.79: the rest of BatchGenerator (index, num_batches, next())."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "sequential_model",
+   "name": "Sequential model",
+   "definition": "A model that applies a list of layers in order; here NaiveSequential.",
+   "intuition": "An assembly line: each station transforms the item and passes it on.",
+   "technical": "__call__: x = inputs; for layer in layers: x = layer(x); return x.",
+   "significance": "Reproduces keras.Sequential with a handful of lines.",
+   "example": "model = NaiveSequential([NaiveDense(784, 512, relu), NaiveDense(512, 10, softmax)]).",
+   "misconception": "The model does not hold its own parameters separately from the layers; its weights property just collects the layers' variables.",
+   "related": ["dense_layer", "keras_model"],
+   "source": "book"
+  },
+  {
+   "id": "weights",
+   "name": "Model weights list",
+   "definition": "The ordered list of all trainable variables of the model, obtained by concatenating each layer's weights.",
+   "intuition": "An inventory of every knob the training process may turn.",
+   "technical": "[W1 (784, 512), b1 (512,), W2 (512, 10), b2 (10,)]; len == 4.",
+   "significance": "The argument passed to gradient computation and to the update step (p.79-p.80).",
+   "example": "assert len(model.weights) == 4.",
+   "misconception": "len(model.weights) counts tensors, not scalar parameters; there are 407,050 scalars in these 4 tensors.",
+   "related": ["keras_variable", "dense_layer"],
+   "source": "book"
+  },
+  {
+   "id": "mini_batch",
+   "name": "Mini-batch iteration",
+   "definition": "Splitting the training data into consecutive chunks of batch_size samples, each used for one training step.",
+   "intuition": "Reading a book a few pages at a time instead of all at once.",
+   "technical": "With batch_size=128 and 60,000 images there are math.ceil(60000 / 128) = 469 batches (completed on p.79).",
+   "significance": "Implements the batching that fit did automatically on p.76.",
+   "example": "Batch 0 = images[0:128], batch 1 = images[128:256], ... batch 468 = images[59904:60000] (96 samples).",
+   "misconception": "The default batch_size of the generator (128) matches the fit call on p.76; it is a choice, not a requirement.",
+   "related": ["sgd", "epoch"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "The mock model as a composition of two Dense layers",
+   "latex": "f(X) = \\operatorname{softmax}\\big(\\operatorname{relu}(X W_1 + b_1)\\, W_2 + b_2\\big), \\quad W_1 \\in \\mathbb{R}^{784\\times 512},\\, b_1 \\in \\mathbb{R}^{512},\\, W_2 \\in \\mathbb{R}^{512\\times 10},\\, b_2 \\in \\mathbb{R}^{10}",
+   "source_text": "NaiveSequential([NaiveDense(input_size=28 * 28, output_size=512, activation=ops.relu), NaiveDense(input_size=512, output_size=10, activation=ops.softmax)])",
+   "variables": [
+    {"symbol": "X", "meaning": "Batch of flattened images, shape (batch, 784)"},
+    {"symbol": "W_1, b_1", "meaning": "Weights of the first NaiveDense layer"},
+    {"symbol": "W_2, b_2", "meaning": "Weights of the second NaiveDense layer"},
+    {"symbol": "f(X)", "meaning": "Predicted class probabilities, shape (batch, 10)"}
+   ],
+   "operations": "What NaiveSequential.__call__ computes when it applies the two layers in order.",
+   "purpose": "Writes the code on the page as a single mathematical function; the book does not print this formula.",
+   "interpretation": "model.weights is exactly the list [W1, b1, W2, b2] of the parameters of f.",
+   "intuition": "Two stacked transformations: 784 pixels -> 512 features -> 10 class probabilities.",
+   "numerical_example": "Parameter count: 784*512 + 512 + 512*10 + 10 = 401,408 + 512 + 5,120 + 10 = 407,050.",
+   "source": "ai_explanation",
+   "book_ref": "p.78"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "NaiveDense.weights (end of the NaiveDense class)",
+   "original_code": "    @property\n    def weights(self):\n        return [self.W, self.b]",
+   "language": "python",
+   "what_it_does": "Completes the NaiveDense class from p.77 with a property returning the layer's two variables.",
+   "line_explanations": [
+    {"lines": "1-3", "explanation": "Callout: the convenience method for retrieving the layer's weights. @property lets callers write layer.weights without parentheses."}
+   ],
+   "inputs_outputs": "Returns [W, b].",
+   "algorithm": "None; accessor.",
+   "theory_link": "Exposes the trainable parameters that gradient descent will update.",
+   "parameters": [],
+   "pitfalls": ["It is indented as part of NaiveDense; on its own it is not valid at top level."]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "NaiveSequential",
+   "original_code": "class NaiveSequential:\n    def __init__(self, layers):\n        self.layers = layers\n\n    def __call__(self, inputs):\n        x = inputs\n        for layer in self.layers:\n            x = layer(x)\n        return x\n\n    @property\n    def weights(self):\n        weights = []\n        for layer in self.layers:\n            weights += layer.weights\n        return weights",
+   "language": "python",
+   "what_it_does": "Chains a list of layers: calling the model applies each layer in order; the weights property returns the concatenation of all layers' weights.",
+   "line_explanations": [
+    {"lines": "1-3", "explanation": "Stores the list of layers."},
+    {"lines": "5-9", "explanation": "Forward pass of the whole model: feed the output of each layer into the next and return the last output."},
+    {"lines": "11-16", "explanation": "Builds a flat list of every layer's variables, in layer order: [W1, b1, W2, b2] for the MNIST model."}
+   ],
+   "inputs_outputs": "Call: tensor -> tensor. weights: list of keras.Variable.",
+   "algorithm": "Function composition and list concatenation.",
+   "theory_link": "A deep network is a chain of layers (p.76); training updates the collection of all their weights.",
+   "parameters": [{"name": "layers", "role": "Ordered list of callable layers, each exposing a weights property"}],
+   "pitfalls": [
+    "Layers must have compatible sizes; NaiveSequential does not check that one layer's output_size equals the next layer's input_size.",
+    "The weights list is rebuilt on every access; it contains the same variable objects, so updating them updates the layers."
+   ]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Building the mock Keras model",
+   "original_code": "model = NaiveSequential(\n    [\n        NaiveDense(input_size=28 * 28, output_size=512, activation=ops.relu),\n        NaiveDense(input_size=512, output_size=10, activation=ops.softmax),\n    ]\n)\nassert len(model.weights) == 4",
+   "language": "python",
+   "what_it_does": "Recreates the first example's architecture with the naive classes and checks that it exposes four weight tensors.",
+   "line_explanations": [
+    {"lines": "1-3", "explanation": "First layer: 784 inputs (28 * 28 flattened pixels) to 512 units with ops.relu."},
+    {"lines": "4", "explanation": "Second layer: 512 inputs to 10 units with ops.softmax, giving class probabilities."},
+    {"lines": "7", "explanation": "Sanity check: 2 layers x (W, b) = 4 weight tensors."}
+   ],
+   "inputs_outputs": "Model maps (batch, 784) -> (batch, 10).",
+   "algorithm": "Instantiation only.",
+   "theory_link": "Same model as keras.Sequential on p.76, with explicit input sizes.",
+   "parameters": [
+    {"name": "input_size=28 * 28", "role": "Flattened MNIST image size, 784"},
+    {"name": "output_size=512 / 10", "role": "Hidden width / number of classes"},
+    {"name": "activation", "role": "ops.relu for the hidden layer, ops.softmax for the output"}
+   ],
+   "pitfalls": ["Input images must be flattened to 784 and converted to float (done in the first example on p.75) before calling this model."],
+   "illustrative_code": "# AI-written: inspect shapes and count parameters\nfor w in model.weights:\n    print(tuple(w.shape))\n# (784, 512) (512,) (512, 10) (10,)\nprint(sum(math.prod(w.shape) for w in model.weights))  # 407050"
+  },
+  {
+   "id": "c4",
+   "listing": null,
+   "title": "BatchGenerator (beginning)",
+   "original_code": "import math\n\nclass BatchGenerator:\n    def __init__(self, images, labels, batch_size=128):",
+   "language": "python",
+   "what_it_does": "Starts a class that will hand out mini-batches of images and labels; the constructor body continues on p.79.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "math is imported for math.ceil, used on p.79 to compute the number of batches."},
+    {"lines": "3-4", "explanation": "The generator takes the full image and label arrays and a batch size defaulting to 128, the same as in fit on p.76."}
+   ],
+   "inputs_outputs": "Input: images, labels arrays. Output (p.79): successive (images, labels) batches via next().",
+   "algorithm": "Sequential slicing with a moving index (p.79).",
+   "theory_link": "Step 1 of mini-batch SGD: draw a batch of samples and targets (p.68).",
+   "parameters": [{"name": "batch_size", "role": "Number of samples per batch (128)"}],
+   "pitfalls": ["The listing is incomplete on this page; see p.79 for the rest."]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "NaiveSequential vs keras.Sequential",
+   "kind": "breakdown",
+   "body": "| | NaiveSequential (p.78) | keras.Sequential (p.76) |\n|---|---|---|\n| Layer list | stored in `self.layers` | stored internally |\n| Forward pass | explicit loop in `__call__` | same idea, plus shape checks |\n| Weights | `weights` property concatenating lists | `model.weights` / `trainable_weights` tracked automatically |\n| Input size | must be passed to each NaiveDense | inferred on first call (`build()`, p.119) |\n| Training | hand-written step (p.79) | `compile` + `fit` |\n\n(Comparison compiled for these notes from p.76-p.78 and the chapter 3 passage on p.119.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Tracing a batch through model(x)",
+   "kind": "step_by_step",
+   "body": "Let `x` have shape (128, 784).\n\n1. `x = inputs` -> (128, 784)\n2. First NaiveDense: `matmul(x, W1)` -> (128, 512); `+ b1` -> (128, 512); `relu` -> (128, 512)\n3. Second NaiveDense: `matmul(x, W2)` -> (128, 10); `+ b2` -> (128, 10); `softmax` -> (128, 10), each row summing to 1\n4. Return the (128, 10) probabilities.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "The mock Keras model built on this page",
+   "why": "NaiveSequential([NaiveDense(28*28 -> 512, relu), NaiveDense(512 -> 10, softmax)]): click each layer to see its output shape and the parameter count of its W and b.",
+   "widget": "nn_architecture",
+   "params": {
+    "layers": [
+     {"name": "input (28*28)", "type": "input", "shape": "(None, 784)"},
+     {"name": "NaiveDense 1", "type": "dense", "units": 512, "activation": "relu", "shape": "(None, 512)"},
+     {"name": "NaiveDense 2", "type": "output", "units": 10, "activation": "softmax", "shape": "(None, 10)"}
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "How model.weights is assembled",
+   "why": "The weights properties on this page: each NaiveDense returns [W, b], NaiveSequential concatenates them, giving the 4 tensors checked by the assert.",
+   "mermaid": "flowchart LR\n  L1[NaiveDense 784->512 relu] -->|weights| A[\"[W1, b1]\"]\n  L2[NaiveDense 512->10 softmax] -->|weights| B[\"[W2, b2]\"]\n  A --> M[\"model.weights = [W1, b1, W2, b2]\"]\n  B --> M\n  M --> C[len == 4]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "len(model.weights) == 4 means the model has 4 parameters.", "correction": "It has 4 weight tensors; together they contain 407,050 scalar parameters."},
+  {"claim": "NaiveSequential needs to know how each layer works internally.", "correction": "It only calls each layer on the previous output and reads its weights property; any callable with weights would work."},
+  {"claim": "The model's weights property copies the variables.", "correction": "It returns a list of the same variable objects, so updating these entries updates the layers themselves."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 77, "note": "NaiveDense class, whose final weights property opens this page."},
+   {"page": 76, "note": "keras.Sequential model being mocked."},
+   {"page": 49, "note": "Data batches."}
+  ],
+  "later": [
+   {"page": 79, "note": "BatchGenerator completed; one_training_step uses model and model.weights."},
+   {"page": 80, "note": "Gradients computed with respect to model.weights and applied to them."},
+   {"page": 119, "note": "Real Keras layers create weights in build() and infer input sizes."},
+   {"page": 216, "note": "The Sequential class in chapter 7."}
+  ],
+  "prerequisites": [
+   {"page": 77, "note": "NaiveDense and keras.Variable."}
+  ],
+  "related_math": [
+   {"page": 77, "note": "output = activation(matmul(input, W) + b)."}
+  ],
+  "related_code": [
+   {"page": 79, "note": "Listing 2.9, a single step of training."},
+   {"page": 81, "note": "The full training loop using BatchGenerator."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "NaiveDense exposes [W, b] through a weights property.",
+  "NaiveSequential applies its layers in order and concatenates their weights into one list.",
+  "The mock model 784 -> 512 (relu) -> 10 (softmax) reproduces the first example and has exactly 4 weight tensors.",
+  "A batch generator is needed to feed the model mini-batches of 128 samples; it is completed on p.79."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "Why does the assert check that len(model.weights) == 4?", "options": ["Because each layer has two weight tensors (W and b) and there are two layers", "Because the model has 4 output classes", "Because there are 4 epochs", "Because relu and softmax each add two parameters"], "answer": "Because each layer has two weight tensors (W and b) and there are two layers", "explanation": "model.weights concatenates [W1, b1] and [W2, b2]. The model has 10 output classes, trains for 5 epochs in the book, and activations have no parameters.", "page_refs": [78]},
+  {"id": "q2", "type": "short", "question": "List the shapes of the four tensors in model.weights, in order.", "options": [], "answer": "(784, 512), (512,), (512, 10), (10,)", "explanation": "W has shape (input_size, output_size) and b (output_size,); input_size=28*28=784 for the first layer and 512 for the second.", "page_refs": [77, 78]},
+  {"id": "q3", "type": "math", "question": "How many scalar trainable parameters does the mock model contain?", "options": [], "answer": "407,050", "explanation": "784*512 + 512 = 401,920 for the first layer; 512*10 + 10 = 5,130 for the second; total 407,050.", "page_refs": [78]},
+  {"id": "q4", "type": "conceptual", "question": "Why is it useful for the model to expose all its weights as a single flat list?", "options": [], "answer": "So the training step can compute the gradient of the loss with respect to every weight and apply an update to each, without knowing the model's structure.", "explanation": "The page motivates the property as a way to keep track of the layers' parameters; p.79 then passes model.weights to the gradient and update functions.", "page_refs": [78, 79]},
+  {"id": "q5", "type": "mcq", "question": "What does NaiveSequential.__call__ return for an input batch of shape (128, 784)?", "options": ["A list of the outputs of each layer", "A tensor of shape (128, 512)", "A tensor of shape (128, 10)", "The list of weights"], "answer": "A tensor of shape (128, 10)", "explanation": "It feeds x through each layer and returns only the last output, which has 10 units. (128, 512) is the intermediate output of the first layer; it does not return a list.", "page_refs": [78]},
+  {"id": "q6", "type": "conceptual", "question": "Why must NaiveDense be given input_size=28 * 28 explicitly, whereas layers.Dense(512) on p.76 needs no input size?", "options": [], "answer": "NaiveDense creates W in its constructor, before seeing any data, so it must know the input dimension; real Keras layers defer weight creation until they are first called and can read the input shape.", "explanation": "Chapter 3 (p.119) explains this deferred build() mechanism for Keras layers.", "page_refs": [78, 119]},
+  {"id": "q7", "type": "self", "question": "Could you add a third NaiveDense layer (e.g. 512 -> 256 -> 10) to the mock model? Which arguments must change and what would len(model.weights) be?", "options": [], "answer": "The second layer becomes NaiveDense(512, 256, relu) and a third NaiveDense(256, 10, softmax) is added; len(model.weights) == 6.", "explanation": "Consecutive sizes must match, and each layer adds two weight tensors.", "page_refs": [78]}
+ ]
+}

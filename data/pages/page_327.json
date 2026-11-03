@@ -1,0 +1,325 @@
+{
+ "page_id": "page_327",
+ "pdf_page": 327,
+ "printed_page": "303",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:44:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Minor imprecision in the book text: section 10.3.3 says the separate loss function 'takes the final layer's output', but in Listing 10.22 loss_fn takes last_conv_layer_output, i.e. the output of the last convolutional layer, not the model's final layer; 'final layer' should presumably read 'last convolutional layer'."
+  ],
+  "extraction_quality": "Clean. p327_e03 is the continuation of Listing 10.21 (PyTorch) whose first two lines (function header and the forward pass through last_conv_layer_model) are on p.326. Callouts were matched to lines using the page image: 'Creates a copy of last_conv_layer_output that we can get gradients for' -> the clone().detach().requires_grad_(True) block; 'Retrieves the activation channel corresponding to the top predicted class' -> top_class_channel = preds[:, top_pred_index]; 'Gets the gradient ...' -> backward()/grad lines."
+ },
+ "overview": {
+  "title": "Top-class gradients in PyTorch and JAX",
+  "chapter": "10 Interpreting what ConvNets learn",
+  "section": "10.3 Visualizing heatmaps of class activation",
+  "subsection": "10.3.3 Getting the gradient of the top class: JAX version",
+  "main_topic": "The rest of the PyTorch implementation of get_top_class_gradients (Listing 10.21: clone/detach/requires_grad_, backward(), .grad) and the JAX implementation (Listing 10.22: a separate loss function returning the top-class activation, turned into a gradient function with jax.grad).",
+  "central_idea": "All three backends compute the same tensor, the gradient of the top predicted class's output with respect to the last conv feature map, but with different autodiff styles: PyTorch marks a leaf tensor as requiring gradients and calls backward(); JAX transforms a pure function returning a scalar into its gradient function.",
+  "importance": "Completes the 'gradient' half of Grad-CAM for every backend supported by Keras 3, so the backend-agnostic NumPy post-processing on p.328 can follow. It also reinforces the three autodiff paradigms taught in chapter 3 on a realistic example.",
+  "learning_objectives": [
+   "Explain why the PyTorch version clones, detaches and calls requires_grad_(True) on the feature map.",
+   "Retrieve a gradient in PyTorch with .backward() and the .grad attribute of a leaf tensor.",
+   "Write a JAX loss function whose first argument is the array to differentiate and whose output is a scalar.",
+   "Use jax.grad to create a gradient function and call it on the feature map.",
+   "Compare the imperative (TensorFlow/PyTorch) and functional (JAX) approaches to the same gradient."
+  ],
+  "prerequisites": [
+   "Listing 10.20 and the start of Listing 10.21 (p.326)",
+   "PyTorch gradients with .backward() (p.101) and JAX's jax.grad metaprogramming approach (p.110)",
+   "Gradient ascent in PyTorch and JAX for filter visualization (p.319)",
+   "classifier_model and last_conv_layer_model (p.325-p.326)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Listing 10.21 continued (PyTorch).** After computing the last conv activations (p.326), the function replaces them with\n\n`last_conv_layer_output.clone().detach().requires_grad_(True)`\n\nwhich, per the callout, \"creates a copy of last_conv_layer_output that we can get gradients for\": a fresh **leaf tensor** cut off from the backbone's computation graph, with gradient tracking enabled. Then the classifier runs on it, the top class index is found with `ops.argmax(preds[0])`, the activation channel of that class is selected with `preds[:, top_pred_index]`, and `top_class_channel.backward()` backpropagates. The gradient is read from `last_conv_layer_output.grad`. As in TensorFlow, the function is called on `img_array` and both outputs are converted with `ops.convert_to_numpy`.\n\n**10.3.3 JAX version (Listing 10.22).** JAX needs a **separate loss computation function**. `loss_fn(last_conv_layer_output)` runs `classifier_model`, finds the top class and returns `top_class_channel[0]`, the scalar activation value of the top-class channel, which serves as the \"loss\" to differentiate. `grad_fn = jax.grad(loss_fn)` creates a gradient function. Inside `get_top_class_gradients`, the feature map is computed and `grads = grad_fn(last_conv_layer_output)`; as the callout says, retrieving the gradient \"is just a matter of calling the gradient function!\" The same NumPy conversion follows.\n\nIn all three backends the result is the pair `(grads, last_conv_layer_output)`, two NumPy arrays of the same shape, ready for the pooling and channel weighting of section 10.3.4 (p.328).\n\nNote: the prose says the loss function \"takes the final layer's output\"; in the code it takes the last *convolutional* layer's output (see review flag).",
+ "paragraphs": [
+  {
+   "ref": "p327_e05",
+   "excerpt": "Finally, let’s do JAX. We define a separate loss computation function that takes",
+   "what_it_says": "For JAX, a separate loss computation function is defined; it takes the (last conv) layer's output and returns the activation channel corresponding to the top predicted class. That activation value is used as the 'loss', which makes it possible to compute the gradient.",
+   "what_it_means": "JAX differentiates functions, not recorded computations. So the computation 'feature map -> top-class output' has to be packaged as a Python function whose first argument is the array we want gradients for and whose return value is a scalar; jax.grad then produces a new function returning the gradient.",
+   "why_it_matters": "It shows how 'loss' in JAX simply means 'the scalar we differentiate', not necessarily a training loss. Here we are not minimizing anything; we just want the sensitivity of the class score.",
+   "technical_idea": "loss_fn returns top_class_channel[0] (a scalar) rather than top_class_channel (shape (1,)), because jax.grad requires a scalar output. The text's 'final layer's output' refers in the code to last_conv_layer_output (see review flag).",
+   "terminology": [
+    {"term": "jax.grad", "meaning": "A JAX transformation that turns a scalar-valued function into a function computing its gradient with respect to its first argument."},
+    {"term": "loss function (here)", "meaning": "The scalar function to differentiate: the top-class activation, not a training objective."}
+   ],
+   "connections": [
+    "p.110: JAX's three-step recipe: define a loss function, call jax.grad, call the gradient function; the loss must return a scalar.",
+    "p.319: Listing 10.13 used jax.grad(compute_loss) for gradient ascent on the input image."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "autodiff",
+   "name": "Three autodiff styles",
+   "definition": "Automatic differentiation as exposed by TensorFlow (GradientTape records operations), PyTorch (tensors with requires_grad build a graph; backward() fills .grad) and JAX (jax.grad transforms a function).",
+   "intuition": "Recorder, self-tracking tensors, and function transformer: three interfaces to the same chain rule.",
+   "technical": "PyTorch requires a leaf tensor with requires_grad=True; JAX requires a pure function with scalar output whose first argument is the differentiation variable.",
+   "significance": "Lets the book compute the Grad-CAM gradient on any Keras 3 backend.",
+   "example": "Listings 10.20 (TF), 10.21 (PyTorch), 10.22 (JAX).",
+   "misconception": "The three versions do not compute different things; they all return d(top class)/d(feature map).",
+   "related": ["gradient_tape", "backpropagation", "multi_backend_keras"],
+   "source": "book"
+  },
+  {
+   "id": "leaf_tensor",
+   "name": "Leaf tensor with requires_grad (PyTorch)",
+   "definition": "A tensor not produced by a tracked operation, whose .grad attribute is populated by backward() when requires_grad is True.",
+   "intuition": "Start a new, clean graph at the feature map so its gradient ends up in an accessible place.",
+   "technical": "clone() copies the data, detach() removes the link to the backbone's graph, requires_grad_(True) turns on tracking in place.",
+   "significance": "Without it, last_conv_layer_output.grad would be None (non-leaf tensors do not retain .grad by default).",
+   "example": "last_conv_layer_output.clone().detach().requires_grad_(True)",
+   "misconception": "Detaching does not stop gradients flowing through the classifier; it only stops them going further back into the backbone, which is not needed.",
+   "related": ["autodiff", "backpropagation"],
+   "source": "book"
+  },
+  {
+   "id": "grad_cam",
+   "name": "Grad-CAM gradients",
+   "definition": "Gradient of the top-class output with respect to the last conv feature map.",
+   "intuition": "Per-location, per-channel sensitivity of the class score.",
+   "technical": "Returned by all three backends as grads with the feature map's shape; converted to NumPy for post-processing.",
+   "significance": "Input to the channel-importance pooling on p.328.",
+   "example": "grads for class 386 (African elephant).",
+   "misconception": "No parameter update is performed; the gradient is only read, not used for training.",
+   "related": ["class_activation_map", "gradient_tape"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "The JAX 'loss' and its gradient function",
+   "latex": "L(A) = g_{c^*}(A), \\qquad \\nabla_A L = \\texttt{jax.grad}(L)(A) = \\frac{\\partial\\, g_{c^*}(A)}{\\partial A}",
+   "source_text": "def loss_fn(last_conv_layer_output): ... return top_class_channel[0]\ngrad_fn = jax.grad(loss_fn)\ngrads = grad_fn(last_conv_layer_output)",
+   "variables": [
+    {"symbol": "A", "meaning": "last_conv_layer_output, the last conv feature map."},
+    {"symbol": "g", "meaning": "classifier_model; g_c(A) is its output for class c."},
+    {"symbol": "c^*", "meaning": "top_pred_index, the argmax of the predictions."},
+    {"symbol": "L", "meaning": "loss_fn: the scalar top-class activation."}
+   ],
+   "operations": "jax.grad maps the scalar function L to the function A -> dL/dA.",
+   "purpose": "Same quantity as tape.gradient in TensorFlow and .grad in PyTorch.",
+   "interpretation": "Each element is how much the top-class output changes per unit change of one feature-map activation.",
+   "intuition": "Turn 'compute the score' into 'compute how the score responds'.",
+   "numerical_example": "Beyond the book: the argmax inside loss_fn is not differentiable but does not need to be; it only chooses which output to return. Gradients flow through preds, treating the chosen index as a constant.",
+   "source": "book",
+   "book_ref": "p.327"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "10.21",
+   "title": "Computing the top class gradients with PyTorch (continued from p.326)",
+   "original_code": "    last_conv_layer_output = (\n        last_conv_layer_output.clone().detach().requires_grad_(True)\n    )\n    preds = classifier_model(last_conv_layer_output)\n    top_pred_index = ops.argmax(preds[0])\n    top_class_channel = preds[:, top_pred_index]\n    top_class_channel.backward()\n    grads = last_conv_layer_output.grad\n    return grads, last_conv_layer_output\ngrads, last_conv_layer_output = get_top_class_gradients(img_array)\ngrads = ops.convert_to_numpy(grads)\nlast_conv_layer_output = ops.convert_to_numpy(last_conv_layer_output)",
+   "language": "python",
+   "what_it_does": "Turns the feature map into a gradient-tracking leaf tensor, runs the classifier on it, backpropagates from the top-class output, and reads the gradient from .grad. The function header and the first forward pass (last_conv_layer_model(img_array)) are on p.326.",
+   "line_explanations": [
+    {"lines": "1-3", "explanation": "Callout: creates a copy of last_conv_layer_output that we can get gradients for. clone() copies, detach() separates it from the backbone graph (making it a leaf), requires_grad_(True) enables gradient tracking."},
+    {"lines": "4", "explanation": "Forward pass through the classifier head; PyTorch records the graph because the input requires gradients."},
+    {"lines": "5-6", "explanation": "Top class index and its output column (callout: retrieves the activation channel corresponding to the top predicted class)."},
+    {"lines": "7-8", "explanation": "backward() propagates from the single-element tensor to the leaf; the gradient is stored in last_conv_layer_output.grad (callout: gets the gradient of the top predicted class with regard to the output feature map of the last convolutional layer)."},
+    {"lines": "9", "explanation": "Returns gradients and feature map."},
+    {"lines": "10-12", "explanation": "Same calling and NumPy conversion code as the TensorFlow version."}
+   ],
+   "inputs_outputs": "Input: preprocessed img_array. Outputs: NumPy arrays grads and last_conv_layer_output, same shape.",
+   "algorithm": "Make leaf tensor -> forward -> select class -> backward -> read .grad.",
+   "theory_link": "Reverse-mode autodiff (backpropagation) restricted to the classifier head.",
+   "parameters": [
+    {"name": "requires_grad_(True)", "role": "Enables gradient accumulation into .grad for this tensor."}
+   ],
+   "pitfalls": [
+    "Without detach(), the tensor would be a non-leaf whose .grad is not retained (None), and backward would also flow into the backbone weights.",
+    "backward() without arguments requires a single-element output; it works here because the batch holds one image.",
+    "Calling the function twice on the same leaf would accumulate gradients; here a fresh tensor is created on every call."
+   ],
+   "illustrative_code": ""
+  },
+  {
+   "id": "c2",
+   "listing": "10.22",
+   "title": "Computing the top class gradients with Jax",
+   "original_code": "import jax\ndef loss_fn(last_conv_layer_output):\n    preds = classifier_model(last_conv_layer_output)\n    top_pred_index = ops.argmax(preds[0])\n    top_class_channel = preds[:, top_pred_index]\n    return top_class_channel[0]\ngrad_fn = jax.grad(loss_fn)\ndef get_top_class_gradients(img_array):\n    last_conv_layer_output = last_conv_layer_model(img_array)\n    grads = grad_fn(last_conv_layer_output)\n    return grads, last_conv_layer_output\ngrads, last_conv_layer_output = get_top_class_gradients(img_array)\ngrads = ops.convert_to_numpy(grads)\nlast_conv_layer_output = ops.convert_to_numpy(last_conv_layer_output)",
+   "language": "python",
+   "what_it_does": "Defines a scalar function of the feature map (the top-class activation), transforms it into its gradient function with jax.grad, and uses it to get the gradient for the elephant image.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "JAX is imported for jax.grad (backend-specific)."},
+    {"lines": "2-6", "explanation": "Callout: defines a separate loss function. It runs the classifier, picks the top class and returns top_class_channel[0], the scalar activation value of the top-class channel (callout)."},
+    {"lines": "7", "explanation": "Callout: creates a gradient function. grad_fn(A) returns d loss_fn / dA."},
+    {"lines": "8-11", "explanation": "Computes the feature map and calls grad_fn on it (callout: now retrieving the gradient of the top-class channel is just a matter of calling the gradient function!)."},
+    {"lines": "12-14", "explanation": "Same calling and NumPy conversion as the other backends."}
+   ],
+   "inputs_outputs": "Input: preprocessed img_array. Outputs: NumPy arrays grads and last_conv_layer_output, same shape.",
+   "algorithm": "Function transformation: f -> grad(f), then evaluation at the feature map.",
+   "theory_link": "Same derivative as Listings 10.20 and 10.21; JAX's functional style was introduced on p.110.",
+   "parameters": [
+    {"name": "loss_fn", "role": "Scalar-valued function whose first argument is the array to differentiate."},
+    {"name": "grad_fn", "role": "Function returned by jax.grad(loss_fn)."}
+   ],
+   "pitfalls": [
+    "Returning top_class_channel (shape (1,)) instead of top_class_channel[0] would make jax.grad fail, since it requires a scalar output.",
+    "jax.grad differentiates with respect to the first argument only by default.",
+    "The forward pass through classifier_model happens twice in total (once inside grad_fn); this is cheap because the head is small."
+   ],
+   "illustrative_code": "# AI-written variant (not from the book): get the value and gradient in one call\nvalue_and_grad_fn = jax.value_and_grad(loss_fn)\nscore, grads = value_and_grad_fn(last_conv_layer_model(img_array))"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "clone().detach().requires_grad_(True), piece by piece",
+   "kind": "breakdown",
+   "body": "- `clone()`: makes a copy of the activations, so the original tensor is not modified in place.\n- `detach()`: returns a tensor that shares data but has no history; it becomes a **leaf** of a new graph. Gradients will therefore stop here instead of flowing into the backbone's weights.\n- `requires_grad_(True)`: in-place flag (note the trailing underscore) that tells PyTorch to track operations on this tensor and to store its gradient in `.grad`.\n\nPyTorch only populates `.grad` for leaf tensors by default, so this three-step recipe is the standard way to get the gradient with respect to an intermediate activation. (Explanation beyond the book's callout.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Side-by-side comparison of the three backends",
+   "kind": "alternative",
+   "body": "| Step | TensorFlow (10.20) | PyTorch (10.21) | JAX (10.22) |\n|---|---|---|---|\n| Mark the variable | `tape.watch(A)` | `A.clone().detach().requires_grad_(True)` | first argument of `loss_fn` |\n| Forward | inside `with tf.GradientTape()` | normal call, graph built automatically | inside `loss_fn` |\n| Target | `preds[:, top_pred_index]` | `preds[:, top_pred_index]` | `preds[:, top_pred_index][0]` (scalar) |\n| Gradient | `tape.gradient(target, A)` | `target.backward(); A.grad` | `jax.grad(loss_fn)(A)` |\n\nEverything after this point (p.328-p.330) is plain NumPy and identical for all backends.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Recorder vs function transformer",
+   "kind": "analogy",
+   "body": "TensorFlow and PyTorch are like filming a cooking session and then replaying it backward to see how each ingredient affected the dish. JAX is like having a recipe card (a pure function) and a machine that rewrites the card into a new card describing those sensitivities. To use the machine, you must write the recipe down as a card first, which is why JAX needs the separate `loss_fn`.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Same gradient, three backends",
+   "why": "This page completes the PyTorch version and adds the JAX version of the computation started in TensorFlow on p.326.",
+   "mermaid": "flowchart TB\n  A[\"A = last_conv_layer_model(img_array)\"] --> T[\"TensorFlow:<br/>tape.watch(A) ... tape.gradient\"]\n  A --> P[\"PyTorch:<br/>A.clone().detach().requires_grad_(True)<br/>backward(); A.grad\"]\n  A --> J[\"JAX:<br/>grad_fn = jax.grad(loss_fn)<br/>grad_fn(A)\"]\n  T --> G[\"grads (same shape as A)\"]\n  P --> G\n  J --> G\n  G --> N[\"ops.convert_to_numpy -> p.328\"]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "detach() in the PyTorch version prevents computing the gradient.",
+   "correction": "detach() only cuts the link to the backbone; requires_grad_(True) then starts a new graph from the feature map, through which the classifier's gradients flow."
+  },
+  {
+   "claim": "The JAX 'loss' must be something we minimize.",
+   "correction": "Here it is simply the scalar top-class activation; the book uses it as the 'loss' only to obtain its gradient."
+  },
+  {
+   "claim": "The JAX loss function takes the model's final-layer output.",
+   "correction": "Despite the wording in the text, loss_fn takes last_conv_layer_output, the output of the last convolutional layer, and runs the classifier on it."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 326, "note": "TensorFlow version (Listing 10.20) and the first two lines of Listing 10.21."},
+   {"page": 325, "note": "last_conv_layer_model and preprocessing of img_array."},
+   {"page": 319, "note": "Gradient ascent in PyTorch (loss.backward(), image.grad) and JAX (jax.grad)."},
+   {"page": 110, "note": "JAX's metaprogramming approach to gradients."},
+   {"page": 101, "note": "PyTorch .backward() example."}
+  ],
+  "later": [
+   {"page": 328, "note": "Pooling the gradients and weighting the channels (Listing 10.23)."},
+   {"page": 329, "note": "Superimposing the heatmap on the picture."}
+  ],
+  "prerequisites": [
+   {"page": 110, "note": "jax.grad requires a scalar-valued function of the differentiated argument."},
+   {"page": 101, "note": "requires_grad and .grad in PyTorch."}
+  ],
+  "related_math": [
+   {"page": 326, "note": "Definition of the gradient of the top class with respect to the feature map."}
+  ],
+  "related_code": [
+   {"page": 326, "note": "Listing 10.20, TensorFlow."},
+   {"page": 319, "note": "Listings 10.12-10.13, filter visualization gradients in PyTorch and JAX."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "PyTorch: make the feature map a leaf with clone().detach().requires_grad_(True), run the classifier, call backward() on the top-class output, read .grad.",
+  "JAX: write loss_fn(feature_map) returning the scalar top-class activation, build grad_fn = jax.grad(loss_fn), call it on the feature map.",
+  "All three backends produce the same grads tensor with the shape of the feature map.",
+  "ops.convert_to_numpy makes the rest of Grad-CAM backend-independent.",
+  "The book's 'final layer's output' in 10.3.3 should be read as the last convolutional layer's output."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In the PyTorch version, what is the purpose of last_conv_layer_output.clone().detach().requires_grad_(True)?",
+   "options": [
+    "To move the tensor to the GPU",
+    "To create a copy of the feature map that we can get gradients for",
+    "To freeze the classifier weights",
+    "To normalize the feature map between 0 and 1"
+   ],
+   "answer": "To create a copy of the feature map that we can get gradients for",
+   "explanation": "That is the callout's wording: it creates a leaf tensor tracking gradients so .grad is populated by backward(). It does not move devices, freeze weights, or normalize.",
+   "page_refs": [327]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Why does loss_fn in Listing 10.22 return top_class_channel[0] rather than top_class_channel?",
+   "options": [],
+   "answer": "Because jax.grad requires the function to return a scalar; top_class_channel has shape (1,), and indexing [0] gives the scalar activation of the top class.",
+   "explanation": "p.110 states the JAX loss function should return a scalar; the callout says it 'returns the activation value of the top-class channel'.",
+   "page_refs": [327, 110]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why does JAX need a separate loss function while TensorFlow and PyTorch do not?",
+   "options": [],
+   "answer": "JAX computes gradients by transforming functions (jax.grad takes a function and returns its gradient function), so the computation must be expressed as a function of the variable to differentiate. TensorFlow and PyTorch record operations as they execute, so the computation can be written inline.",
+   "explanation": "This is the metaprogramming approach described on p.110.",
+   "page_refs": [327, 110]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "Where does PyTorch store the gradient in Listing 10.21?",
+   "options": [
+    "In top_class_channel.grad",
+    "In the return value of backward()",
+    "In last_conv_layer_output.grad",
+    "In classifier_model.grad"
+   ],
+   "answer": "In last_conv_layer_output.grad",
+   "explanation": "grads = last_conv_layer_output.grad. backward() returns None; the target and the model do not hold this gradient.",
+   "page_refs": [327]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "ops.argmax is not differentiable. Why doesn't that break the gradient computation in loss_fn?",
+   "options": [],
+   "answer": "argmax only selects which output to return; it produces an integer index treated as a constant. The gradient flows through preds (the selected entry), which is differentiable.",
+   "explanation": "Added explanation; the same holds in the TensorFlow and PyTorch versions.",
+   "page_refs": [327]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "What does the text of section 10.3.3 say the loss function takes as input, and what does the code actually pass it?",
+   "options": [],
+   "answer": "The text says 'the final layer's output'; the code passes last_conv_layer_output, the output of the last convolutional layer.",
+   "explanation": "A small wording imprecision in the book; the code is authoritative.",
+   "page_refs": [327]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you rewrite Listing 10.22 so that it explains a class index you choose, rather than the top class?",
+   "options": [],
+   "answer": "Add a class index argument (e.g. def loss_fn(A, class_index): return classifier_model(A)[0, class_index]) and use jax.grad(loss_fn), which differentiates with respect to the first argument.",
+   "explanation": "Self-check; this variation is not in the book.",
+   "page_refs": [327]
+  }
+ ]
+}

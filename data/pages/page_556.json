@@ -1,0 +1,423 @@
+{
+ "page_id": "page_556",
+ "pdf_page": 556,
+ "printed_page": "532",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:20:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "The book explains negative prompts as something you could get by training on (image, positive_prompt, negative_prompt) triplets. Stable Diffusion is not trained this way. Negative prompts are an inference-time use of classifier-free guidance: the model is trained with the caption sometimes dropped (empty prompt), and at sampling time the negative-prompt prediction replaces the unconditional one in noise = neg + s * (pos - neg). The book's phrasing ('you could simply train') presents a hypothetical, but readers may take it as how SD works. The notes explain the actual mechanism and label it as beyond the book."
+  ],
+  "extraction_quality": "Good. e03 is the end of Listing 17.8 begun on p.555. The callout 'A trick to keep memory usage down. More details in chapter 18.' points at dtype=\"float16\". The caption of figure 17.14 is split across e06 and e08, and the sentence 'Let’s try removing the color blue from our input:' is split across e05 and e07. The sidebar 'Visual artifacts in the Stable Diffusion output' (e11) continues on p.557. The prompt string contains the typo 'astraunaut' (for 'astronaut'), copied verbatim."
+ },
+ "overview": {
+  "title": "Generating with Stable Diffusion and negative prompts",
+  "chapter": "17 Image generation",
+  "section": "17.3 Text-to-image models",
+  "subsection": "",
+  "main_topic": "Completing Listing 17.8 with float16, generating an image from a prompt with TextToImage.generate(), steering away from concepts with a negative prompt, and the visual artifacts of diffusion output.",
+  "central_idea": "KerasHub's TextToImage task wraps tokenization and the diffusion loop in one generate() call. Passing a dict with 'prompts' and 'negative_prompts' steers generation toward the positive prompt and away from the negative one; here it removes the color blue. Diffusion outputs still contain artifacts, such as duplicated tusks, because the model lacks real understanding of anatomy and physics.",
+  "importance": "This is the reader's first hands-on use of a state-of-the-art text-to-image model. Negative prompts are a practical control knob, and the sidebar sets realistic expectations about what these models understand.",
+  "learning_objectives": [
+   "Explain what dtype=\"float16\" does when loading the model and why it is used.",
+   "Describe what TextToImage.generate() wraps (tokenization plus the diffusion process).",
+   "Use a negative prompt via the dict input {\"prompts\": ..., \"negative_prompts\": ...}.",
+   "Explain conceptually how a negative prompt steers denoising, and relate the book's explanation to classifier-free guidance.",
+   "Identify typical diffusion artifacts and their cause."
+  ],
+  "prerequisites": [
+   "Text-conditioned diffusion (p.555)",
+   "The CausalLM task from chapter 16",
+   "Floating-point precision (covered in chapter 18)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes **Listing 17.8**. The `from_preset` call gets one more argument, `dtype=\"float16\"`. The callout calls this a trick to keep memory usage down, with details in chapter 18: storing weights and activations in 16-bit floats halves memory compared with float32. Then a prompt is defined, `\"A NASA astraunaut riding an origami elephant in New York City\"` (with a typo in the original), and `task.generate(prompt)` produces the image in figure 17.13.\n\nLike the `CausalLM` task from chapter 16, `TextToImage` is a **high-level task class**. Its `generate()` call handles tokenization and the entire diffusion process.\n\nStable Diffusion also accepts a **negative prompt**, which steers the diffusion process *away* from certain text. The authors say there is nothing magic about it. You could train on triplets `(image, positive_prompt, negative_prompt)`, where the positive prompt describes the image and the negative prompt is words that do not describe it. Feeding both embeddings to the denoiser teaches it to steer toward images matching the positive prompt and away from those matching the negative one. The example passes a dictionary to `generate()`:\n\n```python\ntask.generate({\"prompts\": prompt, \"negative_prompts\": \"blue color\"})\n```\n\nFigure 17.14 shows the result: the astronaut now rides a dark gray elephant through a warm, yellow-orange street, with no blue in sight.\n\nA sidebar, **'Visual artifacts in the Stable Diffusion output'**, points out flaws such as the second elephant's duplicated tusks. Some artifacts are unavoidable with diffusion models: correctly drawing a human in a space suit on a paper elephant requires an understanding of anatomy and physics that the model lacks. The sidebar continues on p.557.",
+ "paragraphs": [
+  {
+   "ref": "p556_e04",
+   "excerpt": "Like the CausalLM task we covered last chapter, the TextToImage task is",
+   "what_it_says": "The TextToImage task is, like the CausalLM task of chapter 16, a high-level class for image generation conditioned on text. It wraps tokenization and the diffusion process into one generate call.",
+   "what_it_means": "A KerasHub 'task' combines a preprocessor (here, the tokenizers for the text encoders) with a backbone (text encoders, diffusion network, image decoder) and the generation loop. Calling `task.generate(prompt)` therefore runs everything: tokenize, embed, sample latent noise, run the denoising steps with guidance, decode latents to pixels, and convert to a uint8 image. Page 558 takes this apart into separate steps.",
+   "why_it_matters": "The same abstraction (task = preprocessing + backbone + generate) runs across KerasHub, so what you learned with LLMs carries over to image generation, and vice versa.",
+   "technical_idea": "",
+   "terminology": [
+    {
+     "term": "Task (KerasHub)",
+     "meaning": "A high-level model class bundling preprocessing, a backbone network and task-specific logic such as generate()."
+    },
+    {
+     "term": "CausalLM",
+     "meaning": "The KerasHub task for autoregressive text generation used in chapter 16."
+    }
+   ],
+   "connections": [
+    "p.555: Listing 17.8 creates the task with TextToImage.from_preset.",
+    "p.558: Listing 17.9 decomposes generate() into its three steps."
+   ]
+  },
+  {
+   "ref": "p556_e05",
+   "excerpt": "The Stable Diffusion model actually adds a second “negative prompt” to its",
+   "what_it_says": "Stable Diffusion has a second, 'negative' prompt that steers diffusion away from certain text. The book says you could train on (image, positive_prompt, negative_prompt) triplets, with the positive prompt describing the image and the negative prompt being words that do not describe it. Feeding both embeddings to the denoiser teaches it to steer toward the positive and away from the negative. Figure 17.14 and the following code remove the color blue (e07 completes the sentence: 'the color blue from our input:').",
+   "what_it_means": "The idea is directional control. The denoiser's update at each step can be pushed toward one text and away from another. With the negative prompt 'blue color', the result loses the blue origami elephant and blue tones; the figure shows a dark elephant in a golden-orange scene. The book offers the triplet description as a simple way to *think* about it ('you could simply train'). As the technical note explains, real Stable Diffusion gets the same effect without negative-prompt training data.",
+   "why_it_matters": "Negative prompts are one of the most used practical controls in text-to-image tools, used to suppress unwanted styles, colors, blur, extra limbs and so on. Understanding them as steering the denoising direction makes their behaviour predictable.",
+   "technical_idea": "Beyond the book: Stable Diffusion uses classifier-free guidance (CFG). During training the caption is randomly replaced by an empty prompt, so the same network learns both conditional and unconditional predictions. At sampling time it computes two noise predictions per step, one with the positive prompt ($\\hat\\epsilon_{pos}$) and one with the negative prompt ($\\hat\\epsilon_{neg}$, the empty prompt by default), and combines them as $\\hat\\epsilon = \\hat\\epsilon_{neg} + s\\,(\\hat\\epsilon_{pos} - \\hat\\epsilon_{neg})$ with guidance scale $s$ (7.0 in Listing 17.9 on p.558). A negative prompt simply replaces the empty-prompt prediction, so the update moves away from it. No triplets are needed.",
+   "terminology": [
+    {
+     "term": "Negative prompt",
+     "meaning": "Text describing what the generated image should not contain; generation is pushed away from it."
+    },
+    {
+     "term": "Positive prompt",
+     "meaning": "The ordinary prompt describing the desired image."
+    },
+    {
+     "term": "Classifier-free guidance (not in the book)",
+     "meaning": "Combining conditional and unconditional (or negative-prompt) noise predictions to strengthen prompt adherence."
+    }
+   ],
+   "connections": [
+    "p.558: the generate() decomposition passes negative token ids for an empty prompt and uses guidance_scale=7.0.",
+    "p.559: the four embedding tensors include sequence and vector for both positive and negative prompts."
+   ]
+  },
+  {
+   "ref": "p556_e11",
+   "excerpt": "You will notice plenty of visual artifacts in our Stable Diffusion output",
+   "what_it_says": "The sidebar points out visual artifacts in the outputs, notably the second elephant's duplicated tusks. Some of this is unavoidable with diffusion models: truly drawing a human in a space suit on a paper elephant would require an understanding of anatomy and physics that the model lacks. (Continued on p.557: the model interpolates from its training data without real understanding, and a bigger model would help.)",
+   "what_it_means": "Diffusion models learn statistical patterns of local and global image structure. They have no explicit 3-D model of an elephant's skull or of how a rider sits. Details such as tusk count, finger count or how limbs connect are decided by many small denoising steps, each locally plausible, without a global consistency check, so duplicated or merged parts appear. Combining unusual concepts ('origami' + 'elephant' + 'astronaut') makes this more likely, because the model has to extrapolate beyond common training compositions.",
+   "why_it_matters": "This is a practical reminder of chapter 17's broader point (p.534): the latent space does not encode a consistent model of the physical world. You should expect, and check for, such errors before using generated images.",
+   "technical_idea": "",
+   "terminology": [
+    {
+     "term": "Visual artifact",
+     "meaning": "An implausible detail in a generated image, such as duplicated parts, garbled objects or incoherent lighting."
+    }
+   ],
+   "connections": [
+    "p.534: generated images may show extra fingers or incoherent lighting because the latent space lacks a model of the physical world.",
+    "p.557: the sidebar continues, noting the 'medium' model's size as a fixable factor."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "negative_prompt",
+   "name": "Negative prompt",
+   "definition": "A second text input that steers the diffusion process away from images matching it.",
+   "intuition": "Telling an illustrator 'not blue' as well as what to draw.",
+   "technical": "Book's framing: a denoiser trained on (image, positive_prompt, negative_prompt) triplets learns to move toward the positive and away from the negative. Actual SD mechanism (beyond the book): classifier-free guidance with the negative prompt's prediction in place of the unconditional one.",
+   "significance": "One of the main practical controls for text-to-image models.",
+   "example": "task.generate({\"prompts\": prompt, \"negative_prompts\": \"blue color\"}) removes blue from the astronaut-elephant scene (figure 17.14).",
+   "misconception": "A negative prompt is not a filter applied after generation. It changes every denoising step.",
+   "related": [
+    "text_conditioning",
+    "classifier_free_guidance",
+    "diffusion_model"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "classifier_free_guidance",
+   "name": "Classifier-free guidance",
+   "definition": "A sampling technique that extrapolates from an unconditional (or negative-prompt) noise prediction toward the conditional one by a guidance scale s.",
+   "intuition": "Compute 'what the model would do with the prompt' and 'what it would do without it', then exaggerate the difference.",
+   "technical": "noise = noise_neg + s * (noise_pos - noise_neg). s = 1 is ordinary conditional sampling; larger s gives stronger prompt adherence at some cost in diversity.",
+   "significance": "This is how Stable Diffusion implements both prompt strength and negative prompts.",
+   "example": "guidance_scale=7.0 in Listing 17.9 (p.558).",
+   "misconception": "Despite the name, no separate classifier network is involved.",
+   "related": [
+    "negative_prompt",
+    "text_conditioning"
+   ],
+   "source": "ai_explanation"
+  },
+  {
+   "id": "mixed_precision",
+   "name": "float16 weights to save memory",
+   "definition": "Loading and running the model in 16-bit floating point instead of 32-bit.",
+   "intuition": "Each number takes half the bytes, so the model needs about half the memory.",
+   "technical": "dtype=\"float16\" in from_preset sets the variable and compute dtype. About 3 billion parameters take roughly 6 GB in float16 versus 12 GB in float32 (estimate, not from the book).",
+   "significance": "Makes the model fit on a free Colab GPU; chapter 18 covers precision in detail.",
+   "example": "TextToImage.from_preset(\"stable_diffusion_3_medium\", image_shape=(512, 512, 3), dtype=\"float16\")",
+   "misconception": "Half precision rarely degrades inference quality noticeably for such models, but it has a smaller range, so overflow is possible in some operations.",
+   "related": [
+    "stable_diffusion"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "17.8",
+   "title": "Creating a Stable Diffusion text-to-image model (end) and generating an image",
+   "original_code": "    dtype=\"float16\",\n)\nprompt = \"A NASA astraunaut riding an origami elephant in New York City\"\ntask.generate(prompt)",
+   "language": "python",
+   "what_it_does": "Completes the from_preset call from p.555 with dtype=\"float16\", defines the prompt and generates one 512×512 image (figure 17.13).",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Loads and runs the model in float16. Callout: 'A trick to keep memory usage down. More details in chapter 18.'"
+    },
+    {
+     "lines": "2",
+     "explanation": "Closes the from_preset( call begun on p.555."
+    },
+    {
+     "lines": "3",
+     "explanation": "The text prompt. 'astraunaut' is a typo in the book's code for 'astronaut'; the text encoder's subword tokenization is fairly robust to it, and the output still shows an astronaut."
+    },
+    {
+     "lines": "4",
+     "explanation": "Runs the whole pipeline: tokenization, text encoding, iterative denoising from random latents, decoding, conversion to an image array. In a notebook the returned array is displayed as figure 17.13."
+    }
+   ],
+   "inputs_outputs": "Input: a prompt string. Output: a uint8 NumPy array of shape (512, 512, 3).",
+   "algorithm": "generate(): tokenize prompt and an empty negative prompt → encode text → sample Gaussian latents → for each step, denoise with classifier-free guidance → decode latents with the image decoder → rescale [-1, 1] to [0, 255].",
+   "theory_link": "This is the text-conditioned diffusion described on p.555, run with pretrained weights.",
+   "parameters": [
+    {
+     "name": "dtype",
+     "role": "Numeric precision of weights and computation; float16 halves memory."
+    },
+    {
+     "name": "prompt",
+     "role": "The text the image should depict."
+    }
+   ],
+   "pitfalls": [
+    "Each call samples fresh noise, so re-running generate(prompt) gives a different image unless a seed is fixed.",
+    "Without dtype=\"float16\" the model may exceed the memory of a 16 GB GPU.",
+    "Typos in prompts can change results; correct spelling usually gives more reliable conditioning."
+   ],
+   "illustrative_code": ""
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Generating with a negative prompt",
+   "original_code": "task.generate(\n    {\n        \"prompts\": prompt,\n        \"negative_prompts\": \"blue color\",\n    }\n)",
+   "language": "python",
+   "what_it_does": "Calls generate() with a dictionary input instead of a string, giving both the positive prompt and the negative prompt 'blue color'. The result (figure 17.14) avoids blue.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "generate() accepts a dict when you need more than one text input."
+    },
+    {
+     "lines": "3",
+     "explanation": "\"prompts\": the positive prompt (the astronaut-elephant sentence)."
+    },
+    {
+     "lines": "4",
+     "explanation": "\"negative_prompts\": text to steer away from. When omitted, an empty string is used (compare p.558)."
+    },
+    {
+     "lines": "5-6",
+     "explanation": "Closes the dict and the call."
+    }
+   ],
+   "inputs_outputs": "Input: dict with keys 'prompts' and 'negative_prompts'. Output: a uint8 image of shape (512, 512, 3) without blue tones.",
+   "algorithm": "Same as plain generate(), but the negative embedding comes from 'blue color' instead of the empty string, so the guidance term pushes each step away from 'blue'.",
+   "theory_link": "Negative prompts steer denoising away from given text (book); mechanically, through classifier-free guidance (beyond the book).",
+   "parameters": [
+    {
+     "name": "\"prompts\"",
+     "role": "What to generate."
+    },
+    {
+     "name": "\"negative_prompts\"",
+     "role": "What to avoid."
+    }
+   ],
+   "pitfalls": [
+    "The removal can be indirect: suppressing 'blue' changed the whole palette (sky and lighting became warm), not just the elephant.",
+    "Negative prompts are not hard constraints; small traces of the unwanted concept can remain."
+   ],
+   "illustrative_code": "# AI-written (not from the book): other negative-prompt uses\ntask.generate({\n    \"prompts\": \"portrait photo of an old fisherman\",\n    \"negative_prompts\": \"blurry, low quality, extra fingers\",\n})"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "How negative prompts actually work in Stable Diffusion",
+   "kind": "alternative",
+   "body": "The book describes training on `(image, positive_prompt, negative_prompt)` triplets as one way you *could* get negative prompts. Stable Diffusion uses **classifier-free guidance** instead:\n\n1. In training, the caption is dropped (replaced by an empty prompt) some fraction of the time, so the network learns both $\\hat\\epsilon(x_t, c)$ and $\\hat\\epsilon(x_t, \\varnothing)$.\n2. At each sampling step it predicts noise twice: with the positive prompt and with a second prompt that is empty by default.\n3. It combines them as $\\hat\\epsilon = \\hat\\epsilon_{neg} + s(\\hat\\epsilon_{pos} - \\hat\\epsilon_{neg})$, where $s$ is the guidance scale (7.0 by default in Listing 17.9, p.558).\n4. A **negative prompt** puts text in the second slot. The update then extrapolates *away* from 'blue color' and toward the positive prompt.\n\nSo the effect the book describes, steering toward the positive and away from the negative, is real, but it comes from an inference-time trick. No negative-prompt training data is needed.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why artifacts like duplicated tusks happen",
+   "kind": "breakdown",
+   "body": "- **No explicit structure model**: the network has no notion that an elephant has exactly two tusks; it has seen patterns of 'tusk-like texture near trunk'.\n- **Locally plausible steps**: each denoising step improves local plausibility, and a second tusk is locally plausible.\n- **Out-of-distribution compositions**: 'origami elephant ridden by an astronaut in NYC' is rare in training data, so the model extrapolates.\n- **Model size**: the 'medium' model is the smallest SD3 (p.557); larger models reduce, but do not eliminate, such errors.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "One denoising step with a positive and a negative prompt",
+   "why": "Shows how the negative prompt 'blue color' from the code on this page enters each denoising step (classifier-free guidance view, beyond the book).",
+   "mermaid": "flowchart LR\n  X[current noisy latents] --> DP[Denoiser + positive prompt embedding]\n  X --> DN[Denoiser + negative prompt embedding: 'blue color']\n  DP --> EP[noise_pos]\n  DN --> EN[noise_neg]\n  EP --> G[\"noise = noise_neg + s * (noise_pos - noise_neg)\"]\n  EN --> G\n  G --> U[update latents toward positive, away from negative]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Stable Diffusion was trained on triplets of images, positive prompts and negative prompts.",
+   "correction": "The book presents this as a way you could train such a model. In practice, SD uses classifier-free guidance at inference time; the negative prompt replaces the unconditional prediction."
+  },
+  {
+   "claim": "A negative prompt removes unwanted elements after the image is generated.",
+   "correction": "It acts at every denoising step, changing the trajectory of generation. That is why removing 'blue' changed the whole color palette."
+  },
+  {
+   "claim": "Artifacts like duplicated tusks mean the model is broken.",
+   "correction": "They are an expected consequence of a model that interpolates training statistics without understanding anatomy or physics; larger models reduce them."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 555,
+    "note": "Text-conditioned diffusion and the first half of Listing 17.8."
+   },
+   {
+    "page": 534,
+    "note": "Generated images can show extra fingers or garbled objects because the latent space lacks a consistent model of the physical world."
+   }
+  ],
+  "later": [
+   {
+    "page": 557,
+    "note": "End of the artifacts sidebar (medium vs larger SD3 model) and the num_steps parameter."
+   },
+   {
+    "page": 558,
+    "note": "Listing 17.9 shows the negative prompt and guidance_scale explicitly inside the decomposed generate()."
+   },
+   {
+    "page": 559,
+    "note": "The four text-embedding tensors: sequence and vector for positive and negative prompts."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 555,
+    "note": "How text embeddings condition the denoiser."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 555,
+    "note": "First half of Listing 17.8."
+   },
+   {
+    "page": 558,
+    "note": "Listing 17.9 decomposes the generate() call used here."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 555,
+    "note": "Figure 17.13, the output without a negative prompt (blue origami elephant)."
+   },
+   {
+    "page": 557,
+    "note": "Figure 17.15: the same prompt with different numbers of diffusion steps."
+   }
+  ]
+ },
+ "takeaways": [
+  "dtype=\"float16\" halves the memory needed to load and run Stable Diffusion 3 (details in chapter 18).",
+  "TextToImage.generate() wraps tokenization and the entire diffusion process, like CausalLM.generate() for text.",
+  "Passing {\"prompts\": ..., \"negative_prompts\": ...} steers generation away from the negative text; 'blue color' removed blue from the scene.",
+  "The book explains negative prompts through training on triplets; in Stable Diffusion they work through classifier-free guidance at inference time.",
+  "Diffusion outputs contain artifacts such as duplicated tusks because the model has no real understanding of anatomy or physics."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What is the purpose of dtype=\"float16\" in Listing 17.8?",
+   "options": [
+    "To make generated images sharper",
+    "To keep memory usage down",
+    "To enable negative prompts",
+    "To make the generation deterministic"
+   ],
+   "answer": "To keep memory usage down",
+   "explanation": "The callout says it is 'a trick to keep memory usage down'. 16-bit floats take half the memory of 32-bit floats. It has nothing to do with sharpness, negative prompts or determinism.",
+   "page_refs": [
+    556
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "How do you pass a negative prompt to TextToImage.generate()?",
+   "options": [],
+   "answer": "Pass a dictionary instead of a string: task.generate({\"prompts\": prompt, \"negative_prompts\": \"blue color\"}).",
+   "explanation": "Shown in the code under figure 17.14.",
+   "page_refs": [
+    556
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Explain how a negative prompt can influence every step of the diffusion process rather than acting as a post-processing filter.",
+   "options": [],
+   "answer": "At each denoising step the denoiser's noise prediction depends on the text embeddings. The negative prompt's embedding defines a direction to move away from (via the guidance combination), so the trajectory from noise to image is steered at every step. That is why removing 'blue' changed the whole palette, not just one object.",
+   "explanation": "The book says feeding both embeddings to the denoiser lets it steer the noise toward the positive and away from the negative prompt. The guidance formula is an addition beyond the book.",
+   "page_refs": [
+    556,
+    558
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "According to the sidebar, why does the second elephant have duplicated tusks?",
+   "options": [
+    "Because dtype=\"float16\" introduced rounding errors",
+    "Because the negative prompt removed the correct tusks",
+    "Because drawing such a scene correctly requires understanding of anatomy and physics that the model lacks",
+    "Because the prompt contains a typo"
+   ],
+   "answer": "Because drawing such a scene correctly requires understanding of anatomy and physics that the model lacks",
+   "explanation": "The sidebar attributes artifacts to the model's lack of understanding of anatomy and physics; it interpolates its training data. Half precision, the negative prompt and the typo are not the stated causes.",
+   "page_refs": [
+    556,
+    557
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "Which earlier KerasHub task does the book compare TextToImage to, and what do they have in common?",
+   "options": [],
+   "answer": "CausalLM from chapter 16. Both are high-level task classes whose generate() call wraps preprocessing (tokenization) and the full generation procedure.",
+   "explanation": "The first paragraph after the code makes this comparison.",
+   "page_refs": [
+    556
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "self",
+   "question": "Try to predict: what would happen to figure 17.14 if you used the negative prompt 'elephant'? Explain your reasoning in terms of steering the denoising process.",
+   "options": [],
+   "answer": "The positive prompt asks for an elephant while the negative pushes away from one, so the two directions conflict. You would expect a weaker or distorted elephant, perhaps a different animal or an abstract paper shape, depending on the guidance balance.",
+   "explanation": "A thought experiment based on the steering view on this page; actual results depend on the model and guidance scale.",
+   "page_refs": [
+    556
+   ]
+  }
+ ]
+}

@@ -1,0 +1,387 @@
+{
+ "page_id": "page_470",
+ "pdf_page": 470,
+ "printed_page": "446",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:06:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Book inconsistency in the NumPy-like pseudocode: both layer_normalization and batch_normalization return (x - mean) / variance. Standardization divides by the standard deviation, i.e. (x - mean) / sqrt(variance + epsilon); dividing by the variance does not yield unit variance. The surrounding text calls it pseudocode, and the point about which axes are pooled is unaffected.",
+   "Minor imprecision: the text says attention_mask will \"zero the attention score\" at masked locations. In practice the masked scores are set to a large negative value before the softmax so that the resulting attention *weights* are (near) zero; a zero raw score would still receive positive weight."
+  ],
+  "extraction_quality": "Clean. Element p470_e07 merges two printed paragraphs (\"We also pass a new input…\" and \"Note that the input and outputs…\"), annotated separately. The decoder paragraph continues on p.471."
+ },
+ "overview": {
+  "title": "LayerNormalization vs BatchNormalization; attention masks",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "15.3.2 Transformer encoder block / 15.3.3 Transformer decoder block",
+  "main_topic": "The axes over which layer and batch normalization compute statistics, the padding attention_mask of the encoder, stackability of encoder blocks, and the start of the decoder block.",
+  "central_idea": "LayerNormalization computes mean and variance over the last (feature) axis of each item, so samples never interact, while BatchNormalization pools across the batch axis. The encoder uses a Boolean attention_mask broadcast to (batch, target_len, source_len) to stop tokens attending to padding. The decoder block will apply attention twice: self-attention over the target, then attention to the encoder output.",
+  "importance": "These details make listing 15.14 work correctly on real padded batches, and the shape-preserving property is what allows deep stacks of Transformer blocks. The decoder introduction sets up listing 15.15.",
+  "learning_objectives": [
+   "Read the two pseudocode functions and identify the axes each normalization pools over.",
+   "Explain why per-sequence statistics suit sequence data better than batch statistics.",
+   "Describe the shape and meaning of attention_mask and how (batch, 1, source_length) broadcasts.",
+   "Explain why identical input and output shapes allow encoder blocks to be stacked.",
+   "Describe the two attention layers of the decoder block."
+  ],
+  "prerequisites": [
+   "Listing 15.14, the TransformerEncoder (p.469)",
+   "Batch normalization in image models (chapter 9)",
+   "NumPy reductions with axis and keepdims",
+   "Broadcasting rules"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the NumPy-like pseudocode promised on p.469. `layer_normalization(batch_of_sequences)` takes an input of shape `(batch_size, sequence_length, embedding_dim)` and computes mean and variance with `axis=-1`: \"we only pool data over the last axis.\" By contrast, `batch_normalization(batch_of_images)` (during training) takes `(batch_size, height, width, channels)` and pools over `axis=(0, 1, 2)`, including the batch axis, \"which creates interactions between samples in a batch.\" The text concludes that BatchNormalization gathers statistics from many samples, whereas LayerNormalization pools within each sequence separately, which is more appropriate for sequence data. (Both functions as printed divide by the variance; real normalization divides by the square root of variance plus a small epsilon.)\n\nNext the book explains the new `attention_mask` argument used in listing 15.14. It is a Boolean tensor broadcast to the attention-score shape `(batch_size, target_length, source_length)`; masked locations are excluded from the attention calculation. The encoder uses it so that no token attends to padding tokens, which carry no information. `source_mask` marks the non-padding tokens and is upranked to `(batch_size, 1, source_length)`.\n\nBecause the encoder's inputs and outputs have the same shape, encoder blocks can be stacked, \"building a progressively more expressive representation of the input English sentence.\"\n\nSection **15.3.3 Transformer decoder block** begins. The decoder block is almost identical to the encoder block but must also consume the encoder's output. It therefore uses attention twice: first self-attention over the target sequence, then another `MultiHeadAttention` layer that receives both the source and target sequences (the sentence continues on p.471, where this is named cross-attention).",
+ "paragraphs": [
+  {
+   "ref": "p470_e04",
+   "excerpt": "Compare to BatchNormalization (during training):",
+   "what_it_says": "A one-line transition introducing the batch_normalization pseudocode for comparison, specifying that it describes behaviour during training.",
+   "what_it_means": "\"During training\" matters: at inference BatchNormalization uses running averages accumulated during training instead of the current batch's statistics, whereas LayerNormalization behaves the same in both phases (Beyond the book).",
+   "why_it_matters": "Sets up the side-by-side comparison of axes.",
+   "terminology": [],
+   "connections": ["p.469: the claim that BatchNormalization doesn't work well for sequence data"]
+  },
+  {
+   "ref": "p470_e06",
+   "excerpt": "While BatchNormalization collects information from many samples to obtain accurate statistics",
+   "what_it_says": "BatchNormalization collects information from many samples to estimate feature means and variances; LayerNormalization pools data within each sequence separately, which is more appropriate for sequence data.",
+   "what_it_means": "In the pseudocode, layer norm averages over the feature axis only, so each token of each sequence is normalized using its own numbers. Batch norm averages over batch and spatial axes, so the normalization of one image depends on the other images in the batch.",
+   "why_it_matters": "For sequences, batch statistics are contaminated by padding and vary with sequence length and batch composition; per-sequence statistics avoid these problems.",
+   "technical_idea": "Note (not in the book): with axis=-1 on a (batch, seq_len, dim) tensor, the statistics are actually per token, not per whole sequence; \"within each sequence\" is true in the sense that no other sequence is involved.",
+   "terminology": [
+    {"term": "Pooling statistics", "meaning": "Averaging over certain axes to compute mean/variance."}
+   ],
+   "connections": ["p.469: listing 15.14 uses two LayerNormalization layers"]
+  },
+  {
+   "ref": "p470_e07",
+   "excerpt": "We also pass a new input to the MultiHeadAttention layer called attention_mask.",
+   "what_it_says": "attention_mask is a Boolean tensor broadcast to the attention-score shape (batch_size, target_length, source_length). Where set, it zeroes the attention score, excluding those source tokens from the calculation. It prevents tokens from attending to padding, which carries no information. The encoder takes a source_mask marking non-padding tokens and upranks it to (batch_size, 1, source_length).",
+   "what_it_means": "Each entry [b, i, j] says whether query position i in sample b may look at key position j. The padding mask depends only on j (is token j real?), so it has a singleton query axis that broadcasts across all i. That is exactly what source_mask[:, None, :] in listing 15.14 produces.",
+   "why_it_matters": "Batches of sentences are padded to a common length; without the mask, real tokens would mix meaningless padding vectors into their representations.",
+   "technical_idea": "Beyond the book: inside the layer, masked scores are replaced by a very negative number before softmax, so their weights become ~0 and the remaining weights renormalize to sum to 1. True means \"may attend\".",
+   "terminology": [
+    {"term": "attention_mask", "meaning": "Boolean tensor specifying which query-key pairs are allowed."},
+    {"term": "Padding token", "meaning": "A filler token (often id 0) added to make sequences in a batch the same length."},
+    {"term": "Uprank", "meaning": "Add an axis to increase a tensor's rank, here from 2 to 3."}
+   ],
+   "connections": ["p.469: mask = source_mask[:, None, :] in listing 15.14", "p.471: the decoder reuses source_mask for cross-attention and needs a different (causal) mask for self-attention"]
+  },
+  {
+   "ref": "p470_e07",
+   "excerpt": "Note that the input and outputs of this layer have the same shape,",
+   "what_it_says": "The encoder layer's input and output have the same shape, so encoder blocks can be stacked, building a progressively more expressive representation of the English input sentence.",
+   "what_it_means": "TransformerEncoder maps (batch, len, hidden_dim) to (batch, len, hidden_dim); you can apply it repeatedly, each block refining the contextual representation.",
+   "why_it_matters": "Stackability is how Transformers scale in depth; large models stack dozens of identical blocks.",
+   "terminology": [],
+   "connections": ["p.489: Transformers work by stacking blocks of alternating attention and feedforward networks"]
+  },
+  {
+   "ref": "p470_e09",
+   "excerpt": "Next up is the decoder block. This layer will be almost identical",
+   "what_it_says": "The decoder block is almost identical to the encoder block, but it also takes the encoder output sequence as input. It uses attention twice: a self-attention layer, as in the encoder, letting each target position use other target positions, and then another MultiHeadAttention layer that receives both the [source and target sequences; continued on p.471].",
+   "what_it_means": "The decoder has three sublayers: self-attention over the Spanish target, attention from target to the English source (cross-attention), and the feedforward network. The second attention is the original cross-attention use from p.468: query=target, key=value=encoder output.",
+   "why_it_matters": "This is how information flows from the English sentence into Spanish predictions without any RNN.",
+   "technical_idea": "The decoder's self-attention will need a causal mask so a position cannot see future target tokens (p.471-472).",
+   "terminology": [
+    {"term": "Decoder block", "meaning": "The Transformer layer that processes the target sequence and attends to the encoder output."},
+    {"term": "Cross-attention", "meaning": "Attention whose queries come from one sequence and keys/values from another (named on p.471)."}
+   ],
+   "connections": ["p.471: listing 15.15, the TransformerDecoder, and the name cross-attention", "p.468: query=target, key=source, value=source"]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "layer_normalization",
+   "name": "Layer normalization",
+   "definition": "Normalization whose mean and variance are computed over the last (feature) axis of each item, independent of the rest of the batch.",
+   "intuition": "Each token vector is centred and scaled using only its own features.",
+   "technical": "Pseudocode on the page: mean and var over axis=-1 with keepdims=True for input (batch_size, sequence_length, embedding_dim).",
+   "significance": "The normalization used in Transformers.",
+   "example": "For a token vector [1, 2, 3, 6], mean = 3, var = 3.5; normalized ≈ [-1.07, -0.53, 0, 1.60] (dividing by the std ≈ 1.87).",
+   "misconception": "It does not normalize across the sequence-length axis.",
+   "related": ["batch_normalization", "transformer_encoder"],
+   "source": "book"
+  },
+  {
+   "id": "batch_normalization",
+   "name": "Batch normalization (training mode)",
+   "definition": "Normalization whose statistics are computed across the batch axis (and spatial axes for images), per channel.",
+   "intuition": "Each feature channel is standardized using all samples currently in the batch.",
+   "technical": "Pseudocode on the page: mean and var over axis=(0, 1, 2) for input (batch_size, height, width, channels).",
+   "significance": "Works well for images but creates interactions between samples, which is unsuitable for padded sequences.",
+   "example": "Annotation: \"Pools data over the batch axis (axis 0), which creates interactions between samples in a batch.\"",
+   "misconception": "At inference time it does not use the current batch's statistics but running averages (Beyond the book).",
+   "related": ["layer_normalization"],
+   "source": "book"
+  },
+  {
+   "id": "attention_mask",
+   "name": "Attention mask (padding mask)",
+   "definition": "Boolean tensor broadcast to (batch_size, target_length, source_length) that excludes certain key positions from attention.",
+   "intuition": "A per-pair permission slip: may query i look at key j?",
+   "technical": "Encoder: source_mask (batch, source_length) → (batch, 1, source_length) so it broadcasts over target_length.",
+   "significance": "Prevents attending to padding; the same mechanism with a triangular pattern implements causal masking (p.472).",
+   "example": "For a sentence of 5 real tokens padded to 8, mask row = [T,T,T,T,T,F,F,F] for every query position.",
+   "misconception": "The mask is not multiplied into the output; it changes which keys receive softmax weight.",
+   "related": ["self_attention", "broadcasting", "causal_mask"],
+   "source": "book"
+  },
+  {
+   "id": "transformer_decoder",
+   "name": "Transformer decoder block",
+   "definition": "A block like the encoder block but with two attention layers: self-attention over the target, then attention to the encoder output, followed by a feedforward network.",
+   "intuition": "First consider what has been generated so far, then consult the source sentence.",
+   "technical": "Self-attention (query=key=value=target, with causal mask) → cross-attention (query=target, key=value=source) → FFN, each with residual + LayerNorm (listing 15.15, p.471).",
+   "significance": "Connects encoder output to the next-token prediction.",
+   "example": "Spanish target tokens attend to the English encoder output.",
+   "misconception": "The decoder does not just reuse the encoder block unchanged; it needs cross-attention and causal masking.",
+   "related": ["transformer_encoder", "cross_attention", "self_attention"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Layer normalization over the last axis",
+   "latex": "\\mu_{b,t} = \\frac{1}{D}\\sum_{d=1}^{D} x_{b,t,d},\\quad \\sigma^2_{b,t} = \\frac{1}{D}\\sum_{d=1}^{D}(x_{b,t,d}-\\mu_{b,t})^2,\\quad \\hat x_{b,t,d} = \\frac{x_{b,t,d}-\\mu_{b,t}}{\\sqrt{\\sigma^2_{b,t}+\\epsilon}}",
+   "source_text": "mean = np.mean(batch_of_sequences, keepdims=True, axis=-1); variance = np.var(batch_of_sequences, keepdims=True, axis=-1); return (batch_of_sequences - mean) / variance",
+   "variables": [
+    {"symbol": "x_{b,t,d}", "meaning": "Feature d of token t in sequence b; shape (batch_size, sequence_length, embedding_dim)."},
+    {"symbol": "D", "meaning": "embedding_dim, the size of the last axis."},
+    {"symbol": "\\mu_{b,t}, \\sigma^2_{b,t}", "meaning": "Mean and variance of one token's features."},
+    {"symbol": "\\epsilon", "meaning": "Small constant for numerical stability (not in the book's pseudocode)."}
+   ],
+   "operations": "Reduce over the last axis only; subtract mean and divide by standard deviation.",
+   "purpose": "States the operation the pseudocode sketches. Note the book's pseudocode divides by the variance; the standard formula (shown) divides by the square root of the variance plus epsilon.",
+   "interpretation": "Each token vector ends up with mean 0 and variance 1 over its features. Keras's layer then applies a learned scale γ and offset β (Beyond the book).",
+   "intuition": "Standardize each token on its own.",
+   "numerical_example": "Token [1, 2, 3, 6]: μ = 3, σ² = (4+1+0+9)/4 = 3.5, σ ≈ 1.871 → [-1.069, -0.535, 0, 1.604]. Dividing by σ² as printed would give [-0.571, -0.286, 0, 0.857], whose variance is 1/3.5 ≈ 0.286, not 1.",
+   "source": "ai_explanation",
+   "book_ref": "p.470"
+  },
+  {
+   "id": "m2",
+   "title": "Batch normalization statistics (training)",
+   "latex": "\\mu_{c} = \\frac{1}{NHW}\\sum_{n,h,w} x_{n,h,w,c},\\quad \\sigma^2_{c} = \\frac{1}{NHW}\\sum_{n,h,w}(x_{n,h,w,c}-\\mu_c)^2",
+   "source_text": "mean = np.mean(batch_of_images, keepdims=True, axis=(0, 1, 2)); variance = np.var(batch_of_images, keepdims=True, axis=(0, 1, 2))",
+   "variables": [
+    {"symbol": "x_{n,h,w,c}", "meaning": "Pixel (h, w), channel c, of image n; shape (batch_size, height, width, channels)."},
+    {"symbol": "N, H, W", "meaning": "batch_size, height, width."},
+    {"symbol": "\\mu_c, \\sigma^2_c", "meaning": "Per-channel statistics pooled over the whole batch and all positions."}
+   ],
+   "operations": "Reduce over axes 0, 1, 2, leaving one statistic per channel.",
+   "purpose": "Contrast: these statistics depend on every sample in the batch.",
+   "interpretation": "Changing one image in the batch changes how all the others are normalized.",
+   "intuition": "Standardize each channel using the crowd.",
+   "source": "book",
+   "book_ref": "p.470"
+  },
+  {
+   "id": "m3",
+   "title": "Masked attention weights",
+   "latex": "\\alpha_{b,i,j} = \\frac{\\mathbb{1}[m_{b,i,j}]\\,\\exp(s_{b,i,j})}{\\sum_{j'} \\mathbb{1}[m_{b,i,j'}]\\,\\exp(s_{b,i,j'})},\\qquad m \\in \\{0,1\\}^{B\\times T\\times S}",
+   "source_text": "This Boolean tensor input will be broadcast to the same shape as our attention scores (batch_size, target_length, source_length).",
+   "variables": [
+    {"symbol": "s_{b,i,j}", "meaning": "Attention score of query position i against key position j in sample b."},
+    {"symbol": "m_{b,i,j}", "meaning": "Mask value (True = allowed). For padding masks m does not depend on i."},
+    {"symbol": "B, T, S", "meaning": "batch_size, target_length, source_length."}
+  ],
+   "operations": "Only allowed positions take part in the softmax normalization.",
+   "purpose": "Formalizes \"stopping the source tokens at these locations from being used in the attention calculation.\"",
+   "interpretation": "Masked tokens get exactly zero weight; the rest renormalize to sum to 1.",
+   "intuition": "Padding is invisible to every query.",
+   "numerical_example": "Scores [2, 1, 0.5] with mask [T, T, F]: weights = softmax([2, 1]) = [0.731, 0.269, 0].",
+   "source": "ai_explanation",
+   "book_ref": "p.470"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Layer normalization in NumPy-like pseudocode",
+   "original_code": "def layer_normalization(batch_of_sequences):\n    mean = np.mean(batch_of_sequences, keepdims=True, axis=-1)\n    variance = np.var(batch_of_sequences, keepdims=True, axis=-1)\n    return (batch_of_sequences - mean) / variance",
+   "language": "python",
+   "what_it_does": "Normalizes each token vector using the mean and variance of its own features.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Input shape: (batch_size, sequence_length, embedding_dim) (annotation)."},
+    {"lines": "2-3", "explanation": "\"To compute mean and variance, we only pool data over the last axis.\" keepdims=True keeps shape (batch, seq_len, 1) so broadcasting works."},
+    {"lines": "4", "explanation": "Centre and scale. As printed it divides by the variance; a correct implementation divides by np.sqrt(variance + eps)."}
+   ],
+   "inputs_outputs": "Input and output: (batch_size, sequence_length, embedding_dim).",
+   "algorithm": "Per-item standardization over the feature axis.",
+   "theory_link": "Shows why samples don't interact: no reduction touches axis 0.",
+   "parameters": [{"name": "axis=-1", "role": "Pool only over the embedding dimension."}],
+   "pitfalls": ["Divides by variance, not standard deviation (pseudocode simplification); no epsilon, so a constant vector would divide by zero.", "Omits the learned scale and offset that keras.layers.LayerNormalization has."],
+   "illustrative_code": "# AI-written: corrected version\nimport numpy as np\ndef layer_norm(x, eps=1e-6):\n    mean = x.mean(axis=-1, keepdims=True)\n    var = x.var(axis=-1, keepdims=True)\n    return (x - mean) / np.sqrt(var + eps)\nprint(layer_norm(np.array([[[1., 2., 3., 6.]]])))  # [[[-1.069 -0.535 0. 1.604]]]"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Batch normalization (training) in NumPy-like pseudocode",
+   "original_code": "def batch_normalization(batch_of_images):\n    mean = np.mean(batch_of_images, keepdims=True, axis=(0, 1, 2))\n    variance = np.var(batch_of_images, keepdims=True, axis=(0, 1, 2))\n    return (batch_of_images - mean) / variance",
+   "language": "python",
+   "what_it_does": "Normalizes each channel using statistics pooled over the batch, height and width axes.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Input shape: (batch_size, height, width, channels) (annotation)."},
+    {"lines": "2-3", "explanation": "\"Pools data over the batch axis (axis 0), which creates interactions between samples in a batch.\" Statistics have shape (1, 1, 1, channels)."},
+    {"lines": "4", "explanation": "Same simplification as above: divides by variance instead of standard deviation."}
+   ],
+   "inputs_outputs": "Input and output: (batch_size, height, width, channels).",
+   "algorithm": "Per-channel standardization over batch and spatial positions.",
+   "theory_link": "Contrasts with layer norm: the reduction includes axis 0.",
+   "parameters": [{"name": "axis=(0, 1, 2)", "role": "Pool over batch, height and width; keep channels separate."}],
+   "pitfalls": ["Only describes training behaviour; at inference, moving averages are used.", "Divides by variance rather than std, as printed."]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why batch statistics break for padded sequences",
+   "kind": "step_by_step",
+   "body": "Beyond the book:\n1. A batch of English sentences is padded to the longest one; short sentences contain many padding vectors.\n2. Batch norm would average over the batch (and, for sequences, the time axis), so padding vectors pull the mean and variance toward their values.\n3. The amount of padding changes from batch to batch, so the normalization of a given sentence changes depending on its batch-mates.\n4. At inference you may process a single sentence, whose statistics differ from training batches.\n\nLayer norm sidesteps all four: each token's statistics are its own.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Broadcasting the padding mask, concretely",
+   "kind": "numerical",
+   "body": "Suppose batch_size = 1 and the English sentence has 3 real tokens padded to length 4: `source_mask = [[True, True, True, False]]`, shape (1, 4). After `source_mask[:, None, :]` it has shape (1, 1, 4). Broadcast to the score shape (1, 4, 4) (target_length = source_length = 4 in self-attention), it becomes\n\n```\n[[T T T F]\n [T T T F]\n [T T T F]\n [T T T F]]\n```\n\nEvery query row may attend to columns 0-2 and never to column 3. The padded position itself still gets an output vector, which later layers or the loss mask ignore.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "How the (batch, 1, source_length) mask broadcasts",
+   "why": "The page says source_mask is upranked to (batch_size, 1, source_length) and broadcast to the score shape (batch_size, target_length, source_length).",
+   "widget": "broadcasting",
+   "params": {"a_shape": [2, 6, 6], "b_shape": [2, 1, 6]}
+  },
+  {
+   "id": "v2",
+   "type": "svg",
+   "title": "Axes pooled by LayerNormalization vs BatchNormalization",
+   "why": "The two pseudocode functions differ only in the reduction axes; this diagram highlights which elements share statistics.",
+   "svg": "<svg viewBox=\"0 0 520 220\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"12\" fill=\"none\" stroke=\"currentColor\"><text x=\"20\" y=\"18\" fill=\"currentColor\" stroke=\"none\">LayerNormalization: axis=-1 (per token)</text><g transform=\"translate(20,30)\"><rect x=\"0\" y=\"0\" width=\"200\" height=\"20\" stroke-width=\"3\"/><rect x=\"0\" y=\"25\" width=\"200\" height=\"20\" stroke-width=\"3\"/><rect x=\"0\" y=\"50\" width=\"200\" height=\"20\" stroke-width=\"3\"/><text x=\"0\" y=\"92\" fill=\"currentColor\" stroke=\"none\">each row = one token's embedding_dim</text><text x=\"0\" y=\"108\" fill=\"currentColor\" stroke=\"none\">stats computed inside each row</text></g><text x=\"280\" y=\"18\" fill=\"currentColor\" stroke=\"none\">BatchNormalization: axis=(0,1,2)</text><g transform=\"translate(280,30)\"><rect x=\"0\" y=\"0\" width=\"40\" height=\"70\" stroke-dasharray=\"3 2\"/><rect x=\"50\" y=\"0\" width=\"40\" height=\"70\" stroke-dasharray=\"3 2\"/><rect x=\"100\" y=\"0\" width=\"40\" height=\"70\" stroke-dasharray=\"3 2\"/><rect x=\"150\" y=\"0\" width=\"40\" height=\"70\" stroke-dasharray=\"3 2\"/><rect x=\"10\" y=\"10\" width=\"20\" height=\"50\" fill=\"currentColor\" fill-opacity=\"0.25\"/><rect x=\"60\" y=\"10\" width=\"20\" height=\"50\" fill=\"currentColor\" fill-opacity=\"0.25\"/><rect x=\"110\" y=\"10\" width=\"20\" height=\"50\" fill=\"currentColor\" fill-opacity=\"0.25\"/><rect x=\"160\" y=\"10\" width=\"20\" height=\"50\" fill=\"currentColor\" fill-opacity=\"0.25\"/><path d=\"M20 75 L20 85 L170 85 L170 75\"/><text x=\"0\" y=\"104\" fill=\"currentColor\" stroke=\"none\">4 samples; shaded = one channel</text><text x=\"0\" y=\"120\" fill=\"currentColor\" stroke=\"none\">stats shared across all samples</text></g><text x=\"20\" y=\"190\" fill=\"currentColor\" stroke=\"none\">Layer norm: samples never interact. Batch norm: \"creates interactions between samples in a batch\".</text></svg>"
+  },
+  {
+   "id": "v3",
+   "type": "widget",
+   "title": "Decoder block preview",
+   "why": "The new subsection introduces the decoder block with two attention layers (self-attention and attention to the encoder output); hover the encoder-decoder diagram to see where each lives.",
+   "widget": "transformer_block",
+   "params": {"kind": "encoder_decoder"}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "LayerNormalization normalizes over the whole sequence (all tokens together).", "correction": "The pseudocode pools only over axis=-1, the feature axis; with a 3-D input that means each token is normalized separately."},
+  {"claim": "The printed functions return unit-variance outputs.", "correction": "As printed they divide by the variance; real implementations divide by sqrt(variance + epsilon)."},
+  {"claim": "attention_mask removes padding tokens from the sequence.", "correction": "The sequence length is unchanged; masked positions simply receive no attention weight from any query."},
+  {"claim": "The decoder block is just an encoder block applied to the target.", "correction": "It adds a second MultiHeadAttention layer that uses the encoder output, and its self-attention needs a causal mask (p.471)."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 469, "note": "Listing 15.14 introduced LayerNormalization and mask = source_mask[:, None, :]."},
+   {"page": 468, "note": "Cross-attention call query=target, key=source, value=source, which the decoder reuses."}
+  ],
+  "later": [
+   {"page": 471, "note": "Cross-attention is named, listing 15.15 defines the TransformerDecoder, and the need for a causal mask is explained."},
+   {"page": 472, "note": "The lower-triangular causal mask and figure 15.8."},
+   {"page": 473, "note": "Encoder and decoder assembled into the translation Transformer."},
+   {"page": 498, "note": "A decoder block without cross-attention is used for GPT-style models."}
+  ],
+  "prerequisites": [
+   {"page": 469, "note": "The TransformerEncoder layer being explained."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 469, "note": "Listing 15.14 is the code these explanations refer to."},
+   {"page": 471, "note": "Listing 15.15 uses source_mask as attention_mask for cross-attention."}
+  ],
+  "related_figures": [
+   {"page": 472, "note": "Figure 15.8 shows encoder and decoder blocks."}
+  ]
+ },
+ "takeaways": [
+  "Layer norm pools statistics over the last axis of each item; batch norm (training) pools over batch and spatial axes and couples samples.",
+  "Per-sequence statistics are more appropriate for sequence data.",
+  "The printed pseudocode divides by variance; real normalization divides by sqrt(variance + eps).",
+  "attention_mask is Boolean, broadcast to (batch_size, target_length, source_length), and blocks attention to padding.",
+  "source_mask is upranked to (batch_size, 1, source_length) for broadcasting.",
+  "Same input/output shape → encoder blocks stack.",
+  "The decoder block uses attention twice: self-attention on the target, then attention over the encoder output."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "For an input of shape (batch_size, sequence_length, embedding_dim), over which axis does the book's layer_normalization compute its statistics?",
+   "options": ["axis=0", "axis=1", "axis=-1", "axis=(0, 1)"],
+   "answer": "axis=-1",
+   "explanation": "The annotation reads \"we only pool data over the last axis.\" axis=0 would mix samples (like batch norm); axis=1 would mix tokens of a sequence; (0, 1) would do both.",
+   "page_refs": [470]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "What shape is attention_mask broadcast to, and what shape does the encoder give source_mask?",
+   "options": [],
+   "answer": "Broadcast to (batch_size, target_length, source_length); source_mask is upranked to (batch_size, 1, source_length).",
+   "explanation": "Both shapes are stated on the page; the singleton axis broadcasts across all query positions.",
+   "page_refs": [470, 469]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why is LayerNormalization more appropriate than BatchNormalization for sequence data?",
+   "options": [],
+   "answer": "BatchNormalization pools statistics over the batch axis, creating interactions between samples; LayerNormalization pools within each sequence separately, so each sample's normalization doesn't depend on other (differently padded, differently long) sequences in the batch.",
+   "explanation": "The page contrasts the axes and states that per-sequence pooling is more appropriate.",
+   "page_refs": [470]
+  },
+  {
+   "id": "q4",
+   "type": "math",
+   "question": "Apply the correct layer normalization (divide by standard deviation, ε≈0) to the token vector [2, 4, 6, 8]. What would the book's pseudocode (divide by variance) return instead?",
+   "options": [],
+   "answer": "Mean 5, variance 5, std ≈ 2.236. Correct: [-1.342, -0.447, 0.447, 1.342]. Pseudocode: [-0.6, -0.2, 0.2, 0.6].",
+   "explanation": "Deviations are [-3, -1, 1, 3]; variance = (9+1+1+9)/4 = 5. Dividing by 5 instead of √5 yields outputs with variance 0.2, not 1, illustrating the pseudocode's simplification.",
+   "page_refs": [470]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Why can TransformerEncoder blocks be stacked on top of each other?",
+   "options": ["Because they share weights.", "Because their input and output have the same shape.", "Because LayerNormalization removes the batch axis.", "Because attention_mask is recomputed in every block."],
+   "answer": "Because their input and output have the same shape.",
+   "explanation": "The page says so directly. Blocks do not share weights; LayerNormalization does not change shapes; the mask is the same input, not the reason for stackability.",
+   "page_refs": [470]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "What two attention layers does the decoder block use, according to the start of 15.3.3?",
+   "options": [],
+   "answer": "First a self-attention layer over the target sequence (like the encoder); then another MultiHeadAttention layer receiving both the target and the source/encoder output (cross-attention, named on p.471).",
+   "explanation": "The page says \"we can use attention twice\"; the sentence is completed on p.471.",
+   "page_refs": [470, 471]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you explain to someone why the padding mask has a size-1 axis for the target dimension, and what would go wrong without the mask?",
+   "options": [],
+   "answer": "Whether key j is padding doesn't depend on which query is looking, so one row is enough and broadcasts across all queries. Without it, real tokens would mix information from padding vectors into their representations.",
+   "explanation": "Self-check on the attention_mask paragraph.",
+   "page_refs": [470]
+  }
+ ]
+}

@@ -1,0 +1,373 @@
+{
+  "page_id": "page_416",
+  "pdf_page": 416,
+  "printed_page": "392",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:50:00Z",
+    "confidence": "high",
+    "review_flags": [
+      "Code callout next to Listing 14.6 misspells 'occurrences' as 'occurances' ('Replaces all occurances with a merged version').",
+      "Listing 14.6 builds its regex with a non-raw f-string containing '\\S' (f\"(?<!\\S){first} {second}(?!\\S)\"). It works, but Python 3.12+ emits a SyntaxWarning for the invalid escape sequence; an rf-string would avoid it. first/second are also not passed through re.escape (harmless for the alphanumeric symbols here)."
+    ],
+    "extraction_quality": "Clean. Listing 14.6, its two callouts, and the ten printed merge states all match the page image. I checked the merge trace by hand and it is consistent with the code (including max() tie-breaking by insertion order)."
+  },
+  "overview": {
+    "title": "Byte-pair merging step by step (Listing 14.6)",
+    "chapter": "14 Text classification",
+    "section": "14.2 Preparing text data",
+    "subsection": "14.2.2 Subword tokenization",
+    "main_topic": "Counting adjacent symbol pairs and merging the most frequent one, repeated ten times on the toy corpus",
+    "central_idea": "BPE repeatedly counts all adjacent symbol pairs (weighted by word frequency), picks the most frequent, and merges it everywhere into a new symbol. Merged symbols can merge again, so common words end up as single tokens while rare words stay partly split.",
+    "importance": "This is the core loop of byte-pair encoding. Listing 14.7 (p.417) wraps exactly these two functions to learn a full vocabulary and an ordered list of merge rules for Moby Dick.",
+    "learning_objectives": [
+      "Explain how count_pairs computes frequency-weighted adjacent-pair counts",
+      "Explain how merge_pair uses a regex with lookarounds to replace only whole-symbol pairs",
+      "Trace the ten printed merge steps and justify each choice, including tie-breaking",
+      "Explain why common words become single symbols while rare words stay partially merged"
+    ],
+    "prerequisites": [
+      "The counts dict from count_and_split_words (Listing 14.5, p.415)",
+      "Python zip, Counter, max with key=, dict comprehensions",
+      "Regex lookbehind (?<!...) and lookahead (?!...)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "Starting from the character-split word counts of p.415, the authors apply **byte-pair merging**. In each step they consider **all pairs of adjacent symbols in all words**, weighting each by its word's frequency, and **merge only the most common one**. Initially that is `(\"o\", \"w\")`: it occurs in \"brown\" (3 occurrences) and \"slow\" (1 occurrence), so it gets weight 4. It becomes the new symbol `\"ow\"`, and every `\"o w\"` is replaced. Counting and merging then continue, and `\"ow\"` now behaves as one unit that could, for example, merge with `\"l\"` into `\"low\"`. Repeating this builds **larger and larger subwords**.\n\n**Listing 14.6** implements it with two helpers:\n\n- `count_pairs(counts)` splits each word into its symbols and adds `freq` for every adjacent pair `zip(symbols[:-1], symbols[1:])`.\n- `merge_pair(counts, first, second)` compiles the regex `(?<!\\S)first second(?!\\S)`, which matches the pair only when it is bounded by spaces or string ends (a whole-symbol match, \"Matches an unmerged pair\"). It rewrites every key, replacing the match with `first+second` (\"Replaces all occurrences with a merged version\").\n\nA loop runs 10 iterations: count pairs, take `max(pairs, key=pairs.get)`, merge, print the keys. The printed trace shows `ow` → `th` → `the` → `br` → `brow` → `brown` → `fo` → `fox` → `qu` → `qui`. After ten merges, **\"the\", \"brown\" and \"fox\" are single symbols**. \"quick\" is part-way (`\"qui c k\"`), while the rare words \"slow\" (`\"s l ow\"`) and \"foxhound\" (`\"fox h o u n d\"`) are only partly merged. The authors' conclusion: **common words are merged entirely, less common words only partially**. That is what lets a subword vocabulary encode frequent words compactly while still spelling out rare ones.",
+  "paragraphs": [
+    {
+      "ref": "p416_e03",
+      "excerpt": "To apply byte-pair encoding to our split word counts, we will find two characters",
+      "what_it_says": "BPE finds two characters and merges them into a new symbol. All pairs of characters in all words are considered, and only the most common is merged. In the toy data that is (\"o\", \"w\"), found in \"brown\" (3 times) and \"slow\" (once). It becomes \"ow\", and all occurrences of \"o w\" are merged.",
+      "what_it_means": "Pair frequency is summed over all words and weighted by how often each word occurs. That's why (o,w) at 4 beats pairs like (t,h) or (b,r) at 3: it gets contributions from two different words.",
+      "why_it_matters": "This is the greedy selection rule of BPE. Each merge removes the largest possible number of symbols from the encoded corpus, which links back to the compression view (p.414).",
+      "technical_idea": "Merging a pair with total count c shortens the encoded corpus by exactly c symbols: 52 → 48 here.",
+      "terminology": [
+        {"term": "symbol pair", "meaning": "Two adjacent units in a word's current segmentation."},
+        {"term": "merge", "meaning": "Replacing every occurrence of a pair with a single new symbol that is added to the vocabulary."}
+      ],
+      "connections": [
+        "p.415: the counts dict this operates on"
+      ]
+    },
+    {
+      "ref": "p416_e04",
+      "excerpt": "Then we continue, counting pairs and merging pairs, except now \"ow\" will be",
+      "what_it_says": "Counting and merging repeat, but now \"ow\" is a single unit that could merge with, say, \"l\" to form \"low\". Progressively merging the most frequent pair builds a vocabulary of larger and larger subwords. Then the authors try it on the toy data.",
+      "what_it_means": "Merges compose: a merged symbol is just another symbol, so after enough steps whole words (or frequent word pieces) emerge. Each merge adds exactly one vocabulary entry.",
+      "why_it_matters": "This explains how BPE reaches long tokens without ever enumerating them directly. The number of merges sets the vocabulary size (p.417).",
+      "technical_idea": "The \"low\" example is hypothetical for this corpus: (l, ow) has count 1 and isn't chosen in the first ten steps.",
+      "terminology": [
+        {"term": "subword", "meaning": "A merged symbol: a character sequence that may be a whole word or a piece of one."}
+      ],
+      "connections": [
+        "p.417: compute_sub_word_vocabulary repeats merges until the vocabulary reaches vocab_size"
+      ]
+    },
+    {
+      "ref": "p416_e09",
+      "excerpt": "We can see how common words are merged entirely, whereas less common words are",
+      "what_it_says": "The output shows that common words are merged entirely, while less common words are only partially merged.",
+      "what_it_means": "After 10 merges, the (×3), brown (×3) and fox (×2, plus inside foxhound) are single tokens. quick (×2) is half done, and slow and foxhound (×1) are still mostly characters. Frequency decides how much a word gets compressed.",
+      "why_it_matters": "This is the property that makes subword tokenization work. Frequent text gets short encodings, like word-level tokenization, and rare text is still representable from smaller pieces, like character-level tokenization (p.414).",
+      "connections": [
+        "p.414: goals of subword tokenization",
+        "p.418: on Moby Dick, every word is tokenizable without [UNK]"
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "byte_pair_encoding",
+      "name": "Byte-pair encoding (BPE)",
+      "definition": "Greedy, iterative merging of the most frequent adjacent symbol pair into a new symbol, starting from characters.",
+      "intuition": "Repeatedly glue together the two pieces that appear side by side most often.",
+      "technical": "Each iteration: pairs = Σ_words freq(word)·[adjacent pairs]; best = argmax; rewrite all words; add best to the vocabulary and record the merge rank.",
+      "significance": "Learns a subword vocabulary from data; frequent words become single tokens.",
+      "example": "Toy merges in order: ow, th, the, br, brow, brown, fo, fox, qu, qui.",
+      "misconception": "BPE doesn't look for the 'best' segmentation globally. It is greedy, one merge at a time.",
+      "related": ["subword_tokenization", "tokenization_as_compression", "merge_rule"],
+      "source": "book"
+    },
+    {
+      "id": "merge_rule",
+      "name": "Merge rule",
+      "definition": "A learned instruction 'replace adjacent symbols A B with AB', together with the order (rank) in which it was learned.",
+      "intuition": "One entry in the tokenizer's shorthand legend.",
+      "technical": "Here produced by max(pairs, key=pairs.get) and applied via merge_pair; p.417 stores them in a ranked dictionary.",
+      "significance": "The ordered merge rules, plus the base characters, fully define how new text is tokenized.",
+      "example": "Rule 1: o w → ow; rule 2: t h → th; rule 3: th e → the.",
+      "misconception": "The order matters: applying rules in a different order can give a different segmentation.",
+      "related": ["byte_pair_encoding"],
+      "source": "book"
+    },
+    {
+      "id": "subword_tokenization",
+      "name": "Subword tokenization",
+      "definition": "Tokenization using learned units between characters and whole words.",
+      "intuition": "Whole tokens for frequent words, pieces for rare ones.",
+      "technical": "Implemented in the book via BPE.",
+      "significance": "Common words merged entirely, rare words partly: the page's conclusion.",
+      "example": "\"foxhound\" → \"fox h o u n d\" after 10 merges.",
+      "misconception": "Partial merges are not errors; they are how rare words stay representable.",
+      "related": ["byte_pair_encoding"],
+      "source": "book"
+    },
+    {
+      "id": "regex_lookaround",
+      "name": "Regex lookarounds for whole-symbol matching",
+      "definition": "(?<!\\S) asserts that the preceding character isn't a non-space (so it is a space or the string start); (?!\\S) asserts the same for the following character.",
+      "intuition": "Only match \"o w\" where both o and w are complete symbols, not the tail of \"fo\" or the head of \"wn\".",
+      "technical": "Zero-width assertions, so the bounding spaces aren't consumed and remain as separators after substitution.",
+      "significance": "Without them, merging (\"o\",\"x\") could incorrectly fire inside \"fo x\" (matching the 'o' of 'fo').",
+      "example": "In \"fo x h o u n d\", pattern for (o,u) matches \"o u\" but pattern for (o,x) does not match \"fo x\".",
+      "misconception": "A plain str.replace('o w', 'ow') would be wrong once multi-character symbols exist.",
+      "related": ["merge_rule"],
+      "source": "ai_explanation"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Frequency-weighted pair count",
+      "latex": "\\operatorname{count}(a,b) = \\sum_{w \\in \\text{words}} \\operatorname{freq}(w)\\cdot \\#\\{i : s_i(w)=a,\\ s_{i+1}(w)=b\\}",
+      "source_text": "Implemented in code as: for pair in zip(symbols[:-1], symbols[1:]): pairs[pair] += freq",
+      "variables": [
+        {"symbol": "w", "meaning": "a distinct word (key of counts)"},
+        {"symbol": "\\operatorname{freq}(w)", "meaning": "number of times w appears in the corpus"},
+        {"symbol": "s_i(w)", "meaning": "the i-th symbol of w's current segmentation"},
+        {"symbol": "(a,b)", "meaning": "an adjacent symbol pair"}
+      ],
+      "operations": "For each word, count adjacent positions holding (a,b), multiply by word frequency, and sum over words. The merged pair is the argmax.",
+      "purpose": "The score that decides which pair BPE merges next.",
+      "interpretation": "Merging (a,b) reduces the total number of symbols in the encoded corpus by exactly count(a,b).",
+      "intuition": "Pairs common in frequent words win.",
+      "numerical_example": "count(o,w) = 3·1 (brown) + 1·1 (slow) = 4; count(t,h) = 3; count(q,u) = 2.",
+      "source": "ai_explanation",
+      "book_ref": "p.416"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": "14.6",
+      "title": "Running a few steps of byte-pair merging",
+      "original_code": "def count_pairs(counts):\n    pairs = collections.Counter()\n    for word, freq in counts.items():\n        symbols = word.split()\n        for pair in zip(symbols[:-1], symbols[1:]):\n            pairs[pair] += freq\n    return pairs\ndef merge_pair(counts, first, second):\n    split = re.compile(f\"(?<!\\S){first} {second}(?!\\S)\")\n    merged = f\"{first}{second}\"\n    return {split.sub(merged, word): count for word, count in counts.items()}\nfor i in range(10):\n    pairs = count_pairs(counts)\n    first, second = max(pairs, key=pairs.get)\n    counts = merge_pair(counts, first, second)\n    print(list(counts.keys()))",
+      "language": "python",
+      "what_it_does": "Defines pair counting and pair merging, then performs ten greedy BPE merges on the toy counts, printing the segmentation of every word after each merge.",
+      "line_explanations": [
+        {"lines": "1-7", "explanation": "count_pairs: for every word, split on spaces to get its current symbols; zip(symbols[:-1], symbols[1:]) yields each adjacent pair; add the word's frequency to that pair's tally. Returns a Counter keyed by tuples like ('o', 'w')."},
+        {"lines": "8-9", "explanation": "merge_pair builds a regex matching \"first second\" only when bounded by whitespace or string edges (callout: 'Matches an unmerged pair')."},
+        {"lines": "10", "explanation": "The replacement string: the two symbols concatenated, e.g. 'ow'."},
+        {"lines": "11", "explanation": "Dict comprehension that rewrites every key with all occurrences substituted and keeps the counts (callout: 'Replaces all occurrences with a merged version'). Because keys are distinct words, no two keys collapse into one."},
+        {"lines": "12-16", "explanation": "Ten iterations: recount pairs on the updated segmentation, choose the most frequent pair (ties go to the pair first inserted into the Counter, i.e. first seen while scanning), merge, print."}
+      ],
+      "inputs_outputs": "Input: counts from Listing 14.5. Output: counts rebound to the merged state after 10 steps; ten printed lists of keys.",
+      "algorithm": "Greedy BPE training: argmax over frequency-weighted adjacent-pair counts, global substitution, repeat.",
+      "theory_link": "Each merge adds one vocabulary entry and reduces the corpus's encoded length by the pair's count, which is the compression idea of p.414-415.",
+      "parameters": [
+        {"name": "range(10)", "role": "Number of merges; in Listing 14.7 this becomes 'until the vocabulary reaches vocab_size'."},
+        {"name": "first, second", "role": "The two symbols of the chosen pair."}
+      ],
+      "pitfalls": [
+        "If pairs is empty (every word fully merged), max() raises ValueError; this toy loop never reaches that point.",
+        "The f-string isn't raw, so '\\S' triggers a SyntaxWarning in recent Python versions.",
+        "Symbols aren't re.escape'd; a symbol containing regex metacharacters would break the pattern.",
+        "Recounting all pairs from scratch every step is O(corpus) per merge, which is slow for large vocabularies (p.418 notes about a minute on Moby Dick)."
+      ],
+      "illustrative_code": "# AI-written: show the winning pair and its count at each step\nfor i in range(10):\n    pairs = count_pairs(counts)\n    (a, b), c = max(pairs.items(), key=lambda kv: kv[1])\n    print(f\"step {i+1}: merge {a!r}+{b!r} (count {c})\")\n    counts = merge_pair(counts, a, b)"
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Segmentations after each of the ten merges",
+      "original_code": "[\"t h e\", \"q u i c k\", \"b r ow n\", \"f o x\", \"s l ow\", \"f o x h o u n d\"]\n[\"th e\", \"q u i c k\", \"b r ow n\", \"f o x\", \"s l ow\", \"f o x h o u n d\"]\n[\"the\", \"q u i c k\", \"b r ow n\", \"f o x\", \"s l ow\", \"f o x h o u n d\"]\n[\"the\", \"q u i c k\", \"br ow n\", \"f o x\", \"s l ow\", \"f o x h o u n d\"]\n[\"the\", \"q u i c k\", \"brow n\", \"f o x\", \"s l ow\", \"f o x h o u n d\"]\n[\"the\", \"q u i c k\", \"brown\", \"f o x\", \"s l ow\", \"f o x h o u n d\"]\n[\"the\", \"q u i c k\", \"brown\", \"fo x\", \"s l ow\", \"fo x h o u n d\"]\n[\"the\", \"q u i c k\", \"brown\", \"fox\", \"s l ow\", \"fox h o u n d\"]\n[\"the\", \"qu i c k\", \"brown\", \"fox\", \"s l ow\", \"fox h o u n d\"]\n[\"the\", \"qui c k\", \"brown\", \"fox\", \"s l ow\", \"fox h o u n d\"]",
+      "language": "text",
+      "what_it_does": "Shows the word keys after merges 1-10.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Merge (o,w), count 4: affects brown and slow."},
+        {"lines": "2-3", "explanation": "(t,h), count 3, then (th,e), count 3: 'the' is complete. Several pairs tie at 3; (t,h) wins because it was counted first."},
+        {"lines": "4-6", "explanation": "(b,r), (br,ow), (brow,n), each count 3: 'brown' is complete."},
+        {"lines": "7-8", "explanation": "(f,o) and (fo,x), count 2+1 = 3: 'fox' is complete, inside foxhound too."},
+        {"lines": "9-10", "explanation": "Only count-2 pairs from 'quick' remain at the top: (q,u), then (qu,i). The rare words slow and foxhound get no more merges."}
+      ],
+      "inputs_outputs": "Printed output of c1.",
+      "algorithm": "N/A (trace).",
+      "theory_link": "The total number of symbols falls from 52 to 23 over the ten merges: compression in action.",
+      "parameters": [],
+      "pitfalls": [
+        "Real Python prints single quotes; the book shows double quotes."
+      ],
+      "illustrative_code": ""
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Full tie-breaking trace",
+      "kind": "step_by_step",
+      "body": "After merge 1, the pairs with count 3 are (t,h), (h,e), (b,r), (r,ow), (ow,n), (f,o), (o,x). `count_pairs` inserts pairs in the order it scans words ('t h e' first), and `max` returns the first maximal key, so (t,h) wins. Next, (th,e) is first at 3. Then the scan reaches 'q u i c k' (all 2s) and then 'b r ow n', so (b,r) wins, followed by (br,ow) and (brow,n). Then 'f o x' gives (f,o) and (fo,x), each 2 from 'fox' + 1 from 'foxhound' = 3. Finally only 2s remain, and the first scanned is 'q u i c k': (q,u), then (qu,i). Every printed line matches this.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Compression achieved by each merge",
+      "kind": "numerical",
+      "body": "The encoded corpus starts at 3·3 + 2·5 + 3·5 + 2·3 + 1·4 + 1·8 = **52** symbols over an 18-character alphabet. Each merge removes `count` symbols and adds one vocabulary entry:\n\n| merge | count | total symbols | vocab size |\n|---|---|---|---|\n| ow | 4 | 48 | 19 |\n| th | 3 | 45 | 20 |\n| the | 3 | 42 | 21 |\n| br | 3 | 39 | 22 |\n| brow | 3 | 36 | 23 |\n| brown | 3 | 33 | 24 |\n| fo | 3 | 30 | 25 |\n| fox | 3 | 27 | 26 |\n| qu | 2 | 25 | 27 |\n| qui | 2 | 23 | 28 |\n\nVocabulary sizes here count every merged symbol, including intermediates like 'br'.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Intermediate symbols stay in the vocabulary",
+      "kind": "breakdown",
+      "body": "Merges like 'br', 'brow' and 'fo' are kept as vocabulary entries even after 'brown' and 'fox' exist. They are needed to tokenize new words (e.g. 'brow' or 'foam' could reuse them), and the merge rules must be replayed in order on new text (p.417).",
+      "source": "inference"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "chart",
+      "title": "Total symbols in the encoded toy corpus after each merge",
+      "why": "Shows the ten printed merges on this page as compression: each merge shortens the encoded corpus by the merged pair's count.",
+      "chart": {
+        "type": "line",
+        "data": {
+          "labels": ["start", "ow", "th", "the", "br", "brow", "brown", "fo", "fox", "qu", "qui"],
+          "datasets": [{"label": "total symbols", "data": [52, 48, 45, 42, 39, 36, 33, 30, 27, 25, 23]}]
+        },
+        "options": {"scales": {"y": {"beginAtZero": true, "title": {"display": true, "text": "symbols in corpus"}}, "x": {"title": {"display": true, "text": "merge applied"}}}}
+      }
+    },
+    {
+      "id": "v2",
+      "type": "chart",
+      "title": "Pair counts before the first merge",
+      "why": "Why (\"o\",\"w\") is merged first: it is the only pair with count 4.",
+      "chart": {
+        "type": "bar",
+        "data": {
+          "labels": ["o w", "t h", "h e", "b r", "r o", "w n", "f o", "o x", "q u", "u i", "i c", "c k", "s l", "l o", "x h", "h o", "o u", "u n", "n d"],
+          "datasets": [{"label": "frequency-weighted count", "data": [4, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1]}]
+        },
+        "options": {"scales": {"y": {"beginAtZero": true, "ticks": {"stepSize": 1}}}}
+      }
+    },
+    {
+      "id": "v3",
+      "type": "mermaid",
+      "title": "How 'brown' is built",
+      "why": "Traces merges 1, 4, 5 and 6 from the printed output.",
+      "mermaid": "flowchart LR\n A[\"b r o w n\"] -- \"merge o+w\" --> B[\"b r ow n\"]\n B -- \"merge b+r\" --> C[\"br ow n\"]\n C -- \"merge br+ow\" --> D[\"brow n\"]\n D -- \"merge brow+n\" --> E[\"brown\"]"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "BPE merges the most frequent pair within each word separately.",
+      "correction": "Pair counts are summed over the whole corpus, weighted by word frequency, and one global merge is applied per step."
+    },
+    {
+      "claim": "Once 'brown' is a symbol, 'br' and 'brow' are discarded.",
+      "correction": "Every merge adds a vocabulary entry; intermediates remain and can be used for other words."
+    },
+    {
+      "claim": "A simple string replace of 'o w' would implement merge_pair.",
+      "correction": "Whole-symbol matching is required; the lookarounds (?<!\\S) and (?!\\S) stop matches that start or end inside a multi-character symbol."
+    },
+    {
+      "claim": "Rare words can't be tokenized if they don't get merged.",
+      "correction": "They stay as smaller pieces or characters ('s l ow', 'fox h o u n d'), which is still a valid encoding."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 415, "note": "count_and_split_words and the toy corpus counts"},
+      {"page": 414, "note": "Subword tokenization goals and compression view"}
+    ],
+    "later": [
+      {"page": 417, "note": "Listing 14.7 turns this loop into compute_sub_word_vocabulary and a SubWordTokenizer that applies ranked merges"},
+      {"page": 418, "note": "Training BPE on Moby Dick and evaluating the tokenizer"},
+      {"page": 495, "note": "SentencePiece uses the same BPE technique for the mini-GPT"}
+    ],
+    "prerequisites": [
+      {"page": 415, "note": "Representation of words as space-separated symbols"}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 415, "note": "Listing 14.5 produces the input counts"},
+      {"page": 417, "note": "Listing 14.7 reuses count_pairs/merge_pair logic"}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "Each BPE step counts all adjacent symbol pairs across all words, weighted by word frequency, and merges only the most frequent one.",
+    "The first toy merge is (\"o\",\"w\") with count 4 (brown ×3 + slow ×1).",
+    "merge_pair uses regex lookarounds so only whole symbols are merged, and it rewrites every word at once.",
+    "Merged symbols can merge again, building up longer subwords: ow → brow → brown.",
+    "After ten merges, common words (the, brown, fox) are single symbols; rare ones (slow, foxhound) are only partially merged."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "Why is (\"o\", \"w\") the first pair merged?",
+      "options": ["It appears in the most distinct words of any pair", "Its frequency-weighted count, 4, is the highest", "Vowel-consonant pairs are prioritized", "It is alphabetically first among ties"],
+      "answer": "Its frequency-weighted count, 4, is the highest",
+      "explanation": "brown (×3) + slow (×1) = 4, more than any other pair (several have 3). Counting distinct words isn't the criterion (o,w is in only two words). There is no vowel rule. Ties are broken by insertion order, not alphabetically, and there is no tie here anyway.",
+      "page_refs": [416]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "What does the regex (?<!\\S)first second(?!\\S) ensure in merge_pair?",
+      "options": [],
+      "answer": "That the pair is matched only as two complete symbols, preceded and followed by a space or the string boundary, not as part of a longer symbol.",
+      "explanation": "The lookbehind and lookahead forbid a non-space character directly before or after the match. The callout calls this matching an 'unmerged pair'.",
+      "page_refs": [416]
+    },
+    {
+      "id": "q3",
+      "type": "math",
+      "question": "In the state after merge 6 (\"the\", \"q u i c k\", \"brown\", \"f o x\", \"s l ow\", \"f o x h o u n d\"), what is the count of (\"f\",\"o\"), and why is it merged next?",
+      "options": [],
+      "answer": "3: 2 from 'f o x' (fox ×2) plus 1 from 'f o x h o u n d' (foxhound ×1). It ties with (o,x) at 3 and is counted first, and every other pair is ≤ 2.",
+      "explanation": "count_pairs weights pairs by word frequency; max() returns the first key with the maximal value.",
+      "page_refs": [415, 416]
+    },
+    {
+      "id": "q4",
+      "type": "conceptual",
+      "question": "Why does 'foxhound' end up as \"fox h o u n d\" while 'fox' becomes a single symbol?",
+      "options": [],
+      "answer": "The pairs inside 'fox' are frequent (they occur in fox ×2 and foxhound ×1), but the pairs in 'hound' occur only once, so they never win a merge within ten steps.",
+      "explanation": "The page's conclusion: common words are merged entirely, less common words only partially.",
+      "page_refs": [416]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "How many new vocabulary entries do the ten iterations of the loop create?",
+      "options": ["3 (the, brown, fox)", "6", "10", "It depends on the number of words"],
+      "answer": "10",
+      "explanation": "Each merge creates one new symbol (ow, th, the, br, brow, brown, fo, fox, qu, qui). 'the, brown, fox' are just the complete words among them.",
+      "page_refs": [416]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "What would happen to the loop if all words became single symbols before the 10 iterations ended?",
+      "options": [],
+      "answer": "count_pairs would return an empty Counter and max() would raise a ValueError.",
+      "explanation": "Beyond the book: Listing 14.6 has no guard; in practice you stop when no pairs remain or the target vocabulary size is reached.",
+      "page_refs": [416, 417]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you predict the 11th merge on the toy data?",
+      "options": [],
+      "answer": "(\"qui\", \"c\") with count 2, giving \"quic k\".",
+      "explanation": "After merge 10 the remaining count-2 pairs are (qui,c) and (c,k); (qui,c) is counted first. All other pairs have count 1.",
+      "page_refs": [416]
+    }
+  ]
+}

@@ -1,0 +1,479 @@
+{
+ "page_id": "page_568",
+ "pdf_page": 568,
+ "printed_page": "544",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T10:20:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. Listing 18.3 and two unnumbered code blocks; the last one (get_best_trained_model) continues on p.569, whose bundle was read for the rest of the function."
+ },
+ "overview": {
+  "title": "Querying best hyperparameters and finding the best epoch",
+  "chapter": "18 Best practices for the real world",
+  "section": "18.1 Getting the most out of your models",
+  "subsection": "18.1.1 Hyperparameter optimization",
+  "main_topic": "Retrieving the top-N hyperparameter configurations from the tuner and determining how many epochs to train each one before retraining on the full training data",
+  "central_idea": "After the search, take the best configurations and retrain them on all the training data (training + validation). First, use the validation set one last time, with a patient EarlyStopping, to find the epoch where validation loss is lowest.",
+  "importance": "Turns the result of a search into final models. It shows a practical recipe for deciding the training length when no validation set will be available during the final training.",
+  "learning_objectives": [
+   "Use tuner.get_best_hyperparameters(n) and explain what it returns",
+   "Explain why the final models can be trained on training + validation data",
+   "Explain why the aggressive patience used during the search may produce underfitted models",
+   "Compute the best epoch from history.history['val_loss'] (and why the +1 is needed)",
+   "Explain why the final training run is slightly longer than the best epoch"
+  ],
+  "prerequisites": [
+   "The search launched on p.567 (x_train / x_val split, EarlyStopping with patience=5)",
+   "The History object returned by fit() and its history dict",
+   "EarlyStopping (p.233)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Listing 18.3** retrieves the top configurations: `best_hps = tuner.get_best_hyperparameters(top_n)` with `top_n = 4`. The callout notes that it returns a list of `HyperParameters` objects, which you can pass straight to the model-building function, so `build_model(hp)` rebuilds the corresponding model.\n\nThe authors then argue for **retraining on all the training data**. Once you stop changing hyperparameters, you no longer need to evaluate on the validation data, so it can be folded back into training. For MNIST this means the full 60,000-sample training set (`x_train_full`, kept on p.567), with no validation split.\n\nOne parameter is still open: **how many epochs to train**. Without a validation set, early stopping cannot decide during the final run. Also, the `patience=5` used during the search saved time but may have stopped models too early, leaving them underfitted, so the final models should typically train longer than they did during the search. The fix is to use the validation set once more. `get_best_epoch(hp)` builds a fresh model, trains it on the 50k/10k split for up to 100 epochs with a much more patient `EarlyStopping(monitor=\"val_loss\", mode=\"min\", patience=10)` (callout: \"Note the very high patience value\"), reads the per-epoch validation losses from `history.history[\"val_loss\"]`, and returns the 1-based index of the minimum.\n\nFinally, the full-data model should be trained for a bit longer than that epoch count, because it sees more data per epoch: 20% more in this case (60,000 vs 50,000). The function `get_best_trained_model(hp)` starts at the bottom of the page: it calls `get_best_epoch`, rebuilds the model and begins a `model.fit(` call that continues on p.569 with `epochs=int(best_epoch * 1.2)`.",
+ "paragraphs": [
+  {
+   "ref": "p568_e05",
+   "excerpt": "Usually, when retraining these models, you may want to include the validation data as",
+   "what_it_says": "When retraining the selected models, you can include the validation data in the training data, because you will make no further hyperparameter changes and so no longer need to evaluate on the validation data. For MNIST, train the final models on all of the original training data, with no validation set.",
+   "what_it_means": "The validation set existed only to make decisions. Once all decisions are made, those 10,000 labelled examples are more useful as extra training signal. More data usually means better generalization, so the final model should benefit. The test set still stays untouched, so you still get an unbiased final estimate.",
+   "why_it_matters": "In small-data settings, the validation split may be a large fraction of your data, and giving it back for the final training can improve results noticeably. The cost is that you lose the ability to monitor overfitting during the final run, which is why the next paragraph fixes the epoch count in advance.",
+   "terminology": [
+    {
+     "term": "Retraining",
+     "meaning": "Training a fresh model from scratch with a chosen configuration, as opposed to reusing the weights from the search."
+    }
+   ],
+   "connections": [
+    "p.567: x_train_full and y_train_full were kept 'for later' exactly for this step",
+    "p.569: the retraining code uses x_train_full, y_train_full"
+   ]
+  },
+  {
+   "ref": "p568_e06",
+   "excerpt": "Before we can train on the full training data, though, there’s one last parameter",
+   "what_it_says": "The number of epochs still has to be chosen. You usually want to train longer than during the search, because an aggressive patience value in EarlyStopping saves time during the search but may lead to underfitted models. Use the validation set to find the best epoch.",
+   "what_it_means": "During the search, patience=5 cut runs short: a model whose val_loss stalls for 5 epochs and would then improve again is stopped too early. That is acceptable for ranking configurations (all were treated similarly) but not for the final model. Now that only a handful of configurations remain, you can afford a more patient run (patience=10) on the train/validation split to locate the real minimum of the validation loss.",
+   "why_it_matters": "It separates two goals: cheap ranking during the search, and careful training of the final candidates. The epoch number is effectively one more hyperparameter, chosen on validation data before the validation data is merged into training.",
+   "terminology": [
+    {
+     "term": "Patience",
+     "meaning": "Number of epochs without improvement that EarlyStopping tolerates before stopping."
+    },
+    {
+     "term": "Underfitting",
+     "meaning": "The model has not been trained enough (or lacks capacity) to capture the useful patterns in the data."
+    }
+   ],
+   "connections": [
+    "p.567: patience=5 in the search's EarlyStopping callback",
+    "p.233: EarlyStopping callback semantics"
+   ]
+  },
+  {
+   "ref": "p568_e08",
+   "excerpt": "And finally, train on the full dataset for just a bit longer than this",
+   "what_it_says": "Train on the full dataset for slightly more epochs than the best epoch found, because there is more data: 20% more in this case.",
+   "what_it_means": "60,000 samples vs 50,000 is 1.2×. The code on p.569 scales the epoch count by the same factor, `int(best_epoch * 1.2)`. The book only gives the reasoning 'more data, so a bit longer'. One AI interpretation (not in the book) is that the larger dataset tolerates a bit more training before overfitting, so the best epoch shifts slightly later. Note that each epoch also already contains 1.2× more gradient steps, so this is a heuristic rather than a derived rule.",
+   "why_it_matters": "It gives a concrete, reproducible rule for setting the training length when no validation monitor is available.",
+   "terminology": [],
+   "connections": [
+    "p.569: epochs=int(best_epoch * 1.2) in get_best_trained_model"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "retrain_on_full_data",
+   "name": "Retraining on training + validation data",
+   "definition": "After all hyperparameters (including the epoch count) are fixed, train the final model from scratch on the union of the training and validation sets.",
+   "intuition": "The practice exams have served their purpose; now study from them too before the real exam.",
+   "technical": "Train with the selected hp on x_train_full (60k) for a fixed number of epochs determined beforehand on the train/val split; evaluate on the untouched test set.",
+   "significance": "Uses all labelled data for the final model without compromising the test estimate.",
+   "example": "MNIST: 50k + 10k → 60k samples.",
+   "misconception": "That you can still use early stopping on validation data in this final run; there is no held-out validation set any more.",
+   "related": [
+    "validation_set",
+    "hyperparameter_tuning"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "early_stopping",
+   "name": "Patience trade-off in early stopping",
+   "definition": "Low patience saves compute but risks stopping during a temporary plateau; high patience is more reliable but slower.",
+   "intuition": "Low patience gives up on a slow learner too early; high patience waits to see if it gets back on track.",
+   "technical": "Search: patience=5 for 20×2 runs. Best-epoch run: patience=10 for each of the 4 final configurations. The best epoch is computed from the full val_loss history, not from where training stopped.",
+   "significance": "Choosing patience per phase balances cost and the quality of the final model.",
+   "example": "If val_loss is lowest at epoch 23, training with patience 10 stops at epoch 33, and get_best_epoch returns 23.",
+   "misconception": "That the stopping epoch is the best epoch. It is patience epochs later.",
+   "related": [
+    "overfitting",
+    "validation_set"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "hyperparameter_tuning",
+   "name": "Top-N configurations",
+   "definition": "tuner.get_best_hyperparameters(n) returns the n best HyperParameters objects ranked by the objective.",
+   "intuition": "The tuner's leaderboard.",
+   "technical": "Each HyperParameters object holds concrete values (e.g. units=…, optimizer='adam') and can be passed to build_model to reconstruct that architecture and compile settings.",
+   "significance": "Keeping several top configurations prepares for ensembling (p.570) and guards against noise in the ranking.",
+   "example": "best_hps[0].get('units')",
+   "misconception": "That it returns trained models; it returns configurations only (get_best_models, p.569, returns models).",
+   "related": [
+    "bayesian_optimization",
+    "model_ensembling"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Best epoch from the validation-loss history",
+   "latex": "e^{*} = 1 + \\operatorname*{arg\\,min}_{i \\in \\{0,\\dots,E-1\\}} \\; L_{\\text{val}}[i]",
+   "source_text": "best_epoch = val_loss_per_epoch.index(min(val_loss_per_epoch)) + 1",
+   "variables": [
+    {
+     "symbol": "L_{\\text{val}}[i]",
+     "meaning": "Validation loss after the (i+1)-th epoch, i.e. element i of history.history[\"val_loss\"] (Python 0-based indexing)"
+    },
+    {
+     "symbol": "E",
+     "meaning": "Number of epochs actually run before EarlyStopping halted training (at most 100)"
+    },
+    {
+     "symbol": "e^{*}",
+     "meaning": "Best epoch, counted from 1, as a number of epochs to train"
+    }
+   ],
+   "operations": "Find the minimum of the list, take its (first) position, and add 1 to convert a 0-based index into an epoch count.",
+   "purpose": "Determine how many epochs the configuration needs before validation loss starts to rise.",
+   "interpretation": "Training for e* epochs on the 50k/10k split gives the lowest validation loss observed.",
+   "intuition": "The bottom of the U-shaped validation-loss curve.",
+   "numerical_example": "If `val_loss_per_epoch = [0.31, 0.22, 0.18, 0.17, 0.19, ...]`, the minimum 0.17 is at index 3, so `best_epoch = 4`. The final model would train for `int(4 * 1.2) = 4` epochs (p.569). With e* = 23 it would train for `int(27.6) = 27`.",
+   "source": "book",
+   "book_ref": "p.568"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "18.3",
+   "title": "Querying the best hyperparameter configurations",
+   "original_code": "top_n = 4\nbest_hps = tuner.get_best_hyperparameters(top_n)",
+   "language": "python",
+   "what_it_does": "Retrieves the four best hyperparameter configurations found by the search, ranked by the objective (val_accuracy).",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Number of top configurations to keep."
+    },
+    {
+     "lines": "2",
+     "explanation": "Returns a list of HyperParameters objects (best first), which you can pass to the model-building function (callout)."
+    }
+   ],
+   "inputs_outputs": "Input: the completed tuner. Output: list of 4 HyperParameters objects.",
+   "algorithm": "Sort completed trials by objective score in the objective's direction; return the top n configurations.",
+   "theory_link": "The output of a hyperparameter optimization is a configuration; the weights are retrained separately.",
+   "parameters": [
+    {
+     "name": "top_n",
+     "role": "How many configurations to return."
+    }
+   ],
+   "pitfalls": [
+    "Close scores among the top configurations may be within noise; that is one reason to keep several of them.",
+    "These are configurations, not trained models."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "get_best_epoch: finding the optimal training length",
+   "original_code": "def get_best_epoch(hp):\n    model = build_model(hp)\n    callbacks = [\n        keras.callbacks.EarlyStopping(\n            monitor=\"val_loss\", mode=\"min\", patience=10\n        )\n    ]\n    history = model.fit(\n        x_train,\n        y_train,\n        validation_data=(x_val, y_val),\n        epochs=100,\n        batch_size=128,\n        callbacks=callbacks,\n    )\n    val_loss_per_epoch = history.history[\"val_loss\"]\n    best_epoch = val_loss_per_epoch.index(min(val_loss_per_epoch)) + 1\n    print(f\"Best epoch: {best_epoch}\")\n    return best_epoch",
+   "language": "python",
+   "what_it_does": "Builds a fresh model for configuration hp, trains it on the 50k training split with validation on the 10k split for up to 100 epochs with a patient EarlyStopping (patience=10), and returns the epoch (1-based) with the lowest validation loss.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "Rebuilds an untrained, compiled model from a HyperParameters object."
+    },
+    {
+     "lines": "3-7",
+     "explanation": "EarlyStopping on val_loss with mode='min' (lower is better) and a very high patience of 10, so a temporary plateau does not end training early."
+    },
+    {
+     "lines": "8-15",
+     "explanation": "Standard fit() on the train/validation split defined on p.567, same batch size and epoch cap as during the search."
+    },
+    {
+     "lines": "16",
+     "explanation": "history.history is a dict of per-epoch metric lists; 'val_loss' has one entry per epoch run."
+    },
+    {
+     "lines": "17",
+     "explanation": "Index of the minimum validation loss, plus 1 to convert from a 0-based list index to an epoch count."
+    },
+    {
+     "lines": "18-19",
+     "explanation": "Prints and returns the best epoch."
+    }
+   ],
+   "inputs_outputs": "Input: a HyperParameters object (plus global x_train, y_train, x_val, y_val). Output: an integer epoch count.",
+   "algorithm": "Train with patient early stopping → take argmin of the validation-loss curve.",
+   "theory_link": "The epoch count is chosen on validation data, like any other hyperparameter, before the validation data is merged into training.",
+   "parameters": [
+    {
+     "name": "patience=10",
+     "role": "Tolerance of plateaus; higher than the search's 5."
+    },
+    {
+     "name": "mode=\"min\"",
+     "role": "Lower val_loss is better (inferred anyway for a loss, made explicit here)."
+    },
+    {
+     "name": "epochs=100",
+     "role": "Upper bound."
+    }
+   ],
+   "pitfalls": [
+    "The best epoch depends on the random seed. A single run gives a noisy estimate; averaging over a few runs is more robust.",
+    "It relies on global variables x_train, x_val, etc. from p.567 being the 50k/10k split, not the full data.",
+    "The model trained here is discarded; only the epoch number is kept. This costs an extra training run per configuration."
+   ]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "get_best_trained_model (beginning; continues on p.569)",
+   "original_code": "def get_best_trained_model(hp):\n    best_epoch = get_best_epoch(hp)\n    model = build_model(hp)\n    model.fit(",
+   "language": "python",
+   "what_it_does": "Starts the function that finds the best epoch for a configuration, rebuilds a fresh model and trains it on the full training set. The fit() arguments, `x_train_full, y_train_full, batch_size=128, epochs=int(best_epoch * 1.2)`, and `return model` are on p.569.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "First determine the best epoch with the validation set."
+    },
+    {
+     "lines": "3",
+     "explanation": "Build a new, untrained model with the same hyperparameters, since the best-epoch model was trained on only 50k samples."
+    },
+    {
+     "lines": "4",
+     "explanation": "Begin training; continued on p.569 with the full 60k data and 1.2× the best epoch count, without validation data or callbacks."
+    }
+   ],
+   "inputs_outputs": "Input: HyperParameters. Output (p.569): a model trained on all 60,000 training samples.",
+   "algorithm": "best_epoch ← get_best_epoch(hp); model ← build_model(hp); fit on full data for int(1.2 · best_epoch) epochs.",
+   "theory_link": "Retraining on train + validation once all decisions are made.",
+   "parameters": [],
+   "pitfalls": [
+    "Calling it in a loop over best_hps (p.569) costs two training runs per configuration."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "The full post-search recipe, step by step",
+   "kind": "step_by_step",
+   "body": "1. **Search** (p.567): rank configurations using 50k train / 10k val, aggressive patience 5.\n2. **Select** (listing 18.3): `best_hps = tuner.get_best_hyperparameters(4)`.\n3. **Pick the epoch count** (this page): for each hp, train on 50k/10k with patience 10 and take the argmin of `val_loss`.\n4. **Retrain** (p.569): new model, all 60k samples, `int(best_epoch * 1.2)` epochs, no validation.\n5. **Evaluate once** on the 10k test set (p.569).\n\nOnly step 5 touches the test set, and it influences no decision.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why index + 1?",
+   "kind": "numerical",
+   "body": "`history.history[\"val_loss\"][0]` is the validation loss **after the first epoch**. If the minimum is at list index 0, the best number of epochs is 1, not 0. Without the `+ 1`, `model.fit(epochs=0)` in the retraining step would do nothing at all.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "widget": "training_curves",
+   "title": "Locating the best epoch on a validation-loss curve",
+   "why": "get_best_epoch takes the argmin of history.history['val_loss']. Move the marker to the bottom of the validation curve; with patience=10 training would stop 10 epochs later.",
+   "params": {
+    "epochs": 40,
+    "overfit_from": 15,
+    "noise": 0.03
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "From search results to final models",
+   "why": "Shows how listing 18.3, get_best_epoch and get_best_trained_model on this page chain together, and which data split each step uses.",
+   "mermaid": "flowchart LR\n  T[tuner after search] -->|get_best_hyperparameters 4| H[best_hps: 4 HyperParameters]\n  H --> E[get_best_epoch hp\\n50k train / 10k val\\npatience=10]\n  E -->|best_epoch| R[build_model hp\\nfit on 60k full data\\nepochs = int best_epoch x 1.2]\n  R --> M[final model]\n  M --> X[evaluate on 10k test p.569]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "get_best_hyperparameters returns trained models.",
+   "correction": "It returns HyperParameters objects (configurations). You pass them to build_model and train them yourself; get_best_models (p.569) is the shortcut that returns models."
+  },
+  {
+   "claim": "The final model should be trained only on the training split, as during the search.",
+   "correction": "Once hyperparameters are frozen, the validation data can be merged in. The book trains on the full 60k MNIST training set."
+  },
+  {
+   "claim": "The epoch at which EarlyStopping halted training is the best epoch.",
+   "correction": "Training stops patience epochs after the best one; the code finds the argmin of the val_loss history instead."
+  },
+  {
+   "claim": "The search's early stopping already gives the right training length.",
+   "correction": "Its aggressive patience (5) may have produced underfitted models, so a more patient run (10) is used to find the epoch."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 567,
+    "note": "The search with patience=5 and the x_train/x_val/x_train_full arrays used here."
+   },
+   {
+    "page": 566,
+    "note": "The tuner and its val_accuracy objective, which ranks the configurations returned here."
+   },
+   {
+    "page": 564,
+    "note": "build_model(hp), which reconstructs a model from each HyperParameters object."
+   }
+  ],
+  "later": [
+   {
+    "page": 569,
+    "note": "End of get_best_trained_model (epochs=int(best_epoch * 1.2)), test evaluation, and the get_best_models shortcut."
+   },
+   {
+    "page": 570,
+    "note": "Model ensembling, a natural use for several top configurations."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 233,
+    "note": "EarlyStopping callback and why you can't know the right number of epochs in advance."
+   },
+   {
+    "page": 173,
+    "note": "Validation vs test roles."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 234,
+    "note": "More on built-in callbacks such as EarlyStopping and ModelCheckpoint."
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "tuner.get_best_hyperparameters(n) returns the n best configurations as HyperParameters objects usable with build_model.",
+  "Once hyperparameters are frozen, retrain on training + validation data (the full 60k MNIST training set).",
+  "The search's aggressive patience saves time but may underfit; use a patient early stopping run to find the best epoch.",
+  "best_epoch = argmin(val_loss) + 1, computed from the History object.",
+  "Train the final model slightly longer than best_epoch (×1.2) because it sees 20% more data."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What does tuner.get_best_hyperparameters(top_n) return?",
+   "options": [
+    "The top_n trained Keras models",
+    "A list of HyperParameters objects that can be passed to the model-building function",
+    "The validation accuracies of the top_n trials",
+    "A new tuner restricted to the top_n configurations"
+   ],
+   "answer": "A list of HyperParameters objects that can be passed to the model-building function",
+   "explanation": "The listing's callout says exactly this. Trained models come from get_best_models (p.569); scores and a new tuner are not what this method returns.",
+   "page_refs": [
+    568,
+    569
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "conceptual",
+   "question": "Why is it acceptable to train the final models on the validation data?",
+   "options": [],
+   "answer": "No further hyperparameter decisions will be made, so validation data is no longer needed for evaluation. It becomes extra training data, while the separate test set still gives an unbiased final estimate.",
+   "explanation": "Stated in the first paragraph. The test set remains untouched (p.567).",
+   "page_refs": [
+    568,
+    567
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "Why does get_best_epoch use patience=10 instead of the patience=5 used during the search?",
+   "options": [],
+   "answer": "The aggressive patience saved time during the search but may lead to underfitted models (stopping during a temporary plateau). A higher patience finds the true minimum of the validation loss more reliably.",
+   "explanation": "From the second paragraph and the 'Note the very high patience value' callout.",
+   "page_refs": [
+    568
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "math",
+   "question": "history.history['val_loss'] = [0.40, 0.28, 0.21, 0.19, 0.20, 0.22]. What does get_best_epoch return, and how many epochs will get_best_trained_model train for?",
+   "options": [],
+   "answer": "best_epoch = 4 (min 0.19 at index 3, +1). Final training: int(4 × 1.2) = int(4.8) = 4 epochs.",
+   "explanation": "The index of the minimum is 3; adding 1 converts to an epoch count. p.569 multiplies by 1.2 and truncates with int().",
+   "page_refs": [
+    568,
+    569
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "Where does the factor '20% more' come from?",
+   "options": [],
+   "answer": "The final training set has 60,000 samples versus 50,000 during the search and epoch selection: 60,000 / 50,000 = 1.2.",
+   "explanation": "The 10,000 validation samples are added back (p.567 split).",
+   "page_refs": [
+    568,
+    567
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "mcq",
+   "question": "Why can't EarlyStopping be used to decide the training length of the final full-data model?",
+   "options": [
+    "EarlyStopping only works with KerasTuner",
+    "There is no held-out validation set left to monitor",
+    "The final model has no loss function",
+    "EarlyStopping is incompatible with batch_size=128"
+   ],
+   "answer": "There is no held-out validation set left to monitor",
+   "explanation": "All 60k training samples are used for training. Monitoring the test set would leak it. The other options are false.",
+   "page_refs": [
+    568
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you explain why the epoch count is decided before merging the validation data into training, and what would go wrong if you skipped this step?",
+   "options": [],
+   "answer": "Without validation data during the final run, you need the epoch count fixed in advance. Skipping it means guessing (risking under- or overfitting) or peeking at the test set (leaking it).",
+   "explanation": "The book's recipe uses the validation set one last time to settle this last parameter.",
+   "page_refs": [
+    568
+   ]
+  }
+ ]
+}

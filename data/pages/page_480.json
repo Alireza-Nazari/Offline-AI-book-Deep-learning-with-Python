@@ -1,0 +1,328 @@
+{
+ "page_id": "page_480",
+ "pdf_page": 480,
+ "printed_page": "456",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:49:01Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. The page opens mid-bullet: the first bullet ('A matching tokenizer') starts on p.479, so p480_e03 is its continuation. Listing 15.20 is complete on this page. The last paragraph (p480_e13) breaks mid-sentence and continues on p.481."
+ },
+ "overview": {
+  "title": "Loading RoBERTa with KerasHub",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.4 Classification with a pretrained Transformer",
+  "subsection": "15.4.2 Loading a pretrained Transformer",
+  "main_topic": "The three ingredients needed to reuse a pretrained Transformer (tokenizer, architecture, weights) and loading all three for RoBERTa with KerasHub's from_preset()",
+  "central_idea": "A pretrained model is only useful if you reproduce exactly the tokenizer, the architecture and the weights it was trained with. KerasHub bundles all three behind `from_preset(\"roberta_base_en\")`, giving a subword `Tokenizer` with a ~50,000-term vocabulary and a task-agnostic `Backbone`.",
+  "importance": "This is the moment the book switches from training Transformers from scratch to reusing a large pretrained one. Knowing why tokenizer, architecture and weights must match exactly is what lets you fine-tune pretrained models correctly instead of silently breaking them.",
+  "learning_objectives": [
+   "List the three things required to use a pretrained model and explain why each must match pretraining exactly",
+   "Load a pretrained tokenizer and backbone with `keras_hub.models.Tokenizer.from_preset()` and `keras_hub.models.Backbone.from_preset()`",
+   "Explain why subword tokenization is necessary at RoBERTa's data scale, compared with character-level and word-level tokenization",
+   "Interpret the integer output of the RoBERTa tokenizer on a short sentence",
+   "Begin to define what a 'backbone' is in KerasHub"
+  ],
+  "prerequisites": [
+   "Subword tokenization and the SubWordTokenizer from chapter 14",
+   "The TransformerEncoder block built in section 15.3.2",
+   "BERT, masked language modeling and RoBERTa (pp.478-479)",
+   "Embedding layers"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes the list, started on p.479, of what you need in order to use a pretrained model:\n\n1. **A matching tokenizer.** Text must be split into tokens and mapped to the *same integer indices* as during pretraining. If the words of the IMDb reviews mapped to different indices, the learned representation of each token (its row in the embedding matrix) would be attached to the wrong token and would be useless.\n2. **A matching model architecture.** You have to recreate *exactly* the computation the model did during pretraining, so that the weights mean the same thing.\n3. **The pretrained weights.** For RoBERTa these came from about a day of training on 1,024 GPUs over billions of words, which is not something you would redo.\n\nThe authors note that rewriting the tokenizer and architecture would not be hard, because RoBERTa's internals almost exactly match the `TransformerEncoder` built earlier in the chapter. Still, matching an implementation exactly takes time, so, as in earlier chapters, they use **KerasHub**. **Listing 15.20** loads a `Tokenizer` and a `Backbone` with `from_preset(\"roberta_base_en\")`, which fetches the weights, configuration and tokenizer assets for RoBERTa *base*, the smallest checkpoint released with the RoBERTa paper.\n\nThe RoBERTa tokenizer is almost the same as the `SubWordTokenizer` from chapter 14, with tweaks to handle Unicode from any language. The page argues that subword tokenization is a must at this scale: character tokens would make sequences far too long (expensive training), and word tokens would need a huge vocabulary and an unworkably large `Embedding` layer. With subwords, any word can be encoded with a vocabulary of only about 50,000 terms. A demo shows `tokenizer(\"The quick brown fox\")` returning `[133, 2119, 6219, 23602]`.\n\nThe page ends by asking what the `Backbone` is. In chapter 8 a backbone was a vision network that maps images to a latent space without a prediction head. The KerasHub definition continues on p.481.",
+ "paragraphs": [
+  {
+   "ref": "p480_e03",
+   "excerpt": "reviews map to different token indices than they would have during pretraining",
+   "what_it_says": "This finishes the first bullet ('A matching tokenizer', begun on p.479). If the IMDb review words were mapped to different token indices than during pretraining, the model's learned representation of each token could not be used.",
+   "what_it_means": "A pretrained Transformer's first layer is an embedding lookup: token id $i$ selects row $i$ of a learned matrix. That row only means something for the token that had id $i$ during pretraining. If your tokenizer gives 'movie' the id that RoBERTa used for 'banana', the model sees 'banana'. The weights are still there, but they are attached to the wrong inputs.",
+   "why_it_matters": "This is why you never build your own vocabulary (for example with `TextVectorization.adapt()` on IMDb) when fine-tuning a pretrained model. You have to load the tokenizer that ships with the model.",
+   "technical_idea": "Beyond the book: the same applies to special tokens (`<s>`, `</s>`, `<pad>`). Their ids and positions are part of the pretraining contract, which is why p.482-483 pack sequences with RoBERTa's own start, end and pad ids.",
+   "terminology": [
+    {"term": "Token index", "meaning": "The integer a tokenizer assigns to a token; it is used as a row index into the embedding matrix."},
+    {"term": "Learned representation", "meaning": "The embedding vector (and the downstream behaviour) the model learned for a token during pretraining."}
+   ],
+   "connections": [
+    "p.479: the bullet list of requirements starts with 'A matching tokenizer'",
+    "p.419: chapter 14 already warned that you must reuse the tokenization used during pretraining or throw out the useful representations of input tokens"
+   ]
+  },
+  {
+   "ref": "p480_e04",
+   "excerpt": "A matching model architecture—To use the pretrained model, we need to recreate",
+   "what_it_says": "Second requirement: you need to recreate exactly the math the model used internally during pretraining.",
+   "what_it_means": "Weights are just arrays of numbers. They only produce sensible outputs when combined in the same way as during training: the same layer order, normalization placement, activation, number of heads, hidden sizes, positional embedding scheme and so on. A small difference, such as applying layer normalization before rather than after a sublayer, changes the function and the pretrained weights no longer fit.",
+   "why_it_matters": "It explains why libraries like KerasHub exist. Reproducing a published architecture exactly enough to load its checkpoint is fiddly, and getting it slightly wrong fails silently: you get worse results, not an error.",
+   "terminology": [
+    {"term": "Architecture", "meaning": "The exact computation graph of the model: layers, shapes, and how they connect."}
+   ],
+   "connections": ["p.468: the TransformerEncoder block that RoBERTa's layers almost exactly match"]
+  },
+  {
+   "ref": "p480_e05",
+   "excerpt": "The pretrained weights—These weights were created by training the model for about",
+   "what_it_says": "Third requirement: the weights themselves, which were produced by training for about a day on 1,024 GPUs over billions of input words.",
+   "what_it_means": "The weights hold all the value of pretraining. Tokenizer and architecture are code you could write, but the weights represent an amount of compute and data that an individual would rarely reproduce. p.479 estimated RoBERTa cost a few hundred thousand dollars to train.",
+   "why_it_matters": "This is the economic argument for transfer learning in NLP. Someone else pays for pretraining once, and everyone can then fine-tune cheaply.",
+   "technical_idea": "Beyond the book: 1,024 GPUs for about a day is roughly 24,000 GPU-hours. The RoBERTa paper reports this budget (1,024 V100 GPUs for about one day) for its large configuration. The book states it for the model in general.",
+   "terminology": [
+    {"term": "Checkpoint", "meaning": "A saved set of trained weights, often published with its configuration."}
+   ],
+   "connections": ["p.479: RoBERTa used 160 GB of web text and cost a few hundred thousand dollars to train"]
+  },
+  {
+   "ref": "p480_e06",
+   "excerpt": "Recreating the tokenizer and architecture code ourselves would not be too hard.",
+   "what_it_says": "Writing the tokenizer and architecture ourselves would be feasible, since RoBERTa's internals almost exactly match the `TransformerEncoder` built earlier. But exact matching is time-consuming, so as before the book uses KerasHub to get pretrained model implementations for Keras.",
+   "what_it_means": "Conceptually you already know everything inside RoBERTa: embeddings, positional embeddings, and stacked encoder blocks of self-attention plus feedforward with residuals and layer norm. What KerasHub adds is engineering: an implementation checked to match the original checkpoint number for number.",
+   "why_it_matters": "It reassures the reader that the pretrained model is not a black box. It is the same building block as section 15.3.2, scaled up and trained on far more data.",
+   "terminology": [
+    {"term": "KerasHub", "meaning": "A Keras library of pretrained model implementations (backbones, tokenizers, task models) loadable via presets."},
+    {"term": "TransformerEncoder", "meaning": "The custom Keras layer built in section 15.3.2: self-attention plus a two-layer feedforward network, with residual connections and layer normalization."}
+   ],
+   "connections": [
+    "p.468: section 15.3.2 builds the TransformerEncoder",
+    "p.509: KerasHub is used again in chapter 16 to load the Gemma LLM"
+   ]
+  },
+  {
+   "ref": "p480_e07",
+   "excerpt": "Let’s use KerasHub to load a RoBERTa tokenizer and model. We can use",
+   "what_it_says": "KerasHub's special constructor `from_preset()` loads a pretrained model's weights, configuration and tokenizer assets. The book loads RoBERTa's base model, the smallest of the few checkpoints released with the RoBERTa paper.",
+   "what_it_means": "A *preset* is a named bundle: a config describing the architecture hyperparameters, a weights file, and the tokenizer's vocabulary and merge files. Calling `from_preset` with the same name on `Tokenizer` and on `Backbone` makes the two consistent, which satisfies all three requirements in two lines. (The book says 'from disk'; in practice the files are downloaded and cached locally on first use.)",
+   "why_it_matters": "Using the same preset name for tokenizer and backbone is what guarantees they match. Mixing presets, such as a base tokenizer with a different model's backbone, would break the token-index requirement.",
+   "terminology": [
+    {"term": "Preset", "meaning": "A named, versioned bundle of configuration, weights and assets for a pretrained model in KerasHub."},
+    {"term": "Base model", "meaning": "The smaller standard size of RoBERTa (12 layers, hidden size 768), in contrast with 'large'."}
+   ],
+   "connections": ["p.481: backbone.summary() shows the base model has 124 million parameters and 12 encoder layers"]
+  },
+  {
+   "ref": "p480_e10",
+   "excerpt": "The Tokenizer maps from text to sequences of integers, as we would expect.",
+   "what_it_says": "The `Tokenizer` turns text into integer sequences. RoBERTa's tokenizer is almost the same as the `SubWordTokenizer` built in chapter 14, with small tweaks to handle Unicode characters from any language.",
+   "what_it_means": "RoBERTa uses byte-pair encoding: a vocabulary learned by repeatedly merging frequent pairs, as in chapter 14. The 'tweak' is that it works on bytes rather than characters (byte-level BPE). Any Unicode string is a sequence of bytes, so no input is ever out of vocabulary.",
+   "why_it_matters": "It ties the pretrained tokenizer back to something the reader built by hand, so it is not a mystery component.",
+   "technical_idea": "Beyond the book: with byte-level BPE the worst case for an unseen word is one token per byte, just as chapter 14's subword tokenizer falls back to single characters.",
+   "terminology": [
+    {"term": "SubWordTokenizer", "meaning": "The byte-pair-encoding style tokenizer implemented in chapter 14, which learns merge rules from a corpus."},
+    {"term": "Unicode", "meaning": "The standard for encoding text in all writing systems; byte-level tokenizers handle it by operating on UTF-8 bytes."}
+   ],
+   "connections": ["p.418: the SubWordTokenizer covers every word of Moby Dick without an [UNK] token"]
+  },
+  {
+   "ref": "p480_e11",
+   "excerpt": "Given the size of RoBERTa’s pretraining dataset, subword tokenization is a must.",
+   "what_it_says": "At RoBERTa's data scale, subword tokenization is required. Character-level tokens would make sequences far too long and training too expensive. Word-level tokens would need a massive vocabulary to cover the distinct words in millions of web documents, and that would make the front `Embedding` layer unworkably large. Subwords handle any word with only about a 50,000-term vocabulary.",
+   "what_it_means": "This is a trade-off between sequence length and vocabulary size. Attention cost grows with the square of sequence length, so long character sequences are costly. Embedding parameters grow linearly with vocabulary size times model width. Subwords sit in the middle: common words get one token, and rare words are split into a few pieces.",
+   "why_it_matters": "It explains a design choice found in essentially every modern language model, and it puts numbers on the embedding-size argument.",
+   "technical_idea": "Beyond the book: with hidden size 768, a 50,000-term embedding has $50{,}000\\times768\\approx38.4$M parameters, about a third of RoBERTa-base's 124M (p.481). A word vocabulary of 'hundreds of millions of terms' (p.414) at the same width would need hundreds of billions of embedding parameters. (The exact RoBERTa vocabulary is 50,265 entries; the book rounds to 50,000.)",
+   "terminology": [
+    {"term": "Vocabulary size", "meaning": "The number of distinct tokens the tokenizer can output; it equals the number of rows in the embedding matrix."},
+    {"term": "Embedding layer", "meaning": "A lookup table of shape (vocab_size, hidden_dim) that maps token ids to vectors."}
+   ],
+   "connections": [
+    "p.414: chapter 14 compared a 64-term character vocabulary with word vocabularies that blow up at web scale",
+    "p.419: subword tokenization became the dominant choice for modern language models"
+   ]
+  },
+  {
+   "ref": "p480_e13",
+   "excerpt": "What is this Backbone we just loaded? We saw in chapter 8 that",
+   "what_it_says": "The paragraph asks what the `Backbone` is. It recalls from chapter 8 that in computer vision a backbone is a network that maps input images to a latent space, a vision model without a prediction head. The sentence about KerasHub's meaning continues on p.481.",
+   "what_it_means": "The same split applies to text. The backbone turns token ids into contextual vectors, one per token. A task head, such as a classifier, sits on top and is trained for the specific task.",
+   "why_it_matters": "This backbone/head split is how fine-tuning is organized in KerasHub and in most of modern deep learning. One expensive general-purpose body is reused, and a cheap task-specific head is added.",
+   "terminology": [
+    {"term": "Backbone", "meaning": "A pretrained network that produces latent representations but has no task-specific output head."},
+    {"term": "Head", "meaning": "The small task-specific part of the model (for example, a Dense softmax classifier) added on top of a backbone."}
+   ],
+   "connections": ["p.481: the definition continues, and the backbone outputs shape (batch_size, sequence_length, 768)"]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "transfer_learning",
+   "name": "Transfer learning with a pretrained Transformer",
+   "definition": "Reusing a model pretrained on a large generic corpus as the starting point for a specific task, by loading its tokenizer, architecture and weights and then fine-tuning.",
+   "intuition": "Someone else has already taught the model how English works. You only have to teach it what a positive movie review looks like.",
+   "technical": "It requires an exact match of the tokenizer (token to id mapping), the architecture (the function the weights parameterize) and the weights. KerasHub's `from_preset` provides all three.",
+   "significance": "Since BERT and RoBERTa, this has been the dominant way to solve NLP tasks with limited labeled data.",
+   "example": "Load `roberta_base_en`, attach a classification head, fine-tune on 20,000 IMDb reviews (pp.481-484).",
+   "misconception": "That you can use pretrained weights with any tokenizer. A mismatched vocabulary makes the embeddings refer to the wrong tokens.",
+   "related": ["tokenization", "embedding", "transformer"],
+   "source": "book"
+  },
+  {
+   "id": "tokenization",
+   "name": "Subword tokenization at scale",
+   "definition": "Splitting text into units between characters and words, learned from data, so that common words are single tokens and rare words are a few pieces.",
+   "intuition": "It is a compromise: short sequences like word tokenization and complete coverage like character tokenization.",
+   "technical": "RoBERTa uses byte-level BPE with about 50,000 tokens. Sequence length drives attention cost and vocabulary size drives embedding size, and subwords keep both manageable.",
+   "significance": "The book calls it 'a must' given RoBERTa's 160 GB pretraining corpus.",
+   "example": "`tokenizer(\"The quick brown fox\")` gives `[133, 2119, 6219, 23602]`: four common words, four tokens.",
+   "misconception": "That subword tokens are always fragments of words. Frequent words are usually a single token, as the example shows.",
+   "related": ["embedding", "transfer_learning"],
+   "source": "book"
+  },
+  {
+   "id": "pretrained_backbone",
+   "name": "Backbone",
+   "definition": "A pretrained network that maps inputs to a latent representation and has no task-specific head.",
+   "intuition": "It is the body of a screwdriver, and different heads fit onto it (p.481).",
+   "technical": "RoBERTa's backbone takes token ids (and a padding mask) and outputs a (batch_size, sequence_length, 768) tensor (p.481).",
+   "significance": "It separates the expensive, reusable part of a model from the cheap, task-specific part.",
+   "example": "`keras_hub.models.Backbone.from_preset(\"roberta_base_en\")`.",
+   "misconception": "That a backbone can classify out of the box. It has no loss function or output head until you add one.",
+   "related": ["transfer_learning", "transformer"],
+   "source": "book"
+  },
+  {
+   "id": "keras_hub_preset",
+   "name": "KerasHub preset / from_preset()",
+   "definition": "A named bundle of configuration, weights and tokenizer assets, loaded by the `from_preset()` class constructor.",
+   "intuition": "It is like ordering a complete kit by its catalog number instead of buying the parts separately.",
+   "technical": "`Tokenizer.from_preset(name)` and `Backbone.from_preset(name)` read the same preset, so the vocabulary and the embedding rows correspond.",
+   "significance": "It turns the three requirements on this page into two lines of code.",
+   "example": "`\"roberta_base_en\"`: RoBERTa, base size, English.",
+   "misconception": "That 'preset' means only the hyperparameters. It also includes the trained weights and vocabulary files.",
+   "related": ["pretrained_backbone", "transfer_learning"],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "15.20",
+   "title": "Loading the RoBERTa pretrained model with KerasHub",
+   "original_code": "import keras_hub\n\ntokenizer = keras_hub.models.Tokenizer.from_preset(\"roberta_base_en\")\nbackbone = keras_hub.models.Backbone.from_preset(\"roberta_base_en\")",
+   "language": "python",
+   "what_it_does": "Imports KerasHub and builds two objects from the same preset: the RoBERTa-base tokenizer (vocabulary and merge rules) and the RoBERTa-base backbone (architecture with pretrained weights).",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Imports the KerasHub library of pretrained models."},
+    {"lines": "3", "explanation": "`Tokenizer.from_preset` resolves the preset name to RoBERTa's tokenizer class and loads its vocabulary assets. It is the 'matching tokenizer'."},
+    {"lines": "4", "explanation": "`Backbone.from_preset` builds the RoBERTa architecture from the preset's config and loads its pretrained weights. These are the 'matching architecture' and 'pretrained weights'."}
+   ],
+   "inputs_outputs": "Input: the preset name string. Output: a callable tokenizer (string to int32 token ids) and a Keras model (token_ids and padding_mask to (batch, seq_len, 768) features).",
+   "algorithm": "Look up the preset, download and cache its files if needed, instantiate the right subclass, load the weights.",
+   "theory_link": "It implements the three requirements of transfer learning listed on pp.479-480.",
+   "parameters": [
+    {"name": "\"roberta_base_en\"", "role": "Preset name: model family (RoBERTa), size (base), language (English)."}
+   ],
+   "pitfalls": [
+    "Use the same preset name for tokenizer and backbone; mismatches break the token-id contract.",
+    "The first call downloads several hundred MB of weights, so network access and disk space are needed.",
+    "The backbone has no classification head; calling it gives features, not predictions."
+   ],
+   "illustrative_code": "# AI-written sketch, not from the book: inspect what was loaded\nprint(tokenizer.vocabulary_size())   # about 50k entries\nprint(backbone.count_params())       # about 124M (see p.481)\n# To run the backbone, pack ids with StartEndPacker first (p.483)"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Tokenizing a short sentence with RoBERTa's tokenizer",
+   "original_code": ">>> tokenizer(\"The quick brown fox\")\nArray([  133,  2119,  6219, 23602], dtype=int32)",
+   "language": "python",
+   "what_it_does": "Calls the tokenizer on a string and gets back four int32 token ids, one per word.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Tokenizers in KerasHub are callable layers; passing a string tokenizes it."},
+    {"lines": "2", "explanation": "The output is an int32 array. Each common word becomes a single token: 'The' becomes 133, and the next three words (with their leading spaces) become 2119, 6219 and 23602."}
+   ],
+   "inputs_outputs": "Input: a Python string. Output: a 1-D int32 array of length 4.",
+   "algorithm": "Byte-level BPE: split into pre-tokens, apply learned merges, look up ids.",
+   "theory_link": "It shows the 'only a 50,000-term vocabulary' claim at work: frequent words are single tokens, so sequences stay short.",
+   "parameters": [],
+   "pitfalls": [
+    "No start/end tokens are added here; packing with `<s>` and `</s>` is done separately with StartEndPacker (p.482-483).",
+    "Beyond the book: in RoBERTa's byte-level BPE a leading space is part of the token, so ' fox' and 'fox' have different ids."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why mismatched tokenizers fail silently",
+   "kind": "step_by_step",
+   "body": "1. During pretraining, 'great' had id 372 (say), and row 372 of the embedding matrix learned a 'positive adjective' vector.\n2. You build your own IMDb vocabulary in which 'great' is id 15.\n3. At fine-tuning time, the model looks up row 15. That row was trained for whatever token RoBERTa assigned id 15 to.\n4. No error is raised, because the ids are valid integers below the vocabulary size. The model just starts from nonsense and loses most of the benefit of pretraining.\n\n(Ids here are invented for illustration.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "The length-versus-vocabulary trade-off in numbers",
+   "kind": "numerical",
+   "body": "Take a 300-word review.\n\n- **Characters:** about 1,600 tokens. Self-attention computes $1600^2 \\approx 2.6$M scores per head per layer.\n- **Subwords (about 1.3 tokens per word):** about 400 tokens, so $400^2 = 160{,}000$ scores, 16 times fewer.\n- **Words:** about 300 tokens, but covering web text needs millions of vocabulary entries, and at width 768 each million entries costs 768M embedding parameters.\n\nSubwords give nearly word-level lengths with a 50k vocabulary, about 38M embedding parameters. (Illustrative estimates, not from the book.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Pretrained parts as a matched set",
+   "kind": "analogy",
+   "body": "Think of a pretrained model as a lock and key cut together. The weights are the lock's pins, the architecture is the shape of the keyway, and the tokenizer is the key. A key from a different lock might fit the keyway, but it won't turn the pins. `from_preset` hands you a lock and key that were made together.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "\"The quick brown fox\" through RoBERTa's tokenizer",
+   "why": "The page tokenizes this sentence and gets [133, 2119, 6219, 23602]. The widget walks from tokens to ids to embedding lookups, using the ids printed on the page.",
+   "widget": "token_sequence",
+   "params": {"text": "The quick brown fox", "mode": "word", "vocab": {"the": 133, "The": 133, "quick": 2119, "brown": 6219, "fox": 23602}}
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "What from_preset() loads",
+   "why": "It shows the three requirements on this page and which object in Listing 15.20 supplies each.",
+   "mermaid": "flowchart LR\n  P[\"preset: roberta_base_en\"] --> T[\"Tokenizer<br/>vocab + merges (~50k)\"]\n  P --> C[\"config<br/>architecture\"]\n  P --> W[\"pretrained weights<br/>~1 day on 1,024 GPUs\"]\n  C --> B[\"Backbone\"]\n  W --> B\n  X[\"text\"] --> T --> I[\"token ids\"] --> B --> F[\"(batch, seq_len, 768) features\"]\n  F -.-> H[\"task head (added next)\"]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "Pretrained weights can be used with any reasonable tokenizer.", "correction": "Token ids index rows of the learned embedding matrix. Any other tokenizer assigns different ids, and the learned representations are lost (p480_e03)."},
+  {"claim": "RoBERTa's tokenizer is a word-level tokenizer because 'The quick brown fox' gives one id per word.", "correction": "It is a subword tokenizer. Common words happen to be single tokens, while rare words are split into several pieces."},
+  {"claim": "A Backbone is a complete classifier.", "correction": "A backbone outputs latent features and is not set up for any loss. A head must be attached (p.481)."},
+  {"claim": "RoBERTa's architecture is fundamentally different from the encoder built in this chapter.", "correction": "The book says its internals almost exactly match the TransformerEncoder built earlier; the difference is scale and training data."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 479, "note": "RoBERTa introduced; the requirements list begins with 'A matching tokenizer'"},
+   {"page": 478, "note": "Section 15.4 opens: BERT and masked-language-model pretraining"},
+   {"page": 468, "note": "The TransformerEncoder block whose structure RoBERTa almost exactly matches"},
+   {"page": 418, "note": "Chapter 14's SubWordTokenizer, which RoBERTa's tokenizer closely resembles"},
+   {"page": 414, "note": "Character vs. word tokenization trade-offs at scale"}
+  ],
+  "later": [
+   {"page": 481, "note": "Backbone definition continues; summary shows 124M parameters and 12 encoder layers"},
+   {"page": 482, "note": "IMDb data reloaded and RoBERTa's <s> ... </s> <pad> packing format"},
+   {"page": 483, "note": "Listing 15.21 packs tokens with StartEndPacker using this tokenizer's special ids"},
+   {"page": 509, "note": "Chapter 16 loads the Gemma LLM with KerasHub in the same way"}
+  ],
+  "prerequisites": [
+   {"page": 418, "note": "Subword tokenization"},
+   {"page": 468, "note": "Transformer encoder block"}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 483, "note": "Listing 15.21 uses the tokenizer loaded here"}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "Reusing a pretrained model requires three matched pieces: tokenizer, architecture and weights.",
+  "A mismatched tokenizer is a silent failure: the embedding rows no longer correspond to the right tokens.",
+  "KerasHub's `from_preset(\"roberta_base_en\")` loads a consistent tokenizer and backbone in two lines.",
+  "Subword tokenization balances sequence length against vocabulary and embedding size, and about 50,000 tokens cover any word.",
+  "A backbone is a pretrained model without a task head; a head is attached for each downstream task."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "Why can't we build our own vocabulary from the IMDb reviews and feed the ids into pretrained RoBERTa?", "options": ["Because IMDb reviews contain too many words for any vocabulary", "Because the token ids would not match the ids used in pretraining, so the learned token representations would be wrong", "Because RoBERTa only accepts character-level input", "Because custom vocabularies cannot be used with Keras models"], "answer": "Because the token ids would not match the ids used in pretraining, so the learned token representations would be wrong", "explanation": "p480_e03: if the words map to different indices than during pretraining, the learned representations cannot be used. IMDb vocabulary size is not the problem, RoBERTa uses subwords rather than characters, and Keras supports custom vocabularies in general.", "page_refs": [479, 480]},
+  {"id": "q2", "type": "short", "question": "Name the three things needed to use a pretrained model, according to pp.479-480.", "options": [], "answer": "A matching tokenizer, a matching model architecture, and the pretrained weights.", "explanation": "These are the three bullets. KerasHub's from_preset supplies all three.", "page_refs": [479, 480]},
+  {"id": "q3", "type": "conceptual", "question": "Explain why character-level and word-level tokenization are both poor choices at RoBERTa's scale.", "options": [], "answer": "Character tokens make sequences much longer, so training (especially attention) is much more expensive. Word tokens need a huge vocabulary to cover web text, which makes the Embedding layer unworkably large. Subwords keep sequences short with a vocabulary of about 50k.", "explanation": "This follows p480_e11 directly: it is a trade-off between sequence length and vocabulary size.", "page_refs": [480, 414]},
+  {"id": "q4", "type": "math", "question": "RoBERTa-base has hidden size 768 and a vocabulary of about 50,000. Approximately how many parameters are in its token embedding matrix, and what fraction of the 124M total is that?", "options": [], "answer": "$50{,}000 \\times 768 = 38.4$M parameters, about 31% of 124M.", "explanation": "An embedding matrix has one row of hidden_dim values per vocabulary entry. The 768 width comes from p.481 and the 124M total from p.481's summary.", "page_refs": [480, 481]},
+  {"id": "q5", "type": "mcq", "question": "What does `keras_hub.models.Backbone.from_preset(\"roberta_base_en\")` return?", "options": ["A sentiment classifier ready to predict IMDb labels", "The RoBERTa-base architecture with pretrained weights, outputting per-token features", "Only the tokenizer vocabulary", "An untrained RoBERTa with random weights"], "answer": "The RoBERTa-base architecture with pretrained weights, outputting per-token features", "explanation": "from_preset loads weights, configuration and assets. A Backbone has no task head (p.481), so it is not a classifier. The tokenizer is loaded separately, and the weights are pretrained, not random.", "page_refs": [480, 481]},
+  {"id": "q6", "type": "short", "question": "`tokenizer(\"The quick brown fox\")` returns four ids. What does this tell you about how subword tokenizers handle common words?", "options": [], "answer": "Common words are kept as single tokens; only rare words are split into several subword pieces.", "explanation": "Each of the four common English words maps to one id, so sequence length stays close to word count for typical text.", "page_refs": [480]},
+  {"id": "q7", "type": "self", "question": "Could you explain to a colleague, without notes, what a 'backbone' is and why KerasHub separates it from task heads?", "options": [], "answer": "A backbone maps inputs to latent features without a prediction head; separating it lets one pretrained body be reused for many tasks by adding small task-specific heads.", "explanation": "p480_e13 and p.481 define the backbone through the computer-vision analogy from chapter 8 and the screwdriver analogy.", "page_refs": [480, 481]}
+ ]
+}

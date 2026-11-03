@@ -1,0 +1,476 @@
+{
+ "page_id": "page_552",
+ "pdf_page": 552,
+ "printed_page": "528",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:40:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. The first code element is the continuation of generate() from p.551 (the loop body and the return), indented as a method; extracted verbatim. The VisualizationCallback listing is complete on this page. Minor: the first snippet names the predicted noise `pred_noises`, while call() and denoise() use `pred_noise_masks`; same quantity, just a different local name."
+ },
+ "overview": {
+  "title": "Finishing generate(); a visualization callback",
+  "chapter": "17 Image generation",
+  "section": "17.2 Diffusion models",
+  "subsection": "17.2.6 Visualizing results with a custom callback",
+  "main_topic": "The body of the generation loop (denoise, then re-noise to the next diffusion time), denormalization of generated images, and a Keras callback that shows a 3 x 6 grid of generated images at the end of each epoch.",
+  "central_idea": "At each step generate() predicts the clean image and the noise, then rebuilds a noisy image for the next, lower diffusion time by mixing those predictions with the next step's signal and noise rates. After the last step, the predicted images are denormalized and clipped to [0, 255]. Since there is no proper metric for image quality, a custom callback calls generate() after every epoch so you can judge progress by eye.",
+  "importance": "Completes the sampler that turns noise into flowers and gives a practical way to monitor generative training, where the loss alone says little about sample quality.",
+  "learning_objectives": [
+   "Explain the re-noising update next_signal * pred_images + next_noise * pred_noises.",
+   "Explain how and why generated images are denormalized and clipped.",
+   "Describe what happens at the last iteration of the loop.",
+   "Write a Keras callback that runs generation in on_epoch_end and plots a grid of images.",
+   "Explain why visual inspection is used instead of a metric."
+  ],
+  "prerequisites": [
+   "generate() start, call() and compute_loss() (p.551)",
+   "denoise() (p.550)",
+   "keras.callbacks.Callback and its hooks (chapter 7)",
+   "Matplotlib subplots"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**End of generate().** Inside the loop started on p.551, each iteration:\n\n1. calls `self.denoise(noisy_images, noise_rates, signal_rates)` to get `pred_images` and `pred_noises` (\"Calls denoising model\");\n2. computes `next_diffusion_times = diffusion_times - step_size` and the matching `next_noise_rates, next_signal_rates` with `diffusion_schedule()`;\n3. builds the input of the next iteration as `next_signal_rates * pred_images + next_noise_rates * pred_noises` (\"Prepares noisy images for the next iteration\").\n\nSo the image is not denoised in place. Instead, the model's current guess of the clean image is re-mixed with its current guess of the noise at a slightly lower noise level. After the loop, the method returns the **last predicted clean images**, denormalized with `self.normalizer.mean + pred_images * self.normalizer.variance**0.5` and clipped with `ops.clip(images, 0.0, 255.0)` (\"Denormalizes images so their values fit between 0 and 255\").\n\n**17.2.6 Visualizing results with a custom callback.** There is no proper metric for the quality of generated images, so you should look at samples during training to see whether the model is improving. `VisualizationCallback(keras.callbacks.Callback)` stores `diffusion_steps=20`, `num_rows=3`, `num_cols=6`. In `on_epoch_end()` it calls `self.model.generate(num_images=18, diffusion_steps=20)`, creates a 12 x 6 inch figure, and fills a 3 x 6 grid of subplots: image `i = row * num_cols + col` is converted to NumPy, cast to `uint8` and shown without axes. Finally it calls `plt.tight_layout()`, `plt.show()` and `plt.close()`.\n\nThe callback is passed to `fit()` on pp.553-554.",
+ "paragraphs": [
+  {
+   "ref": "p552_e05",
+   "excerpt": "We don’t have a proper metric to judge the quality of our generated",
+   "what_it_says": "There is no proper metric for the quality of generated images, so you should visualize generated images during training to judge progress. A custom callback does this easily: it uses generate() at the end of each epoch to display a 3 x 6 grid.",
+   "what_it_means": "The training loss (MAE on noise) tells you how well the denoiser predicts noise, but not directly whether full 20-step generations look like flowers. A callback hooks into fit() and runs your code at fixed points, here once per epoch, so you can watch samples go from blobs to flowers.",
+   "why_it_matters": "For generative models, human inspection of samples is often the most informative signal during development. Beyond the book: automated scores such as FID or KID exist but need a separate pretrained network and many samples.",
+   "terminology": [
+    {
+     "term": "Callback",
+     "meaning": "An object passed to fit() whose methods (on_epoch_end, on_batch_end, ...) Keras calls at specific points of training."
+    },
+    {
+     "term": "on_epoch_end",
+     "meaning": "Callback hook called after each epoch with the epoch index and logs."
+    }
+   ],
+   "connections": [
+    "p.553: VisualizationCallback() is passed to model.fit().",
+    "p.554: the generated flowers after 100 epochs (Figure 17.12)."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "reverse_diffusion_sampling",
+   "name": "Reverse diffusion step (re-noising update)",
+   "definition": "One generation step: estimate the clean image and the noise at the current diffusion time, then recombine them with the rates of the next, lower diffusion time.",
+   "intuition": "Make your best guess of the final picture, then deliberately blur it back with a bit less static than before, and repeat. Each round the guess is made from a cleaner input.",
+   "technical": "x_{t-dt} = s(t - dt) x_hat_0 + n(t - dt) eps_hat, where (x_hat_0, eps_hat) = denoise(x_t, n(t), s(t)). Beyond the book: this is the deterministic DDIM update (eta = 0).",
+   "significance": "Makes generation a smooth, stable path from noise to image with a chosen number of steps.",
+   "example": "With 20 steps the noise rate used for re-noising goes 0.997, 0.990, ..., 0.37, 0.312 (at t = 0).",
+   "misconception": "That each step subtracts the predicted noise and keeps the result. It keeps a re-mixed version; only after the final step is the pure predicted image returned.",
+   "related": [
+    "diffusion_model",
+    "diffusion_schedule",
+    "denoise_reconstruction"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "denormalization",
+   "name": "Denormalization",
+   "definition": "Inverting the input normalization: multiply by the standard deviation and add the mean.",
+   "intuition": "Convert back from 'standard deviations from average' to pixel values.",
+   "technical": "images = mean + pred_images * sqrt(variance), using the Normalization layer's adapted statistics; then clip to [0, 255].",
+   "significance": "Needed to display or save generated images.",
+   "example": "Normalized value 1.0 with mean 110, std 70 -> pixel 180.",
+   "misconception": "That clipping is optional. Predicted values can fall outside the valid range; without clipping, the uint8 cast would wrap around.",
+   "related": [
+    "input_normalization"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "keras_callback",
+   "name": "Keras callback",
+   "definition": "An object with hook methods that fit() calls during training.",
+   "intuition": "A plug-in that watches training and acts at set moments.",
+   "technical": "Subclass keras.callbacks.Callback and override hooks such as on_epoch_end(epoch, logs); self.model refers to the model being trained.",
+   "significance": "Used here for qualitative monitoring; also for checkpointing (ModelCheckpoint, p.554) and early stopping.",
+   "example": "VisualizationCallback plots 18 samples each epoch.",
+   "misconception": "That callbacks can only read metrics. They have full access to the model and can call any of its methods, such as generate().",
+   "related": [
+    "keras_model"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Re-noising to the next diffusion time",
+   "latex": "x_{t-\\Delta} = s(t-\\Delta)\\,\\hat{x}_0 + n(t-\\Delta)\\,\\hat\\varepsilon, \\qquad \\Delta = \\frac{1}{T}",
+   "source_text": "noisy_images = (next_signal_rates * pred_images + next_noise_rates * pred_noises)",
+   "variables": [
+    {
+     "symbol": "\\hat x_0",
+     "meaning": "pred_images from denoise() at time t"
+    },
+    {
+     "symbol": "\\hat\\varepsilon",
+     "meaning": "pred_noises from denoise() at time t"
+    },
+    {
+     "symbol": "\\Delta",
+     "meaning": "step_size = 1/diffusion_steps"
+    },
+    {
+     "symbol": "s(t-\\Delta), n(t-\\Delta)",
+     "meaning": "next_signal_rates, next_noise_rates"
+    },
+    {
+     "symbol": "x_{t-\\Delta}",
+     "meaning": "noisy_images for the next iteration"
+    }
+   ],
+   "operations": "Broadcast multiply-add with (num_images, 1, 1, 1) rate tensors.",
+   "purpose": "Produces a slightly less noisy image consistent with the schedule.",
+   "interpretation": "The next input looks exactly like a training input at time t - Delta, built from the model's own estimates of image and noise.",
+   "intuition": "Rebuild the noisy image as if the true image were your current guess, but with less noise.",
+   "numerical_example": "One pixel, T = 20, going from t = 0.5 to 0.45: suppose $\\hat x_0 = 0.8$, $\\hat\\varepsilon = -0.3$. Next rates $s = 0.643$, $n = 0.766$: $x = 0.643\\cdot0.8 + 0.766\\cdot(-0.3) = 0.514 - 0.230 = 0.285$.",
+   "source": "book",
+   "book_ref": "p.552"
+  },
+  {
+   "id": "m2",
+   "title": "Denormalization and clipping",
+   "latex": "\\text{images} = \\operatorname{clip}\\!\\left(\\mu + \\hat{x}_0\\,\\sqrt{\\sigma^2},\\ 0,\\ 255\\right)",
+   "source_text": "images = (self.normalizer.mean + pred_images * self.normalizer.variance**0.5); return ops.clip(images, 0.0, 255.0)",
+   "variables": [
+    {
+     "symbol": "\\mu",
+     "meaning": "self.normalizer.mean, per-channel dataset mean"
+    },
+    {
+     "symbol": "\\sigma^2",
+     "meaning": "self.normalizer.variance, per-channel dataset variance"
+    },
+    {
+     "symbol": "\\hat x_0",
+     "meaning": "final pred_images in normalized units"
+    }
+   ],
+   "operations": "Inverse standardization, then clamping to the valid pixel range.",
+   "purpose": "Return displayable RGB values.",
+   "interpretation": "Exactly undoes the normalizer applied in call() during training.",
+   "intuition": "Back to pixel units.",
+   "numerical_example": "With $\\mu = 110$, $\\sigma = 70$: $\\hat x_0 = 2.5 \\to 285 \\to$ clipped to 255; $\\hat x_0 = -0.5 \\to 75$.",
+   "source": "book",
+   "book_ref": "p.552"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "generate() continued: denoise, re-noise, denormalize",
+   "original_code": "            pred_images, pred_noises = self.denoise(\n                noisy_images, noise_rates, signal_rates\n            )\n            next_diffusion_times = diffusion_times - step_size\n            next_noise_rates, next_signal_rates = diffusion_schedule(\n                next_diffusion_times\n            )\n            noisy_images = (\n                next_signal_rates * pred_images + next_noise_rates * pred_noises\n            )\n        images = (\n            self.normalizer.mean + pred_images * self.normalizer.variance**0.5\n        )\n        return ops.clip(images, 0.0, 255.0)",
+   "language": "python",
+   "what_it_does": "Completes the generation loop from p.551: each iteration denoises the current images and re-noises the predictions to the next diffusion time; after the loop the last predicted clean images are denormalized and clipped to [0, 255].",
+   "line_explanations": [
+    {
+     "lines": "1-3",
+     "explanation": "Callout 'Calls denoising model': predicted clean images and predicted noise at the current diffusion time."
+    },
+    {
+     "lines": "4-7",
+     "explanation": "Diffusion time and rates for the next step (one step_size lower)."
+    },
+    {
+     "lines": "8-10",
+     "explanation": "Callout 'Prepares noisy images for the next iteration': mix predicted image and predicted noise with the next rates."
+    },
+    {
+     "lines": "11-13",
+     "explanation": "After the loop: callout 'Denormalizes images so their values fit between 0 and 255', using the adapted mean and the square root of the variance (the standard deviation)."
+    },
+    {
+     "lines": "14",
+     "explanation": "Clamp to the valid pixel range."
+    }
+   ],
+   "inputs_outputs": "Loop state: noisy_images (num_images, 128, 128, 3). Output: float images in [0, 255] of the same shape.",
+   "algorithm": "for each step: (x0_hat, eps_hat) = denoise(x_t); x_{t-dt} = s(t-dt) x0_hat + n(t-dt) eps_hat. Return denormalize(x0_hat) from the last step.",
+   "theory_link": "Reverse diffusion with a deterministic update; the result is the model's final estimate of the clean image.",
+   "parameters": [
+    {
+     "name": "step_size",
+     "role": "Gap between the current and next diffusion time, 1/diffusion_steps."
+    }
+   ],
+   "pitfalls": [
+    "On the last iteration next_diffusion_times is 0 and a new noisy_images is computed but never used; the returned value is pred_images from the last denoise() call (at t = 1/T).",
+    "The normalizer must have been adapted (p.553); otherwise mean and variance would not be the dataset statistics.",
+    "Output is float; cast to uint8 before displaying, as the callback does."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "VisualizationCallback",
+   "original_code": "class VisualizationCallback(keras.callbacks.Callback):\n    def __init__(self, diffusion_steps=20, num_rows=3, num_cols=6):\n        self.diffusion_steps = diffusion_steps\n        self.num_rows = num_rows\n        self.num_cols = num_cols\n\n    def on_epoch_end(self, epoch=None, logs=None):\n        generated_images = self.model.generate(\n            num_images=self.num_rows * self.num_cols,\n            diffusion_steps=self.diffusion_steps,\n        )\n\n        plt.figure(figsize=(self.num_cols * 2.0, self.num_rows * 2.0))\n        for row in range(self.num_rows):\n            for col in range(self.num_cols):\n                i = row * self.num_cols + col\n                plt.subplot(self.num_rows, self.num_cols, i + 1)\n                img = ops.convert_to_numpy(generated_images[i]).astype(\"uint8\")\n                plt.imshow(img)\n                plt.axis(\"off\")\n        plt.tight_layout()\n        plt.show()\n        plt.close()",
+   "language": "python",
+   "what_it_does": "A Keras callback that, after every training epoch, generates 18 images with 20 diffusion steps and displays them in a 3 x 6 grid.",
+   "line_explanations": [
+    {
+     "lines": "1-5",
+     "explanation": "Store the number of generation steps and the grid layout (defaults 20, 3, 6)."
+    },
+    {
+     "lines": "7-11",
+     "explanation": "on_epoch_end: self.model is the DiffusionModel being trained (set by fit()); generate 3 * 6 = 18 images."
+    },
+    {
+     "lines": "13",
+     "explanation": "Figure of 12 x 6 inches: 2 inches per image."
+    },
+    {
+     "lines": "14-17",
+     "explanation": "Loop over grid cells; i is the flat index; subplot indices are 1-based."
+    },
+    {
+     "lines": "18",
+     "explanation": "Convert the image tensor to NumPy and cast to uint8 (values are already clipped to [0, 255])."
+    },
+    {
+     "lines": "19-20",
+     "explanation": "Show the image without axes."
+    },
+    {
+     "lines": "21-23",
+     "explanation": "Tidy spacing, display, and close the figure to free memory."
+    }
+   ],
+   "inputs_outputs": "Input: the model being trained. Output: a displayed figure each epoch; nothing returned.",
+   "algorithm": "At epoch end: generate -> lay out in a grid -> show.",
+   "theory_link": "Qualitative evaluation of a generative model in the absence of a proper metric.",
+   "parameters": [
+    {
+     "name": "diffusion_steps",
+     "role": "Steps used for the preview samples (20: 20 U-Net passes per epoch)."
+    },
+    {
+     "name": "num_rows, num_cols",
+     "role": "Grid shape; their product is the number of generated images."
+    }
+   ],
+   "pitfalls": [
+    "The constructor does not call super().__init__(). It works here because fit() sets the model on the callback, but calling super().__init__() is the safer convention for Keras callbacks.",
+    "Each epoch adds images to the notebook output; on Colab this can exceed the output limit (p.554 explains the workaround).",
+    "Generation is not free: 20 forward passes of the U-Net on 18 images every epoch."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why re-noise instead of just subtracting a bit of noise?",
+   "kind": "breakdown",
+   "body": "The denoiser was trained only on inputs of the form $s(t)\\,x_0 + n(t)\\,\\varepsilon$, i.e. on images that lie exactly on the schedule. By rebuilding the next input as $s(t-\\Delta)\\hat x_0 + n(t-\\Delta)\\hat\\varepsilon$, `generate()` makes sure every input it feeds the network looks like a training input at the stated noise level. Early on, $\\hat x_0$ is a blurry average-looking flower; as the noise rate falls, the network sees more structure and $\\hat x_0$ sharpens. (Explanation beyond the book; the update corresponds to the deterministic DDIM sampler.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Trace of a 4-step generation",
+   "kind": "step_by_step",
+   "body": "With `diffusion_steps = 4` (step_size 0.25):\n\n| step | t | (n, s) at t | next t | (n, s) at next t |\n|---|---|---|---|---|\n| 0 | 1.00 | (1.000, 0.020) | 0.75 | (0.947, 0.322) |\n| 1 | 0.75 | (0.947, 0.322) | 0.50 | (0.804, 0.594) |\n| 2 | 0.50 | (0.804, 0.594) | 0.25 | (0.586, 0.811) |\n| 3 | 0.25 | (0.586, 0.811) | 0.00 | (0.312, 0.950) |\n\nThe returned image is `pred_images` from step 3 (estimated at t = 0.25), denormalized. The re-noised image for t = 0 is computed but unused.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "The sketch-artist analogy",
+   "kind": "analogy",
+   "body": "A sketch artist works from a smudged photo. She draws her best full guess, then deliberately smudges her drawing a little less than the original and redraws from that. Each round the starting point is clearer, so the guess improves, until the last drawing is crisp.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "One iteration of the generation loop",
+   "why": "Shows the data flow of the loop body on this page: denoise at t, compute the next rates, re-noise, and the final denormalization.",
+   "mermaid": "flowchart TD\n  X[noisy_images at time t] --> D[denoise with noise and signal rates at t]\n  D --> P[pred_images]\n  D --> E[pred_noises]\n  T[t minus step_size] --> S[diffusion_schedule: next rates]\n  S --> M[next_signal * pred_images + next_noise * pred_noises]\n  P --> M\n  E --> M\n  M --> |next iteration| X\n  P --> |after last step| O[mean + pred_images * std, clip 0..255]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "generate() returns the last noisy_images.",
+   "correction": "It returns the denormalized pred_images from the last denoise() call; the final re-noised tensor is discarded."
+  },
+  {
+   "claim": "The training loss is a good measure of how realistic the generated images are.",
+   "correction": "The authors note there is no proper metric for generated image quality, hence the visualization callback."
+  },
+  {
+   "claim": "Denormalization only needs to multiply by 255.",
+   "correction": "Inputs were standardized with dataset mean and variance, so the inverse is mean + x * sqrt(variance), followed by clipping."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 551,
+    "note": "First part of generate(): initial Gaussian noise, step_size and the current rates."
+   },
+   {
+    "page": 550,
+    "note": "denoise(), called at the start of each loop iteration."
+   },
+   {
+    "page": 549,
+    "note": "The normalization layer whose statistics are used to denormalize."
+   },
+   {
+    "page": 548,
+    "note": "diffusion_schedule() used to compute the next rates."
+   }
+  ],
+  "later": [
+   {
+    "page": 553,
+    "note": "The model is instantiated, the normalizer adapted and the model compiled; fit() begins."
+   },
+   {
+    "page": 554,
+    "note": "fit() receives VisualizationCallback and ModelCheckpoint; Figure 17.12 shows generated flowers."
+   },
+   {
+    "page": 557,
+    "note": "Figure 17.15 varies the number of diffusion steps for Stable Diffusion."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 551,
+    "note": "Start of the generate() loop."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 551,
+    "note": "The forward noising equation used in training, mirrored by the re-noising update."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 551,
+    "note": "First half of generate()."
+   },
+   {
+    "page": 554,
+    "note": "Passing VisualizationCallback() to fit()."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 554,
+    "note": "Figure 17.12, examples of generated flowers."
+   }
+  ]
+ },
+ "takeaways": [
+  "Each generation step denoises, then re-noises the predicted image with the predicted noise at the next diffusion time.",
+  "The output is the last pred_images, denormalized with the adapted mean and standard deviation and clipped to [0, 255].",
+  "There is no proper metric for generated-image quality, so samples are inspected visually.",
+  "VisualizationCallback generates 18 images with 20 steps after each epoch and shows them in a 3 x 6 grid.",
+  "Callbacks can call any method of self.model, including custom ones like generate()."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "How does generate() build the input for the next iteration?",
+   "options": [
+    "noisy_images - pred_noises",
+    "next_signal_rates * pred_images + next_noise_rates * pred_noises",
+    "pred_images only",
+    "signal_rates * noisy_images + noise_rates * new random noise"
+   ],
+   "answer": "next_signal_rates * pred_images + next_noise_rates * pred_noises",
+   "explanation": "This is the line with the callout 'Prepares noisy images for the next iteration'. It reuses the predicted noise rather than fresh noise, uses the next step's rates, and is not a simple subtraction.",
+   "page_refs": [
+    552
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "What exactly does generate() return?",
+   "options": [],
+   "answer": "The predicted clean images from the last denoise() call, denormalized as normalizer.mean + pred_images * normalizer.variance**0.5 and clipped to [0, 255].",
+   "explanation": "The noisy_images computed in the final iteration are not used.",
+   "page_refs": [
+    552
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why do the authors use a callback that displays generated images rather than relying on a metric?",
+   "options": [],
+   "answer": "Because there is no proper metric to judge generated image quality; looking at samples is the practical way to tell whether the model is improving.",
+   "explanation": "Stated in the first sentence of section 17.2.6. The MAE loss measures noise prediction, not sample realism.",
+   "page_refs": [
+    552
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "math",
+   "question": "A normalized predicted pixel is -0.4 and the channel's adapted mean and variance are 100 and 3600. What pixel value does generate() return?",
+   "options": [],
+   "answer": "100 + (-0.4) * 60 = 76",
+   "explanation": "variance**0.5 = 60; the result is within [0, 255] so clipping does nothing.",
+   "page_refs": [
+    552
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "With the callback's defaults, how many images are generated per epoch and with how many diffusion steps?",
+   "options": [
+    "6 images, 3 steps",
+    "18 images, 20 steps",
+    "20 images, 18 steps",
+    "3 images, 6 steps"
+   ],
+   "answer": "18 images, 20 steps",
+   "explanation": "num_images = num_rows * num_cols = 3 * 6 = 18, and diffusion_steps defaults to 20. The other options mix up rows, columns and steps.",
+   "page_refs": [
+    552
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "Why is the image cast to uint8 before plt.imshow()?",
+   "options": [],
+   "answer": "imshow interprets float RGB data as values in [0, 1]; casting the [0, 255] values to uint8 makes Matplotlib display them correctly as 8-bit pixels.",
+   "explanation": "The same cast was used to display a dataset image on p.545. (Matplotlib behaviour is background knowledge, not stated on this page.)",
+   "page_refs": [
+    552,
+    545
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Trace generate() with diffusion_steps = 2 by hand: which diffusion times are denoised, which next times are computed, and which predictions are returned?",
+   "options": [],
+   "answer": "Denoise at t = 1.0 (next t = 0.5) and at t = 0.5 (next t = 0.0); return the denormalized pred_images from t = 0.5.",
+   "explanation": "If you can trace this, you understand the loop.",
+   "page_refs": [
+    551,
+    552
+   ]
+  }
+ ]
+}

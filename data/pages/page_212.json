@@ -1,0 +1,148 @@
+{
+ "page_id": "page_212", "pdf_page": 212, "printed_page": "188", "book_id": "dlwp3",
+ "generation": {"status": "complete", "model": "claude-opus-5-5", "generated_at": "2026-11-03T07:28:11Z",
+   "confidence": "high", "review_flags": [], "extraction_quality": "Clean; the first element continues the weight-pruning bullet from p.211, and the inline code model.quantize(\"int8\") was split across two lines by the extractor."},
+ "overview": {
+   "title": "Weight quantization, monitoring in the wild, and maintaining models",
+   "chapter": "6 The universal workflow of machine learning",
+   "section": "6.3 Deploying your model",
+   "subsection": "6.3.4 Maintaining your model",
+   "main_topic": "The end of inference optimization (pruning tradeoff, int8 weight quantization with model.quantize), section 6.3.3 on monitoring deployed models (A/B tests, manual audits, user surveys), and the start of 6.3.4 on maintenance under concept drift.",
+   "central_idea": "Deployment does not end a project. After shrinking the model (pruning, int8 quantization) and shipping it, you must measure its real impact with A/B tests, audits or surveys, and plan for its decay as concept drift erodes performance over days, weeks or years.",
+   "importance": "This page turns deployment from a one-off event into a continuing loop. The A/B testing and audit practices, and the project-specific model lifespans, are what separate a production ML system from a notebook experiment.",
+   "learning_objectives": [
+     "Explain how the amount of pruning controls the size/accuracy tradeoff",
+     "Explain why int8 quantization makes a model four times smaller, and how to apply it with model.quantize(\"int8\")",
+     "Describe what to monitor after deployment: behavior, performance on new data, interaction with the application, business metrics",
+     "Explain how randomized A/B testing isolates the model's causal impact",
+     "Choose between manual audits and alternatives such as user surveys",
+     "Relate concept drift to the expected lifespan of different models"
+   ],
+   "prerequisites": [
+     "Weight pruning introduced on p.211",
+     "Floating-point dtypes such as float32 (chapter 2)",
+     "Data annotation infrastructure (p.198–p.199)",
+     "Concept drift (p.201)",
+     "The chapter's example projects (p.196)"
+   ],
+   "page_kind": "content"
+ },
+ "summary": "The page opens by finishing the **weight pruning** bullet from p.211. Keeping only the most significant coefficients reduces the model's memory and compute footprint *at a small cost in performance metrics*, and the amount of pruning lets you control the **size/accuracy tradeoff**.\n\nThe second technique is **weight quantization**. Models are trained with `float32` weights, but the weights can be quantized to 8-bit signed integers (`int8`). The result is an inference-only model that is **four times smaller** (1 byte vs. 4 bytes per weight) and *remains near the accuracy of the original*. Keras has a built-in `quantize()` API, and `model.quantize(\"int8\")` compresses each weight to a single byte.\n\n**Section 6.3.3, Monitoring your model in the wild.** Suppose you have exported the model, integrated it, done a dry run on production data, and written unit tests and logging/status-monitoring code, so it is time to \"press the big red button\". Even then you must keep monitoring the model's behavior, its performance on new data, its interaction with the rest of the application, and its **impact on business metrics**:\n\n- Did user engagement on the online radio go up after the new recommender? Did ad click-through rate rise? Use **randomized A/B testing**: route some cases through the new model and keep a control subset on the old process. With enough cases, the difference in outcomes is likely attributable to the model.\n- Where possible, run a regular **manual audit**, reusing the annotation infrastructure: send a fraction of production data to be annotated and compare it with the model's predictions. The book says to definitely do this for the image search engine and the bad-cookie system.\n- When audits are impossible, use alternatives such as **user surveys**, e.g., for the spam and offensive-content flagging system.\n\n**Section 6.3.4, Maintaining your model**, begins: *no model lasts forever*. Because of **concept drift** (p.201), production data changes and performance and relevance slowly decay. The book estimates lifespans of *weeks* for the music recommender, *days* for credit card fraud detection, and *a couple of years at best* for the image search engine. Getting ready for the next model generation continues on p.213.",
+ "paragraphs": [
+   {"ref": "p212_e03", "excerpt": "the memory and compute footprint of your model at a small cost",
+    "what_it_says": "(End of the pruning bullet.) Pruning reduces memory and compute footprint at a small cost in performance metrics; tuning how much you prune controls the size/accuracy tradeoff.",
+    "what_it_means": "Pruning has a dial, the fraction of weights removed. A little pruning is almost free, and heavy pruning shrinks the model a lot but eventually hurts accuracy.",
+    "why_it_matters": "It frames optimization as a tradeoff you set deliberately for the target device, which matches the efficiency/accuracy point on p.210.",
+    "terminology": [{"term": "Footprint", "meaning": "The memory and compute resources a model consumes at inference time."}],
+    "connections": ["p.211: start of the weight-pruning bullet", "p.210: there is always a tradeoff between runtime efficiency and accuracy"]},
+   {"ref": "p212_e04", "excerpt": "Weight quantization—Deep learning models are trained with single-precision floating-point (float32) weights.",
+    "what_it_says": "Models are trained with float32 weights, but these can be quantized to int8, giving an inference-only model four times smaller with near-original accuracy. Keras models have a built-in quantize() API: model.quantize(\"int8\") compresses each weight to a single byte.",
+    "what_it_means": "Training needs float32 precision for tiny gradient updates (p.582), but inference tolerates much coarser numbers. Mapping each weight onto 256 integer levels keeps the forward pass nearly unchanged.",
+    "why_it_matters": "This is the most widely used, near-free compression for deployment, and Keras makes it a one-liner.",
+    "technical_idea": "Size ratio: 32 bits / 8 bits = 4. Chapter 18 (p.585) explains the mechanics: scale matmul inputs so values fit in [-127, 127], compute in int8, and rescale the output.",
+    "terminology": [
+      {"term": "float32", "meaning": "32-bit (4-byte) single-precision floating-point number."},
+      {"term": "int8", "meaning": "8-bit (1-byte) signed integer, typically used for the range [-127, 127] in quantization."},
+      {"term": "Quantization", "meaning": "Mapping continuous/high-precision values onto a small set of discrete lower-precision values."}
+    ],
+    "connections": ["p.585: int8 quantization explained in detail in chapter 18", "p.582: why training uses float32", "p.587: summary: speed up inference with float16 or int8 quantization"]},
+   {"ref": "p212_e07", "excerpt": "You’ve exported an inference model, you’ve integrated it into your application, and",
+    "what_it_says": "Once you have exported and integrated the model, dry-run it on production data, and written unit tests and logging/status-monitoring code, you're ready to deploy to production.",
+    "what_it_means": "These are the engineering checks that come before launch: a dry run (shadow inference on real data without acting on it), automated tests, and observability.",
+    "why_it_matters": "It sets up the next point: passing every pre-launch check still doesn't guarantee success in the real world.",
+    "terminology": [
+      {"term": "Dry run", "meaning": "Running the model on real production data without letting its outputs affect users, to check behavior."},
+      {"term": "Status monitoring", "meaning": "Automated tracking of a running system's health (errors, latency, throughput)."}
+    ],
+    "connections": ["p.209: exporting the inference model with export()"]},
+   {"ref": "p212_e08", "excerpt": "Even this is not the end. Once you’ve deployed a model, you",
+    "what_it_says": "After deployment, keep monitoring the model's behavior, its performance on new data, its interaction with the rest of the application, and its eventual impact on business metrics.",
+    "what_it_means": "There are four things to watch: technical behavior, statistical performance, system integration, and business value. A model can be accurate and still fail to move the business metric it was built for.",
+    "why_it_matters": "Success is defined by the project's goals (section 6.1), not by validation accuracy.",
+    "terminology": [{"term": "Business metric", "meaning": "A measure of real-world value (engagement, revenue, click-through rate) rather than a model metric like accuracy."}],
+    "connections": ["p.202: choosing a measure of success"]},
+   {"ref": "p212_e09", "excerpt": "Is user engagement in your online radio up or down after deploying",
+    "what_it_says": "Ask whether engagement or click-through rate improved after the new model. Use randomized A/B testing: a subset goes through the new model and a control subset stays on the old process. With enough cases, the outcome difference is likely attributable to the model.",
+    "what_it_means": "A before/after comparison mixes the model's effect with everything else that changed, such as seasonality, UI changes or marketing. Random assignment makes the two groups statistically equivalent, so the remaining difference can be attributed to the model.",
+    "why_it_matters": "A/B testing is the standard way to establish that a model actually causes the business improvement.",
+    "technical_idea": "Beyond the book: the measured lift is $\\hat\\Delta = \\bar y_{\\text{new}} - \\bar y_{\\text{control}}$; 'sufficiently many cases' means enough samples for the standard error of $\\hat\\Delta$ to be small relative to the effect.",
+    "terminology": [
+      {"term": "Randomized A/B testing", "meaning": "Randomly splitting traffic between a new treatment (B) and a control (A) to measure the treatment's causal effect."},
+      {"term": "Control subset", "meaning": "The group that keeps the old process, serving as the comparison baseline."},
+      {"term": "Click-through rate", "meaning": "Fraction of ad impressions that are clicked."}
+    ],
+    "connections": ["p.196: music recommender and ad click-through prediction projects"]},
+   {"ref": "p212_e10", "excerpt": "If possible, do a regular manual audit of the model’s predictions on",
+    "what_it_says": "Regularly audit predictions on production data by hand, reusing the annotation infrastructure: annotate a fraction of production data and compare with the model's predictions. Definitely do this for the image search engine and the bad-cookie-flagging system.",
+    "what_it_means": "This creates a fresh labeled test set drawn from the live distribution, which directly measures production accuracy and catches drift and training/production mismatch.",
+    "why_it_matters": "Offline test sets go stale. Audits keep evaluation honest after launch.",
+    "terminology": [{"term": "Manual audit", "meaning": "Human review and labeling of a sample of the model's production inputs to check its predictions."}],
+    "connections": ["p.199: annotation infrastructure for the cookie project (cameras plus human labelers)", "p.200: training data must be representative of production data"]},
+   {"ref": "p212_e11", "excerpt": "When manual audits are impossible, consider alternative evaluation avenues such as user",
+    "what_it_says": "When manual audits are impossible, use alternatives such as user surveys, for example for the spam and offensive-content flagging system.",
+    "what_it_means": "For the end-to-end encrypted chat app, the team cannot read messages to audit them, so it asks users whether spam or offensive content slipped through.",
+    "why_it_matters": "Privacy constraints shape monitoring as well as deployment.",
+    "terminology": [{"term": "User survey", "meaning": "Asking users directly about their experience as an indirect quality signal."}],
+    "connections": ["p.210: spam model runs on-device because messages are end-to-end encrypted"]},
+   {"ref": "p212_e14", "excerpt": "Lastly, no model lasts forever. You’ve already learned about concept drift: over",
+    "what_it_says": "No model lasts forever: because of concept drift, production data changes and slowly degrades the model's performance and relevance. Estimated lifespans: weeks for the music recommender, days for credit card fraud detection, a couple of years at best for image search.",
+    "what_it_means": "The speed of drift depends on the domain. Taste changes quickly, fraudsters adapt every day (an adversarial setting), and the visual world changes slowly.",
+    "why_it_matters": "Retraining cadence and data pipelines have to be planned from day one, and the lifespan estimate tells you how often to retrain.",
+    "terminology": [{"term": "Concept drift", "meaning": "Change over time in the properties of production data (and their relation to targets), causing model accuracy to decay."}],
+    "connections": ["p.201: concept drift defined; especially acute in fraud detection", "p.213: preparing the next model generation"]}
+ ],
+ "concepts": [
+   {"id": "weight_pruning", "name": "Weight pruning", "definition": "Keeping only the most significant coefficients in weight tensors to lower parameter count.", "intuition": "Trim weights that barely matter.", "technical": "Reduces memory and compute footprint at a small cost in metrics; the pruning amount controls the size/accuracy tradeoff.", "significance": "Lets models fit device constraints.", "example": "Pruning 50% of the weights of each layer before exporting to TensorFlow Lite.", "misconception": "That pruning is all-or-nothing. It is a tunable dial.", "related": ["weight_quantization", "inference_optimization"], "source": "book"},
+   {"id": "weight_quantization", "name": "Weight quantization", "definition": "Converting float32 weights to a lower-precision type such as int8 for inference.", "intuition": "Rounding prices to the nearest cent instead of a tenth of a cent: tiny error, much less to write.", "technical": "int8 uses 1 byte vs. 4 for float32, so the model is 4× smaller while staying near the original accuracy; Keras offers model.quantize(\"int8\"). Details on p.585.", "significance": "Simple, highly effective compression for deployment.", "example": "A 100M-parameter model: 400 MB in float32 → 100 MB in int8.", "misconception": "That quantized models are meant for further training. The book calls them inference-only.", "related": ["weight_pruning", "inference_optimization"], "source": "book"},
+   {"id": "production_monitoring", "name": "Monitoring a deployed model", "definition": "Continuously tracking a model's behavior, performance on new data, integration and business impact after launch.", "intuition": "A doctor's follow-up visits after surgery, not just the operation itself.", "technical": "Tools include A/B tests, manual audits via the annotation pipeline, and user surveys when audits are impossible.", "significance": "Detects failures and drift that pre-launch testing cannot.", "example": "Sending 1% of cookie images to human labelers each week and comparing with model flags.", "misconception": "That good test-set accuracy means the job is done.", "related": ["ab_testing", "concept_drift"], "source": "book"},
+   {"id": "ab_testing", "name": "Randomized A/B testing", "definition": "Randomly routing some cases through the new model and a control subset through the old process, then comparing outcomes.", "intuition": "A clinical trial for your model.", "technical": "Randomization balances confounders, so with enough cases the outcome difference is likely attributable to the model.", "significance": "Isolates the causal effect of the model from other changes.", "example": "50% of radio listeners get the new recommender; compare engagement with the other 50%.", "misconception": "That before/after comparisons are sufficient. Other changes confound them.", "related": ["production_monitoring"], "source": "book"},
+   {"id": "concept_drift", "name": "Concept drift", "definition": "Change over time in the characteristics of production data, gradually degrading model performance and relevance.", "intuition": "A map slowly going out of date as the city changes.", "technical": "Drift rate depends on domain: weeks (music), days (fraud, adversarial), years (image search).", "significance": "Means models must be maintained and retrained.", "example": "Fraud patterns changing practically every day (p.201).", "misconception": "That a model, once accurate, stays accurate.", "related": ["production_monitoring", "model_maintenance"], "source": "book"},
+   {"id": "model_maintenance", "name": "Model maintenance", "definition": "Planning for and building replacement model generations as deployed models decay.", "intuition": "Scheduled servicing of a car.", "technical": "Driven by concept drift; continued on p.213 (watch for production data changes, keep collecting/annotating hard samples).", "significance": "Closes the loop of the universal workflow.", "example": "Retraining the music recommender every few weeks.", "misconception": "That deployment is the last step.", "related": ["concept_drift"], "source": "book"}
+ ],
+ "math": [
+   {"id": "m1", "title": "Size reduction from int8 quantization", "latex": "\\frac{\\text{size}_{\\text{float32}}}{\\text{size}_{\\text{int8}}} = \\frac{N \\times 32\\ \\text{bits}}{N \\times 8\\ \\text{bits}} = 4", "source_text": "quantize weights to 8-bit signed integers (int8) to get an inference-only model that's four times smaller", "variables": [{"symbol": "N", "meaning": "number of weights (parameters) in the model"}], "operations": "Ratio of storage per weight: 4 bytes vs. 1 byte.", "purpose": "Explains the book's 'four times smaller' figure.", "interpretation": "Every weight shrinks from 4 bytes to 1, so the weight storage shrinks 4× regardless of model size.", "intuition": "Same number of weights, a quarter of the bits each.", "numerical_example": "A model with $N = 25{,}000{,}000$ weights: float32 → $25\\text{M}\\times 4 = 100$ MB; int8 → $25$ MB.", "source": "book", "book_ref": "p.212"},
+   {"id": "m2", "title": "Symmetric int8 quantization of a weight tensor", "latex": "\\begin{aligned} s &= \\frac{127}{\\max_i |w_i|} \\\\ q_i &= \\operatorname{round}(s\\, w_i) \\in [-127, 127] \\\\ \\hat w_i &= q_i / s \\end{aligned}", "source_text": "(not printed on this page; chapter 18 describes scaling tensors to fit [-127, 127], casting to int8, and unscaling)", "variables": [{"symbol": "w_i", "meaning": "original float32 weight"}, {"symbol": "s", "meaning": "scale factor mapping the largest |weight| to 127"}, {"symbol": "q_i", "meaning": "stored int8 value"}, {"symbol": "\\hat w_i", "meaning": "dequantized approximation of the weight"}], "operations": "Scale, round to the nearest integer, store as int8; divide by the scale to recover an approximation.", "purpose": "Shows why int8 stays 'near the accuracy of the original': the rounding error is at most $1/(2s)$ per weight.", "interpretation": "The weights are snapped to a grid of 255 evenly spaced levels across their range.", "intuition": "Measuring with a ruler that has 255 tick marks across the weight range.", "numerical_example": "Weights $[0.50, -0.20, 0.05]$: $s = 127/0.5 = 254$; $q = [127, -51, 13]$; $\\hat w = [0.500, -0.2008, 0.0512]$, errors below 0.002.", "source": "ai_explanation", "book_ref": "p.585"}
+ ],
+ "code": [],
+ "deeper": [
+   {"title": "Using model.quantize in practice", "kind": "application", "body": "The book's one-liner is `model.quantize(\"int8\")`. A typical flow (our illustration, not from the book): train in float32 → evaluate → `model.quantize(\"int8\")` → re-evaluate on validation data to confirm accuracy is \"near the original\" → `export()` for the target runtime. Always measure after quantizing, because some models (or layers) are more sensitive than others.", "source": "ai_explanation"},
+   {"title": "Why randomization isolates the model's effect", "kind": "breakdown", "body": "Suppose you launch a recommender in December, and engagement rises 8%. Was it the model or the holidays? In an A/B test both groups experience December, and random assignment means they have the same mix of users on average. The only systematic difference is the model, so the gap between groups estimates its effect. 'Sufficiently many cases' matters because with few users random noise can look like an effect.", "source": "ai_explanation"},
+   {"title": "Reading the lifespan estimates", "kind": "breakdown", "body": "The book's lifespans follow how fast each domain changes: **days** for fraud detection (adversaries actively adapt, p.201), **weeks** for music recommendations (tastes and new releases change constantly), and **a couple of years at best** for image search (what objects look like changes slowly). Our inference: retraining frequency should match, so retrain fraud models daily, recommenders weekly or monthly, image search yearly.", "source": "inference"},
+   {"title": "Analogy: launching a product vs. running a shop", "kind": "analogy", "body": "Pre-launch tests are the grand opening inspection. Monitoring is checking the till and talking to customers every day. Maintenance is restocking as fashions change. A shop that passes the inspection and is then left alone soon goes out of business.", "source": "analogy"}
+ ],
+ "visualizations": [
+   {"id": "v1", "type": "mermaid", "title": "After launch: monitor, audit, maintain", "why": "Sections 6.3.3 and 6.3.4 describe a continuing loop of monitoring methods and drift-driven maintenance.", "mermaid": "flowchart TD\n  A[Optimized inference model<br/>pruning + model.quantize int8] --> B[Dry run, unit tests, logging]\n  B --> C[Deploy to production]\n  C --> D{Monitor}\n  D --> E[Randomized A/B test<br/>new model vs control]\n  D --> F[Manual audit<br/>annotate sample of production data]\n  D --> G[User surveys<br/>when audits are impossible]\n  E & F & G --> H[Concept drift degrades performance<br/>days: fraud / weeks: music / years: image search]\n  H --> I[Train next generation p.213]\n  I --> A"},
+   {"id": "v2", "type": "chart", "title": "Weight storage: float32 vs int8", "why": "Illustrates the page's 'four times smaller' claim for int8 quantization (illustrative model sizes).", "chart": {"type": "bar", "data": {"labels": ["10M params", "100M params", "1B params"], "datasets": [{"label": "float32 (MB)", "data": [40, 400, 4000]}, {"label": "int8 (MB)", "data": [10, 100, 1000]}]}, "options": {"scales": {"y": {"type": "logarithmic", "title": {"display": true, "text": "MB (log scale)"}}}}}}
+ ],
+ "misconceptions": [
+   {"claim": "Quantizing to int8 badly damages accuracy.", "correction": "The book says the int8 model remains near the accuracy of the original while being four times smaller."},
+   {"claim": "If a model passed its dry run and unit tests, monitoring is unnecessary.", "correction": "The book stresses that even then you must monitor behavior, performance on new data, integration and business impact."},
+   {"claim": "Comparing metrics before and after launch shows the model's impact.", "correction": "Other changes confound such comparisons. Randomized A/B testing with a control subset isolates the model's effect."},
+   {"claim": "All models degrade at the same rate.", "correction": "Lifespans differ widely: days for fraud detection, weeks for music recommendation, a couple of years at best for image search."}
+ ],
+ "connections": {
+   "earlier": [{"page": 211, "note": "Inference optimization introduced; start of the weight pruning bullet."}, {"page": 201, "note": "Concept drift defined; especially acute for fraud detection."}, {"page": 199, "note": "Annotation infrastructure, e.g., cameras and labelers for the cookie project."}, {"page": 202, "note": "Choosing a measure of success."}],
+   "later": [{"page": 213, "note": "Getting ready to train the next generation; chapter summary."}, {"page": 585, "note": "int8 quantization mechanics in chapter 18."}, {"page": 624, "note": "Conclusion: keep monitoring real-world performance to refine the next iteration."}],
+   "prerequisites": [{"page": 582, "note": "Why models are trained in float32."}],
+   "related_math": [{"page": 585, "note": "Scaling into [-127, 127] for int8 matmuls."}],
+   "related_code": [],
+   "related_figures": []
+ },
+ "takeaways": [
+   "The amount of pruning you apply controls the tradeoff between model size and accuracy.",
+   "int8 quantization makes a model 4× smaller (1 byte vs. 4 per weight) with near-original accuracy; in Keras, call model.quantize(\"int8\").",
+   "After launch, monitor behavior, performance on new data, integration with the app, and business metrics.",
+   "Use randomized A/B tests with a control group to attribute outcome changes to the model.",
+   "Audit production predictions by reusing the annotation pipeline; use user surveys when audits are impossible (e.g., encrypted chat).",
+   "Concept drift means no model lasts forever: days for fraud, weeks for music recommendation, a couple of years for image search."
+ ],
+ "questions": [
+   {"id": "q1", "type": "math", "question": "A model has 60 million float32 weights. Roughly how much weight storage does it need before and after model.quantize(\"int8\")?", "options": [], "answer": "About 240 MB before (60M × 4 bytes) and 60 MB after (60M × 1 byte), a 4× reduction.", "explanation": "float32 uses 4 bytes per weight; int8 uses 1 byte, matching the book's 'four times smaller'.", "page_refs": [212]},
+   {"id": "q2", "type": "mcq", "question": "What is the purpose of the control subset in a randomized A/B test of a new recommender?", "options": ["To provide extra training data for the new model", "To keep the old process so that outcome differences can be attributed to the new model", "To test the model's latency under load", "To collect user surveys"], "answer": "To keep the old process so that outcome differences can be attributed to the new model", "explanation": "The book says the control subset sticks to the old process, and with enough cases the outcome difference is likely attributable to the model. The other options describe unrelated activities.", "page_refs": [212]},
+   {"id": "q3", "type": "short", "question": "How does the book suggest auditing model predictions in production, and for which two projects does it say you should definitely do so?", "options": [], "answer": "Reuse the annotation infrastructure: send a fraction of production data for manual annotation and compare it with the model's predictions. Definitely do it for the image search engine and the bad-cookie-flagging system.", "explanation": "Stated in the second monitoring bullet.", "page_refs": [212]},
+   {"id": "q4", "type": "conceptual", "question": "Why does the book suggest user surveys rather than manual audits for the spam and offensive-content flagging system?", "options": [], "answer": "The chat app's messages are end-to-end encrypted, so the team cannot sample and annotate production messages, and a manual audit is impossible. User surveys are an alternative signal.", "explanation": "This combines the third bullet with the encryption constraint from p.210.", "page_refs": [212, 210]},
+   {"id": "q5", "type": "mcq", "question": "According to the book, which model has the shortest expected lifespan?", "options": ["Image search engine", "Music recommender", "Credit card fraud detection", "Bad-cookie detector"], "answer": "Credit card fraud detection", "explanation": "The book gives days for fraud detection, weeks for music recommendation and a couple of years at best for image search. No lifespan is given for the cookie detector.", "page_refs": [212]},
+   {"id": "q6", "type": "conceptual", "question": "Why can a model be trained in float32 but deployed in int8?", "options": [], "answer": "Training needs high precision to accumulate tiny gradient updates, while inference only needs the forward pass to be approximately right. Rounding weights to 256 levels changes outputs very little, so accuracy stays near the original.", "explanation": "The page notes that int8 models are inference-only and near the original's accuracy. Chapter 18 (p.582, p.585) explains the precision reasoning.", "page_refs": [212, 582, 585]},
+   {"id": "q7", "type": "self", "question": "List the four things the book says to keep monitoring after deployment.", "options": [], "answer": "The model's behavior, its performance on new data, its interaction with the rest of the application, and its eventual impact on business metrics.", "explanation": "From the paragraph opening 'Even this is not the end.'", "page_refs": [212]}
+ ]
+}

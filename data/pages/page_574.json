@@ -1,0 +1,517 @@
+{
+ "page_id": "page_574",
+ "pdf_page": 574,
+ "printed_page": "550",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:20:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "The text says the two half outputs are merged 'by concatenating them like this:', but the code that follows only computes half_output_0 and half_output_1. The concatenation step (e.g., keras.ops.concatenate([half_output_0, half_output_1], axis=-1)) is missing from the printed snippet. The notes point this out and supply it as illustrative code.",
+   "Wording in e06: 'you will replicate that split model across multiple groups of two devices—let's say two'. Each group has four devices and there are two groups (as the same sentence and figure 18.2 say), so 'groups of two devices' looks like an editing slip for 'multiple groups of devices'."
+  ],
+  "extraction_quality": "Clean. The code element was extracted without its blank lines (restored from the image). e04 merges the horizontal-partitioning and vertical-partitioning paragraphs, which are covered by two notes. e08 continues on p.575."
+ },
+ "overview": {
+  "title": "Horizontal vs vertical partitioning; JAX for distributed training",
+  "chapter": "18 Best practices for the real world",
+  "section": "18.2 Scaling up model training with multiple devices",
+  "subsection": "18.2.2 Distributed training in practice",
+  "main_topic": "Sharding a model: splitting by layers (horizontal) versus splitting each layer's tensors (vertical), illustrated by halving a Dense kernel across two GPUs",
+  "central_idea": "To fit a model across devices you shard it. Putting different layers on different devices (horizontal partitioning) forces activations to move between devices and can leave GPUs idle. Splitting every layer's kernel and bias across devices (vertical partitioning) uses the parallel structure of matmul and is almost always best for large models. In practice you combine this with data parallelism, and in Keras you do it on the JAX backend.",
+  "importance": "Vertical partitioning is the idea behind the LayoutMap sharding rules on p.577-578 ('shard the last dimension along the model axis'). This page shows by hand what Keras later automates.",
+  "learning_objectives": [
+   "Define sharding/partitioning of a model.",
+   "Contrast horizontal and vertical partitioning and explain the communication drawback of horizontal partitioning.",
+   "Derive the half-kernel and half-bias shapes when splitting Dense(64000) over two devices.",
+   "Explain why concatenating column-split matmul outputs reproduces the full layer output.",
+   "Explain how data and model parallelism are combined across 8 devices."
+  ],
+  "prerequisites": [
+   "Listing 18.4 and its parameter counts (p.573)",
+   "Matrix multiplication and the Dense layer as matmul(inputs, kernel) + bias (chapter 2)",
+   "Tensor slicing (chapter 2)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes the parameter count for Listing 18.4: the last layer has about **512 million** parameters (the first about 1 billion). On **two small devices**, data parallelism is impossible because the model does not fit on either one. Instead you *split* one instance of the model across devices, which is called **sharding** or **partitioning**. There are two ways:\n\n- **Horizontal partitioning**: each device runs *different layers*. GPU 0 runs the first `Dense`, GPU 1 the second. The drawback is **communication overhead**: the first layer's output must be copied to the second device before the second layer can run. If that output is large, this becomes a bottleneck and GPUs sit idle.\n- **Vertical partitioning**: *each layer* is split across all devices. Layers are built from highly parallelizable `matmul` and `convolution` operations, so this is easy to implement and **almost always the best fit for large models**. For the first `Dense`, split the kernel along its last axis into two `(16000, 32000)` halves and the bias into two `(32000,)` halves. Each device computes `matmul(inputs, kernel) + bias` with its halves, and the two outputs are **concatenated**.\n\nThe code snippet slices `kernel` and `bias` and computes each half on `gpu:0` and `gpu:1` using `keras.device(...)` scopes. (The concatenation the text announces is not shown; see the review flag.)\n\nIn reality, data and model parallelism are **mixed**: the model is split across four devices and that split model is replicated twice, each copy handling a sub-batch, for **8 devices** (figure 18.2, p.575).\n\nSection **18.2.2** then begins: the book covers only the **JAX backend**, which the authors call the most performant and scalable Keras backend 'by a mile' (the sentence continues on p.575).",
+ "paragraphs": [
+  {
+   "ref": "p574_e03",
+   "excerpt": "parameters, and the last one has about 512 million parameters. If you’re working with two",
+   "what_it_says": "The last layer of Listing 18.4 has about 512 million parameters. With two small devices you cannot use data parallelism, because the model does not fit on either one. You can split one instance of the model across devices, which is called sharding or partitioning. There are two main ways: horizontal and vertical partitioning.",
+   "what_it_means": "About 1.5 B parameters is about 6 GB of float32 weights, and roughly 4x that in training with Adam. Two small devices can hold this only if each holds part of it.",
+   "why_it_matters": "It introduces 'sharding', the word Keras uses in its LayoutMap API (p.577).",
+   "terminology": [
+    {
+     "term": "Sharding / partitioning",
+     "meaning": "Splitting the variables (and the associated computation) of a single model instance across several devices."
+    }
+   ],
+   "connections": [
+    "p.573: Listing 18.4 and the 1-billion-parameter first layer",
+    "p.577: replicate vs shard decisions per variable dimension"
+   ]
+  },
+  {
+   "ref": "p574_e04",
+   "excerpt": "In horizontal partitioning, each device processes different layers of the model. For example, in",
+   "what_it_says": "In horizontal partitioning, each device processes different layers. In Listing 18.4, one GPU would run the first Dense layer and the other the second. The main drawback is communication overhead: the first layer's output has to be copied to the second device before the second layer can process it. This becomes a bottleneck if that output is large, and GPUs can end up idle.",
+   "what_it_means": "The layers depend on each other in sequence, so while GPU 0 computes layer 1, GPU 1 waits, and vice versa. Plus there is a transfer of a (batch, 64000) activation tensor at every step, and its gradient on the way back.",
+   "why_it_matters": "It explains why naive layer-per-GPU placement gives poor utilisation.",
+   "technical_idea": "Beyond the book: this is pipeline parallelism. Production systems (GPipe, 1F1B schedules) reduce the idle time by splitting each batch into micro-batches so different stages work on different micro-batches at once.",
+   "terminology": [
+    {
+     "term": "Horizontal partitioning",
+     "meaning": "Placing different layers (stages) of the model on different devices."
+    },
+    {
+     "term": "Communication overhead",
+     "meaning": "Time spent moving tensors between devices instead of computing."
+    }
+   ],
+   "connections": [
+    "p.572: model parallelism suits naturally multi-branch architectures"
+   ]
+  },
+  {
+   "ref": "p574_e04",
+   "excerpt": "In vertical partitioning, each layer is split across all available devices. Since layers are",
+   "what_it_says": "In vertical partitioning, each layer is split across all devices. Layers are mostly matmul or convolution operations, which are highly parallelizable, so this is easy to implement and almost always the best fit for large models. For example, split the first Dense layer's kernel and bias into halves: each device gets a (16000, 32000) kernel, split along its last axis, and a (32000,) bias. Each device computes matmul(inputs, kernel) + bias with its halves, and the two outputs are concatenated.",
+   "what_it_means": "Splitting the kernel by columns splits the output units: device 0 computes units 0-31,999 and device 1 computes units 32,000-63,999. Both devices need the full input. The halves do not depend on each other, so both devices work at the same time with no idle waiting.",
+   "why_it_matters": "This is the core move behind tensor parallelism and behind the rule of thumb on p.578: shard the last dimension along the 'model' axis.",
+   "technical_idea": "Column split: x [W_0 | W_1] + [b_0 | b_1] = [x W_0 + b_0 | x W_1 + b_1]. Elementwise activations like ReLU can be applied to each half before concatenating.",
+   "terminology": [
+    {
+     "term": "Vertical partitioning",
+     "meaning": "Splitting each layer's weight tensors across devices so every device computes a slice of every layer (tensor parallelism)."
+    }
+   ],
+   "connections": [
+    "p.577: sharding a (32, 64) variable into four (32, 16) chunks",
+    "p.578: shard the last dimension along the 'model' mesh axis"
+   ]
+  },
+  {
+   "ref": "p574_e06",
+   "excerpt": "In reality, you will want to mix data parallelism and model parallelism. You will split",
+   "what_it_says": "In reality you mix both forms. Split the model across, say, four devices, and replicate that split model across groups of devices (say two), each handling one sub-batch in parallel. That gives two replicas of four devices each, eight devices in total (figure 18.2).",
+   "what_it_means": "Model-parallel degree 4 x data-parallel degree 2 = 8 devices. Gradients are averaged across the 2 replicas, while each replica's weights are spread over its 4 devices.",
+   "why_it_matters": "This is the exact configuration that the 2 x 4 DeviceMesh on p.576 encodes.",
+   "technical_idea": "Note: 'groups of two devices' in the printed text is probably a slip; each group has four devices (see review flags).",
+   "connections": [
+    "p.575: figure 18.2",
+    "p.576: DeviceMesh(shape=(2, 4), axis_names=['data', 'model'])",
+    "p.577: axis 0 for data, axis 1 for model"
+   ]
+  },
+  {
+   "ref": "p574_e08",
+   "excerpt": "Now let’s see how to implement these concepts in practice. We will only cover the",
+   "what_it_says": "Section 18.2.2 starts implementing these ideas, covering only the JAX backend because it is the most performant and scalable Keras backend by a mile. The sentence continues on p.575: if you do large-scale distributed training without JAX, you are wasting money.",
+   "what_it_means": "Keras 3's keras.distribution API (DataParallel, DeviceMesh, LayoutMap, ModelParallel) is implemented on top of JAX's sharding system (jax.sharding / XLA's partitioner), which compiles a single program and inserts the cross-device communication automatically.",
+   "why_it_matters": "If you want to run the following code, set KERAS_BACKEND=jax.",
+   "technical_idea": "Beyond the book: XLA's partitioner (SPMD/GSPMD) takes sharding annotations on variables and propagates them through the computation graph, which is why the book can later say you only need to annotate variables (p.577).",
+   "connections": [
+    "p.106: introduction to JAX",
+    "p.575: the continuation and the DataParallel one-liner"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "sharding",
+   "name": "Sharding (model partitioning)",
+   "definition": "Splitting one model instance's variables and computation across multiple devices.",
+   "intuition": "Cutting one large book into chapters held by different readers.",
+   "technical": "Done per variable dimension: replicate or split along a mesh axis (p.577).",
+   "significance": "The only way to train models larger than a device's memory.",
+   "example": "The (16000, 64000) kernel cut into two (16000, 32000) shards.",
+   "misconception": "That sharding means each device holds a different layer. That is only one form (horizontal); vertical sharding splits inside layers.",
+   "related": [
+    "model_parallelism",
+    "vertical_partitioning"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "horizontal_partitioning",
+   "name": "Horizontal partitioning",
+   "definition": "Each device runs a different set of layers.",
+   "intuition": "An assembly line: station 2 waits for station 1.",
+   "technical": "Requires transferring activations between devices at stage boundaries; sequential dependence causes idle devices unless pipelined with micro-batches.",
+   "significance": "Simple to reason about but often communication-bound.",
+   "example": "GPU 0 runs Dense(64000), GPU 1 runs Dense(8000).",
+   "misconception": "That it runs both devices at full speed. Without pipelining, only one stage works at a time.",
+   "related": [
+    "vertical_partitioning",
+    "model_parallelism"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "vertical_partitioning",
+   "name": "Vertical partitioning",
+   "definition": "Each layer's weight tensors are split across all devices; each device computes a slice of every layer.",
+   "intuition": "Several painters each painting a different vertical strip of the same wall at the same time.",
+   "technical": "Column-split matmul: x[W0|W1] = [xW0|xW1]; outputs concatenated along the feature axis.",
+   "significance": "Almost always the best fit for large models, according to the book.",
+   "example": "Half-kernels of shape (16000, 32000) on gpu:0 and gpu:1.",
+   "misconception": "That it needs no communication. Inputs must be available on every device and outputs must be gathered (or kept sharded for the next layer).",
+   "related": [
+    "sharding",
+    "model_parallelism"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "model_parallelism",
+   "name": "Model parallelism",
+   "definition": "Splitting a model across devices that process the same batch.",
+   "intuition": "Share the model, not the data.",
+   "technical": "Implemented by horizontal or vertical partitioning; combined with data parallelism in practice.",
+   "significance": "Needed for models that do not fit on one device.",
+   "example": "2 replicas x 4 shards = 8 GPUs.",
+   "misconception": "That it is used instead of data parallelism. Real setups use both.",
+   "related": [
+    "data_parallelism",
+    "sharding"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Column-split matmul for vertical partitioning",
+   "latex": "x\\,[\\,W_0 \\mid W_1\\,] + [\\,b_0 \\mid b_1\\,] = [\\,x W_0 + b_0 \\;\\mid\\; x W_1 + b_1\\,]",
+   "source_text": "split the kernel and bias of the first Dense layer into two halves so that each device only receives a kernel of shape (16000, 32000) (split along its last axis) and a bias of shape (32000,). You'd compute matmul(inputs, kernel) + bias with this half-kernel and half-bias for each device, and you'd merge the two outputs by concatenating them",
+   "variables": [
+    {
+     "symbol": "x",
+     "meaning": "inputs, shape (batch, 16000), needed in full on both devices"
+    },
+    {
+     "symbol": "W_0, W_1",
+     "meaning": "kernel[:, :32000] and kernel[:, 32000:], each (16000, 32000)"
+    },
+    {
+     "symbol": "b_0, b_1",
+     "meaning": "bias[:32000] and bias[32000:], each (32000,)"
+    },
+    {
+     "symbol": "\\mid",
+     "meaning": "concatenation along the last (feature) axis"
+    }
+   ],
+   "operations": "Each column of the output depends only on the matching column of W and entry of b, so the columns can be computed separately and placed side by side.",
+   "purpose": "Shows why the per-device halves concatenated give exactly the full Dense output.",
+   "interpretation": "Device k computes output units 32000k to 32000k + 31999 for all samples.",
+   "intuition": "Each output neuron is an independent dot product; assign half the neurons to each GPU.",
+   "numerical_example": "x = [1, 2], W = [[1, 0, 2, 1], [0, 1, 1, 3]], b = 0. Full xW = [1, 2, 4, 7]. Split W0 = first two columns gives [1, 2]; W1 = last two gives [4, 7]. Concatenated: [1, 2, 4, 7].",
+   "source": "book",
+   "book_ref": "p.574"
+  },
+  {
+   "id": "m2",
+   "title": "Shard shapes and per-device parameters",
+   "latex": "\\text{kernel}: (16000, 64000) \\xrightarrow{\\text{split last axis in } 2} 2\\times(16000, 32000),\\quad 16000\\times 32000 + 32000 = 512{,}032{,}000",
+   "source_text": "a kernel of shape (16000, 32000) (split along its last axis) and a bias of shape (32000,)",
+   "variables": [
+    {
+     "symbol": "(16000, 64000)",
+     "meaning": "full first-layer kernel"
+    },
+    {
+     "symbol": "(16000, 32000)",
+     "meaning": "per-device half-kernel"
+    }
+   ],
+   "operations": "Divide the last dimension by the number of devices.",
+   "purpose": "Quantifies how much each device holds after vertical partitioning.",
+   "interpretation": "Each GPU stores about 512 M parameters of the first layer (about 2 GB in float32) instead of about 1 B.",
+   "intuition": "Halving the number of output units halves the layer's memory per device.",
+   "source": "book",
+   "book_ref": "p.574"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Splitting a Dense kernel and bias across two GPUs by hand",
+   "original_code": "half_kernel_0 = kernel[:, :32000]\nhalf_bias_0 = bias[:32000]\n\nhalf_kernel_1 = kernel[:, 32000:]\nhalf_bias_1 = bias[32000:]\n\nwith keras.device(\"gpu:0\"):\n    half_output_0 = keras.ops.matmul(inputs, half_kernel_0) + half_bias_0\n\nwith keras.device(\"gpu:1\"):\n    half_output_1 = keras.ops.matmul(inputs, half_kernel_1) + half_bias_1",
+   "language": "python",
+   "what_it_does": "Slices the first Dense layer's kernel and bias into two column halves and computes each half of the layer output on a different GPU.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "First half: all rows, columns 0-31,999 of the (16000, 64000) kernel, and bias entries 0-31,999."
+    },
+    {
+     "lines": "4-5",
+     "explanation": "Second half: columns 32,000-63,999 and the matching bias entries."
+    },
+    {
+     "lines": "7-8",
+     "explanation": "Inside a keras.device(\"gpu:0\") scope, compute inputs @ half_kernel_0 + half_bias_0, a (batch, 32000) tensor."
+    },
+    {
+     "lines": "10-11",
+     "explanation": "The same on gpu:1 with the second halves. The two computations are independent and can run at the same time."
+    }
+   ],
+   "inputs_outputs": "inputs (batch, 16000), kernel (16000, 64000), bias (64000,) -> half_output_0 and half_output_1, each (batch, 32000). Concatenating them along axis -1 gives (batch, 64000).",
+   "algorithm": "Manual vertical (tensor) partitioning of one affine layer.",
+   "theory_link": "Implements math m1. Keras automates exactly this with a LayoutMap entry such as (None, \"model\") for the kernel (p.577).",
+   "parameters": [
+    {
+     "name": "32000",
+     "role": "split point = 64000 / 2 devices"
+    },
+    {
+     "name": "keras.device(\"gpu:k\")",
+     "role": "context manager placing the enclosed ops (and new tensors) on device k"
+    }
+   ],
+   "pitfalls": [
+    "The printed snippet stops before the merge. You still need keras.ops.concatenate([half_output_0, half_output_1], axis=-1).",
+    "Slicing a full kernel that already sits on one device defeats the purpose: in a real setup each half must be created on its own device from the start (which the LayoutMap API does).",
+    "The ReLU of the first layer is not applied here; it can be applied to each half independently.",
+    "inputs must be present on both devices, which costs a copy."
+   ],
+   "illustrative_code": "# AI-written: complete the example with the merge step and a correctness check (small sizes)\nimport numpy as np\nimport keras\nx = np.random.rand(4, 16).astype('float32')\nkernel = np.random.rand(16, 64).astype('float32')\nbias = np.random.rand(64).astype('float32')\nh0 = keras.ops.matmul(x, kernel[:, :32]) + bias[:32]\nh1 = keras.ops.matmul(x, kernel[:, 32:]) + bias[32:]\nout = keras.ops.concatenate([h0, h1], axis=-1)\nfull = keras.ops.matmul(x, kernel) + bias\nprint(np.allclose(out, full, atol=1e-5))  # True"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Horizontal vs vertical: who waits, what moves",
+   "kind": "step_by_step",
+   "body": "Beyond the book, for Listing 18.4 on two GPUs with batch 128:\n\n**Horizontal.** (1) GPU 0 computes relu(x W1 + b1), a (128, 64000) tensor of about 33 MB in float32; GPU 1 is idle. (2) Copy the 33 MB to GPU 1. (3) GPU 1 computes the output layer; GPU 0 is idle. The backward pass repeats this in reverse with the activation gradient. Utilisation is at most about 50%.\n\n**Vertical.** (1) Both GPUs hold x. (2) Each computes its (128, 32000) half of layer 1 at the same time. (3) For layer 2, each GPU holds half of the rows of W2, matching its half of the hidden units. Each computes a *partial* (128, 8000) product and the two partials are summed (all-reduce, about 4 MB). Both GPUs compute all the time, and the traffic is smaller.\n\nThis is why the book calls vertical partitioning 'almost always the best fit for large models'.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why JAX for distribution",
+   "kind": "breakdown",
+   "body": "Beyond the book. JAX compiles the whole training step with XLA. With sharding annotations on arrays, XLA's SPMD partitioner rewrites the single-device program into a per-device program and inserts collectives (all-gather, reduce-scatter, all-reduce) where needed. This is why Keras can offer distribution through a few configuration objects (DataParallel, DeviceMesh, LayoutMap) without changing model or training code, as the book shows on p.575-578.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Horizontal vs vertical partitioning of Listing 18.4 on two GPUs",
+   "why": "Shows the two strategies of e04 for the exact model on p.573, with the shapes given in the text.",
+   "mermaid": "flowchart TB\n  subgraph H[Horizontal partitioning]\n    hx[\"inputs (batch, 16000)\"] --> h1[\"GPU 0: Dense 64000\"]\n    h1 -->|\"copy (batch, 64000) to GPU 1\"| h2[\"GPU 1: Dense 8000\"]\n  end\n  subgraph V[Vertical partitioning]\n    vx[\"inputs (batch, 16000)\"] --> v0[\"GPU 0: kernel (16000, 32000), bias (32000,)\"]\n    vx --> v1[\"GPU 1: kernel (16000, 32000), bias (32000,)\"]\n    v0 --> vc[\"concatenate: (batch, 64000)\"]\n    v1 --> vc\n  end"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Column split of a matmul, at toy size",
+   "why": "Each output column uses only one column of the kernel, which is why the half-kernels in the code produce independent halves of the output. Watch the columns of the product being computed separately.",
+   "widget": "matrix_product",
+   "params": {
+    "A": [
+     [
+      1,
+      2
+     ]
+    ],
+    "B": [
+     [
+      1,
+      0,
+      2,
+      1
+     ],
+     [
+      0,
+      1,
+      1,
+      3
+     ]
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Putting each layer on its own GPU doubles speed with two GPUs.",
+   "correction": "In horizontal partitioning the layers depend on each other in sequence, so devices take turns and activations must be copied; the book warns GPUs may sit idle."
+  },
+  {
+   "claim": "Vertical partitioning gives an approximation of the layer's output.",
+   "correction": "Concatenating column-split matmul outputs is exactly equal to the full matmul (math m1)."
+  },
+  {
+   "claim": "The printed snippet produces the full layer output.",
+   "correction": "It produces two halves; the concatenation the text mentions must still be added."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 573,
+    "note": "Listing 18.4 and its about 1 B-parameter first layer."
+   },
+   {
+    "page": 572,
+    "note": "Definitions of data and model parallelism."
+   }
+  ],
+  "later": [
+   {
+    "page": 575,
+    "note": "Figure 18.2 (two replicas x four devices) and the DataParallel API."
+   },
+   {
+    "page": 576,
+    "note": "DeviceMesh for the 2 x 4 layout."
+   },
+   {
+    "page": 577,
+    "note": "LayoutMap: replicate or shard each variable dimension."
+   },
+   {
+    "page": 578,
+    "note": "Rule of thumb: shard the last dimension along the model axis."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 106,
+    "note": "Introduction to JAX."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 577,
+    "note": "Sharding a (32, 64) variable into (32, 16) chunks."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 577,
+    "note": "LayoutMap entries such as (None, \"model\") automate this split."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 575,
+    "note": "Figure 18.2."
+   }
+  ]
+ },
+ "takeaways": [
+  "Sharding/partitioning splits one model instance across devices when it does not fit on one.",
+  "Horizontal partitioning (layers per device) suffers from activation transfers and idle devices.",
+  "Vertical partitioning (split every layer's kernel) uses parallel matmuls and is almost always best for large models.",
+  "Splitting a kernel along its last axis splits the output units; concatenating the halves gives the exact full output.",
+  "Real systems mix model parallelism (4 devices per replica) with data parallelism (2 replicas), and Keras does this best on JAX."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Splitting Dense(64000) with a (16000, 64000) kernel across four devices along the last axis gives per-device kernels of shape:",
+   "options": [
+    "(4000, 64000)",
+    "(16000, 16000)",
+    "(16000, 32000)",
+    "(4000, 16000)"
+   ],
+   "answer": "(16000, 16000)",
+   "explanation": "The last axis is divided by 4: 64000 / 4 = 16000, and the input axis stays 16000. (16000, 32000) is the two-device case from the page. The other options split the wrong axis.",
+   "page_refs": [
+    574
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "What is the main drawback of horizontal partitioning according to the book?",
+   "options": [],
+   "answer": "Communication overhead: one layer's output must be copied to the next device before the next layer can run, which can become a bottleneck and leave GPUs idle.",
+   "explanation": "Stated in the horizontal partitioning paragraph.",
+   "page_refs": [
+    574
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "math",
+   "question": "Show that concatenating x W_0 + b_0 and x W_1 + b_1 equals x W + b when W = [W_0 | W_1] and b = [b_0 | b_1].",
+   "options": [],
+   "answer": "Column j of xW is x times column j of W. The columns of W_0 are the first 32,000 columns of W, so x W_0 gives the first 32,000 columns of xW, and likewise for W_1. Adding the matching bias slices and placing the blocks side by side gives xW + b.",
+   "explanation": "See math m1, with a numerical check.",
+   "page_refs": [
+    574
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why is vertical partitioning easy to implement for typical layers?",
+   "options": [],
+   "answer": "Layers are mostly matmul or convolution operations, which are highly parallelizable: different output units or channels can be computed independently on different devices.",
+   "explanation": "This is the book's stated reason.",
+   "page_refs": [
+    574
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "In the mixed setup described on the page, how many devices does each model replica use, and how many replicas are there?",
+   "options": [
+    "2 devices, 4 replicas",
+    "4 devices, 2 replicas",
+    "8 devices, 1 replica",
+    "1 device, 8 replicas"
+   ],
+   "answer": "4 devices, 2 replicas",
+   "explanation": "Two replicas, each running on four devices, for a total of eight (figure 18.2). The other options either swap the roles or remove one form of parallelism.",
+   "page_refs": [
+    574,
+    575
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "What line of code is missing from the printed snippet to finish the layer computation?",
+   "options": [],
+   "answer": "A concatenation, e.g. output = keras.ops.concatenate([half_output_0, half_output_1], axis=-1) (followed by the ReLU activation for this layer).",
+   "explanation": "The text announces concatenation but the snippet stops after computing the halves.",
+   "page_refs": [
+    574
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "conceptual",
+   "question": "Why does the book choose the JAX backend for distributed training?",
+   "options": [],
+   "answer": "The authors consider it by far the most performant and scalable Keras backend for large-scale distributed training; not using it wastes compute and money (p.575).",
+   "explanation": "From e08 and its continuation.",
+   "page_refs": [
+    574,
+    575
+   ]
+  },
+  {
+   "id": "q8",
+   "type": "self",
+   "question": "Could you sketch on paper which device holds which slice of W1 and W2 when vertically partitioning both Dense layers of Listing 18.4 over two GPUs?",
+   "options": [],
+   "answer": "Self-check: W1 split by columns (16000 x 32000 each); W2 split by rows (32000 x 8000 each) matching each GPU's hidden units, with partial outputs summed, or by columns with the hidden activations gathered first.",
+   "explanation": "The second layer's split is beyond the page; see the 'Horizontal vs vertical' deeper note.",
+   "page_refs": [
+    574
+   ]
+  }
+ ]
+}

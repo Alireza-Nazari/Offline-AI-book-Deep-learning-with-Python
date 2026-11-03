@@ -1,0 +1,532 @@
+{
+ "page_id": "page_586",
+ "pdf_page": 586,
+ "printed_page": "562",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:00:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. The first code block is the continuation of `abs_max_quantize` from p.585. Printed outputs were verified by re-running the computation in float32 (they match to all printed digits)."
+ },
+ "overview": {
+  "title": "Running and checking an int8 matmul; model.quantize()",
+  "chapter": "18 Best practices for the real world",
+  "section": "18.3 Speeding up training and inference with lower-precision computation",
+  "subsection": "18.3.6 Faster inference with quantization",
+  "main_topic": "Finishing the hand-written abs-max quantizer, performing the int8 matmul, unscaling, comparing with the float32 result, and using Keras's built-in `model.quantize(\"int8\")`.",
+  "central_idea": "The quantized matmul reproduces the float32 result to within about 0.02 while running the expensive part in int8; in practice you never write this by hand, because Keras's Dense, EinsumDense and Embedding layers implement it and `model.quantize(\"int8\")` switches a whole model over.",
+  "importance": "It closes the loop on the quantization math with a concrete accuracy check and gives the one-line practical API.",
+  "learning_objectives": [
+   "Complete `abs_max_quantize` (cast to int8, return value and scale) and apply it to x and kernel.",
+   "Unscale an int8 matmul result with `x_scale * kernel_scale`.",
+   "Quantify the error of the quantized result against `ops.matmul(x, kernel)`.",
+   "Explain why the extra elementwise ops are cheap relative to a large matmul.",
+   "Use `model.quantize(\"int8\")` and know which layers it affects."
+  ],
+  "prerequisites": [
+   "The abs-max scheme and linearity argument (p.585).",
+   "Dense layers and MultiHeadAttention (EinsumDense)."
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes the function begun on p.585: after rounding and clipping, `abs_max_quantize` casts the scaled values to `int8` and returns both the integer tensor and its scale. It is applied to both operands: `int_x, x_scale = abs_max_quantize(x)` and `int_kernel, kernel_scale = abs_max_quantize(kernel)`.\n\nThen comes the \"faster\" matmul and the unscaling: `int_y = ops.matmul(int_x, int_kernel)`, followed by `y = ops.cast(int_y, dtype=\"float32\") / (x_scale * kernel_scale)`.\n\nComparing with the exact float32 product: the quantized `y` is `[[0.9843736, 0.3933239], [-1.0151455, -3.1965137]]`, while `ops.matmul(x, kernel)` gives `[[0.98, 0.40999997], [-1., -3.2]]`. \"Pretty accurate!\" The largest absolute error is about 0.017. For a large matmul this saves a lot of compute, since int8 computation can be considerably faster than even float16, and the only additions are fast elementwise ops: `abs`, `max`, `clip`, `cast`, `divide`, `multiply`.\n\nThe authors stress that you should not implement quantization by hand. Like float8, int8 quantization is built into the Keras `Dense`, `EinsumDense` and `Embedding` layers, which unlocks int8 inference for any Transformer-based model. Usage is three lines: instantiate a model (or any quantizable layer), call `model.quantize(\"int8\")` (\"Boom!\"), and from then on `predict()` and `call()` run (partially) in int8.",
+ "paragraphs": [
+  {
+   "ref": "p586_e04",
+   "excerpt": "Now we can perform a faster matmul and unscale the output:",
+   "what_it_says": "Introduces the int8 matmul and the division by the product of scales (code c2).",
+   "what_it_means": "This is the step where the speedup would happen on hardware with int8 matrix units; the unscaling is a single elementwise divide.",
+   "why_it_matters": "It applies the linearity argument of p.585 in code.",
+   "terminology": [
+    {
+     "term": "unscaling",
+     "meaning": "Dividing the integer result by $s_x s_W$ to return to the original units."
+    }
+   ],
+   "connections": [
+    "p.585: 'divide it by the product of the input scaling factors'."
+   ]
+  },
+  {
+   "ref": "p586_e06",
+   "excerpt": "How accurate is it? Let’s compare our y with the output of the",
+   "what_it_says": "Sets up a comparison between the quantized y and the exact float32 matmul (code c3).",
+   "what_it_means": "The exact float result serves as ground truth; differences measure quantization (rounding) error. Note the exact result itself shows float32 rounding: 0.40999997 instead of 0.41.",
+   "why_it_matters": "Always validate a quantized model against its float reference.",
+   "terminology": [],
+   "connections": []
+  },
+  {
+   "ref": "p586_e08",
+   "excerpt": "Pretty accurate! For a large matmul, doing this will save you a lot",
+   "what_it_says": "The result is pretty accurate; for a large matmul the savings are large because int8 can be considerably faster than float16, and the only overhead is a few fast elementwise ops (abs, max, clip, cast, divide, multiply).",
+   "what_it_means": "A matmul of two $n\\times n$ matrices costs $O(n^3)$ multiply-adds; quantizing and unscaling costs $O(n^2)$ elementwise work. As $n$ grows the overhead becomes negligible.",
+   "why_it_matters": "It explains why quantization targets big matmul-heavy layers and why it pays off most for large models.",
+   "technical_idea": "Errors here: |0.98437 - 0.98| ≈ 0.0044, |0.39332 - 0.41| ≈ 0.0167, |-1.01515 + 1| ≈ 0.0151, |-3.19651 + 3.2| ≈ 0.0035, i.e. relative errors of 0.1% to 4%. The 0.41 entry has the largest relative error because it results from cancellation between two larger terms (-0.22 + 0.63).",
+   "terminology": [
+    {
+     "term": "elementwise op",
+     "meaning": "An operation applied independently to each entry, cost proportional to tensor size."
+    }
+   ],
+   "connections": [
+    "p.584: by contrast, float8's scaling overhead can exceed its benefits on small models."
+   ]
+  },
+  {
+   "ref": "p586_e09",
+   "excerpt": "Now, of course, I don’t expect you to ever implement quantization by hand",
+   "what_it_says": "Implementing quantization by hand would be impractical. As with float8, int8 quantization is built into Dense, EinsumDense and Embedding, enabling int8 inference for any Transformer-based model; the following code shows how to use it with any Keras model containing such layers.",
+   "what_it_means": "Transformers are built almost entirely from these layers (projections, feedforward blocks, token embeddings), so quantizing them covers nearly all weights and FLOPs. Layers not on the list keep running in their usual dtype; hence 'partially' in the callout.",
+   "why_it_matters": "It turns the theory into a one-call deployment optimization, for example for the LLMs of chapter 16.",
+   "technical_idea": "Beyond the book: the Keras implementation quantizes kernels ahead of time (weights stored as int8 plus scales) and quantizes inputs on the fly at each call, which is the abs-max scheme applied per call, typically with finer-grained (per-channel/per-row) scales than the per-tensor example here.",
+   "terminology": [
+    {
+     "term": "model.quantize(mode)",
+     "meaning": "Keras method converting a model's quantizable layers in place to the given mode, e.g. \"int8\"."
+    }
+   ],
+   "connections": [
+    "p.584: float8 support covers the same three layers.",
+    "p.212: chapter 6 previewed `model.quantize(\"int8\")` for a 4x smaller model."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "quantization",
+   "name": "int8 quantization",
+   "definition": "Representing tensors as int8 values plus float scales so matmuls run in integer arithmetic.",
+   "intuition": "Compute in a coarse integer unit, convert units once at the end.",
+   "technical": "y = cast(q_x @ q_W, float32) / (s_x · s_W).",
+   "significance": "The page shows errors of about 0.02 on the toy example and a one-line Keras API.",
+   "example": "`model.quantize(\"int8\")` then `model.predict(...)`.",
+   "misconception": "Quantization is not lossless; the toy example shows small but nonzero errors.",
+   "related": [
+    "abs_max_scaling",
+    "dense_layer",
+    "transformer"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "quantization_error",
+   "name": "Quantization error",
+   "definition": "The difference between the quantized computation's output and the full-precision output, caused by rounding inputs to the integer grid.",
+   "intuition": "Each input is off by at most half a grid step; dot products sum these small errors.",
+   "technical": "For an entry $y_{ij}$ the error is roughly $\\sum_k (\\delta x_{ik} W_{kj} + x_{ik}\\delta W_{kj})$ with $|\\delta x| \\le 0.5/s_x$, $|\\delta W| \\le 0.5/s_W$ (ignoring second-order terms).",
+   "significance": "It bounds how much accuracy a quantized model can lose and shows that errors grow with the dot-product length unless they cancel.",
+   "example": "Entry (1,2): quantized 0.3933 vs. exact 0.41, error 0.0167.",
+   "misconception": "Relative error is not uniform: outputs that are small due to cancellation suffer the most.",
+   "related": [
+    "quantization"
+   ],
+   "source": "ai_explanation"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Unscaling the int8 matmul output",
+   "latex": "y = \\frac{\\operatorname{float32}\\!\\left(q_x\\, q_W\\right)}{s_x\\, s_W} \\approx x\\,W",
+   "source_text": "y = ops.cast(int_y, dtype=\"float32\") / (x_scale * kernel_scale)",
+   "variables": [
+    {
+     "symbol": "q_x, q_W",
+     "meaning": "`int_x`, `int_kernel`"
+    },
+    {
+     "symbol": "s_x, s_W",
+     "meaning": "`x_scale` ≈ 105.83, `kernel_scale` ≈ 57.73"
+    },
+    {
+     "symbol": "y",
+     "meaning": "the dequantized result"
+    }
+   ],
+   "operations": "Integer matmul, cast, division by a scalar product.",
+   "purpose": "Return the integer result to the original units.",
+   "interpretation": "Exact up to the rounding done when quantizing x and kernel.",
+   "intuition": "Each output was computed in 'units of 1/(s_x s_W)'; dividing converts back.",
+   "numerical_example": "$q_x = [[11, 95],[127, -85]]$, $q_W = [[-6, -127],[64, 40]]$. $q_x q_W = [[6014, 2403],[-6202, -19529]]$. $s_x s_W \\approx 105.833 \\times 57.727 \\approx 6109.4$. Dividing: $[[0.9844, 0.3933],[-1.0152, -3.1965]]$, exactly the printed `y`.",
+   "source": "book",
+   "book_ref": "p.586"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "End of abs_max_quantize and quantizing both operands",
+   "original_code": "    scaled_value = ops.cast(scaled_value, dtype=\"int8\")\n    return scaled_value, scale\nint_x, x_scale = abs_max_quantize(x)\nint_kernel, kernel_scale = abs_max_quantize(kernel)",
+   "language": "python",
+   "what_it_does": "Casts the rounded, clipped values to int8, returns them with their scale, and quantizes x and kernel.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Callout: 'Casts to int8'. Since values are already integers in [-127, 127], the cast is exact."
+    },
+    {
+     "lines": "2",
+     "explanation": "Returns the scale too; it is needed to unscale the matmul output."
+    },
+    {
+     "lines": "3",
+     "explanation": "int_x = [[11, 95], [127, -85]], x_scale ≈ 105.83 (shape (1, 1) because of keepdims)."
+    },
+    {
+     "lines": "4",
+     "explanation": "int_kernel = [[-6, -127], [64, 40]], kernel_scale ≈ 57.73."
+    }
+   ],
+   "inputs_outputs": "Inputs: float32 x and kernel from p.585. Outputs: two int8 tensors and two float scales.",
+   "algorithm": "Per-tensor symmetric abs-max quantization.",
+   "theory_link": "Completes math m1 of p.585.",
+   "parameters": [
+    {
+     "name": "dtype=\"int8\"",
+     "role": "Target integer type."
+    }
+   ],
+   "pitfalls": [
+    "The 1.1 entry of kernel scales to exactly 63.5, a rounding tie; in float32 it rounds to 64 (which the printed output reflects), but in float64 the epsilon pushes it to 63. Tiny numerical details can change quantized values."
+   ],
+   "illustrative_code": null
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "int8 matmul and unscaling",
+   "original_code": "int_y = ops.matmul(int_x, int_kernel)\ny = ops.cast(int_y, dtype=\"float32\") / (x_scale * kernel_scale)",
+   "language": "python",
+   "what_it_does": "Multiplies the int8 tensors and converts the result back to float32 units.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "The matmul on integers. Beyond the book: the products reach values like -19529, far outside int8, so the result must be in a wider integer type; in Keras 3, `ops.matmul` on two int8 tensors returns an int32 result."
+    },
+    {
+     "lines": "2",
+     "explanation": "Cast to float32 and divide by the product of the two scales."
+    }
+   ],
+   "inputs_outputs": "Input: int_x, int_kernel, scales. Output: y ≈ x @ kernel in float32.",
+   "algorithm": "Integer GEMM followed by dequantization.",
+   "theory_link": "math m1; linearity of matmul from p.585.",
+   "parameters": [],
+   "pitfalls": [
+    "Forgetting to unscale gives values ~6000x too large.",
+    "Accumulating in int8 would overflow; hardware int8 matmuls accumulate in int32."
+   ],
+   "illustrative_code": null
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Comparing quantized and exact results",
+   "original_code": ">>> y\narray([[ 0.9843736,  0.3933239],\n       [-1.0151455, -3.1965137]])\n>>> ops.matmul(x, kernel)\narray([[ 0.98      ,  0.40999997],\n       [-1.        , -3.2       ]])",
+   "language": "python",
+   "what_it_does": "Shows an interactive session printing the quantized result and the float32 reference.",
+   "line_explanations": [
+    {
+     "lines": "1-3",
+     "explanation": "Quantized result y."
+    },
+    {
+     "lines": "4-6",
+     "explanation": "Exact float32 result; 0.40999997 is float32's nearest value to 0.41."
+    }
+   ],
+   "inputs_outputs": "Two 2x2 arrays.",
+   "algorithm": "Side-by-side comparison.",
+   "theory_link": "Errors measure the rounding of the quantized inputs.",
+   "parameters": [],
+   "pitfalls": [
+    "A 2x2 example understates how errors accumulate over long dot products in real layers; evaluate a quantized model on a validation set."
+   ],
+   "illustrative_code": "# AI-written: quantify the error\nerr = ops.abs(y - ops.matmul(x, kernel))\nprint(err)            # ~[[0.0044, 0.0167], [0.0151, 0.0035]]\nprint(ops.max(err))   # ~0.0167"
+  },
+  {
+   "id": "c4",
+   "listing": null,
+   "title": "Built-in int8 quantization of a Keras model",
+   "original_code": "model = ...\nmodel.quantize(\"int8\")\npredictions = model.predict(...)",
+   "language": "python",
+   "what_it_does": "Quantizes all quantizable layers of a model to int8 and then runs inference with them.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Callout: 'Instantiates a model (or any quantizable layer)'; typically a trained model."
+    },
+    {
+     "lines": "2",
+     "explanation": "Callout: 'Boom!'. Converts Dense, EinsumDense and Embedding layers in place."
+    },
+    {
+     "lines": "3",
+     "explanation": "Callout: 'Now predict() and call() will run (partially) in int8!'; partially because other layers (normalization, softmax, etc.) are untouched."
+    }
+   ],
+   "inputs_outputs": "Input: a Keras model. Output: the same model object, now with int8 weights in quantizable layers.",
+   "algorithm": "Per-layer weight quantization plus on-the-fly input quantization in the call path.",
+   "theory_link": "Automates c1-c2 inside each supported layer.",
+   "parameters": [
+    {
+     "name": "\"int8\"",
+     "role": "Quantization mode (Keras also supports \"float8\" for the float8 training of p.584)."
+    }
+   ],
+   "pitfalls": [
+    "Quantize after training; check accuracy on validation data afterward.",
+    "Models without Dense/EinsumDense/Embedding layers (e.g. pure convnets) gain little."
+   ],
+   "illustrative_code": null
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why the 0.41 entry has the largest error",
+   "kind": "numerical",
+   "body": "Entry (1,2) is $0.1\\cdot(-2.2) + 0.9\\cdot 0.7 = -0.22 + 0.63 = 0.41$. In integers: $11\\cdot(-127) + 95\\cdot 40 = -1397 + 3800 = 2403$. Exactly scaled, the two products would be $10.583\\cdot(-127.0) \\approx -1344$ and $95.25\\cdot 40.41 \\approx 3849$, summing to $\\approx 2505$ (= $0.41 \\times 6109.4$). Rounding 10.58 up to 11 makes the first product about 53 units more negative, and rounding 95.25 to 95 and 40.41 to 40 lowers the second by about 49 units: together about $-102$ units out of 2505, a relative error near 4%. Because the true result is the difference of two larger numbers, their absolute errors are large relative to the small result. Cancellation magnifies relative quantization error.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Cost accounting for a large matmul",
+   "kind": "breakdown",
+   "body": "For $X \\in \\mathbb{R}^{B\\times d}$ and $W \\in \\mathbb{R}^{d\\times d}$: the matmul is $B d^2$ multiply-adds. Quantizing X needs $\\approx 4Bd$ elementwise ops (abs, max, multiply, round/clip/cast), W can be quantized once ahead of time, and unscaling needs $Bd$ divides. With $d=4096$, overhead is roughly $5/4096 \\approx 0.1\\%$ of the matmul's operation count, so nearly all the int8 speedup is retained.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "The int8 matmul of the book's example",
+   "widget": "matrix_product",
+   "why": "These are the quantized int_x and int_kernel; step through the dot products to get int_y = [[6014, 2403], [-6202, -19529]] before dividing by x_scale * kernel_scale ≈ 6109.4.",
+   "params": {
+    "A": [
+     [
+      11,
+      95
+     ],
+     [
+      127,
+      -85
+     ]
+    ],
+    "B": [
+     [
+      -6,
+      -127
+     ],
+     [
+      64,
+      40
+     ]
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "chart",
+   "title": "Quantized vs. exact matmul outputs",
+   "why": "Plots the two arrays printed on this page side by side to show how close the int8 result is.",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": [
+      "y[0,0]",
+      "y[0,1]",
+      "y[1,0]",
+      "y[1,1]"
+     ],
+     "datasets": [
+      {
+       "label": "int8 quantized",
+       "data": [
+        0.9843736,
+        0.3933239,
+        -1.0151455,
+        -3.1965137
+       ]
+      },
+      {
+       "label": "float32 exact",
+       "data": [
+        0.98,
+        0.40999997,
+        -1.0,
+        -3.2
+       ]
+      }
+     ]
+    },
+    "options": {
+     "scales": {
+      "y": {
+       "title": {
+        "display": true,
+        "text": "value"
+       }
+      }
+     }
+    }
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The int8 matmul result fits in int8.",
+   "correction": "Sums of int8 products quickly exceed 127 (here up to -19529); they are accumulated in int32 before unscaling (beyond the book)."
+  },
+  {
+   "claim": "After model.quantize(\"int8\"), the whole model runs in int8.",
+   "correction": "Only Dense, EinsumDense and Embedding are quantized; the book says predict() and call() run partially in int8."
+  },
+  {
+   "claim": "Quantization overhead cancels the speedup.",
+   "correction": "The added ops are elementwise and cheap compared with a large matmul."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 585,
+    "note": "Start of abs_max_quantize, the example tensors and the linearity argument."
+   },
+   {
+    "page": 584,
+    "note": "float8 support in the same three layers."
+   },
+   {
+    "page": 212,
+    "note": "Chapter 6 introduction of weight quantization and model.quantize(\"int8\")."
+   }
+  ],
+  "later": [
+   {
+    "page": 587,
+    "note": "Chapter 18 summary bullet on float16 and int8 inference."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 582,
+    "note": "float16 inference, the baseline int8 is compared with."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 44,
+    "note": "Tensor operations in a first neural network."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 583,
+    "note": "Mixed precision switch, the training-time counterpart."
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "abs_max_quantize returns the int8 tensor and its scale; both operands are quantized.",
+  "y = cast(int_y, float32) / (x_scale * kernel_scale) recovers the matmul to within ~0.02 in the example.",
+  "The extra ops (abs, max, clip, cast, divide, multiply) are cheap relative to a large matmul.",
+  "Do not hand-roll quantization: Dense, EinsumDense and Embedding support int8 natively.",
+  "`model.quantize(\"int8\")` makes predict()/call() run partially in int8."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "math",
+   "question": "Given int_x = [[11, 95], [127, -85]] and int_kernel = [[-6, -127], [64, 40]], compute int_y[1,1] and dequantize it with x_scale·kernel_scale ≈ 6109.4.",
+   "options": [],
+   "answer": "127·(-127) + (-85)·40 = -16129 - 3400 = -19529; -19529/6109.4 ≈ -3.1965.",
+   "explanation": "Matches the printed -3.1965137 vs. exact -3.2.",
+   "page_refs": [
+    586
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "Which layers does Keras's built-in int8 quantization support, according to the page?",
+   "options": [
+    "Conv2D, Dense, LSTM",
+    "Dense, EinsumDense, Embedding",
+    "All layers",
+    "Only Embedding"
+   ],
+   "answer": "Dense, EinsumDense, Embedding",
+   "explanation": "The page lists these three, the same as for float8; that is why it says Transformer-based models are covered.",
+   "page_refs": [
+    586
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "Which elementwise ops does quantization add to the computation graph?",
+   "options": [],
+   "answer": "abs, max, clip, cast, divide, multiply.",
+   "explanation": "Listed on the page; they are cheap compared with the matmul.",
+   "page_refs": [
+    586
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why does the callout say predict() and call() run only 'partially' in int8 after model.quantize(\"int8\")?",
+   "options": [],
+   "answer": "Only the quantizable layers (Dense, EinsumDense, Embedding) use int8; other operations such as normalization, activations and softmax still run in floating point, and inputs are dequantized after each int8 matmul.",
+   "explanation": "Follows from the restricted set of supported layers stated on the page.",
+   "page_refs": [
+    586
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "Why is quantization more worthwhile for a large matmul than for the 2x2 example?",
+   "options": [],
+   "answer": "The matmul cost grows as O(n^3) while the quantization overhead is elementwise, O(n^2); for large matrices the int8 speedup dominates.",
+   "explanation": "The page says that for a large matmul this saves a lot of compute, with only fast elementwise ops added.",
+   "page_refs": [
+    586
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "mcq",
+   "question": "What would happen if you forgot to divide int_y by (x_scale * kernel_scale)?",
+   "options": [
+    "Nothing; int_y already equals x @ kernel",
+    "The result would be about 6100 times too large",
+    "The result would be rounded to zero",
+    "The matmul would fail with a dtype error"
+   ],
+   "answer": "The result would be about 6100 times too large",
+   "explanation": "int_y ≈ s_x s_W (x @ kernel) with s_x s_W ≈ 6109.4. No rounding to zero or dtype error is involved.",
+   "page_refs": [
+    586
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you take a trained Keras Transformer, quantize it to int8, and design a check that its accuracy is still acceptable?",
+   "options": [],
+   "answer": "Call model.quantize(\"int8\") and compare validation metrics (and outputs) with the float model.",
+   "explanation": "The page gives the API; validation is the practical safeguard implied by the y vs. exact comparison.",
+   "page_refs": [
+    586
+   ]
+  }
+ ]
+}

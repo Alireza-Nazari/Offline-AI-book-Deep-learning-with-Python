@@ -1,0 +1,452 @@
+{
+ "page_id": "page_053",
+ "pdf_page": 53,
+ "printed_page": "29",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-fable-5-1",
+  "generated_at": "2026-11-03T04:14:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction. Both code blocks match the page image, including the margin callouts (\"x is a rank-2 NumPy tensor.\", \"Avoids overwriting the input tensor\", \"x and y are rank-2 NumPy tensors.\"). The final paragraph is cut mid-sentence and continues on p.54."
+ },
+ "overview": {
+  "title": "Unpacking the Dense layer: relu, addition, and element-wise operations",
+  "chapter": "2 The mathematical building blocks of neural networks",
+  "section": "2.3 The gears of neural networks: Tensor operations",
+  "subsection": "2.3.1 Element-wise operations",
+  "main_topic": "The three tensor operations inside `relu(matmul(input, W) + b)`, the book's policy of using NumPy code instead of mathematical notation, and element-wise operations (relu, addition) with naive double-loop implementations versus optimized BLAS-backed NumPy.",
+  "central_idea": "relu and addition act independently on every entry of a tensor; that independence is what makes them trivially parallel (vectorized), so in practice they are never written as Python loops but delegated to optimized NumPy/BLAS routines.",
+  "importance": "Element-wise operations are the simplest tensor primitives and the first to be understood, differentiated (p.70) and reimplemented (p.77). The naive loops make the semantics unmistakable; the contrast with vectorized code (timed on p.54) explains why deep learning code never iterates over tensor entries by hand.",
+  "learning_objectives": [
+   "Name the three tensor operations in the Dense layer formula and define relu(x) = max(x, 0).",
+   "Define an element-wise operation and explain why such operations are highly amenable to parallel (vectorized) implementation.",
+   "Trace `naive_relu` and `naive_add` on a small rank-2 tensor and explain the role of `assert` and `.copy()`.",
+   "Explain what NumPy delegates to BLAS and why the built-in versions are preferred."
+  ],
+  "prerequisites": [
+   "The Dense layer formula `output = relu(matmul(input, W) + b)` (p.52)",
+   "Rank and shape; indexing `x[i, j]` on a rank-2 tensor (p.46-49)",
+   "Basic Python: functions, `for` loops, `assert`"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Unpacking the Dense formula.** `output = relu(matmul(input, W) + b)` (p.52) contains three tensor operations: a tensor product (`matmul`) between the input tensor and the tensor `W`; an addition (`+`) between the resulting matrix and the vector `b`; and a `relu` operation, where `relu(x)` is `max(x, 0)` and \"relu\" stands for *REctified Linear Unit*.\n\n**NOTE on notation.** Although the section is entirely linear algebra, the book contains no mathematical notation. The author has found that programmers without a mathematical background grasp these concepts more readily as short Python snippets than as equations, so NumPy code is used throughout.\n\n**2.3.1 Element-wise operations.** relu and addition are *element-wise* operations: they are applied independently to each entry of the tensors involved. This makes them highly amenable to massively parallel, *vectorized* implementations (a term from the vector-processor supercomputers of 1970-1990). A naive Python implementation uses `for` loops:\n\n- `naive_relu(x)` asserts `x` is rank 2, copies it (so the input is not overwritten), and sets `x[i, j] = max(x[i, j], 0)` for every `i`, `j`.\n- `naive_add(x, y)` asserts both are rank 2 with identical shapes, copies `x`, and does `x[i, j] += y[i, j]` for every entry.\n\nElement-wise multiplication, subtraction and so on follow the same principle.\n\n**In practice.** With NumPy arrays these operations are available as well-optimized built-in functions that delegate the heavy lifting to a *Basic Linear Algebra Subprograms* (BLAS) implementation. The sentence continues on p.54: BLAS are low-level, highly parallel, efficient routines usually written in Fortran or C, and the next page times `z = x + y` / `np.maximum(z, 0.)` against the naive loops (0.02 s versus 2.45 s).",
+ "paragraphs": [
+  {
+   "ref": "p053_e03",
+   "excerpt": "Let’s unpack this. We have three tensor operations here:",
+   "what_it_says": "The Dense formula from the previous page is decomposed into three tensor operations, listed in the bullets that follow.",
+   "what_it_means": "The authors read `relu(matmul(input, W) + b)` from the inside out: product, then addition, then relu. Each is a self-contained primitive that will get its own subsection.",
+   "why_it_matters": "Establishes the plan for the rest of section 2.3 and, implicitly, for backpropagation (p.70): if you know the derivative of each of these three primitives, you can differentiate the whole layer.",
+   "technical_idea": "Operator precedence in the expression: the innermost call `matmul` executes first, `+` second, and the outer `relu` last.",
+   "terminology": [],
+   "connections": ["p.52: the formula being unpacked.", "p.70: backpropagation uses the derivatives of exactly these atomic operations (addition, relu, tensor product)."]
+  },
+  {
+   "ref": "p053_e04",
+   "excerpt": "A tensor product (matmul) between the input tensor and a tensor named W.",
+   "what_it_says": "Operation 1: a tensor product (`matmul`) between the input tensor and the layer's tensor `W`.",
+   "what_it_means": "This is the only operation of the three that mixes different entries together: every output feature combines all input features. It is deferred to 2.3.3 (p.56).",
+   "why_it_matters": "The product is where the weights act; it is also the only non-element-wise operation in the layer, which is why it gets a separate, longer treatment.",
+   "technical_idea": "For a `(samples, n_in)` input and `(n_in, units)` W, the result is `(samples, units)`.",
+   "terminology": [
+    {"term": "tensor product (matmul)", "meaning": "Matrix multiplication generalized to tensors; `np.matmul` or `@` (p.56)."}
+   ],
+   "connections": ["p.56: 2.3.3 Tensor product."]
+  },
+  {
+   "ref": "p053_e05",
+   "excerpt": "An addition (+) between the resulting matrix and a vector b.",
+   "what_it_says": "Operation 2: an addition between the resulting matrix and the vector `b`.",
+   "what_it_means": "Adding a vector to a matrix is not shape-compatible in the naive sense; it works through broadcasting (p.54), which repeats `b` along the samples axis. The `naive_add` on this page requires identical shapes precisely to set up that discussion.",
+   "why_it_matters": "The bias `b` shifts each output unit independently; broadcasting is the mechanism that lets one vector apply to every sample in the batch.",
+   "technical_idea": "`(samples, units) + (units,)` → `(samples, units)` via broadcasting.",
+   "terminology": [],
+   "connections": ["p.54: 2.3.2 Broadcasting answers \"what happens with addition when the shapes differ?\""]
+  },
+  {
+   "ref": "p053_e06",
+   "excerpt": "A relu operation: relu(x) is max(x, 0). \"relu\" stands for",
+   "what_it_says": "Operation 3: `relu(x)` is `max(x, 0)`; the name stands for \"REctified Linear Unit\".",
+   "what_it_means": "relu passes positive values unchanged and replaces negative ones with zero. It is applied to every entry separately, so it is element-wise. \"Rectified\" is borrowed from electronics, where a rectifier passes current in one direction only.",
+   "why_it_matters": "relu is the nonlinearity that keeps a stack of Dense layers from collapsing into one linear map (explained on p.62); it is the default hidden activation throughout the book.",
+   "technical_idea": "Piecewise linear: identity for x ≥ 0, zero for x < 0. Beyond the book: its derivative is 1 for x > 0 and 0 for x < 0, which matters for backpropagation (p.70).",
+   "terminology": [
+    {"term": "relu (REctified Linear Unit)", "meaning": "The function max(x, 0) applied element-wise."}
+   ],
+   "connections": ["p.62: why a nonlinearity such as relu is needed between layers.", "p.43: `activation=\"relu\"` in the first model."]
+  },
+  {
+   "ref": "p053_e07",
+   "excerpt": "NOTE Although this section deals entirely with linear algebra expressions, you",
+   "what_it_says": "The book deliberately contains no mathematical notation: the author finds that programmers without a math background master the concepts more readily as short Python snippets than as equations, so NumPy code is used throughout.",
+   "what_it_means": "This is a stylistic contract for the whole book. Every \"formula\" will be executable code, e.g. `max(x, 0)` instead of a piecewise definition. The companion notes you are reading add conventional notation alongside the code, but the book itself never requires it.",
+   "why_it_matters": "It tells you how to read the rest of the chapter: the code *is* the math. If you can run and modify the snippet, you understand the operation.",
+   "technical_idea": "The approach works because NumPy's semantics (shapes, broadcasting, matmul) coincide with the linear-algebra meaning; a snippet is both a definition and a test.",
+   "terminology": [],
+   "connections": []
+  },
+  {
+   "ref": "p053_e10",
+   "excerpt": "The relu operation and addition are element-wise operations: operations that are",
+   "what_it_says": "relu and addition are element-wise: applied independently to each entry. Hence they suit massively parallel, *vectorized* implementations (the term comes from 1970-1990 vector-processor supercomputers). A naive Python version uses a `for` loop, as in the `naive_relu` that follows.",
+   "what_it_means": "Because entry (i, j) of the output depends only on entry (i, j) of the input(s), all entries can be computed at the same time in any order. That is exactly the kind of work GPUs and SIMD CPU instructions do best. Writing a Python loop makes the dependence structure explicit but forfeits the parallelism.",
+   "why_it_matters": "Understanding *why* element-wise ops are cheap (independence) explains both the 100× speed gap measured on p.54 and why frameworks encourage whole-tensor expressions rather than loops.",
+   "technical_idea": "Beyond the book: \"vectorized\" today means that one instruction operates on many data elements (SIMD), or, in the NumPy sense, that the loop runs inside compiled C over contiguous memory rather than in the Python interpreter.",
+   "terminology": [
+    {"term": "element-wise operation", "meaning": "An operation applied independently to each entry of the tensor(s), so output[i, j] depends only on input(s)[i, j]."},
+    {"term": "vectorized implementation", "meaning": "An implementation that processes many entries in parallel or in a single compiled loop, rather than one entry per interpreted Python step."}
+   ],
+   "connections": ["p.54: the timing experiment and the GPU/CUDA remark."]
+  },
+  {
+   "ref": "p053_e12",
+   "excerpt": "You could do the same for addition:",
+   "what_it_says": "Addition gets the same treatment in `naive_add`, which loops over all entries of two same-shaped rank-2 tensors.",
+   "what_it_means": "The only structural differences from `naive_relu` are a second argument and the extra `assert x.shape == y.shape`: an element-wise binary operation needs a one-to-one pairing of entries.",
+   "why_it_matters": "The shape assertion is the seed of the broadcasting discussion: the Dense layer adds a matrix and a vector, which this function would reject.",
+   "technical_idea": "`x[i, j] += y[i, j]` is in-place on the copy, leaving the caller's `x` untouched.",
+   "terminology": [],
+   "connections": ["p.54: `naive_add` \"only supports the addition of rank-2 tensors with identical shapes\"."]
+  },
+  {
+   "ref": "p053_e14",
+   "excerpt": "On the same principle, you can do element-wise multiplication, subtraction, and so on.",
+   "what_it_says": "Multiplication, subtraction and other binary operations can be written element-wise on the same principle.",
+   "what_it_means": "Replace `+=` with `*=` or `-=` and you have element-wise product or difference. Note that element-wise multiplication (`x * y`) is different from the tensor product `matmul` of the Dense layer.",
+   "why_it_matters": "Prepares the distinction, made explicit on p.56, between `*` (element-wise) and `matmul`/`@` (tensor product), a frequent source of confusion.",
+   "technical_idea": "Element-wise product of two `(m, n)` tensors is `(m, n)`; `matmul` of `(m, n)` and `(n, p)` is `(m, p)`.",
+   "terminology": [],
+   "connections": ["p.56: the tensor product is not element-wise."]
+  },
+  {
+   "ref": "p053_e15",
+   "excerpt": "In practice, when dealing with NumPy arrays, these operations are available as",
+   "what_it_says": "In practice, NumPy provides these operations as well-optimized built-in functions that delegate the heavy lifting to a BLAS (Basic Linear Algebra Subprograms) implementation; BLAS are low-level… (continued on p.54: highly parallel, efficient routines in Fortran or C).",
+   "what_it_means": "You never write the loops yourself. `x + y` and `np.maximum(x, 0.)` run in compiled code over whole arrays. BLAS is the decades-old standard library interface for vector and matrix kernels (OpenBLAS, Intel MKL, Apple Accelerate are implementations).",
+   "why_it_matters": "The naive versions exist to teach semantics; the built-ins are what you use. The next page quantifies the gap (0.02 s vs 2.45 s) and extends the point to GPUs via CUDA.",
+   "technical_idea": "Beyond the book: strictly, BLAS covers vector/matrix operations such as axpy and gemm; plain element-wise NumPy ufuncs are compiled C loops with SIMD, while `matmul` is the call that lands in BLAS gemm. The book's broader point (compiled, parallel kernels do the work) holds either way.",
+   "terminology": [
+    {"term": "BLAS", "meaning": "Basic Linear Algebra Subprograms: a standard set of low-level, highly optimized routines for vector and matrix operations, implemented in Fortran or C."}
+   ],
+   "connections": ["p.54: BLAS description continues; timing of NumPy vs naive loops; CUDA on GPUs."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "relu",
+   "name": "relu (REctified Linear Unit)",
+   "definition": "The element-wise function relu(x) = max(x, 0): positive entries pass through, negative entries become 0.",
+   "intuition": "A one-way valve: lets positive signal through, blocks negative signal.",
+   "technical": "Applied independently to every tensor entry. Piecewise linear with a kink at 0; cheap to compute; used as the activation of hidden Dense layers in the book's first model.",
+   "significance": "Provides the nonlinearity without which stacked layers would collapse into a single linear transformation (p.62); its simplicity makes it fast and easy to differentiate.",
+   "example": "relu([[-1.5, 2.0], [0.0, -0.3]]) = [[0, 2.0], [0, 0]]; `naive_relu` computes this with a double loop.",
+   "misconception": "That relu is linear because its name contains \"linear\". It is linear on each half-line but not overall; the kink at 0 is what makes it a nonlinearity.",
+   "related": ["activation_function", "element_wise_operation", "dense_layer"],
+   "source": "book"
+  },
+  {
+   "id": "element_wise_operation",
+   "name": "Element-wise operation",
+   "definition": "An operation applied independently to each entry of the tensor(s) involved, such as relu, addition, subtraction or multiplication of same-shaped tensors.",
+   "intuition": "Like applying the same stamp to every cell of a grid; what happens in one cell never depends on its neighbours.",
+   "technical": "output[i, j] = f(x[i, j]) for unary ops, or f(x[i, j], y[i, j]) for binary ops on identical shapes. Because entries are independent, the work parallelizes perfectly (vectorization, SIMD, GPU kernels).",
+   "significance": "Two of the three operations in a Dense layer are element-wise; their independence is the reason for the vectorized implementations and the 100× speedups seen on p.54, and it makes their derivatives trivial (p.70).",
+   "example": "`naive_add` and `naive_relu` on this page; `x + y` and `np.maximum(x, 0.)` in NumPy.",
+   "misconception": "That `matmul` is element-wise too. It is not: each output entry combines a whole row and a whole column.",
+   "related": ["relu", "vectorization", "broadcasting", "matrix_product"],
+   "source": "book"
+  },
+  {
+   "id": "vectorization",
+   "name": "Vectorized implementation",
+   "definition": "An implementation that processes many tensor entries in parallel (or in one compiled loop) instead of one entry per interpreted step; the term comes from the vector-processor supercomputers of 1970-1990.",
+   "intuition": "Instead of a clerk adding numbers one pair at a time, a machine adds all pairs in one stroke.",
+   "technical": "NumPy's built-in functions delegate to optimized, parallel routines (BLAS, written in Fortran/C); on GPUs, JAX/TensorFlow/PyTorch use CUDA kernels (p.54). Element-wise operations vectorize perfectly because entries are independent.",
+   "significance": "The reason deep learning code is written as whole-tensor expressions: the naive loop versions are orders of magnitude slower (p.54).",
+   "example": "`z = x + y; z = np.maximum(z, 0.)` takes 0.02 s where the naive loops take 2.45 s (p.54).",
+   "misconception": "That vectorization changes the result. It computes exactly the same values as the naive loop, only faster.",
+   "related": ["element_wise_operation", "blas"],
+   "source": "book"
+  },
+  {
+   "id": "blas",
+   "name": "BLAS (Basic Linear Algebra Subprograms)",
+   "definition": "A standard set of low-level, highly parallel, efficient tensor-manipulation routines, typically implemented in Fortran or C, to which NumPy delegates the heavy lifting of its built-in operations.",
+   "intuition": "The engine room below NumPy's friendly deck: decades of hand-tuned numeric kernels.",
+   "technical": "Implementations include OpenBLAS, Intel MKL and Apple Accelerate (names not in the book). NumPy calls them for operations like matrix multiplication; element-wise ufuncs run in NumPy's own compiled loops.",
+   "significance": "Explains why `np.matmul`, `+`, `np.maximum` are \"blazing fast\" compared with Python loops.",
+   "example": "`np.matmul(x, W)` in the Dense layer ends up in a BLAS matrix-multiply kernel.",
+   "misconception": "That NumPy itself is written in Python. Its numeric core is compiled C, and heavy linear algebra is handed to BLAS.",
+   "related": ["vectorization", "element_wise_operation"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "relu",
+   "latex": "\\operatorname{relu}(x) = \\max(x, 0) = \\begin{cases} x & x \\ge 0 \\\\ 0 & x < 0 \\end{cases}",
+   "source_text": "relu(x) is max(x, 0)",
+   "variables": [
+    {"symbol": "x", "meaning": "a single tensor entry (the function is applied to every entry independently)"}
+   ],
+   "operations": "Compare with 0 and keep the larger.",
+   "purpose": "Introduces a nonlinearity into the Dense layer after the affine step `matmul(input, W) + b`.",
+   "interpretation": "Negative pre-activations are silenced; positive ones pass unchanged, so each output unit is either \"off\" (0) or reports a linear signal.",
+   "intuition": "Rectifier: one-way flow.",
+   "numerical_example": "For the matrix [[-1.5, 2.0], [0.0, -0.3]], relu gives [[0.0, 2.0], [0.0, 0.0]]. In `naive_relu` this is four iterations of `x[i, j] = max(x[i, j], 0)`.",
+   "source": "book",
+   "book_ref": "p.53"
+  },
+  {
+   "id": "m2",
+   "title": "Element-wise addition of two same-shaped rank-2 tensors",
+   "latex": "z_{ij} = x_{ij} + y_{ij}, \\qquad 0 \\le i < m,\\; 0 \\le j < n",
+   "source_text": "x[i, j] += y[i, j]  (inside the double for loop of naive_add)",
+   "variables": [
+    {"symbol": "x, y", "meaning": "rank-2 tensors of identical shape (m, n)"},
+    {"symbol": "z", "meaning": "the result, also of shape (m, n)"},
+    {"symbol": "i, j", "meaning": "row and column indices"}
+   ],
+   "operations": "One scalar addition per entry; m × n additions in total, all independent.",
+   "purpose": "Defines what `+` means for tensors of the same shape; the Dense layer's `+ b` is this operation after broadcasting `b` to the matrix shape (p.54).",
+   "interpretation": "Entry (i, j) of the output depends only on entries (i, j) of the inputs: the defining property of an element-wise operation.",
+   "intuition": "Overlay two grids and add cell by cell.",
+   "numerical_example": "x = [[1, 2], [3, 4]], y = [[10, 20], [30, 40]] → z = [[11, 22], [33, 44]].",
+   "source": "book",
+   "book_ref": "p.53"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "naive_relu: element-wise relu with explicit loops",
+   "original_code": "def naive_relu(x):\n    assert len(x.shape) == 2\n    x = x.copy()\n    for i in range(x.shape[0]):\n        for j in range(x.shape[1]):\n            x[i, j] = max(x[i, j], 0)\n    return x",
+   "language": "python",
+   "what_it_does": "Returns a new rank-2 tensor in which every negative entry of `x` has been replaced by 0 and every non-negative entry kept.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Takes one NumPy array `x`."},
+    {"lines": "2", "explanation": "Callout: \"x is a rank-2 NumPy tensor.\" The assertion restricts the function to matrices so that two nested loops suffice."},
+    {"lines": "3", "explanation": "Callout: \"Avoids overwriting the input tensor.\" `x.copy()` allocates a fresh array; without it, the in-place assignments below would mutate the caller's data."},
+    {"lines": "4-5", "explanation": "Iterate over every row index i and column index j; `x.shape[0]` rows, `x.shape[1]` columns."},
+    {"lines": "6", "explanation": "The relu rule itself, `max(x[i, j], 0)`, applied to one entry at a time; this is the element-wise definition made explicit."},
+    {"lines": "7", "explanation": "Return the modified copy."}
+   ],
+   "inputs_outputs": "Input: rank-2 array of any numeric dtype. Output: array of the same shape and dtype with negatives zeroed.",
+   "algorithm": "Double loop over all m × n entries; O(m·n) scalar operations executed in the Python interpreter.",
+   "theory_link": "Implements relu(x) = max(x, 0) and demonstrates that the operation is element-wise: iteration (i, j) touches only entry (i, j).",
+   "parameters": [{"name": "x", "role": "rank-2 input tensor"}],
+   "pitfalls": [
+    "Fails the assertion on vectors or rank-3 tensors; the NumPy built-in `np.maximum(x, 0.)` works for any rank.",
+    "Orders of magnitude slower than NumPy for large arrays (2.45 s vs 0.02 s on p.54) because each entry costs an interpreted Python step.",
+    "On an integer array, `max(x[i, j], 0)` stays integer; on floats it stays float. The built-in on p.54 uses `0.` to make the float intent explicit."
+   ],
+   "illustrative_code": "import numpy as np\nx = np.array([[-1.5, 2.0], [0.0, -0.3]])\nprint(naive_relu(x))          # [[0.  2. ] [0.  0. ]]\nprint(np.maximum(x, 0.))      # identical result, vectorized\nprint(x)                      # unchanged, thanks to x.copy()"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "naive_add: element-wise addition with explicit loops",
+   "original_code": "def naive_add(x, y):\n    assert len(x.shape) == 2\n    assert x.shape == y.shape\n    x = x.copy()\n    for i in range(x.shape[0]):\n        for j in range(x.shape[1]):\n            x[i, j] += y[i, j]\n    return x",
+   "language": "python",
+   "what_it_does": "Returns a new rank-2 tensor whose entry (i, j) is `x[i, j] + y[i, j]`, for two tensors of identical shape.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Two inputs, `x` and `y`."},
+    {"lines": "2-3", "explanation": "Callout: \"x and y are rank-2 NumPy tensors.\" Rank 2 is required for the two loops; identical shapes are required so every `x[i, j]` has a partner `y[i, j]`. This second assertion is exactly what broadcasting (p.54) relaxes."},
+    {"lines": "4", "explanation": "Callout: \"Avoids overwriting the input tensor.\" Work on a copy so the caller's `x` is unchanged."},
+    {"lines": "5-7", "explanation": "Visit every entry and add the corresponding entry of `y` in place on the copy."},
+    {"lines": "8", "explanation": "Return the sum."}
+   ],
+   "inputs_outputs": "Inputs: two rank-2 arrays of the same shape (m, n). Output: array of shape (m, n).",
+   "algorithm": "m × n independent scalar additions.",
+   "theory_link": "Element-wise addition z_ij = x_ij + y_ij; the `+ b` in the Dense layer is this operation once `b` has been broadcast to the matrix shape.",
+   "parameters": [
+    {"name": "x", "role": "first rank-2 tensor (copied, then accumulated into)"},
+    {"name": "y", "role": "second rank-2 tensor, same shape"}
+   ],
+   "pitfalls": [
+    "Rejects the matrix-plus-vector case of the Dense layer; p.54 introduces broadcasting and `naive_add_matrix_and_vector` to handle it.",
+    "If `x` is an integer array and `y` is float, `x[i, j] += y[i, j]` truncates to integer on the copy of `x`; NumPy's `x + y` would instead promote to float."
+   ],
+   "illustrative_code": "import numpy as np\nx = np.array([[1., 2.], [3., 4.]])\ny = np.array([[10., 20.], [30., 40.]])\nprint(naive_add(x, y))   # [[11. 22.] [33. 44.]]\nprint(x + y)             # same, vectorized\n\n# Variation on the same principle (not in the book):\ndef naive_multiply(x, y):\n    assert len(x.shape) == 2 and x.shape == y.shape\n    x = x.copy()\n    for i in range(x.shape[0]):\n        for j in range(x.shape[1]):\n            x[i, j] *= y[i, j]\n    return x"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Tracing naive_relu and naive_add entry by entry",
+   "kind": "step_by_step",
+   "body": "Let `x = [[-1.5, 2.0], [0.0, -0.3]]` and `y = [[1, 1], [1, 1]]`.\n\n**naive_relu(x)**\n1. `assert len(x.shape) == 2` passes: shape is (2, 2).\n2. Copy x.\n3. (i=0, j=0): max(−1.5, 0) = 0.\n4. (i=0, j=1): max(2.0, 0) = 2.0.\n5. (i=1, j=0): max(0.0, 0) = 0.0.\n6. (i=1, j=1): max(−0.3, 0) = 0.\n7. Return `[[0, 2.0], [0.0, 0]]`.\n\n**naive_add(x, y)**\n1. Both assertions pass (rank 2, equal shapes).\n2. Copy x.\n3. Four iterations add 1 to each entry: `[[-0.5, 3.0], [1.0, 0.7]]`.\n\nEach iteration reads and writes only position (i, j); the order of the iterations is irrelevant to the result. That independence is the formal content of \"element-wise\" and the reason a GPU can run all four (or four million) iterations simultaneously.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why independence buys parallelism",
+   "kind": "breakdown",
+   "body": "Compare two loops over a tensor:\n\n- **Element-wise** (`x[i, j] = max(x[i, j], 0)`): iteration (i, j) needs only input (i, j). No iteration waits for another, so the work can be split across thousands of GPU threads or packed into SIMD registers that apply one instruction to many entries at once. Speedup scales with the number of entries.\n- **Cumulative sum** (`x[i] = x[i] + x[i-1]`): iteration i needs the *result* of iteration i−1. Naively it is sequential; parallelizing it requires a different algorithm.\n\nThe book's word for exploiting the first case is *vectorized*. The 1970-1990 vector processors (Cray machines are the famous example; my addition) executed one instruction on a whole vector of operands, and NumPy's compiled loops plus modern CPU SIMD and GPU CUDA kernels are the descendants of that idea.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Code as notation: how to read this book's \"formulas\"",
+   "kind": "alternative",
+   "body": "The NOTE on this page commits the book to Python snippets instead of equations. A rough dictionary for readers who know the conventional notation (my mapping; the book does not present it):\n\n| Book (NumPy) | Conventional notation |\n|---|---|\n| `relu(x)` / `max(x, 0)` | $\\max(x, 0)$ applied element-wise |\n| `x + y` (same shape) | $z_{ij} = x_{ij} + y_{ij}$ |\n| `x * y` | Hadamard (element-wise) product $x \\odot y$ |\n| `matmul(x, W)` / `x @ W` | matrix product $xW$ |\n| `x.shape == (m, n)` | $x \\in \\mathbb{R}^{m \\times n}$ |\n\nThe advantage of the book's convention is that every definition is runnable and testable; the disadvantage is that shape constraints (which notation makes explicit through dimensions) are only enforced at run time, hence the `assert` lines in the naive implementations.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "relu(x) = max(x, 0)",
+   "why": "The page defines relu as max(x, 0); hover the curve to see that it is the identity for positive x and zero for negative x, with the kink at 0 that makes it nonlinear.",
+   "widget": "activation_functions",
+   "params": {"functions": ["relu"], "show_derivative": false}
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "The three operations inside the Dense layer",
+   "why": "The page unpacks `relu(matmul(input, W) + b)` into a tensor product, an addition and a relu; this shows their order and which are element-wise.",
+   "mermaid": "flowchart LR\n  I[\"input<br/>(samples, n_in)\"] --> M[\"matmul(input, W)<br/>tensor product, p.56<br/>not element-wise\"]\n  W[\"W<br/>(n_in, units)\"] --> M\n  M --> A[\"+ b<br/>addition via broadcasting, p.54<br/>element-wise\"]\n  B[\"b<br/>(units,)\"] --> A\n  A --> R[\"relu = max(x, 0)<br/>element-wise\"]\n  R --> O[\"output<br/>(samples, units)\"]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "All three operations in the Dense layer are element-wise.",
+   "correction": "Only addition and relu are. The tensor product `matmul` combines entire rows and columns, so an output entry depends on many input entries (p.56)."
+  },
+  {
+   "claim": "`naive_relu` modifies the array you pass in.",
+   "correction": "It calls `x.copy()` first, precisely to avoid overwriting the input tensor, as the margin callout says; the caller's array is untouched."
+  },
+  {
+   "claim": "NumPy is fast because it is written in Python cleverly.",
+   "correction": "NumPy's built-in operations are compiled, well-optimized functions that delegate the heavy lifting to BLAS routines written in Fortran or C; the speed comes from leaving the Python interpreter."
+  },
+  {
+   "claim": "Since the book uses no mathematical notation, the content is not really linear algebra.",
+   "correction": "The NOTE says the section deals entirely with linear algebra expressions; the author simply chose Python snippets as the notation because programmers learn them more readily."
+  },
+  {
+   "claim": "relu is a linear function.",
+   "correction": "relu(x) = max(x, 0) is linear on each side of 0 but has a kink at 0, so it is a nonlinearity; that is its whole purpose in the layer (p.62)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 52, "note": "The Dense formula `output = relu(matmul(input, W) + b)` that this page unpacks; the claim that networks reduce to a handful of tensor operations."},
+   {"page": 43, "note": "The first model used `activation=\"relu\"` in its hidden Dense layer."},
+   {"page": 47, "note": "Rank and shape, used by the `assert len(x.shape) == 2` checks."}
+  ],
+  "later": [
+   {"page": 54, "note": "BLAS sentence completes; NumPy `x + y` and `np.maximum(z, 0.)`; timing 0.02 s vs 2.45 s; CUDA on GPUs; broadcasting begins."},
+   {"page": 55, "note": "General broadcasting rule and `naive_add_matrix_and_vector`."},
+   {"page": 56, "note": "The tensor product `np.matmul` / `@`, the one non-element-wise operation of the layer."},
+   {"page": 62, "note": "Why the relu nonlinearity is essential between stacked layers."},
+   {"page": 70, "note": "Backpropagation chains the derivatives of these atomic operations (addition, relu, tensor product)."},
+   {"page": 77, "note": "The from-scratch `NaiveDense` layer reimplements `relu(matmul(x, W) + b)`."},
+   {"page": 90, "note": "The same tensor operations in TensorFlow."}
+  ],
+  "prerequisites": [
+   {"page": 52, "note": "The Dense layer as a function."},
+   {"page": 49, "note": "Indexing `x[i, j]` and shapes."}
+  ],
+  "related_math": [
+   {"page": 52, "note": "The full Dense layer formula."}
+  ],
+  "related_code": [
+   {"page": 54, "note": "Vectorized NumPy equivalents and the timing script."},
+   {"page": 55, "note": "`naive_add_matrix_and_vector`, the broadcasting counterpart of `naive_add`."},
+   {"page": 77, "note": "`NaiveDense` using `keras.ops.matmul` and `keras.ops.relu`."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "The Dense layer formula contains exactly three tensor operations: a tensor product `matmul(input, W)`, an addition `+ b`, and `relu(x) = max(x, 0)` (REctified Linear Unit).",
+  "The book uses NumPy snippets instead of mathematical notation: the code is the definition.",
+  "relu and addition are element-wise: applied independently to each entry, which makes them ideal for massively parallel (vectorized) implementations.",
+  "`naive_relu` and `naive_add` show the semantics with double `for` loops; they assert rank 2 (and equal shapes for addition) and copy the input to avoid overwriting it.",
+  "In practice, NumPy's optimized built-ins, backed by BLAS routines in Fortran or C, do the work; the naive loops are for understanding only."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "short",
+   "question": "What does \"relu\" stand for, and what does relu(x) compute?",
+   "options": [],
+   "answer": "REctified Linear Unit; relu(x) = max(x, 0), so negatives become 0 and non-negatives pass unchanged.",
+   "explanation": "Both the expansion of the acronym and the definition `max(x, 0)` are given in the third bullet on the page.",
+   "page_refs": [53]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "Which of the three operations in `relu(matmul(input, W) + b)` is NOT element-wise?",
+   "options": ["The relu", "The addition of b", "The tensor product matmul", "All three are element-wise"],
+   "answer": "The tensor product matmul",
+   "explanation": "The page states that relu and addition are element-wise. The tensor product is treated separately (p.56) because each output entry combines a whole row of the input with a whole column of W; it is not an independent per-entry operation.",
+   "page_refs": [53, 56]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why are element-wise operations \"highly amenable to massively parallel implementations\"?",
+   "options": [],
+   "answer": "Because each output entry depends only on the corresponding input entry (or entries), so all entries can be computed independently and simultaneously, in any order, with no communication between them.",
+   "explanation": "The page defines element-wise operations as applied independently to each entry; independence is exactly the condition under which work can be distributed across many parallel units (vectorized implementations, SIMD, GPU threads).",
+   "page_refs": [53]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "What is the purpose of the line `x = x.copy()` in `naive_relu` and `naive_add`?",
+   "options": [
+    "To convert x to float32",
+    "To avoid overwriting the input tensor",
+    "To make the loops run faster",
+    "To check that x is rank 2"
+   ],
+   "answer": "To avoid overwriting the input tensor",
+   "explanation": "The margin callout says exactly this: the functions assign into `x[i, j]`, so without a copy they would mutate the caller's array. Copying does not change dtype, does not speed up the loops, and the rank check is done by the separate `assert len(x.shape) == 2`.",
+   "page_refs": [53]
+  },
+  {
+   "id": "q5",
+   "type": "math",
+   "question": "Compute `naive_relu(x)` and `naive_add(x, y)` for x = [[-2, 3], [0, -1]] and y = [[1, 1], [2, 2]].",
+   "options": [],
+   "answer": "naive_relu(x) = [[0, 3], [0, 0]]; naive_add(x, y) = [[-1, 4], [2, 1]].",
+   "explanation": "relu replaces each negative entry with 0 and keeps 3 and 0. Addition pairs entries position by position: −2+1, 3+1, 0+2, −1+2.",
+   "page_refs": [53]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "Why would `naive_add` fail on the Dense layer's `matmul(input, W) + b`, and which upcoming idea fixes this?",
+   "options": [],
+   "answer": "Because `naive_add` asserts `x.shape == y.shape`, while the Dense layer adds a rank-2 matrix to a rank-1 vector `b`; broadcasting (2.3.2, p.54) virtually expands the vector to the matrix shape so the element-wise addition can proceed.",
+   "explanation": "The page's second bullet says the addition is between the resulting matrix and a vector, and `naive_add` requires identical rank-2 shapes; p.54 opens by pointing out this limitation and introducing broadcasting.",
+   "page_refs": [53, 54]
+  },
+  {
+   "id": "q7",
+   "type": "conceptual",
+   "question": "What does NumPy do instead of running Python loops for element-wise operations, according to the page?",
+   "options": [],
+   "answer": "It provides well-optimized built-in functions that delegate the heavy lifting to a BLAS (Basic Linear Algebra Subprograms) implementation, low-level routines written in Fortran or C.",
+   "explanation": "The final paragraph states this; p.54 completes the sentence and demonstrates the speed difference (0.02 s vs 2.45 s).",
+   "page_refs": [53, 54]
+  },
+  {
+   "id": "q8",
+   "type": "self",
+   "question": "Can you write, from memory, a `naive_subtract(x, y)` on the same pattern as `naive_add`, and say which single line you would change?",
+   "options": [],
+   "answer": "Identical to `naive_add` except the inner line becomes `x[i, j] -= y[i, j]`.",
+   "explanation": "The page says element-wise multiplication, subtraction and so on follow the same principle; the loop structure, assertions and copy are unchanged. If you were unsure, re-read `naive_add` and note that only the per-entry operation defines which element-wise function it is.",
+   "page_refs": [53]
+  }
+ ]
+}

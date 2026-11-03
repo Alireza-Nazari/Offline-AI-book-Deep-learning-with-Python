@@ -1,0 +1,287 @@
+{
+ "page_id": "page_382", "pdf_page": 382, "printed_page": "358", "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:12:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. The three bullets continue the parameter list from p.381. Listing 13.7 is complete on this page. The last body paragraph is cut mid-sentence and continues on p.383 ('...aren't necessarily temporally close')."
+ },
+ "overview": {
+  "title": "Instantiating the training, validation and test datasets",
+  "chapter": "13 Timeseries forecasting",
+  "section": "13.2 A temperature forecasting example",
+  "subsection": "13.2.1 Preparing the data",
+  "main_topic": "Using start_index and end_index to confine each dataset to its chronological split, and Listing 13.7, which builds train_dataset, val_dataset and test_dataset with timeseries_dataset_from_array.",
+  "central_idea": "The three datasets share the same arrays (raw_data[:-delay] as data, temperature[delay:] as targets) and the same window parameters, and differ only in the index range their windows may use. Each yields shuffled batches of 256 five-day hourly windows with their target temperatures.",
+  "importance": "These three dataset objects feed every model trained in chapter 13, from the dense baseline to the bidirectional LSTM. Understanding exactly what is in a batch is needed to interpret all later shapes and MAE values.",
+  "learning_objectives": [
+   "Explain the role of start_index and end_index for each split.",
+   "Read Listing 13.7 line by line, including why data is raw_data[:-delay] and targets is temperature[delay:].",
+   "State the shapes of samples and targets in a batch: (256, 120, 14) and (256,).",
+   "Explain what shuffle=True shuffles (whole windows, not timesteps inside a window) and why this does not break the chronological split.",
+   "Estimate how many windows and batches each dataset yields."
+  ],
+  "prerequisites": [
+   "p.381: timeseries_dataset_from_array, sampling_rate, sequence_length and delay",
+   "p.379: num_train_samples and num_val_samples",
+   "p.380: normalization of raw_data"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The parameter list from p.381 continues with the **index ranges** of the three splits:\n\n- training: `start_index = 0`, `end_index = num_train_samples`, so only the first 50% of the data is used;\n- validation: `start_index = num_train_samples`, `end_index = num_train_samples + num_val_samples`, the next 25%;\n- test: `start_index = num_train_samples + num_val_samples` with no `end_index`, the remaining samples.\n\n**Listing 13.7** sets `sampling_rate = 6`, `sequence_length = 120`, `delay = sampling_rate * (sequence_length + 24 - 1)` (= 858) and `batch_size = 256`. It then calls `keras.utils.timeseries_dataset_from_array` three times with identical arguments: data `raw_data[:-delay]`, `targets=temperature[delay:]`, the sampling rate and sequence length, `shuffle=True` and `batch_size=batch_size`. Only `start_index`/`end_index` differ. The two shifted arrays apply the toy-example rule from p.381: the window starting at row N of the (normalized) feature array is paired with the temperature at row N + 858, i.e. 24 hours after the window's last hourly point. The targets come from the unnormalized `temperature` array, so they are in degrees Celsius.\n\nEach dataset yields `(samples, targets)` tuples: `samples` is a batch of 256 samples, each with **120 consecutive hours** of input data (14 features per hour), and `targets` is the matching array of 256 temperatures. Because the samples are **randomly shuffled**, two consecutive sequences in a batch are not necessarily close in time (the sentence ends on p.383). Shuffling happens *within* each split's index range, so validation and test windows still come entirely after the training period.",
+ "paragraphs": [
+  {
+   "ref": "p382_e03",
+   "excerpt": "start_index = 0 and end_index = num_train_samples—For the training dataset, to only use",
+   "what_it_says": "The training dataset uses start_index = 0 and end_index = num_train_samples, so only the first 50% of the data.",
+   "what_it_means": "Windows may only use rows 0 to 210,224 of the data array. Since every window needs 715 consecutive raw rows (120 hourly points spanning 119 hours), window starts range from 0 to about 209,510.",
+   "why_it_matters": "This enforces the chronological split of p.379 at the level of individual samples.",
+   "technical_idea": "Beyond the book: the inputs of training windows stay below row 210,225, but their targets (858 rows after the start) can lie up to about 143 rows (one day) into the validation period. Inputs never overlap, so this is usually considered acceptable.",
+   "terminology": [
+    {"term": "start_index / end_index", "meaning": "Bounds on the rows of data that windows may use; end_index is exclusive."}
+   ],
+   "connections": [
+    "p.379: num_train_samples = int(0.5 * len(raw_data)).",
+    "p.380: num_train_samples = 210,225."
+   ]
+  },
+  {
+   "ref": "p382_e04",
+   "excerpt": "start_index = num_train_samples and end_index = num_train_samples + num_ val_samples—For the validation dataset",
+   "what_it_says": "The validation dataset uses start_index = num_train_samples and end_index = num_train_samples + num_val_samples, the next 25% of the data.",
+   "what_it_means": "Validation windows use rows 210,225 to 315,336 only, so every validation input is more recent than every training input.",
+   "why_it_matters": "Model selection in the chapter (comparing the baseline, dense, conv and recurrent models) is based on this dataset, so it must reflect forecasting the unseen future.",
+   "connections": [
+    "p.379: the reason validation must be more recent than training."
+   ]
+  },
+  {
+   "ref": "p382_e05",
+   "excerpt": "start_index = num_train_samples + num_val_samples—For the test dataset, to use the remaining",
+   "what_it_says": "The test dataset starts at num_train_samples + num_val_samples and, with no end_index, uses the remaining samples.",
+   "what_it_means": "Omitting end_index means windows may go up to the end of the data array, which is raw_data[:-delay]. So the last 858 rows of raw_data never begin a window; they only appear as targets.",
+   "why_it_matters": "The test set is the final, most recent 25%, touched only once to report the final score (for example the 2.62 degC baseline test MAE on p.384).",
+   "connections": [
+    "p.384: the commonsense baseline's test MAE."
+   ]
+  },
+  {
+   "ref": "p382_e08",
+   "excerpt": "Each dataset yields a tuple (samples, targets), where samples is a batch of",
+   "what_it_says": "Each dataset yields (samples, targets): samples is a batch of 256 samples, each with 120 consecutive hours of input data, and targets is the matching array of 256 target temperatures. The samples are randomly shuffled, so two consecutive sequences in a batch are not necessarily close in time (the sentence finishes on p.383).",
+   "what_it_means": "A batch tensor has shape (256, 120, 14): batch, hourly timesteps, features. targets has shape (256,). shuffle=True randomizes the order of whole windows. The order of the 120 hours inside each window is preserved, which is what the models need.",
+   "why_it_matters": "Shuffling windows decorrelates the samples within a batch, which makes gradient estimates less biased toward one particular week of weather. Since shuffling is done within each split's index range, it does not leak future data into training.",
+   "technical_idea": "Beyond the book: shuffle=True on val_dataset and test_dataset does not change their MAE (the metric averages over all samples). It is harmless, but not necessary.",
+   "terminology": [
+    {"term": "samples", "meaning": "Batch of input windows, shape (256, 120, 14)."},
+    {"term": "targets", "meaning": "Batch of target temperatures in degC, shape (256,)."}
+   ],
+   "connections": [
+    "p.383: Listing 13.8 inspects one batch and prints these shapes.",
+    "p.379: the chronological split that shuffling must not break."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "timeseries_dataset_from_array",
+   "name": "keras.utils.timeseries_dataset_from_array",
+   "definition": "A Keras utility that yields batches of sliding windows and their index-aligned targets from an array.",
+   "intuition": "One window factory per split, all with the same settings.",
+   "technical": "Arguments used here: data, targets, sampling_rate, sequence_length, shuffle, batch_size, start_index, end_index.",
+   "significance": "Produces train_dataset, val_dataset and test_dataset for all chapter-13 models.",
+   "example": "train_dataset over rows [0, 210225) of raw_data[:-858].",
+   "misconception": "shuffle=True scrambles the timesteps inside each window. It only shuffles the order of windows.",
+   "related": ["sliding_window", "temporal_split"],
+   "source": "book"
+  },
+  {
+   "id": "temporal_split",
+   "name": "Chronological split via index ranges",
+   "definition": "Implementing a time-ordered train/validation/test split by restricting the rows each dataset may draw windows from.",
+   "intuition": "Three non-overlapping stretches of the timeline.",
+   "technical": "start_index/end_index: [0, n_train), [n_train, n_train + n_val), [n_train + n_val, end).",
+   "significance": "Keeps evaluation honest while letting training use shuffled batches.",
+   "example": "The three bullets at the top of the page.",
+   "misconception": "Shuffling is incompatible with a chronological split. Shuffling within each split is fine.",
+   "related": ["validation_set"],
+   "source": "book"
+  },
+  {
+   "id": "batch",
+   "name": "Batch of timeseries samples",
+   "definition": "A group of windows processed together in one gradient step.",
+   "intuition": "256 independent five-day weather histories looked at side by side.",
+   "technical": "Rank-3 tensor (batch, timesteps, features) = (256, 120, 14), plus a (256,) target vector.",
+   "significance": "This is the input format of the dense, Conv1D and RNN models that follow.",
+   "example": "samples[0] might be from March 2010 and samples[1] from October 2011.",
+   "misconception": "Rows of a batch are consecutive in time. They are randomly chosen windows.",
+   "related": ["timeseries_dataset_from_array"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Index alignment produced by the shifted arrays",
+   "latex": "\\mathbf{x}^{(N)} = \\big(\\tilde{X}_{N},\\, \\tilde{X}_{N+6},\\, \\dots,\\, \\tilde{X}_{N+714}\\big) \\in \\mathbb{R}^{120\\times 14}, \\qquad y^{(N)} = T_{N+858}",
+   "source_text": "raw_data[:-delay], targets=temperature[delay:], sampling_rate=sampling_rate, sequence_length=sequence_length",
+   "variables": [
+    {"symbol": "\\tilde{X}_t", "meaning": "Row t of the normalized raw_data (14 features)"},
+    {"symbol": "T_t", "meaning": "Temperature in degC at row t (the unnormalized temperature array)"},
+    {"symbol": "N", "meaning": "Start row of the window, restricted by start_index/end_index"},
+    {"symbol": "858", "meaning": "delay = 6 x (120 + 24 - 1)"}
+   ],
+   "operations": "Every 6th row from N to N + 714 forms the input; temperature[delay:][N] = temperature[N + 858] is the target.",
+   "purpose": "Spells out what Listing 13.7 feeds the models.",
+   "interpretation": "The target is 144 rows (24 h) after the last input row N + 714.",
+   "intuition": "Five days of hourly snapshots, then 'what will the thermometer read one day after the last snapshot?'",
+   "numerical_example": "N = 1,000: inputs are rows 1,000, 1,006, ..., 1,714; target is temperature[1,858].",
+   "source": "inference",
+   "book_ref": "p.381"
+  },
+  {
+   "id": "m2",
+   "title": "Approximate number of windows and batches per split",
+   "latex": "n_{\\text{windows}} = (\\text{end} - \\text{start}) - r(L-1), \\qquad n_{\\text{batches}} = \\left\\lceil n_{\\text{windows}} / 256 \\right\\rceil",
+   "source_text": "(not in the book; derived from Listing 13.7)",
+   "variables": [
+    {"symbol": "r(L-1)", "meaning": "6 x 119 = 714 extra rows each window needs after its start"},
+    {"symbol": "\\text{end} - \\text{start}", "meaning": "Number of rows available to the split"}
+   ],
+   "operations": "Count valid window starts, then divide by the batch size, rounding up.",
+   "purpose": "Tells you how many steps one epoch takes.",
+   "interpretation": "Train: 210,225 - 714 = 209,511 windows, 819 batches. Validation: 105,112 - 714 = 104,398 windows, 408 batches. Test: (420,451 - 858 - 315,337) - 714 = 103,542 windows, 405 batches (using the 420,451 rows implied by p.380).",
+   "intuition": "Almost every row starts a window; only the last 714 rows of each range cannot.",
+   "numerical_example": "$\\lceil 209{,}511 / 256 \\rceil = \\lceil 818.4 \\rceil = 819$ training steps per epoch.",
+   "source": "ai_explanation",
+   "book_ref": "p.382"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "13.7",
+   "title": "Instantiating datasets for training, validation, and testing",
+   "original_code": "sampling_rate = 6\nsequence_length = 120\ndelay = sampling_rate * (sequence_length + 24 - 1)\nbatch_size = 256\n\ntrain_dataset = keras.utils.timeseries_dataset_from_array(\n    raw_data[:-delay],\n    targets=temperature[delay:],\n    sampling_rate=sampling_rate,\n    sequence_length=sequence_length,\n    shuffle=True,\n    batch_size=batch_size,\n    start_index=0,\n    end_index=num_train_samples,\n)\n\nval_dataset = keras.utils.timeseries_dataset_from_array(\n    raw_data[:-delay],\n    targets=temperature[delay:],\n    sampling_rate=sampling_rate,\n    sequence_length=sequence_length,\n    shuffle=True,\n    batch_size=batch_size,\n    start_index=num_train_samples,\n    end_index=num_train_samples + num_val_samples,\n)\n\ntest_dataset = keras.utils.timeseries_dataset_from_array(\n    raw_data[:-delay],\n    targets=temperature[delay:],\n    sampling_rate=sampling_rate,\n    sequence_length=sequence_length,\n    shuffle=True,\n    batch_size=batch_size,\n    start_index=num_train_samples + num_val_samples,\n)",
+   "language": "python",
+   "what_it_does": "Builds three shuffled, batched datasets of (five-day hourly window, temperature 24 hours later) pairs, one per chronological split.",
+   "line_explanations": [
+    {"lines": "1-4", "explanation": "Hourly sampling (one row in six), 120-hour windows, delay = 6 x 143 = 858 rows, batches of 256."},
+    {"lines": "6-7", "explanation": "data = raw_data[:-delay]: the normalized features with the last 858 rows removed, so every window start has a target."},
+    {"lines": "8", "explanation": "targets = temperature[delay:]: the degC temperature shifted by 858, so targets[N] = temperature[N + 858]."},
+    {"lines": "9-10", "explanation": "Inside each window, keep every 6th row, 120 times."},
+    {"lines": "11-12", "explanation": "Shuffle window order and batch by 256."},
+    {"lines": "13-14", "explanation": "Training windows confined to rows [0, num_train_samples)."},
+    {"lines": "17-26", "explanation": "Validation dataset: identical, except for the range [num_train_samples, num_train_samples + num_val_samples)."},
+    {"lines": "28-36", "explanation": "Test dataset: from num_train_samples + num_val_samples to the end of the data array (no end_index)."}
+   ],
+   "inputs_outputs": "Inputs: normalized raw_data (N, 14), temperature (N,), split sizes. Outputs: three datasets yielding (samples, targets) with shapes (256, 120, 14) and (256,); the last batch of each epoch is smaller.",
+   "algorithm": "Lazy sliding-window generation with index-aligned shifted targets, per-split index bounds, shuffling and batching.",
+   "theory_link": "Implements the problem formulation of p.380 and the toy alignment rule of p.381 at full scale.",
+   "parameters": [
+    {"name": "sampling_rate=6", "role": "One point per hour inside a window."},
+    {"name": "sequence_length=120", "role": "Five days of hourly points."},
+    {"name": "delay=858", "role": "Shift between data and targets, so the target is 24 h after the last input."},
+    {"name": "batch_size=256", "role": "Windows per batch."},
+    {"name": "shuffle=True", "role": "Randomizes window order (within the split)."},
+    {"name": "start_index / end_index", "role": "Restrict windows to the split's rows."}
+   ],
+   "pitfalls": [
+    "Changing sampling_rate or sequence_length without recomputing delay changes the forecast horizon.",
+    "The targets are in degC (unnormalized), while the inputs are normalized. MAE is therefore reported directly in degrees, but the temperature input column is on a different scale from the target.",
+    "Passing shuffle=True to the validation and test sets is harmless for metrics, but don't rely on their order (for plotting predictions over time, use shuffle=False).",
+    "The arrays are copied into the dataset pipeline. With raw_data at about 47 MB this is fine, but for very large series you would stream from disk."
+   ],
+   "illustrative_code": "# AI-written (not from the book): check the batch shapes and the alignment\nfor samples, targets in train_dataset.take(1):\n    print(samples.shape, targets.shape)  # (256, 120, 14) (256,)\n\n# alignment check on an unshuffled copy\nds = keras.utils.timeseries_dataset_from_array(\n    raw_data[:-delay], targets=temperature[delay:],\n    sampling_rate=6, sequence_length=120, batch_size=1, shuffle=False)\nx, y = next(iter(ds))\nassert float(y[0]) == temperature[858]"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why the same arrays work for all three splits",
+   "kind": "breakdown",
+   "body": "All three calls receive the same `raw_data[:-delay]` and `temperature[delay:]`. Because the targets are aligned by index, a window starting at row N always gets `temperature[N + 858]`, whichever split it belongs to. The splits differ only in which N are allowed, through `start_index` and `end_index`. This is simpler and less error-prone than slicing raw_data into three pieces and recomputing the alignment for each.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Shuffling windows vs shuffling the timeline",
+   "kind": "breakdown",
+   "body": "On p.379 the book warns against splits that ignore temporal order. Here `shuffle=True` might look contradictory, but it is not. The **split** is chronological (each dataset draws from its own time range), and only the **order in which windows are presented** within that range is randomized. Each window keeps its internal time order. Shuffling helps SGD: without it, a batch would contain 256 windows starting in consecutive rows, i.e. nearly identical copies of a ~6-day stretch of weather, giving very noisy, correlated gradient estimates.",
+   "source": "inference"
+  },
+  {
+   "title": "A batch as a 3D tensor",
+   "kind": "numerical",
+   "body": "One batch has $256 \\times 120 \\times 14 = 430{,}080$ input values and 256 targets. Flattened (as the dense model on p.384 will do), each sample becomes a vector of $120 \\times 14 = 1{,}680$ features. A recurrent layer instead reads 120 steps of 14 features each.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Shape of one batch from train_dataset",
+   "why": "The page states that each batch holds 256 samples of 120 consecutive hours plus 256 targets; this traces the shapes from the raw arrays to a batch.",
+   "widget": "tensor_shapes",
+   "params": {"steps": [
+    {"op": "raw_data[:-delay]", "shape": [419593, 14]},
+    {"op": "one window (r=6, L=120)", "shape": [120, 14]},
+    {"op": "batch of samples", "shape": [256, 120, 14]},
+    {"op": "batch of targets", "shape": [256]}
+   ]}
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "Three datasets from the same arrays",
+   "why": "Shows how the three calls in Listing 13.7 differ only in start_index/end_index.",
+   "mermaid": "flowchart TB\n D[\"data = raw_data[:-858]<br/>targets = temperature[858:]\"] --> TR[\"train_dataset<br/>start 0, end num_train_samples\"]\n D --> VA[\"val_dataset<br/>start num_train_samples<br/>end num_train_samples + num_val_samples\"]\n D --> TE[\"test_dataset<br/>start num_train_samples + num_val_samples<br/>(to the end)\"]\n TR --> B[\"shuffled batches: (256,120,14), (256,)\"]\n VA --> B\n TE --> B"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "shuffle=True breaks the chronological split.", "correction": "Shuffling is applied within each dataset's own index range, so validation and test windows remain entirely later than the training windows."},
+  {"claim": "Samples in a batch are consecutive five-day windows.", "correction": "They are randomly chosen windows, so samples[0] and samples[1] are not necessarily close in time (p.382-383)."},
+  {"claim": "The test dataset has an end_index of len(raw_data).", "correction": "No end_index is passed, so it runs to the end of the data argument, raw_data[:-delay]; the last 858 rows are only used as targets."},
+  {"claim": "The targets are normalized like the inputs.", "correction": "They come from the temperature array, which Listing 13.6 did not modify, so they are in degC."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 381, "note": "The toy example and the parameters sampling_rate, sequence_length and delay."},
+   {"page": 380, "note": "Normalization of raw_data with training statistics; the split sizes."},
+   {"page": 379, "note": "Why the split must be chronological."}
+  ],
+  "later": [
+   {"page": 383, "note": "Listing 13.8 inspects a batch; the commonsense baseline is introduced."},
+   {"page": 384, "note": "Baseline MAE 2.44 (val) / 2.62 (test) degC; a basic densely connected model is trained on these datasets."},
+   {"page": 386, "note": "A 1D convolutional model on the same datasets."},
+   {"page": 392, "note": "A recurrent layer in Keras processes the (120, 14) sequences."}
+  ],
+  "prerequisites": [
+   {"page": 381, "note": "How targets are aligned with windows."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 381, "note": "The dummy dataset with np.arange(10)."},
+   {"page": 380, "note": "Listing 13.6 normalizes the data used here."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "start_index/end_index confine the train, validation and test datasets to the first 50%, the next 25% and the rest of the timeline.",
+  "All three datasets use data=raw_data[:-delay] and targets=temperature[delay:], with delay = 858.",
+  "Batches have shape (256, 120, 14) for samples and (256,) for targets; the targets are in degC.",
+  "shuffle=True randomizes the order of windows within each split, so batches contain temporally scattered samples, without breaking the split.",
+  "About 819 training batches per epoch result (beyond the book: 209,511 windows / 256)."
+ ],
+ "questions": [
+  {"id": "q1", "type": "short", "question": "What start_index and end_index does each of the three datasets use?", "options": [], "answer": "Train: 0 to num_train_samples. Validation: num_train_samples to num_train_samples + num_val_samples. Test: num_train_samples + num_val_samples to the end (no end_index).", "explanation": "These are the three bullets at the top of the page.", "page_refs": [382]},
+  {"id": "q2", "type": "mcq", "question": "What is the shape of `samples` in one full batch from train_dataset?", "options": ["(256, 14)", "(256, 120, 14)", "(256, 720, 14)", "(120, 256, 14)"], "answer": "(256, 120, 14)", "explanation": "256 samples, each with 120 hourly timesteps of 14 features. 720 would be five days without subsampling, (256, 14) drops the time axis, and Keras puts the batch axis first.", "page_refs": [382]},
+  {"id": "q3", "type": "conceptual", "question": "Why is the data argument raw_data[:-delay] rather than raw_data?", "options": [], "answer": "targets is temperature[delay:], which is delay elements shorter. Trimming the data by the same amount keeps the two arrays aligned and guarantees every window start N has a target temperature[N + delay].", "explanation": "This is the same pattern as int_sequence[:-3] / int_sequence[3:] on p.381.", "page_refs": [381, 382]},
+  {"id": "q4", "type": "mcq", "question": "Which statement about shuffle=True in Listing 13.7 is correct?", "options": ["It shuffles the 120 timesteps within each window", "It mixes training and validation windows", "It randomizes the order of windows within each dataset's index range", "It shuffles the 14 feature columns"], "answer": "It randomizes the order of windows within each dataset's index range", "explanation": "Windows keep their internal order, and each dataset only draws from its own range. Shuffling timesteps or features would destroy the data's meaning.", "page_refs": [382]},
+  {"id": "q5", "type": "math", "question": "Approximately how many windows does train_dataset contain, and how many batches of 256 is that?", "options": [], "answer": "210,225 - 714 = 209,511 windows, which is 819 batches (the last one partial).", "explanation": "Each window needs 6 x 119 = 714 rows after its start, so starts run from 0 to 209,510. ceil(209,511/256) = 819. (Derived; not stated on this page.)", "page_refs": [380, 382]},
+  {"id": "q6", "type": "short", "question": "In what units are the targets, and why?", "options": [], "answer": "Degrees Celsius: they come from the temperature array, which was not normalized in Listing 13.6 (only raw_data was).", "explanation": "This is why MAE values later on (for example 2.44 on p.384) are directly in degrees.", "page_refs": [380, 382, 384]},
+  {"id": "q7", "type": "self", "question": "Could you modify Listing 13.7 to forecast 12 hours ahead from 3 days of hourly data? Which two lines change?", "options": [], "answer": "sequence_length = 72 and delay = sampling_rate * (sequence_length + 12 - 1); the dataset calls stay the same.", "explanation": "All alignment flows from the delay formula and the window parameters.", "page_refs": [381, 382]}
+ ]
+}

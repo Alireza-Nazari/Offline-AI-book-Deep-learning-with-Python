@@ -1,0 +1,307 @@
+{
+ "page_id": "page_431",
+ "pdf_page": 431,
+ "printed_page": "407",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:12:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. The four callouts of listing 14.20 were matched to their lines using the page image: \"Flattens the inputs\" -> ops.reshape(ops.cast(...), [-1]); \"Builds an identity matrix with all possible one-hot vectors\" -> ops.eye; \"Uses our input token IDs to gather the correct vector for each token\" -> ops.take; \"Unflattens the output\" -> the final reshape. The model summary announced at the bottom is on p.432."
+ },
+ "overview": {
+  "title": "A one-hot encoding layer and a bidirectional LSTM classifier",
+  "chapter": "14 Text classification",
+  "section": "14.5 Sequence models",
+  "subsection": "14.5.1 Training a recurrent model",
+  "main_topic": "Implementing one-hot encoding as a custom Keras layer with backend-agnostic keras.ops (eye + take + reshape), and building a Bidirectional LSTM sequence classifier on top of it",
+  "central_idea": "One-hot encoding is a row lookup into an identity matrix: flatten the token IDs, gather the matching rows of eye(depth), and reshape back, turning a (32, 600) batch into (32, 600, 30000). Feeding this into a Bidirectional(LSTM(64)) lets information flow both forward and backward along the review, which suits classification.",
+  "importance": "It shows how to write a custom preprocessing-style layer with keras.ops that runs on any backend. It also builds the first sequence model, whose cost and accuracy (p.432) motivate word embeddings (p.433).",
+  "learning_objectives": [
+   "Explain line by line how OneHotEncoding.call produces one-hot vectors with ops.eye and ops.take",
+   "Trace the tensor shapes inside the layer for a (32, 600) batch with depth 30,000",
+   "Explain what a bidirectional LSTM is and why it fits classification but not generation",
+   "Describe the architecture of listing 14.21 and its compile settings"
+  ],
+  "prerequisites": [
+   "Listing 14.19 and the padded sequence datasets (p.430)",
+   "Custom Keras layers (subclassing keras.Layer)",
+   "LSTMs from the previous chapter",
+   "Dropout"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Listing 14.20** builds a custom layer, `OneHotEncoding(keras.Layer)`, using only backend-agnostic `keras.ops`. The constructor stores `depth` (the vocabulary size). `call` does four steps, each marked by a callout:\n\n1. **Flattens the inputs**: `ops.reshape(ops.cast(inputs, \"int\"), [-1])` casts token IDs to integers and flattens the batch into a 1-D vector of IDs.\n2. **Builds an identity matrix with all possible one-hot vectors**: `ops.eye(self.depth)`. Row *i* of the identity matrix is exactly the one-hot vector of token *i*.\n3. **Uses the token IDs to gather the correct vector for each token**: `ops.take(one_hot_vectors, flat_inputs, axis=0)`.\n4. **Unflattens the output**: `ops.reshape(outputs, ops.shape(inputs) + (self.depth,))` restores the batch and sequence axes and adds a feature axis.\n\nThe layer is instantiated as `OneHotEncoding(max_tokens)`. Applied to a batch from `sequence_train_ds` it gives shape **(32, 600, 30000)**.\n\nThe authors put this layer directly into the model and use a **bidirectional LSTM** so information propagates both forward and backward along the sequence. They note that text *generation* (later in the book) needs **unidirectional** models, where a token's state depends only on earlier tokens, but for classification a bidirectional LSTM is a good fit.\n\n**Listing 14.21** builds the model with the Functional API: `Input(shape=(max_length,), dtype=\"int32\")` -> `one_hot_encoding` -> `Bidirectional(LSTM(64))` -> `Dropout(0.5)` -> `Dense(1, activation=\"sigmoid\")`. It is named `\"lstm_with_one_hot\"` and compiled with Adam, binary crossentropy and accuracy, the same training setup as the set models. The page ends by turning to the model summary and its parameter count (p.432: about 15.4 million parameters).",
+ "paragraphs": [
+  {
+   "ref": "p431_e07",
+   "excerpt": "We can build this layer directly into a model and use a bidirectional LSTM",
+   "what_it_says": "The one-hot layer can go directly into a model, followed by a bidirectional LSTM so information propagates forward and backward along the token sequence. Generation will later need unidirectional sequence models, where a token state depends only on the token state before it; for classification a bidirectional LSTM is a good fit.",
+   "what_it_means": "A Bidirectional wrapper runs two LSTMs, one left-to-right and one right-to-left, and concatenates their final states. Each direction's summary sees the whole review from a different end. For classification the entire input is available at once, so looking \"ahead\" is legitimate. When generating text, future tokens don't exist yet, so the model must be causal (unidirectional).",
+   "why_it_matters": "It introduces the distinction between bidirectional and causal sequence models, which returns with language models and the Transformer decoder in chapters 15-16.",
+   "technical_idea": "Beyond the book: with LSTM(64) in each direction, the default merge_mode=\"concat\" yields a 128-dimensional vector, matching the (None, 128) output on p.432. Bidirectionality also helps with the end padding of p.430: the backward LSTM reads the pads first and the real words last, so the words are fresh in its final state.",
+   "terminology": [
+    {"term": "bidirectional LSTM", "meaning": "Two LSTMs reading the sequence in opposite directions, with outputs combined (concatenated by default)."},
+    {"term": "unidirectional (causal) model", "meaning": "A sequence model where each position's state depends only on previous positions; required for generation."}
+   ],
+   "connections": [
+    "p.432: the Bidirectional layer outputs (None, 128) with 15,393,280 parameters"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "one_hot_encoding",
+   "name": "One-hot encoding as an identity-matrix lookup",
+   "definition": "Representing token ID i by row i of the V x V identity matrix.",
+   "intuition": "The identity matrix is a catalog of all possible one-hot vectors; you look up the row for each token.",
+   "technical": "ops.take(ops.eye(V), ids, axis=0) gathers rows; reshape restores (batch, length, V).",
+   "significance": "Turns (32, 600) integer batches into (32, 600, 30000) float inputs for the LSTM.",
+   "example": "With V = 4, ID 2 -> row 2 of eye(4) = [0, 0, 1, 0].",
+   "misconception": "That one-hot vectors are cheap; at V = 30,000 they are huge and almost entirely zeros.",
+   "related": ["embedding", "multi_hot_encoding", "keras_layer"],
+   "source": "book"
+  },
+  {
+   "id": "keras_layer",
+   "name": "Custom Keras layer with keras.ops",
+   "definition": "Subclassing keras.Layer and implementing call() with backend-agnostic ops.",
+   "intuition": "Write once, run on JAX, TensorFlow or PyTorch.",
+   "technical": "__init__ stores config (depth) and forwards **kwargs to super(); call(inputs) uses ops.cast, ops.reshape, ops.eye, ops.take, ops.shape. No weights, so 0 parameters (p.432).",
+   "significance": "Lets the one-hot step live inside the model graph.",
+   "example": "OneHotEncoding(max_tokens).",
+   "misconception": "That custom layers must have trainable weights.",
+   "related": ["functional_api"],
+   "source": "book"
+  },
+  {
+   "id": "bidirectional_rnn",
+   "name": "Bidirectional RNN",
+   "definition": "An RNN wrapper that processes the sequence forward and backward and merges the two outputs.",
+   "intuition": "Reading the review from both ends and combining the impressions.",
+   "technical": "Bidirectional(LSTM(64)) -> concat of two 64-dim final states = 128 dims.",
+   "significance": "A good fit for classification, where the full sequence is known; unsuitable for generation.",
+   "example": "Listing 14.21.",
+   "misconception": "That bidirectional models can be used for next-token generation; they would peek at the future.",
+   "related": ["lstm", "rnn", "language_model"],
+   "source": "book"
+  },
+  {
+   "id": "lstm",
+   "name": "LSTM",
+   "definition": "A gated recurrent layer that keeps a cell state across time steps.",
+   "intuition": "A reader with a notebook who decides what to write, keep and erase at each word.",
+   "technical": "Per direction, parameters = 4 x (units x (input_dim + units) + units).",
+   "significance": "With 30,000-dim one-hot inputs, the LSTM's input weights dominate the parameter count.",
+   "example": "LSTM(64) on 30,000-dim inputs: 4 x (64 x 30,064 + 64) = 7,696,640 per direction.",
+   "misconception": "That the LSTM size is set only by hidden_dim; input dimension matters just as much.",
+   "related": ["rnn", "bidirectional_rnn"],
+   "source": "ai_explanation"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "One-hot as a row gather from the identity matrix",
+   "latex": "\\operatorname{onehot}(s)_{b,t,:} = I_V[\\, s_{b,t}, :\\,], \\qquad s \\in \\{0,\\dots,V-1\\}^{B\\times T}",
+   "source_text": "one_hot_vectors = ops.eye(self.depth); outputs = ops.take(one_hot_vectors, flat_inputs, axis=0)",
+   "variables": [
+    {"symbol": "I_V", "meaning": "V x V identity matrix (ops.eye(depth))"},
+    {"symbol": "s_{b,t}", "meaning": "token ID at batch b, position t"},
+    {"symbol": "B, T, V", "meaning": "batch size 32, sequence length 600, depth 30,000"}
+   ],
+   "operations": "Index row $s_{b,t}$ of the identity matrix for every position.",
+   "purpose": "Explains why eye + take implements one-hot encoding.",
+   "interpretation": "The output tensor has shape (B, T, V) with exactly one 1 per (b, t).",
+   "intuition": "Each row of the identity matrix is already a one-hot vector.",
+   "numerical_example": "V = 3, s = [[2, 0]]: $I_3$ rows give [[[0,0,1],[1,0,0]]], shape (1, 2, 3).",
+   "source": "book",
+   "book_ref": "p.431"
+  },
+  {
+   "id": "m2",
+   "title": "Parameter count of the bidirectional LSTM (preview of p.432)",
+   "latex": "P = 2 \\times 4\\,\\big(h\\,(d + h) + h\\big) = 2 \\times 4\\,\\big(64 \\cdot 30064 + 64\\big) = 15{,}393{,}280",
+   "source_text": "Not on this page; the result 15,393,280 is printed in the model summary on p.432.",
+   "variables": [
+    {"symbol": "h", "meaning": "hidden_dim = 64 units per direction"},
+    {"symbol": "d", "meaning": "input feature size = 30,000 (one-hot depth)"},
+    {"symbol": "4", "meaning": "four gate/candidate blocks of an LSTM (input, forget, output, cell candidate)"},
+    {"symbol": "2", "meaning": "two directions"}
+   ],
+   "operations": "Each gate has an input kernel (d x h), a recurrent kernel (h x h) and a bias (h).",
+   "purpose": "Shows where the roughly 15 million parameters come from: almost all are input weights on the one-hot vectors.",
+   "interpretation": "$64 \\times 30{,}000 \\times 4 \\times 2 = 15{,}360{,}000$ of the 15,393,280 parameters multiply one-hot inputs, which means each is effectively a per-word lookup.",
+   "intuition": "A huge input dimension makes even a small LSTM big.",
+   "numerical_example": "Per direction: $64 \\times 30064 = 1{,}924{,}096$; $+64 = 1{,}924{,}160$; $\\times 4 = 7{,}696{,}640$; $\\times 2 = 15{,}393{,}280$. Dense: $128 + 1 = 129$.",
+   "source": "ai_explanation",
+   "book_ref": "p.432"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "14.20",
+   "title": "Building a one-hot encoding layer with Keras ops",
+   "original_code": "from keras import ops\n\nclass OneHotEncoding(keras.Layer):\n    def __init__(self, depth, **kwargs):\n        super().__init__(**kwargs)\n        self.depth = depth\n\n    def call(self, inputs):\n        flat_inputs = ops.reshape(ops.cast(inputs, \"int\"), [-1])\n        one_hot_vectors = ops.eye(self.depth)\n        outputs = ops.take(one_hot_vectors, flat_inputs, axis=0)\n        return ops.reshape(outputs, ops.shape(inputs) + (self.depth,))\n\none_hot_encoding = OneHotEncoding(max_tokens)",
+   "language": "python",
+   "what_it_does": "Defines a weightless Keras layer that converts integer token IDs of any shape into one-hot float vectors of length depth, and instantiates it with depth = max_tokens = 30,000.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "keras.ops provides NumPy-like operations that run on any backend (JAX, TensorFlow, PyTorch)."},
+    {"lines": "3-6", "explanation": "Subclass keras.Layer; forward standard kwargs such as name to the base class; store the one-hot depth."},
+    {"lines": "8-9", "explanation": "Callout \"Flattens the inputs\": cast to integers and reshape to 1-D ([-1]); a (32, 600) batch becomes 19,200 IDs."},
+    {"lines": "10", "explanation": "Callout \"Builds an identity matrix with all possible one-hot vectors\": eye(depth) is depth x depth, and row i is the one-hot vector of i."},
+    {"lines": "11", "explanation": "Callout \"Uses our input token IDs to gather the correct vector for each token\": take rows (axis=0) indexed by the IDs, giving (19200, depth)."},
+    {"lines": "12", "explanation": "Callout \"Unflattens the output\": reshape to the input shape plus a trailing depth axis, giving (32, 600, depth)."},
+    {"lines": "14", "explanation": "Create the layer with depth = max_tokens (30,000)."}
+   ],
+   "inputs_outputs": "Input: integer tensor of any shape S. Output: float tensor of shape S + (depth,).",
+   "algorithm": "flatten -> gather rows of the identity matrix -> reshape.",
+   "theory_link": "One-hot encoding of categorical token IDs (p.430); conceptually identical to an Embedding layer whose matrix is frozen to the identity.",
+   "parameters": [
+    {"name": "depth", "role": "length of each one-hot vector = vocabulary size"}
+   ],
+   "pitfalls": [
+    "Not in the book: ops.eye(30000) materializes a 30,000 x 30,000 float32 matrix (about 3.6 GB) inside call(); depending on backend and compilation this can use a lot of memory. ops.one_hot(inputs, depth) is a built-in alternative.",
+    "The output is huge: (32, 600, 30000) is 576 million floats per batch, which is why training is slow (p.432).",
+    "IDs >= depth would be out of range for take; max_tokens must match the vectorizer's vocabulary size."
+   ],
+   "illustrative_code": "# AI-written: the same result with a built-in op, for comparison\nfrom keras import ops\nx_small = ops.convert_to_tensor([[2, 0, 1]])\nprint(ops.one_hot(x_small, 4))  # shape (1, 3, 4)"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Trying the one-hot layer on a batch",
+   "original_code": ">>> x, y = next(sequence_train_ds.as_numpy_iterator())\n>>> one_hot_encoding(x).shape\n(32, 600, 30000)",
+   "language": "python",
+   "what_it_does": "Applies the layer to one training batch and shows the output shape.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "A (32, 600) integer batch from listing 14.19's pipeline."},
+    {"lines": "2-3", "explanation": "Every token position gains a 30,000-long one-hot axis."}
+   ],
+   "inputs_outputs": "Input (32, 600) ints; output (32, 600, 30000) floats.",
+   "algorithm": "One call of OneHotEncoding.",
+   "theory_link": "Confirms the shape math S + (depth,).",
+   "parameters": [],
+   "pitfalls": ["Each review alone is 600 x 30,000 = 18 million numbers (p.432)."]
+  },
+  {
+   "id": "c3",
+   "listing": "14.21",
+   "title": "Building an LSTM sequence model",
+   "original_code": "hidden_dim = 64\ninputs = keras.Input(shape=(max_length,), dtype=\"int32\")\nx = one_hot_encoding(inputs)\nx = layers.Bidirectional(layers.LSTM(hidden_dim))(x)\nx = layers.Dropout(0.5)(x)\noutputs = layers.Dense(1, activation=\"sigmoid\")(x)\nmodel = keras.Model(inputs, outputs, name=\"lstm_with_one_hot\")\nmodel.compile(\n    optimizer=\"adam\",\n    loss=\"binary_crossentropy\",\n    metrics=[\"accuracy\"],\n)",
+   "language": "python",
+   "what_it_does": "Builds and compiles a Functional-API binary classifier: int token IDs -> one-hot -> Bidirectional LSTM (64 per direction) -> dropout -> sigmoid output.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "64 LSTM units per direction."},
+    {"lines": "2", "explanation": "Input of 600 int32 token IDs per sample (max_length from listing 14.19)."},
+    {"lines": "3", "explanation": "One-hot encode inside the model: (None, 600) -> (None, 600, 30000)."},
+    {"lines": "4", "explanation": "Bidirectional wrapper: forward and backward LSTMs; by default the final states are concatenated -> (None, 128)."},
+    {"lines": "5", "explanation": "Dropout(0.5) randomly zeros half of the 128 features during training for regularization."},
+    {"lines": "6", "explanation": "Single sigmoid unit: probability that the review is positive."},
+    {"lines": "7-12", "explanation": "Wrap as a Model named \"lstm_with_one_hot\" and compile with the same optimizer, loss and metric as the linear models (p.424)."}
+   ],
+   "inputs_outputs": "Input: (batch, 600) int32. Output: (batch, 1) probability.",
+   "algorithm": "Recurrent processing in both directions, then a logistic classifier on the 128-dim summary.",
+   "theory_link": "A sequence model that learns positional dependencies from raw token order (p.429).",
+   "parameters": [
+    {"name": "hidden_dim", "role": "LSTM units per direction (64)"},
+    {"name": "Dropout rate", "role": "0.5 fraction of features dropped during training"},
+    {"name": "optimizer / loss", "role": "adam / binary_crossentropy, as for the set models"}
+   ],
+   "pitfalls": [
+    "The model is far larger (about 15.4M parameters, p.432) than the linear models because the LSTM's input weights scale with the 30,000-dim one-hot input.",
+    "No masking is used, so the LSTMs also process the padding positions."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Shape trace inside OneHotEncoding.call",
+   "kind": "step_by_step",
+   "body": "For a batch `x` of shape (32, 600) and depth 30,000:\n1. `ops.cast(inputs, \"int\")` -> (32, 600) ints.\n2. `ops.reshape(..., [-1])` -> (19200,).\n3. `ops.eye(30000)` -> (30000, 30000).\n4. `ops.take(eye, flat, axis=0)` -> (19200, 30000): row `flat[k]` for each k.\n5. `ops.reshape(outputs, (32, 600) + (30000,))` -> (32, 600, 30000).\n\nFlattening is used so that a simple 1-D gather works for inputs of any rank.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "One-hot + LSTM is secretly an embedding lookup",
+   "kind": "alternative",
+   "body": "Multiplying a one-hot vector $e_i$ by the LSTM input kernel $W \\in \\mathbb{R}^{30000 \\times 256}$ just selects row $i$ of $W$. So the first thing the LSTM does is look up a learned 256-dim vector per word (4 gates x 64 units), at the cost of building and multiplying huge sparse matrices. An `Embedding` layer does the same lookup directly from integer IDs, which is where the chapter goes next (p.433-434). This is an AI explanation that anticipates the book's argument.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Reading from both ends",
+   "kind": "analogy",
+   "body": "A bidirectional LSTM is like two editors reading the same review, one from the first word and one from the last, then pooling their notes. That's fine for judging a finished review, but a writer composing the next word can only use what is already written. That is the unidirectional case the authors mention for generation.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Shapes inside the OneHotEncoding layer",
+   "why": "Listing 14.20 flattens a (32, 600) batch, gathers rows of eye(30000) and reshapes to the (32, 600, 30000) shape printed on the page.",
+   "widget": "tensor_shapes",
+   "params": {"steps": [{"op": "token IDs", "shape": [32, 600]}, {"op": "flatten", "shape": [19200]}, {"op": "take rows of eye(30000)", "shape": [19200, 30000]}, {"op": "unflatten", "shape": [32, 600, 30000]}]}
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Listing 14.21 architecture",
+   "why": "The model on this page: int input (600) -> one-hot (600, 30000) -> Bidirectional LSTM (128) -> Dropout(0.5) -> Dense(1, sigmoid). The Dense layer has 128 x 1 + 1 = 129 parameters, as p.432 shows.",
+   "widget": "nn_architecture",
+   "params": {"layers": [{"name": "input_layer (token IDs)", "type": "input", "shape": "(None, 600)"}, {"name": "one_hot_encoding", "type": "other", "shape": "(None, 600, 30000)"}, {"name": "Bidirectional(LSTM(64))", "type": "rnn", "units": 128, "shape": "(None, 128)"}, {"name": "dropout 0.5", "type": "dropout", "units": 128}, {"name": "dense", "type": "output", "units": 1, "activation": "sigmoid"}]}
+  },
+  {
+   "id": "v3",
+   "type": "widget",
+   "title": "The LSTM cell being run over the sequence",
+   "why": "Each direction of Bidirectional(LSTM(64)) unrolls an LSTM cell over the 600 one-hot vectors; step through the gate updates.",
+   "widget": "rnn_unroll",
+   "params": {"timesteps": 4, "cell": "lstm"}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "The OneHotEncoding layer has trainable parameters.", "correction": "It is a fixed lookup into an identity matrix; the summary on p.432 shows 0 parameters for it."},
+  {"claim": "A bidirectional LSTM can be used to generate text.", "correction": "The authors note that generation needs unidirectional models, where a token's state depends only on earlier tokens."},
+  {"claim": "Bidirectional(LSTM(64)) outputs 64 features.", "correction": "The two directions' 64-dim states are concatenated: 128 features (p.432)."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 430, "note": "Listing 14.19 produces sequence_train_ds with (32, 600) int batches; one-hot encoding motivated."},
+   {"page": 429, "note": "Sequence models learn positional dependencies; RNNs are one option."},
+   {"page": 424, "note": "Same compile settings (adam, binary_crossentropy, accuracy) as the linear classifier."}
+  ],
+  "later": [
+   {"page": 432, "note": "Model summary (15,393,409 parameters), training and the 84% test accuracy, plus why one-hot inputs are so expensive."},
+   {"page": 433, "note": "14.5.2 Understanding word embeddings: dense alternatives to one-hot vectors."},
+   {"page": 434, "note": "14.5.3 Using a word embedding layer instead of one-hot encoding."}
+  ],
+  "prerequisites": [
+   {"page": 430, "note": "One-hot encoding defined for token IDs."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 432, "note": "Listings 14.22-14.23 train and evaluate this model."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "One-hot encoding can be implemented as gathering rows of an identity matrix: flatten -> ops.take(ops.eye(depth)) -> reshape.",
+  "Written with keras.ops, the custom layer works on any Keras backend and has no weights.",
+  "The one-hot output for a batch is (32, 600, 30000), which is huge.",
+  "A bidirectional LSTM reads the sequence both ways and suits classification; generation needs unidirectional models.",
+  "Listing 14.21: Input(600, int32) -> OneHot -> Bidirectional(LSTM(64)) -> Dropout(0.5) -> Dense(1, sigmoid), compiled like the set models."
+ ],
+ "questions": [
+  {"id": "q1", "type": "short", "question": "Why does gathering rows of ops.eye(depth) produce one-hot vectors?", "options": [], "answer": "Row i of the identity matrix has a 1 at position i and 0s elsewhere, which is exactly the one-hot vector of token i. ops.take with the token IDs selects the matching row for each token.", "explanation": "These are the callouts \"Builds an identity matrix with all possible one-hot vectors\" and \"Uses our input token IDs to gather the correct vector for each token\".", "page_refs": [431]},
+  {"id": "q2", "type": "mcq", "question": "What is the output shape of one_hot_encoding(x) for a batch x of shape (32, 600) with max_tokens = 30,000?", "options": ["(32, 30000)", "(32, 600)", "(32, 600, 30000)", "(19200, 30000)"], "answer": "(32, 600, 30000)", "explanation": "The final reshape restores the input shape and appends depth. (19200, 30000) is the intermediate shape before unflattening; (32, 30000) would be a multi-hot vector per review.", "page_refs": [431]},
+  {"id": "q3", "type": "conceptual", "question": "Why is a bidirectional LSTM appropriate for classification but not for text generation?", "options": [], "answer": "In classification the whole review is available, so information can flow both forward and backward. In generation the future tokens don't exist yet, so each token's state may depend only on earlier tokens (a unidirectional model).", "explanation": "Stated in the paragraph after the shape check.", "page_refs": [431]},
+  {"id": "q4", "type": "mcq", "question": "What does the line flat_inputs = ops.reshape(ops.cast(inputs, \"int\"), [-1]) do?", "options": ["Normalizes the token IDs to [0, 1]", "Casts the IDs to integers and flattens them into a 1-D vector", "Builds the identity matrix", "Pads the sequences to length 600"], "answer": "Casts the IDs to integers and flattens them into a 1-D vector", "explanation": "Callout \"Flattens the inputs\". The identity matrix comes from ops.eye, padding happens in TextVectorization (p.430), and no normalization is done.", "page_refs": [431]},
+  {"id": "q5", "type": "math", "question": "How many parameters does the final Dense(1) layer have in listing 14.21, and why?", "options": [], "answer": "129: 128 weights (one per feature of the concatenated bidirectional output) plus 1 bias.", "explanation": "Bidirectional(LSTM(64)) concatenates two 64-dim states into 128; the summary on p.432 confirms 129.", "page_refs": [431, 432]},
+  {"id": "q6", "type": "short", "question": "Why is the OneHotEncoding layer written with keras.ops rather than, say, NumPy or TensorFlow functions?", "options": [], "answer": "keras.ops is backend-agnostic, so the layer runs inside the model on JAX, TensorFlow or PyTorch (the chapter's outputs were produced with JAX, p.426).", "explanation": "The listing title stresses \"with Keras ops\"; multi-backend support is emphasized in the sidebar on p.426.", "page_refs": [426, 431]},
+  {"id": "q7", "type": "self", "question": "Can you trace the shapes of a (32, 600) batch through every line of OneHotEncoding.call and then through listing 14.21 to the output?", "options": [], "answer": "(32,600) -> (19200,) -> eye (30000,30000) -> take (19200,30000) -> (32,600,30000) -> Bidirectional LSTM (32,128) -> Dropout (32,128) -> Dense (32,1).", "explanation": "If you can do this without looking, you understand both listings.", "page_refs": [431, 432]}
+ ]
+}

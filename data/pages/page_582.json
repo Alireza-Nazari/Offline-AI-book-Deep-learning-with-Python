@@ -1,0 +1,300 @@
+{
+ "page_id": "page_582",
+ "pdf_page": 582,
+ "printed_page": "558",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:00:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Resolution figures (p582_e05): 1e-7 / 1e-16 / 1e-3 are the *relative* spacing near 1 (machine epsilon: 2^-23 ≈ 1.19e-7, 2^-52 ≈ 2.2e-16, 2^-10 ≈ 9.8e-4). They are not an absolute 'smallest distance between two arbitrary numbers'. The sidebar just above says spacing grows with magnitude, and float16 can itself represent values far smaller than 1e-3 (down to ~6e-8). The notes explain the relative interpretation."
+  ],
+  "extraction_quality": "Clean. The page opens with the end of the 'On floating-point encoding' sidebar ('(continued)'). Minor book typo 'the typically learning rate' noted in the paragraph note."
+ },
+ "overview": {
+  "title": "Float resolution and float16/bfloat16 inference",
+  "chapter": "18 Best practices for the real world",
+  "section": "18.3 Speeding up training and inference with lower-precision computation",
+  "subsection": "18.3.2 Float16 inference",
+  "main_topic": "Resolution of float16/32/64, setting the Keras dtype policy to float16 for faster inference, and bfloat16 as an alternative 16-bit format",
+  "central_idea": "float32 resolves differences of about 1e-7, float64 about 1e-16, and float16 only about 1e-3. That is too coarse for training updates but fine for inference. Setting keras.config.set_dtype_policy(\"float16\") before defining a model gives nearly 2x faster inference on GPU/TPU. bfloat16 is a 16-bit alternative with 8 exponent and 7 mantissa bits: wider range, lower resolution, often faster on TPUs.",
+  "importance": "This is the first practical use of reduced precision: a one-line change that roughly halves inference time and memory. It also introduces bfloat16, the default 16-bit type for many large models, including Gemma loaded in chapter 16.",
+  "learning_objectives": [
+   "State the approximate resolution of float16, float32 and float64",
+   "Explain why float32 is safe for training with weight updates around 1e-6",
+   "Set a global float16 dtype policy in Keras and know when to do it",
+   "Compare float16 and bfloat16 in exponent/mantissa bits, range and resolution",
+   "Decide when to try bfloat16 instead of float16"
+  ],
+  "prerequisites": [
+   "Floating-point encoding: sign, exponent, mantissa (p.581)",
+   "Learning rate and weight updates (p.64)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**End of the sidebar.** Since representable floats are spaced unevenly, the error introduced when converting a number to floating point varies a lot with the value, and tends to grow for numbers with a large absolute value.\n\n**Resolution in practice.** The authors suggest thinking of float resolution as the smallest distance between two numbers you can safely process: about **1e-7** in single precision, **1e-16** in double precision, and only **1e-3** in half precision. These correspond to the machine epsilons $2^{-23}$, $2^{-52}$ and $2^{-10}$, i.e. relative spacing near 1.\n\n**18.3.2 Float16 inference.** All models in the book so far used `float32` weights and computations. That is enough precision for the forward and backward passes, including small gradient updates: with a typical learning rate of 1e-3, weight updates around 1e-6 are common. Modern GPUs and TPUs have specialized hardware that runs 16-bit operations much faster and with less memory than 32-bit ones. You can set Keras's default precision with `keras.config.set_dtype_policy(\"float16\")`. Do this **before** defining your model. The result is a nice inference speedup (e.g. for `model.predict()`), nearly **2x** on GPU and TPU.\n\n**bfloat16.** An alternative 16-bit type, `bfloat16`, works better on some devices, especially TPUs. It uses **8 exponent bits instead of 5** and **7 mantissa bits instead of 10** (table 18.1, p.583). It covers a much wider range of values with lower resolution. Since some devices are better optimized for one or the other, try both and keep the faster one.",
+ "paragraphs": [
+  {
+   "ref": "p582_e04",
+   "excerpt": "For this reason, the numerical error incurred when converting a number to its",
+   "what_it_says": "Because of the uneven distribution of floats, the error in converting a number to floating point varies a lot with the exact value and tends to be larger for numbers with large absolute values.",
+   "what_it_means": "The rounding error is at most half the gap to the next representable value, and that gap doubles with every power of two. In absolute terms, converting 1,000,000.3 to float32 loses far more than converting 1.3, while the relative error stays below about 6e-8 in both cases. The error also depends on the exact value: numbers that are exactly representable, like 0.5 or 3.0, have zero error.",
+   "why_it_matters": "Neural networks work best with values of moderate magnitude (normalized inputs, small weights, normalization layers), partly because that is where low-precision floats are most accurate.",
+   "terminology": [
+    {"term": "rounding error", "meaning": "Difference between a real number and the nearest representable float."}
+   ],
+   "connections": ["p.581: the sidebar's first half on non-uniform spacing", "p.203: value normalization keeps data in a well-behaved range"]
+  },
+  {
+   "ref": "p582_e05",
+   "excerpt": "The way to think about the resolution of floating-point numbers is in terms",
+   "what_it_says": "Resolution can be thought of as the smallest distance between two arbitrary numbers you can safely process: about 1e-7 in single precision, 1e-16 in double, and only 1e-3 in half precision.",
+   "what_it_means": "These are the machine epsilons: the gap between 1 and the next float (2^-23 ≈ 1.2e-7, 2^-52 ≈ 2.2e-16, 2^-10 ≈ 9.8e-4). In practice, two numbers of order 1 that differ by less than this are indistinguishable. For numbers of other magnitudes, scale by the magnitude: the relevant gap is about ε·|x|.",
+   "why_it_matters": "Comparing these resolutions with the size of weight updates (1e-6, next paragraph) shows why float16 cannot serve as the weight storage format during training.",
+   "technical_idea": "As flagged for review: this is relative resolution, not absolute. float16 can represent 1e-5 by itself (minimum normal ≈ 6.1e-5, subnormals down to ≈ 6e-8), but it cannot represent 1 + 1e-5, which rounds to 1.",
+   "terminology": [
+    {"term": "machine epsilon", "meaning": "Gap between 1.0 and the next larger representable float; a measure of relative precision (term not used in the book)."}
+   ],
+   "connections": ["p.581: float16/32/64 bit widths"]
+  },
+  {
+   "ref": "p582_e07",
+   "excerpt": "Every model you’ve seen in this book so far has used single-precision numbers",
+   "what_it_says": "All models in the book so far stored float32 weights and computed on float32 inputs. That is enough precision for forward and backward passes without losing information, notably for small gradient updates: the typical learning rate is 1e-3, and weight updates around 1e-6 are common.",
+   "what_it_means": "With weights of order 1 and updates of order 1e-6, float32's 1e-7 resolution is just enough to register the update. float16's 1e-3 resolution would round `w + 1e-6` back to `w`, so training would silently stall. (The book's phrase 'the typically learning rate' is a typo for 'the typical learning rate'.)",
+   "why_it_matters": "This sets up the main constraint of the section: speed comes from 16-bit math, but weight updates need 32-bit precision. Mixed precision (p.583) resolves that tension.",
+   "technical_idea": "Inference (not stated in the book): 'without losing any information' is an idealization, since float32 math still rounds. The point is that its rounding is far below the noise inherent in SGD.",
+   "terminology": [
+    {"term": "weight update", "meaning": "The change applied to a weight in one optimizer step, about learning rate × gradient."}
+   ],
+   "connections": ["p.64: gradient descent and the learning rate", "p.583: mixed-precision training keeps float32 variables for exactly this reason"]
+  },
+  {
+   "ref": "p582_e08",
+   "excerpt": "Modern GPUs and TPUs feature specialized hardware that can run 16-bit operations much",
+   "what_it_says": "Modern GPUs and TPUs have specialized hardware that runs 16-bit operations much faster and with less memory than 32-bit ones. Using lower precision when possible can speed things up significantly. You can set the default float precision to float16 with `keras.config.set_dtype_policy(\"float16\")`.",
+   "what_it_means": "Examples are NVIDIA Tensor Cores and TPU matrix units. Halving bits per number also halves memory traffic, which often limits speed. A Keras *dtype policy* sets the dtype that layers use for their variables and computations.",
+   "why_it_matters": "This is a one-line, global change with no edits to model code.",
+   "technical_idea": "Beyond the book: a pure \"float16\" policy stores *variables* in float16 too, which is fine for inference but not for training. That is why training uses \"mixed_float16\" (p.583).",
+   "terminology": [
+    {"term": "dtype policy", "meaning": "Keras setting determining the variable and compute dtypes of layers."},
+    {"term": "Tensor Cores", "meaning": "NVIDIA's units for fast low-precision matrix multiplication (not named in the book)."}
+   ],
+   "connections": ["p.583: keras.config.set_dtype_policy(\"mixed_float16\")"]
+  },
+  {
+   "ref": "p582_e10",
+   "excerpt": "Note that this should be done before you define your model. Doing this",
+   "what_it_says": "Set the policy before defining the model. This gives a nice inference speedup, e.g. for `model.predict()`, of nearly 2x on GPU and TPU.",
+   "what_it_means": "Layers read the global policy when they are constructed, so layers created earlier keep float32. In practice you would set the policy, rebuild the model architecture, and load trained float32 weights into it (they are cast on assignment).",
+   "why_it_matters": "Inference cost dominates deployed systems, so a 2x speedup halves serving cost or latency.",
+   "terminology": [],
+   "connections": ["p.212: deploying a model, where inference speed matters", "p.585: int8 quantization for even faster inference"]
+  },
+  {
+   "ref": "p582_e11",
+   "excerpt": "There’s also an alternative to float16 that works better on some devices, in",
+   "what_it_says": "bfloat16 is an alternative 16-bit type that works better on some devices, especially TPUs. Compared with float16, it uses 8 exponent bits instead of 5 and 7 mantissa bits instead of 10 (table 18.1). This gives a much wider range but lower resolution. Some devices are better optimized for bfloat16, so try both and pick the fastest.",
+   "what_it_means": "bfloat16 is float32 with the bottom 16 mantissa bits cut off: same 8-bit exponent, so the same range (up to ~3.4e38, and tiny values down to ~1e-38), but only 7 mantissa bits (relative resolution 2^-7 ≈ 0.0078, about 2-3 decimal digits). float16 has more precision (~0.001) but a narrow range (max 65,504; smallest normal ≈ 6.1e-5), so it overflows and underflows easily.",
+   "why_it_matters": "Because bfloat16 has float32's range, gradients rarely underflow, and bfloat16 training usually does not need the loss scaling of p.583-584. It is the standard choice on TPUs and recent GPUs and for LLM weights (e.g. Gemma on p.521).",
+   "technical_idea": "Converting float32 to bfloat16 is just truncation or rounding of the low 16 bits, which makes it very cheap in hardware.",
+   "terminology": [
+    {"term": "bfloat16", "meaning": "'Brain floating point' 16-bit format: 1 sign, 8 exponent, 7 mantissa bits."},
+    {"term": "dynamic range", "meaning": "Ratio between the largest and smallest representable magnitudes."}
+   ],
+   "connections": ["p.583: table 18.1 lists the bit counts", "p.521: Gemma loaded with dtype=\"bfloat16\" to save memory", "p.579: TPUs"]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "float16",
+   "name": "float16 (half precision)",
+   "definition": "16-bit IEEE float with 1 sign, 5 exponent and 10 mantissa bits.",
+   "intuition": "About 3 decimal digits of precision in a narrow range.",
+   "technical": "Machine epsilon 2^-10 ≈ 9.8e-4; max 65,504; smallest normal ≈ 6.1e-5.",
+   "significance": "Nearly 2x faster inference on GPU/TPU, and the compute dtype of mixed_float16 training.",
+   "example": "`keras.config.set_dtype_policy(\"float16\")`",
+   "misconception": "float16 can represent 1e-5 by itself, but cannot represent 1 + 1e-5. The problem is resolution relative to magnitude.",
+   "related": ["bfloat16", "mixed_precision", "numerical_precision"],
+   "source": "book"
+  },
+  {
+   "id": "bfloat16",
+   "name": "bfloat16",
+   "definition": "16-bit float with 8 exponent bits and 7 mantissa bits (plus sign).",
+   "intuition": "float32's range with much coarser resolution.",
+   "technical": "Range ~1e-38 to ~3.4e38; machine epsilon 2^-7 ≈ 7.8e-3.",
+   "significance": "Often faster on TPUs; less prone to overflow/underflow than float16.",
+   "example": "`keras.config.set_dtype_policy(\"bfloat16\")` or `dtype=\"bfloat16\"` when loading an LLM.",
+   "misconception": "bfloat16 is not 'more precise' than float16. It has fewer mantissa bits; its advantage is range.",
+   "related": ["float16", "tpu", "mixed_precision"],
+   "source": "book"
+  },
+  {
+   "id": "dtype_policy",
+   "name": "Keras dtype policy",
+   "definition": "A global setting controlling the dtypes Keras layers use for variables and computation.",
+   "intuition": "A default 'number format' for every layer you create afterward.",
+   "technical": "`keras.config.set_dtype_policy(\"float16\")`; must precede model definition.",
+   "significance": "One line switches the entire model to faster arithmetic.",
+   "example": "Set float16, rebuild the model, load weights, run predict().",
+   "misconception": "It does not convert models that already exist.",
+   "related": ["mixed_precision", "keras_layer"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Resolution (machine epsilon) of each precision",
+   "latex": "\\varepsilon = 2^{-p}:\\quad \\varepsilon_{16} = 2^{-10}\\approx 10^{-3},\\ \\ \\varepsilon_{32} = 2^{-23}\\approx 10^{-7},\\ \\ \\varepsilon_{64} = 2^{-52}\\approx 10^{-16}",
+   "source_text": "In single precision, that’s around 1e-7. In double precision, that’s around 1e-16. And in half precision, it’s only 1e-3.",
+   "variables": [
+    {"symbol": "p", "meaning": "Number of mantissa bits (10, 23, 52)."},
+    {"symbol": "\\varepsilon", "meaning": "Gap between 1 and the next representable number."}
+   ],
+   "operations": "Powers of two.",
+   "purpose": "Shows where the book's 1e-3 / 1e-7 / 1e-16 figures come from.",
+   "interpretation": "Numbers near 1 that differ by less than about ε are indistinguishable. Near magnitude |x| the gap is about ε|x|.",
+   "intuition": "Each mantissa bit halves the gap.",
+   "numerical_example": "float16: $1 + 0.0004$ rounds to $1$ (gap 0.000977), while $1 + 0.0006$ rounds to $1.000977$. A weight $w=0.5$ updated by $10^{-6}$ is unchanged in float16 but changes in float32 (gap near 0.5 is $6\\times10^{-8}$).",
+   "source": "ai_explanation",
+   "book_ref": "p.582"
+  },
+  {
+   "id": "m2",
+   "title": "Weight update size versus resolution",
+   "latex": "|\\Delta w| = \\eta\\,|g| \\approx 10^{-3}\\cdot 10^{-3} = 10^{-6} \\ \\ll\\ \\varepsilon_{16}|w|",
+   "source_text": "recall that the typically learning rate is 1e-3, and it’s pretty common to see weight updates on the order of 1e-6",
+   "variables": [
+    {"symbol": "\\eta", "meaning": "Learning rate (~1e-3)."},
+    {"symbol": "g", "meaning": "Gradient component (here assumed ~1e-3 for illustration)."},
+    {"symbol": "\\Delta w", "meaning": "Weight update."},
+    {"symbol": "\\varepsilon_{16}|w|", "meaning": "float16 spacing at the weight's magnitude."}
+   ],
+   "operations": "Multiplication, comparison.",
+   "purpose": "Explains why float32 suffices for training but float16 weights would not.",
+   "interpretation": "If the update is below half the spacing around w, then w + Δw rounds to w and learning stops.",
+   "intuition": "You can't move a pointer by less than one tick mark.",
+   "numerical_example": "w = 0.1: float16 spacing near 0.1 is $2^{-14}\\approx 6.1\\times10^{-5}$, far above $10^{-6}$, so the update is lost. In float32 the spacing near 0.1 is $\\approx 7.5\\times10^{-9}$, so the update is kept.",
+   "source": "inference",
+   "book_ref": "p.582"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Setting a float16 dtype policy",
+   "original_code": "import keras\nkeras.config.set_dtype_policy(\"float16\")",
+   "language": "python",
+   "what_it_does": "Makes float16 the default dtype for layers created from now on, for both variables and computation.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Import Keras."},
+    {"lines": "2", "explanation": "Global policy: subsequently constructed layers use float16."}
+   ],
+   "inputs_outputs": "No return value; affects later model construction.",
+   "algorithm": "Global configuration.",
+   "theory_link": "16-bit hardware paths give nearly 2x inference speed.",
+   "parameters": [
+    {"name": "\"float16\"", "role": "Policy name; alternatives include \"bfloat16\", \"mixed_float16\", \"mixed_bfloat16\", \"float32\"."}
+   ],
+   "pitfalls": ["Call before defining the model.", "Not suitable for training: variables would also be float16 (use mixed_float16, p.583).", "float16 can overflow above 65,504; bfloat16 avoids that."],
+   "illustrative_code": "# AI-written sketch: float16 inference from float32-trained weights\nimport keras\nkeras.config.set_dtype_policy(\"float16\")\nfast_model = build_model()               # same architecture, now float16\nfast_model.load_weights(\"model.weights.h5\")  # values cast to float16\npreds = fast_model.predict(x_test)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "float16 vs bfloat16 vs float32 in numbers",
+   "kind": "numerical",
+   "body": "| | float32 | float16 | bfloat16 |\n|---|---|---|---|\n| sign / exponent / mantissa | 1 / 8 / 23 | 1 / 5 / 10 | 1 / 8 / 7 |\n| machine epsilon | 1.2e-7 | 9.8e-4 | 7.8e-3 |\n| largest value | 3.4e38 | 65,504 | ~3.4e38 |\n| smallest normal | 1.2e-38 | 6.1e-5 | ~1.2e-38 |\n\nbfloat16 keeps float32's range (same exponent) and gives up precision. float16 keeps more precision but has a narrow range. (AI-compiled reference values; the book gives only the bit counts.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why is 16-bit nearly 2x faster?",
+   "kind": "breakdown",
+   "body": "- **Memory bandwidth:** each number is 2 bytes instead of 4, so twice as many weights and activations move per second. Many inference workloads are bandwidth-bound.\n- **Compute units:** GPU Tensor Cores and TPU matrix units have much higher peak throughput at 16 bits.\n- **Memory footprint:** half the memory allows larger batches or larger models per device.\n\nThe gain is usually somewhat below 2x because some operations stay in float32 or are not matmul-bound (AI explanation of the book's 'nearly 2x').",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Analogy: two rulers of the same length",
+   "kind": "analogy",
+   "body": "Both 16-bit formats are rulers with 65,536 tick marks. float16 puts them close together on a short ruler (fine detail, short reach). bfloat16 spreads them over a very long ruler (huge reach, coarse detail). Which ruler is better depends on whether your values sometimes jump very large or very small (use bfloat16) or need fine detail within a modest range (float16).",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "svg",
+   "title": "Bit layouts: float32, float16, bfloat16",
+   "why": "The page contrasts float16 (5 exponent / 10 mantissa bits) with bfloat16 (8 / 7), whose bit counts table 18.1 lists, and both with float32 (8 / 23).",
+   "svg": "<svg viewBox=\"0 0 460 130\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"11\" fill=\"currentColor\"><g fill=\"none\" stroke=\"currentColor\"><rect x=\"80\" y=\"10\" width=\"10\" height=\"24\"/><rect x=\"90\" y=\"10\" width=\"80\" height=\"24\"/><rect x=\"170\" y=\"10\" width=\"230\" height=\"24\"/><rect x=\"80\" y=\"52\" width=\"10\" height=\"24\"/><rect x=\"90\" y=\"52\" width=\"50\" height=\"24\"/><rect x=\"140\" y=\"52\" width=\"100\" height=\"24\"/><rect x=\"80\" y=\"94\" width=\"10\" height=\"24\"/><rect x=\"90\" y=\"94\" width=\"80\" height=\"24\"/><rect x=\"170\" y=\"94\" width=\"70\" height=\"24\"/></g><text x=\"5\" y=\"27\">float32</text><text x=\"5\" y=\"69\">float16</text><text x=\"5\" y=\"111\">bfloat16</text><text x=\"105\" y=\"27\">exp 8</text><text x=\"250\" y=\"27\">mantissa 23</text><text x=\"98\" y=\"69\">exp 5</text><text x=\"158\" y=\"69\">mantissa 10</text><text x=\"105\" y=\"111\">exp 8</text><text x=\"178\" y=\"111\">mant. 7</text><text x=\"250\" y=\"69\">eps ~1e-3, max 65504</text><text x=\"250\" y=\"111\">eps ~8e-3, max ~3e38</text><text x=\"405\" y=\"27\">eps ~1e-7</text></svg>"
+  },
+  {
+   "id": "v2",
+   "type": "chart",
+   "title": "Resolution near 1 per dtype (log scale)",
+   "why": "Shows the book's 1e-3 / 1e-7 / 1e-16 resolution figures for half, single and double precision, plus bfloat16, next to a typical weight update of 1e-6 (p582_e07).",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": ["bfloat16", "float16", "float32", "float64", "typical weight update"],
+     "datasets": [{"label": "magnitude", "data": [0.0078125, 0.0009765625, 1.1920929e-07, 2.220446e-16, 1e-06]}]
+    },
+    "options": {"scales": {"y": {"type": "logarithmic", "title": {"display": true, "text": "value (log scale)"}}}}
+   }
+  }
+ ],
+ "misconceptions": [
+  {"claim": "float16 cannot store numbers smaller than 1e-3.", "correction": "1e-3 is the relative resolution near 1. float16 can store values down to ~6e-8, but cannot distinguish 1 from 1 + 1e-4."},
+  {"claim": "bfloat16 is more precise than float16 because it is newer.", "correction": "bfloat16 has fewer mantissa bits (7 vs 10), so it has lower resolution and a much wider range."},
+  {"claim": "Setting the float16 policy after building the model converts it.", "correction": "The policy must be set before the model is defined."},
+  {"claim": "A float16 policy is fine for training too.", "correction": "Weight updates of ~1e-6 would be lost. Training needs mixed precision with float32 variables (p.583)."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 581, "note": "Floating-point encoding and the first half of the sidebar."},
+   {"page": 580, "note": "Section 18.3 promise of up to 2x speedup."},
+   {"page": 64, "note": "Gradient descent: learning rate and update size."}
+  ],
+  "later": [
+   {"page": 583, "note": "Table 18.1 (float16 vs bfloat16 bits) and mixed-precision training."},
+   {"page": 584, "note": "Loss scaling and float8 training."},
+   {"page": 585, "note": "int8 quantization for faster inference."},
+   {"page": 586, "note": "Quantization in practice."},
+   {"page": 587, "note": "Chapter summary."}
+  ],
+  "prerequisites": [
+   {"page": 581, "note": "Bits, exponent and mantissa."}
+  ],
+  "related_math": [
+   {"page": 581, "note": "Non-uniform float spacing."}
+  ],
+  "related_code": [
+   {"page": 521, "note": "Loading Gemma with dtype=\"bfloat16\"."},
+   {"page": 212, "note": "Deploying models, where inference speed matters."}
+  ],
+  "related_figures": [
+   {"page": 583, "note": "Table 18.1."}
+  ]
+ },
+ "takeaways": [
+  "Float conversion error depends on the value and grows with magnitude.",
+  "Approximate resolution: float32 ~1e-7, float64 ~1e-16, float16 ~1e-3 (relative to magnitude).",
+  "float32 is precise enough for training updates around 1e-6; float16 is not.",
+  "`keras.config.set_dtype_policy(\"float16\")`, set before defining the model, gives nearly 2x faster inference on GPU/TPU.",
+  "bfloat16 has 8 exponent / 7 mantissa bits (vs 5 / 10 for float16): wider range, lower resolution, often faster on TPUs. Try both."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "Compared with float16, bfloat16 has...", "options": ["more mantissa bits and fewer exponent bits", "more exponent bits and fewer mantissa bits", "the same bits but a different bias", "32 bits in total"], "answer": "more exponent bits and fewer mantissa bits", "explanation": "8 exponent vs 5 and 7 mantissa vs 10, giving wider range and lower resolution. The first option describes the reverse; the third is wrong because the field widths differ; both formats are 16 bits.", "page_refs": [582, 583]},
+  {"id": "q2", "type": "short", "question": "What approximate resolution does the book give for half, single and double precision?", "options": [], "answer": "Half: 1e-3; single: 1e-7; double: 1e-16.", "explanation": "Stated right after the sidebar; these match the machine epsilons 2^-10, 2^-23, 2^-52.", "page_refs": [582]},
+  {"id": "q3", "type": "math", "question": "A float16 weight equals 1.0 and the optimizer computes an update of +2e-4. What does the weight become in float16, and why?", "options": [], "answer": "It stays 1.0, because the float16 spacing near 1 is 2^-10 ≈ 9.8e-4 and 2e-4 is less than half of it, so 1.0002 rounds back to 1.0.", "explanation": "This is the reason float16 cannot hold weights during training.", "page_refs": [582]},
+  {"id": "q4", "type": "conceptual", "question": "Why must `set_dtype_policy` be called before defining the model?", "options": [], "answer": "Layers read the global policy when they are constructed (creating their variables and choosing compute dtype). Layers built earlier keep their old dtype.", "explanation": "The page says 'this should be done before you define your model'.", "page_refs": [582]},
+  {"id": "q5", "type": "mcq", "question": "What speedup does the book say to expect from float16 inference on GPU and TPU?", "options": ["About 10%", "Nearly 2x", "About 4x", "None; it only saves memory"], "answer": "Nearly 2x", "explanation": "The page says you should expect 'a nearly 2× speed boost on GPU and TPU'. 10% understates it, 4x overstates it, and the speed gain, not just memory saving, is the point.", "page_refs": [582]},
+  {"id": "q6", "type": "conceptual", "question": "Why might bfloat16 be preferred on TPUs or for large models, despite its lower resolution?", "options": [], "answer": "Some hardware (notably TPUs) is better optimized for it, and its 8-bit exponent gives float32-like range, so values rarely overflow or underflow.", "explanation": "The page notes wider range and device optimization, and advises trying both.", "page_refs": [582]},
+  {"id": "q7", "type": "self", "question": "Can you explain why float16 is fine for inference but not for storing weights during training?", "options": [], "answer": "Inference needs no tiny updates, and 3 significant digits are enough for activations. Training applies updates of ~1e-6, far below float16's ~1e-3 relative resolution, so they would be rounded away.", "explanation": "Combines the resolution paragraph with the float16 inference paragraph.", "page_refs": [582]}
+ ]
+}

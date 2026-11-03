@@ -1,0 +1,407 @@
+{
+  "page_id": "page_111",
+  "pdf_page": 111,
+  "printed_page": "87",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:38:00Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean. The extraction captured only the first of two callouts next to the compute_loss(state, x, y) code; the second ('grads_of_loss_wrt_state has the same structure as state') was read from the page image. The has_aux example itself is on p.112."
+  },
+  "overview": {
+    "title": "jax.grad in practice: value_and_grad, state trees and auxiliary outputs",
+    "chapter": "3 Introduction to TensorFlow, PyTorch, JAX, and Keras",
+    "section": "3.5 Introduction to JAX",
+    "subsection": "3.5.3 Random number generation in JAX",
+    "main_topic": "Practical patterns for JAX gradients: calling the gradient function, getting the loss and gradient together with `jax.value_and_grad`, differentiating a whole state tuple/tree while passing extra inputs, and the setup for returning auxiliary outputs with `has_aux`.",
+    "central_idea": "Real loss functions take a `state` of many arrays plus data inputs, and you usually want both the loss and its gradients. `jax.value_and_grad(compute_loss)` returns `(loss, grads)`, where `grads` mirrors the structure of `state`, the first argument. Extra by-products are handled with `has_aux`.",
+    "importance": "These patterns are exactly what the pure-JAX linear classifier (p.112-113) and Keras's JAX training step (p.242) use. Without them you would compute the loss twice or be unable to train multi-parameter models.",
+    "learning_objectives": [
+      "Call a gradient function on a concrete array (`grad_fn(jnp.array(3.0))`).",
+      "Use `jax.value_and_grad` to obtain the loss value and gradients in one pass and unpack the returned tuple.",
+      "Structure `compute_loss(state, x, y)` so gradients are taken with respect to all state variables but not the data inputs.",
+      "Explain that `state` can be any nested structure of tuples, dicts and lists (a tree) and that gradients have the same structure.",
+      "State the motivation for `has_aux`: returning by-products of the loss computation."
+    ],
+    "prerequisites": [
+      "jax.grad and the requirements on loss functions (p.110)",
+      "Python tuple unpacking",
+      "Gradient descent: why we need both loss and gradients (chapter 2)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page opens with the call that finishes p.110's example: `input_var = jnp.array(3.0)` and `grad_of_loss_wrt_input_var = grad_fn(input_var)`. Since the loss is $x^2$, this gradient is $2 \\cdot 3 = 6$ (the value is not printed in the book).\n\nUnder **JAX gradient-computation best practices**, the authors note that metaprogramming \"is a big word, but it turns out to be quite simple\", and present three real-world refinements.\n\n**Returning the loss value.** You usually need the loss as well as the gradient, and recomputing it separately would be inefficient. `jax.value_and_grad()` works identically to `jax.grad()` but returns a tuple: first the loss value, then the gradient(s): `output, grad_of_loss_wrt_input_var = grad_fn(input_var)`.\n\n**Getting gradients for a complex function.** If the state contains three variables `a`, `b`, `c` and the loss also takes two inputs `x`, `y`, you write `compute_loss(state, x, y)`, with `state` as the first argument (callout: \"state contains a, b, and c. It must be the first argument\"). Then `state = (a, b, c)` and `loss, grads_of_loss_wrt_state = grad_fn(state, x, y)`. A second callout notes that `grads_of_loss_wrt_state` has the same structure as `state`. Gradients are taken only with respect to `state`; `x` and `y` are treated as plain inputs. The state need not be a tuple: any nested structure of tuples, dicts and lists works, which JAX calls a **tree**.\n\n**Returning auxiliary outputs.** If `compute_loss()` must also return a by-product, such as the model `output` computed along the way, you use the `has_aux` argument. The two-step recipe and code are on the next page (p.112).",
+  "paragraphs": [
+    {
+      "ref": "p111_e05",
+      "excerpt": "So far so good! Metaprogramming is a big word, but it turns out",
+      "what_it_says": "Metaprogramming sounds intimidating but is simple in practice; real use cases need a few extra considerations, presented next.",
+      "what_it_means": "The basic `jax.grad` pattern from p.110 is complete; what follows are refinements for realistic training code.",
+      "why_it_matters": "It frames the next three subsections as practical recipes rather than new theory.",
+      "technical_idea": null,
+      "terminology": [
+        {"term": "metaprogramming", "meaning": "Functions that return functions (p.110)."}
+      ],
+      "connections": ["p.110: definition of metaprogramming and the three-step jax.grad process."]
+    },
+    {
+      "ref": "p111_e07",
+      "excerpt": "It’s usually the case that you don’t just need the gradient array; you",
+      "what_it_says": "You typically need the loss value too, and recomputing it outside `grad_fn()` would be inefficient. `jax.value_and_grad()` works like `jax.grad()` but returns a tuple `(loss value, gradient(s))`.",
+      "what_it_means": "Computing gradients by reverse-mode autodiff already requires running the forward pass, which produces the loss. `value_and_grad` simply hands you that loss instead of throwing it away, so you avoid a second forward pass.",
+      "why_it_matters": "Training loops log the loss every step; `value_and_grad` gives it for free. The pure-JAX classifier uses it (p.112).",
+      "technical_idea": "Beyond the book: the cost of a reverse-mode gradient is a small constant multiple of one forward pass, so an extra forward pass to get the loss could add a noticeable fraction of the step time.",
+      "terminology": [
+        {"term": "jax.value_and_grad", "meaning": "Like `jax.grad`, but the returned function outputs `(value, gradient)`."}
+      ],
+      "connections": ["p.112: the linear classifier computes gradients with value_and_grad."]
+    },
+    {
+      "ref": "p111_e10",
+      "excerpt": "Now, what if you need gradients for more than a single variable?",
+      "what_it_says": "Asks two questions: how to get gradients for several variables, and how to handle a loss function with several inputs.",
+      "what_it_means": "Real models have many parameter arrays (weights and biases for each layer) and the loss also depends on data (inputs and targets).",
+      "why_it_matters": "This is the general case every training step faces.",
+      "technical_idea": "Short framing paragraph, noted because it sets up the following one.",
+      "terminology": [],
+      "connections": []
+    },
+    {
+      "ref": "p111_e11",
+      "excerpt": "Let’s say your state contains three variables, `a`, `b`, and `c`, and your",
+      "what_it_says": "With three state variables `a`, `b`, `c` and two inputs `x`, `y`, you pack the variables into `state`, make it the first argument of `compute_loss(state, x, y)`, and call `grad_fn(state, x, y)` to get the loss and the gradients with respect to the state.",
+      "what_it_means": "The first-argument rule from p.110 solves both questions at once: everything you want gradients for goes into the first argument as one container; everything else (data) is passed as later arguments and is not differentiated.",
+      "why_it_matters": "This is the canonical shape of a JAX loss function: `compute_loss(params, inputs, targets)`.",
+      "technical_idea": "The two printed callouts: 'state contains a, b, and c. It must be the first argument' and 'grads_of_loss_wrt_state has the same structure as state', so the result is a tuple `(da, db, dc)`.",
+      "terminology": [
+        {"term": "state", "meaning": "The container of all arrays whose gradients are needed (here `(a, b, c)`)."}
+      ],
+      "connections": ["p.110: the loss function's first argument should contain the state arrays."]
+    },
+    {
+      "ref": "p111_e13",
+      "excerpt": "Note that `state` doesn’t have to be a tuple—it could be a dict,",
+      "what_it_says": "`state` can be a tuple, dict, list, or any nested structure of these, which JAX calls a tree.",
+      "what_it_means": "You can organize parameters naturally, e.g. `{\"dense_1\": {\"W\": ..., \"b\": ...}, \"dense_2\": {...}}`, and `jax.value_and_grad` returns gradients in an identically nested structure.",
+      "why_it_matters": "Trees let large models keep their parameters organized while still using a single first argument.",
+      "technical_idea": "Beyond the book: the official JAX term is 'pytree'; `jax.tree_util.tree_map(lambda p, g: p - lr * g, state, grads)` applies an update to every leaf.",
+      "terminology": [
+        {"term": "tree", "meaning": "In JAX parlance, a nested structure of tuples, dicts and lists whose leaves are arrays."}
+      ],
+      "connections": []
+    },
+    {
+      "ref": "p111_e15",
+      "excerpt": "Finally, what if your `compute_loss()` function needs to return more than just",
+      "what_it_says": "Sometimes `compute_loss()` should also return a by-product of the loss computation, such as an extra value `output`. How can you get it out?",
+      "what_it_means": "`jax.grad`/`value_and_grad` require the function to return a scalar loss, so returning a tuple breaks that rule unless you tell JAX which part is the loss.",
+      "why_it_matters": "Model predictions computed during the loss are often needed for metrics like accuracy; recomputing them would waste a forward pass.",
+      "technical_idea": null,
+      "terminology": [
+        {"term": "auxiliary output", "meaning": "A value returned by the loss function alongside the loss, not differentiated."}
+      ],
+      "connections": ["p.110: the loss function must return a scalar."]
+    },
+    {
+      "ref": "p111_e16",
+      "excerpt": "You would use the `has_aux` argument:",
+      "what_it_says": "The answer is the `has_aux` argument, explained on the next page.",
+      "what_it_means": "With `has_aux=True`, the loss function returns `(loss, aux)` and JAX differentiates only `loss`.",
+      "why_it_matters": "Completes the toolkit needed for real training steps.",
+      "technical_idea": "On p.112: `jax.value_and_grad(compute_loss, has_aux=True)` returns `loss, (grads_of_loss_wrt_state, output)`.",
+      "terminology": [
+        {"term": "has_aux", "meaning": "Flag telling `value_and_grad` that the function returns `(loss, auxiliary_data)`."}
+      ],
+      "connections": ["p.112: the has_aux recipe and code."]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "value_and_grad",
+      "name": "jax.value_and_grad",
+      "definition": "A JAX transformation that returns a function computing both the value of a scalar function and its gradient with respect to the first argument.",
+      "intuition": "Asking for the slope and getting the height thrown in for free.",
+      "technical": "`grad_fn = jax.value_and_grad(compute_loss)`; `loss, grads = grad_fn(state, x, y)`. With `has_aux=True`, it returns `(loss, aux), grads`, which the book unpacks as `loss, (grads, output)` on p.112.",
+      "significance": "The standard tool for training steps in pure JAX (p.112) and in Keras's JAX backend (p.242).",
+      "example": "`output, grad_of_loss_wrt_input_var = grad_fn(input_var)`.",
+      "misconception": "That the gradient comes first in the tuple; the loss value is the first entry.",
+      "related": ["metaprogramming", "autodiff", "loss_function"],
+      "source": "book"
+    },
+    {
+      "id": "pytree",
+      "name": "Tree (pytree) of state",
+      "definition": "Any nested structure of tuples, dicts and lists with arrays at the leaves.",
+      "intuition": "A filing cabinet of parameters: folders within folders, arrays in the files.",
+      "technical": "JAX transformations accept trees as arguments; gradients are returned as a tree with the same structure (callout on the page).",
+      "significance": "Lets one `state` argument carry all of a model's parameters.",
+      "example": "`state = (a, b, c)`; gradients `(da, db, dc)`.",
+      "misconception": "That `state` must be a flat tuple or a single array.",
+      "related": ["value_and_grad", "stateless_computation"],
+      "source": "book"
+    },
+    {
+      "id": "auxiliary_outputs",
+      "name": "Auxiliary outputs (has_aux)",
+      "definition": "Extra values a loss function returns alongside the loss, not differentiated.",
+      "intuition": "A receipt that comes with your purchase: useful, but not part of the price you are optimizing.",
+      "technical": "Enabled by `has_aux=True`; the loss function returns `(loss, aux)` (p.112).",
+      "significance": "Avoids recomputing predictions needed for metrics or state updates.",
+      "example": "Returning the model `output` from `compute_loss`.",
+      "misconception": "That you can just return a tuple from the loss without telling JAX; the scalar-output requirement would be violated.",
+      "related": ["value_and_grad"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Gradients with respect to a state tuple",
+      "latex": "\\texttt{grad\\_fn}(\\text{state}, x, y) = \\Big(L,\\ \\big(\\tfrac{\\partial L}{\\partial a}, \\tfrac{\\partial L}{\\partial b}, \\tfrac{\\partial L}{\\partial c}\\big)\\Big), \\quad L = \\texttt{compute\\_loss}((a,b,c), x, y)",
+      "source_text": "loss, grads_of_loss_wrt_state = grad_fn(state, x, y) with state = (a, b, c)",
+      "variables": [
+        {"symbol": "a, b, c", "meaning": "The state arrays (e.g. model parameters)."},
+        {"symbol": "x, y", "meaning": "Extra inputs (e.g. data and targets), not differentiated."},
+        {"symbol": "L", "meaning": "Scalar loss returned by compute_loss."}
+      ],
+      "operations": "Partial derivatives of a scalar with respect to each array in the state.",
+      "purpose": "Formalizes what `jax.value_and_grad` returns for the page's complex-function example.",
+      "interpretation": "Each gradient has the shape of its array; the tuple has the same structure as `state`.",
+      "intuition": "x and y are held fixed; only the knobs in state are wiggled.",
+      "numerical_example": "Illustrative (not from the book): if $L = (a x + b - y)^2 + c^2$ with $a=1, b=0, c=1, x=2, y=1$, then $L = 1 + 1 = 2$, $\\partial L/\\partial a = 2(ax+b-y)x = 4$, $\\partial L/\\partial b = 2$, $\\partial L/\\partial c = 2$.",
+      "source": "inference",
+      "book_ref": "p.111"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Calling the gradient function",
+      "original_code": "input_var = jnp.array(3.0)\ngrad_of_loss_wrt_input_var = grad_fn(input_var)",
+      "language": "python",
+      "what_it_does": "Evaluates the gradient function from p.110 at 3.0, giving the derivative of $x^2$ there.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "A float JAX scalar array 3.0 (floating point is needed for differentiation)."},
+        {"lines": "2", "explanation": "Calls `grad_fn = jax.grad(compute_loss)` with the same argument as `compute_loss`; the result is $2 \\times 3 = 6.0$ (value not printed in the book)."}
+      ],
+      "inputs_outputs": "Input: 3.0. Output: gradient 6.0.",
+      "algorithm": "Reverse-mode autodiff of $x^2$.",
+      "theory_link": "Step 3 of the three-step process on p.110.",
+      "parameters": [
+        {"name": "input_var", "role": "The point at which the gradient is evaluated."}
+      ],
+      "pitfalls": [
+        "`jnp.array(3)` (an integer) would raise an error because JAX only differentiates with respect to floating-point inputs (beyond the book)."
+      ],
+      "illustrative_code": null
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Getting the loss and gradient together",
+      "original_code": "grad_fn = jax.value_and_grad(compute_loss)\noutput, grad_of_loss_wrt_input_var = grad_fn(input_var)",
+      "language": "python",
+      "what_it_does": "Builds a function returning both the loss and its gradient, then unpacks them.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "`value_and_grad` instead of `grad`; otherwise identical."},
+        {"lines": "2", "explanation": "Tuple unpacking: first the loss value (here named `output`, 9.0 for input 3.0), then the gradient (6.0). Values are hand-computed."}
+      ],
+      "inputs_outputs": "Input: 3.0. Output: (9.0, 6.0).",
+      "algorithm": "One forward + backward pass returning both results.",
+      "theory_link": "Avoids recomputing the loss outside grad_fn.",
+      "parameters": [],
+      "pitfalls": [
+        "Getting the order wrong: value first, gradient second.",
+        "Naming the loss `output` here could be confused with the auxiliary `output` discussed later on the page."
+      ],
+      "illustrative_code": null
+    },
+    {
+      "id": "c3",
+      "listing": null,
+      "title": "Gradients for a state of several variables and several inputs",
+      "original_code": "def compute_loss(state, x, y):\n    ...\n    return loss\ngrad_fn = jax.value_and_grad(compute_loss)\nstate = (a, b, c)\nloss, grads_of_loss_wrt_state = grad_fn(state, x, y)",
+      "language": "python",
+      "what_it_does": "Template for a realistic loss: state first, data inputs after; returns the loss and a gradient tuple matching `state`.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Callout: state contains a, b and c; it must be the first argument. `x`, `y` are extra inputs."},
+        {"lines": "2-3", "explanation": "`...` is a placeholder for the actual loss computation; the function must return a scalar."},
+        {"lines": "4", "explanation": "Build the value-and-gradient function."},
+        {"lines": "5", "explanation": "Pack the three variables into a tuple."},
+        {"lines": "6", "explanation": "Call with the same arguments as compute_loss. Callout: `grads_of_loss_wrt_state` has the same structure as `state`, i.e. a 3-tuple of gradients."}
+      ],
+      "inputs_outputs": "Inputs: state (a, b, c), x, y. Outputs: scalar loss, tuple of three gradient arrays.",
+      "algorithm": "Differentiate with respect to the first argument only.",
+      "theory_link": "The first-argument rule from p.110 generalized to trees.",
+      "parameters": [
+        {"name": "state", "role": "Tree of arrays to differentiate."},
+        {"name": "x, y", "role": "Non-differentiated inputs (e.g. data, targets)."}
+      ],
+      "pitfalls": [
+        "Putting data first and parameters second would give gradients with respect to the data.",
+        "`...` is not runnable code; it stands for your loss logic."
+      ],
+      "illustrative_code": "# AI-written: a concrete instance\nimport jax, jax.numpy as jnp\n\ndef compute_loss(state, x, y):\n    a, b, c = state\n    pred = a * x + b\n    return jnp.mean((pred - y) ** 2) + c ** 2\n\ngrad_fn = jax.value_and_grad(compute_loss)\nstate = (jnp.array(1.0), jnp.array(0.0), jnp.array(1.0))\nloss, (da, db, dc) = grad_fn(state, jnp.array([2.0]), jnp.array([1.0]))\nprint(loss, da, db, dc)   # 2.0 4.0 2.0 2.0"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why value_and_grad is cheaper than grad + a separate loss call",
+      "kind": "step_by_step",
+      "body": "1. Reverse-mode autodiff first runs the forward pass, storing intermediate values.\n2. The final forward value is the loss itself.\n3. It then runs the backward pass to get gradients.\n\n`jax.grad` discards the loss from step 2; `jax.value_and_grad` returns it. Calling `compute_loss` separately would repeat step 1. This mechanism is beyond the book; the book says only that recomputing would be 'quite inefficient'.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Updating a whole tree of parameters",
+      "kind": "application",
+      "body": "Because `grads_of_loss_wrt_state` has the same structure as `state`, a gradient-descent update is a leaf-by-leaf operation:\n\n```python\nlr = 0.1\nstate = jax.tree_util.tree_map(lambda p, g: p - lr * g, state, grads_of_loss_wrt_state)\n```\n\nThis works for tuples, lists, dicts or nested mixes. `tree_map` is not mentioned in the book; the pure-JAX classifier on p.113 updates `W` and `b` explicitly instead.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Constants vs knobs",
+      "kind": "analogy",
+      "body": "Think of `compute_loss(state, x, y)` as a mixing desk: `state` holds the knobs you are allowed to turn, while `x` and `y` are the song being played. `value_and_grad` tells you how loud the error is now and which way to turn each knob, while leaving the song untouched.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "value_and_grad with a state tree",
+      "why": "The page's compute_loss(state, x, y) example: gradients are taken only with respect to state, and come back with the same structure.",
+      "mermaid": "flowchart LR\n  S[\"state = (a, b, c)\"] --> F[\"grad_fn = jax.value_and_grad(compute_loss)\"]\n  X[\"x, y (not differentiated)\"] --> F\n  F --> L[\"loss (scalar)\"]\n  F --> G[\"grads_of_loss_wrt_state = (dL/da, dL/db, dL/dc)\"]"
+    },
+    {
+      "id": "v2",
+      "type": "widget",
+      "title": "The gradient of x² at input_var = 3.0",
+      "why": "The first code block evaluates grad_fn for compute_loss = x² at 3.0; the tangent slope there is 6.",
+      "widget": "derivative_tangent",
+      "params": {"expr": "x*x", "x0": 3, "h": 0.5}
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "`jax.value_and_grad` returns `(gradient, value)`.",
+      "correction": "The first entry is the loss value, the second is the gradient(s)."
+    },
+    {
+      "claim": "With `compute_loss(state, x, y)`, JAX returns gradients for x and y too.",
+      "correction": "Only the first argument, `state`, is differentiated; the callout stresses that state must be the first argument."
+    },
+    {
+      "claim": "The gradients come back as a flat list regardless of how state is organized.",
+      "correction": "`grads_of_loss_wrt_state` has the same structure as `state` (tuple, dict, list or nested tree)."
+    },
+    {
+      "claim": "To return extra values from the loss, you can simply return a tuple.",
+      "correction": "The gradient transformation needs a scalar; use `has_aux=True` so JAX knows the first element is the loss (p.112)."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 110, "note": "compute_loss = square, grad_fn = jax.grad(compute_loss), and the rules for loss functions."}
+    ],
+    "later": [
+      {"page": 112, "note": "The has_aux recipe, @jax.jit, and the start of the pure-JAX linear classifier."},
+      {"page": 113, "note": "compute_loss(state, ...) with jax.value_and_grad for the linear classifier."},
+      {"page": 242, "note": "Keras JAX training step built on stateless functions and gradient metaprogramming."}
+    ],
+    "prerequisites": [
+      {"page": 110, "note": "Metaprogramming approach to gradients."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 112, "note": "`jax.value_and_grad(compute_loss, has_aux=True)` returning `loss, (grads_of_loss_wrt_state, output)`."}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "Call `grad_fn` with the same arguments as `compute_loss` to get gradients.",
+    "`jax.value_and_grad` returns `(loss, gradients)` and avoids recomputing the loss.",
+    "Pack all variables that need gradients into one `state` and make it the first argument; data inputs go after.",
+    "The gradients have the same structure as `state`.",
+    "`state` can be any tree: nested tuples, dicts and lists.",
+    "Use `has_aux` to return by-products such as model outputs from the loss function (details on p.112)."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "What does `grad_fn = jax.value_and_grad(compute_loss)` return when called as `grad_fn(state, x, y)`?",
+      "options": [
+        "Only the gradients with respect to state",
+        "A tuple (loss, gradients with respect to state)",
+        "A tuple (gradients, loss)",
+        "Gradients with respect to state, x and y"
+      ],
+      "answer": "A tuple (loss, gradients with respect to state)",
+      "explanation": "value_and_grad returns the loss value first and the gradient(s) second. Plain `jax.grad` returns only gradients; the order is not reversed; and only the first argument is differentiated.",
+      "page_refs": [111]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "Why would you use `jax.value_and_grad` instead of `jax.grad` plus a separate call to `compute_loss`?",
+      "options": [],
+      "answer": "Because you usually need the loss value too, and recomputing it independently outside grad_fn would be inefficient.",
+      "explanation": "Stated in 'Returning the loss value'; the forward pass needed for the gradient already produces the loss.",
+      "page_refs": [111]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "If `state = {\"W\": W, \"b\": b}`, describe the structure of `grads_of_loss_wrt_state`.",
+      "options": [],
+      "answer": "A dict with keys \"W\" and \"b\", containing dL/dW (same shape as W) and dL/db (same shape as b).",
+      "explanation": "The page's callout says the gradients have the same structure as state, and state may be a dict or any tree.",
+      "page_refs": [111]
+    },
+    {
+      "id": "q4",
+      "type": "math",
+      "question": "For `compute_loss(x) = x**2` and `grad_fn = jax.value_and_grad(compute_loss)`, what does `grad_fn(jnp.array(3.0))` return?",
+      "options": [],
+      "answer": "(9.0, 6.0)",
+      "explanation": "Value $3^2 = 9$, gradient $2 \\cdot 3 = 6$; value first, gradient second.",
+      "page_refs": [110, 111]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "In JAX parlance, what is a 'tree'?",
+      "options": [
+        "A decision tree model",
+        "A nested structure of tuples, dicts and lists",
+        "The computation graph recorded by a GradientTape",
+        "A binary tree of PRNG keys produced by split"
+      ],
+      "answer": "A nested structure of tuples, dicts and lists",
+      "explanation": "Defined on this page. The other options are unrelated concepts: a model type, TensorFlow's tape, and a misreading of key splitting.",
+      "page_refs": [111]
+    },
+    {
+      "id": "q6",
+      "type": "conceptual",
+      "question": "What problem does `has_aux` solve?",
+      "options": [],
+      "answer": "Returning an extra by-product (e.g. the model `output`) from compute_loss alongside the loss, while JAX differentiates only the loss.",
+      "explanation": "The page motivates it as getting out 'an additional value output that's computed as a by-product of the loss computation'; the gradient function otherwise requires a scalar return value (p.110). The mechanics are on p.112.",
+      "page_refs": [110, 111, 112]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you write a `compute_loss(state, x, y)` for a linear model `pred = W*x + b` with MSE, wrap it in `value_and_grad`, and unpack loss and gradients?",
+      "options": [],
+      "answer": "`def compute_loss(state, x, y): W, b = state; return jnp.mean((W*x + b - y)**2)`; `loss, (dW, db) = jax.value_and_grad(compute_loss)((W, b), x, y)`",
+      "explanation": "Compare with the template on this page and with the classifier on p.112-113.",
+      "page_refs": [111, 112, 113]
+    }
+  ]
+}

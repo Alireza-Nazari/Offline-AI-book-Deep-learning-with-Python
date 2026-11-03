@@ -1,0 +1,321 @@
+{
+ "page_id": "page_522",
+ "pdf_page": 522,
+ "printed_page": "498",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:51:03Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. Both code blocks match the page image (the printed smiley is a plain text-style glyph; the extractor rendered it as an emoji). The extractor merged the three printed paragraphs of 16.4.2 that follow the opening paragraph (\"Extending a Transformer...\", \"In fact, the Gemma model...\", \"Let's load an image...\") into one element, p522_e07."
+ },
+ "overview": {
+  "title": "Whack-a-mole hallucinations and the idea of soft image tokens",
+  "chapter": "16 Text generation",
+  "section": "16.4 Going further with LLMs",
+  "subsection": "16.4.2 Multimodal LLMs",
+  "main_topic": "How an instruction-tuned Gemma avoids one hallucination but invents another, and how a Transformer LLM can accept images by turning them into a sequence of 'soft tokens'",
+  "central_idea": "Instruction tuning and RLHF can teach a model to refuse a trick question, but hallucination is suppressed case by case rather than cured. Separately, because a Transformer is a general sequence learner, images can be fed to an LLM by encoding them into 256 vectors of the model's hidden size (2560 for the 4B Gemma) and splicing these 'soft tokens' into the text-embedding sequence.",
+  "importance": "The first half closes the RLHF discussion with a concrete, honest demonstration of what tuning does and does not fix. The second half introduces the core mechanism behind essentially all current vision-language models: a separate encoder maps an image into the LLM's embedding space, and the unchanged Transformer then processes text and image positions together.",
+  "learning_objectives": [
+   "Explain why the instruction-tuned Gemma's refusal of the '542nd president' question comes from training data, not a new modeling technique.",
+   "Explain why removing hallucinations is compared to whack-a-mole, using the invented date in the model's answer.",
+   "Describe the general recipe for making a Transformer multimodal: coerce the new modality into a sequence of vectors.",
+   "State the shapes involved in Gemma's image handling: 256 patches, each a 2560-dimensional vector, giving a (256, 2560) sequence.",
+   "Distinguish 'hard' tokens (rows looked up in a fixed embedding matrix) from 'soft' tokens (arbitrary vectors output by a vision encoder)."
+  ],
+  "prerequisites": [
+   "Token embeddings and the embedding matrix (chapters 14-15)",
+   "The decoder-only Transformer / GPT architecture (p.497)",
+   "Instruction fine-tuning and the hallucination examples on p.511 and p.518",
+   "RLHF and the instruction-tuned gemma3_instruct_4b model (p.519-521)",
+   "The PROMPT_TEMPLATE defined on p.521"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**The trick question, revisited.** The page opens by sending the instruction-tuned 4-billion-parameter Gemma (loaded on p.520 with the chat `PROMPT_TEMPLATE` from p.521) the question that tripped up earlier models: *\"Who is the 542nd president of the United States?\"* The base model on p.511 and the model fine-tuned in section 16.3.2 (p.518) both confidently answered \"James A. Garfield\". This model instead says it is a trick question, that the United States \"has only had 46 presidents\", and adds a friendly remark.\n\nThe authors stress two points. First, the improvement is **not a new modeling technique**: it comes from extensive training on trick questions with responses like this one (the supervised and RLHF tuning described on p.521). Second, the same answer shows why fixing hallucinations is like **whack-a-mole**: while refusing to invent a president, the model invents *today's date* (\"November 2, 2023\"). A language model has no clock; that date is just a plausible continuation.\n\n**16.4.2 Multimodal LLMs.** A chatbot that can also take audio and images would be far more useful. Conceptually this is simple, because the Transformer is not a text-specific model but a model for *learning patterns in sequence data*. If you can turn another data type into a sequence of vectors, you can feed it to a Transformer and train.\n\nThe Gemma model already does this. It ships with a separate **420-million-parameter image encoder** that cuts an image into **256 patches** and encodes each as a vector of the same size as Gemma's hidden dimension, **2560**. An image therefore becomes a `(256, 2560)` sequence that can be **spliced into the text sequence right after the token embedding layer**. Each `(1, 2560)` vector is a **soft token**. Ordinary **hard tokens** can take only one of a fixed set of vectors, the rows of the embedding matrix. Soft tokens can be *any* vector the vision encoder produces. The page ends by downloading a test image (`learned-python.png`) with `keras.utils.get_file`. The image is displayed on p.523 (figure 16.7), and the splicing is drawn in figure 16.6.",
+ "paragraphs": [
+  {
+   "ref": "p522_e04",
+   "excerpt": "This more capable model refuses to take the bait. This is not",
+   "what_it_says": "The instruction-tuned model does not fall for the trick question. The authors say this comes from extensive training on trick questions paired with responses like the one shown, not from a new modeling technique. The answer also shows why removing hallucinations is like whack-a-mole: the model avoids inventing a president but invents today's date.",
+   "what_it_means": "Architecturally, the 4B instruction-tuned Gemma is the same kind of next-token predictor as the base model that answered \"James A. Garfield\" on p.511. What changed is the training distribution. After seeing many false-premise questions answered with \"this is a trick question\", the model has learned that this is a likely continuation for such prompts. Its truthfulness is learned behaviour attached to patterns of input. The model has not gained an internal fact-checker. The invented date proves the point. Nothing in the prompt gives the date, and a language model has no access to the current time, yet the answer 'As of today, ...' calls for a date, so the model supplies a plausible one. (Beyond the book: such dates usually fall near the period the training data comes from.)",
+   "why_it_matters": "This sets realistic expectations. Tuning reduces specific failure modes but cannot remove the basic tendency of a generative model to produce fluent, plausible text whether or not it is grounded. That limitation motivates the retrieval-augmented generation section (p.525-526), which grounds the model by putting correct information in the prompt.",
+   "technical_idea": "Hallucination arises because the model samples from p(token | past tokens) and nothing in that objective separates true from plausible. Fine-tuning reshapes the distribution for the prompt types it covers, and patterns it does not cover still produce confident fabrications.",
+   "terminology": [
+    {"term": "Hallucination", "meaning": "Fluent model output that states false or unsupported facts, e.g. a non-existent president or an invented current date."},
+    {"term": "Take the bait", "meaning": "Accept the false premise of a trick question (that a 542nd president exists) and answer as if it were true."},
+    {"term": "Whack-a-mole", "meaning": "The authors' image for fixing one failure only to see another pop up elsewhere."}
+   ],
+   "connections": [
+    "p.511: the base Gemma model completed 'Tell me about the 542nd president' with 'James A. Garfield'.",
+    "p.518: the authors' own instruction-tuned model gave the same wrong answer; they suggested training on 'I don't know'-style responses.",
+    "p.521: the instruct model was tuned with supervised fine-tuning, RLHF, and teacher-model distillation.",
+    "p.525: hallucination returns as the first 'fatal flaw' that motivates RAG."
+   ]
+  },
+  {
+   "ref": "p522_e06",
+   "excerpt": "One obvious chatbot extension is the ability to handle new modalities",
+   "what_it_says": "Handling new input modalities is an obvious extension for a chatbot. An assistant that can respond to audio and process images is far more useful than a text-only one.",
+   "what_it_means": "A modality is a kind of input data: text, images, audio, video, and so on. So far in the chapter, every input has been a string tokenized into integer IDs. Here the authors motivate letting the same assistant also take a photo or a voice recording.",
+   "why_it_matters": "It frames section 16.4.2. The rest of the subsection shows that very little has to change in the LLM itself to support this.",
+   "terminology": [
+    {"term": "Modality", "meaning": "A type of input or output data such as text, image, or audio."},
+    {"term": "Multimodal LLM", "meaning": "A language model that can accept (and sometimes produce) more than one modality, e.g. images plus text."}
+   ],
+   "connections": [
+    "p.520: the instruction-tuned chatbot whose capabilities are being extended."
+   ]
+  },
+  {
+   "ref": "p522_e07",
+   "excerpt": "Extending a Transformer to different modalities can be done in a conceptually",
+   "what_it_says": "Making a Transformer multimodal is conceptually simple. The Transformer is not text-specific; it is a highly effective model for learning patterns in sequence data. If other data types can be coerced into a sequence representation, that sequence can be fed to a Transformer for training.",
+   "what_it_means": "Nothing in self-attention or the feedforward sublayers refers to words. A Transformer block takes a sequence of vectors of shape (sequence_length, hidden_dim) and returns a sequence of the same shape. Text reaches that form through tokenization plus an embedding lookup. Any other modality only needs its own route to the same form. Images can be cut into patches, audio into short frames, and so on.",
+   "why_it_matters": "This is why one architecture now serves text, images, audio, and more. It also explains why section 16.4.3 later says the 'large language model' name becomes misleading (p.525).",
+   "technical_idea": "Modality-agnostic sequence modeling: the interface to the Transformer is a matrix in $\\mathbb{R}^{n \\times d}$; what produced the rows does not matter to the attention computation.",
+   "terminology": [
+    {"term": "Sequence representation", "meaning": "An ordered list of fixed-size vectors, the input format a Transformer expects."}
+   ],
+   "connections": [
+    "p.486: section 15.5 explains the Transformer as learning a series of refined embedding spaces, which is why it is not tied to text.",
+    "p.497: the mini-GPT decoder stack that processes such sequences."
+   ]
+  },
+  {
+   "ref": "p522_e07",
+   "excerpt": "In fact, the Gemma model we just loaded does just that.",
+   "what_it_says": "The Gemma model loaded on p.520 already does this. It comes with a separate 420-million-parameter image encoder. The encoder cuts an image into 256 patches and encodes each patch as a vector with Gemma's hidden dimensionality, 2560, so an image becomes a (256, 2560) sequence. Because that matches the Transformer's hidden size, the sequence can be spliced into the text sequence after the token embedding layer. You can think of it as 256 special tokens. Each (1, 2560) vector is called a 'soft token' (figure 16.6). Unlike 'hard tokens', which can only be one of a fixed number of vectors in the embedding matrix, soft tokens can be any vector the vision encoder outputs. The paragraph that follows on the page is one sentence: 'Let's load an image to see how this works in a little more detail (figure 16.7)'.",
+   "what_it_means": "Text tokens pass through an embedding lookup: token ID $i$ selects row $i$ of a (vocab_size, 2560) matrix. Image patches skip this lookup. The vision encoder computes a 2560-dimensional vector for each patch directly. After that point both kinds of vectors have the same shape, so the decoder blocks cannot tell them apart. They just see a longer sequence. 'Soft' means continuous: a hard token is limited to one of vocab_size discrete points, while a soft token can sit anywhere in $\\mathbb{R}^{2560}$. That gives the encoder a continuous space in which to describe fine visual detail.",
+   "why_it_matters": "The size match (encoder output = 2560 = Transformer hidden size) is what makes the splice possible without changing the decoder at all. It also sets the cost: every image uses 256 positions of the context window, which is why the next page sets `sequence_length = 512` (p.524).",
+   "technical_idea": "Beyond the book: in the released Gemma 3 models, the vision encoder is a SigLIP-style Vision Transformer. It works at a fixed input resolution (896×896) and produces many more patch embeddings than 256, then pools them and projects them down to 256 vectors of the LM's hidden size. The book's description ('cuts an input image into 256 patches') is a fair simplification of what the LLM ends up seeing.",
+   "terminology": [
+    {"term": "Image encoder / vision encoder", "meaning": "A separate network (here about 420M parameters) that maps an image to a sequence of vectors in the LLM's embedding space."},
+    {"term": "Patch", "meaning": "A small rectangular region of the image; each becomes one vector."},
+    {"term": "Hidden dimension", "meaning": "The width of the vectors flowing through the Transformer; 2560 for Gemma 3 4B."},
+    {"term": "Hard token", "meaning": "A token whose vector is one row of the fixed token-embedding matrix, chosen by an integer ID."},
+    {"term": "Soft token", "meaning": "A vector inserted directly into the embedding sequence, not looked up by ID; it can take any value the encoder produces."},
+    {"term": "Splicing", "meaning": "Inserting the image's 256 vectors into the sequence of text embeddings at a chosen position."}
+   ],
+   "connections": [
+    "p.520: Listing 16.16 loaded gemma3_instruct_4b, the model with this image encoder.",
+    "p.523: figure 16.6 draws hard and soft tokens being merged before the decoder blocks; figure 16.7 is the test image.",
+    "p.524: the <start_of_image> token is expanded into 256 placeholders that are replaced by the soft tokens."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "hallucination",
+   "name": "Hallucination",
+   "definition": "Generation of fluent but false or unsupported statements by a language model.",
+   "intuition": "The model's job is to write what plausibly comes next, and a plausible date or name is easy to write even when no true one exists.",
+   "technical": "Sampling from p(token | past tokens) learned from data. The objective rewards likelihood, not truth. Fine-tuning shifts probability mass for prompt patterns it covers. Uncovered patterns, such as 'what is today's date', still yield confident inventions.",
+   "significance": "Motivates instruction tuning on refusals (p.518), RLHF (p.519), and retrieval-augmented generation (p.525-526).",
+   "example": "The instruct Gemma refuses the 542nd-president premise but states 'As of today, November 2, 2023', a date it cannot know.",
+   "misconception": "That a model which refuses one trick question has stopped hallucinating; the same answer contains a new fabrication.",
+   "related": ["language_model", "instruction_tuning", "rlhf", "rag"],
+   "source": "book"
+  },
+  {
+   "id": "multimodal_llm",
+   "name": "Multimodal LLM",
+   "definition": "A language model that processes inputs from more than one modality, here images together with text, in a single Transformer sequence.",
+   "intuition": "Translate the image into 'words' the Transformer understands, namely vectors of the right size, and then let it read them like any other tokens.",
+   "technical": "A separate encoder maps the image to $(256, d_{model})$ vectors, which are concatenated with text token embeddings and processed by the unchanged decoder stack.",
+   "significance": "The dominant recipe for vision-language assistants; shows the Transformer's generality.",
+   "example": "Gemma 3 4B: 420M-parameter image encoder, 256 soft tokens of dimension 2560 per image.",
+   "misconception": "That the Transformer needs a new architecture for images. The book stresses that the decoder blocks are unchanged.",
+   "related": ["transformer", "soft_token", "embedding", "foundation_model"],
+   "source": "book"
+  },
+  {
+   "id": "soft_token",
+   "name": "Soft token (vs. hard token)",
+   "definition": "A vector inserted directly into a Transformer's input sequence (e.g. by a vision encoder), as opposed to a hard token, which is a row of the embedding matrix selected by an integer ID.",
+   "intuition": "Hard tokens are words from a fixed dictionary; soft tokens are free-form vectors that can say things no dictionary entry can.",
+   "technical": "Hard: $e = E[t]$ with $E \\in \\mathbb{R}^{|V| \\times d}$, $t \\in \\{0,\\dots,|V|-1\\}$, so there are only $|V|$ possible vectors. Soft: $s = f_{\\text{enc}}(\\text{patch}) \\in \\mathbb{R}^{d}$, any continuous value.",
+   "significance": "Lets continuous signals (pixels, audio) enter the token stream without first being discretized.",
+   "example": "Each image yields 256 soft tokens of shape (1, 2560).",
+   "misconception": "That soft tokens have IDs in the vocabulary. They do not; the prompt only holds placeholder positions that are overwritten with encoder outputs (p.524).",
+   "related": ["embedding", "multimodal_llm", "tokenization"],
+   "source": "book"
+  },
+  {
+   "id": "transformer",
+   "name": "Transformer as a general sequence model",
+   "definition": "The book's characterization here: not a text-specific model but a highly effective learner of patterns in sequence data.",
+   "intuition": "It operates on lists of vectors; where the vectors come from is irrelevant to it.",
+   "technical": "Self-attention and feedforward sublayers map $\\mathbb{R}^{n\\times d} \\to \\mathbb{R}^{n\\times d}$ with no reference to vocabulary.",
+   "significance": "Underlies multimodal models and the foundation-model idea on p.525.",
+   "example": "Splicing a (256, 2560) image sequence into a text sequence.",
+   "misconception": "That 'language model' implies the architecture only works for language.",
+   "related": ["self_attention", "multimodal_llm", "foundation_model"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Hard tokens, soft tokens, and the spliced input sequence",
+   "latex": "\\begin{aligned} h_j &= E[t_j] \\in \\mathbb{R}^{2560} \\quad (\\text{hard token}) \\\\ S &= f_{\\text{enc}}(\\text{image}) \\in \\mathbb{R}^{256 \\times 2560} \\quad (\\text{soft tokens}) \\\\ X &= [\\,h_1;\\dots;h_k;\\ S;\\ h_{k+1};\\dots;h_n\\,] \\in \\mathbb{R}^{(n+256) \\times 2560} \\end{aligned}",
+   "source_text": "Each image will be embedded as a (256, 2560) sequence. ... this image representation can simply be spliced into our text sequence after the token embedding layer. ... each (1, 2560) vector is sometimes called a \"soft token\"",
+   "variables": [
+    {"symbol": "t_j", "meaning": "integer ID of the j-th text token"},
+    {"symbol": "E", "meaning": "token embedding matrix of shape (vocabulary size, 2560)"},
+    {"symbol": "h_j", "meaning": "embedding vector of the j-th text (hard) token"},
+    {"symbol": "f_{\\text{enc}}", "meaning": "the separate ~420M-parameter image encoder"},
+    {"symbol": "S", "meaning": "the image's 256 soft tokens, one 2560-dim row each"},
+    {"symbol": "k", "meaning": "position in the text where the image is inserted"},
+    {"symbol": "n", "meaning": "number of text tokens"},
+    {"symbol": "X", "meaning": "the combined sequence fed to the decoder blocks"}
+   ],
+   "operations": "Embedding lookup for text, encoder forward pass for the image, and row-wise concatenation (splicing) along the sequence axis.",
+   "purpose": "Formalizes the page's description of how images enter the LLM after the token embedding layer.",
+   "interpretation": "The decoder sees one matrix with n + 256 rows. Each hard row is one of |V| fixed vectors. Each soft row can be any point in R^2560.",
+   "intuition": "The image occupies 256 'seats' in the sequence, filled with custom-made vectors instead of dictionary entries.",
+   "numerical_example": "A prompt of 12 text tokens plus one image gives a sequence of 12 + 256 = 268 positions, i.e. a $(268, 2560)$ input. Each soft token holds 2560 numbers, so one image contributes $256 \\times 2560 = 655{,}360$ values to the input.",
+   "source": "ai_explanation",
+   "book_ref": "p.522"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Asking the instruction-tuned Gemma the 542nd-president trick question",
+   "original_code": ">>> prompt = \"Who is the 542nd president of the United States?\"\n>>> gemma_lm.generate(PROMPT_TEMPLATE.format(prompt), max_length=512)\n<start_of_turn>user\nWho is the 542nd president of the United States?<end_of_turn>\n<start_of_turn>model\nThis is a trick question! As of today, November 2, 2023, the United States has\nonly had 46 presidents. There hasn't been a 542nd president yet. 😊\nYou're playing with a very large number!<end_of_turn>",
+   "language": "python",
+   "what_it_does": "Formats the trick question with the instruct model's chat template and generates up to 512 tokens. The output echoes the formatted prompt and then the model's turn, which rejects the false premise and invents a date.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "The same false-premise question used on p.511 and p.518."},
+    {"lines": "2", "explanation": "`PROMPT_TEMPLATE.format(prompt)` wraps the question in `<start_of_turn>user ... <end_of_turn>\\n<start_of_turn>model\\n` (defined on p.521), the format the instruct checkpoint was tuned on. `max_length=512` caps the total sequence length, prompt included."},
+    {"lines": "3-5", "explanation": "The echoed prompt: `generate()` returns the prompt plus the continuation."},
+    {"lines": "6-8", "explanation": "The model's reply: it calls the question a trick, says there have been 46 presidents, and makes up 'today' as November 2, 2023. Generation stops when the model emits `<end_of_turn>`."}
+   ],
+   "inputs_outputs": "Input: a formatted chat-style string. Output: one string with the prompt and the generated model turn.",
+   "algorithm": "Autoregressive decoding with the model's default (compiled) sampler until `<end_of_turn>` or max_length.",
+   "theory_link": "Shows the behavioural effect of instruction tuning and RLHF (p.519-521) and the persistence of hallucination.",
+   "parameters": [
+    {"name": "max_length", "role": "Maximum total tokens (prompt + response)."},
+    {"name": "PROMPT_TEMPLATE", "role": "Chat format that must match the one used during tuning."}
+   ],
+   "pitfalls": [
+    "Omitting the template produces worse answers, because the instruct model was tuned on that exact format.",
+    "Do not read the stated date as information. The model has no clock, so the date is generated text like the rest of the answer.",
+    "With random sampling, reruns may produce different phrasings or different invented details."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Downloading a test image for the multimodal demo",
+   "original_code": "import matplotlib.pyplot as plt\n\nimage_url = (\n    \"https://github.com/mattdangerw/keras-nlp-scripts/\"\n    \"blob/main/learned-python.png?raw=true\"\n)\nimage_path = keras.utils.get_file(origin=image_url)",
+   "language": "python",
+   "what_it_does": "Imports matplotlib for display and downloads a PNG from GitHub into the local Keras cache, returning its local file path.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "matplotlib is used on the next page to display the image (figure 16.7)."},
+    {"lines": "3-6", "explanation": "The URL is built from two adjacent string literals, which Python concatenates. `?raw=true` makes GitHub serve the raw file instead of an HTML viewer page."},
+    {"lines": "7", "explanation": "`keras.utils.get_file` downloads the file once, caches it (by default under ~/.keras/datasets), and returns the local path."}
+   ],
+   "inputs_outputs": "Input: a URL. Output: `image_path`, a local filesystem path string.",
+   "algorithm": "Download and cache.",
+   "theory_link": "Prepares raw pixel input for the image encoder that produces soft tokens.",
+   "parameters": [
+    {"name": "origin", "role": "URL to download from."}
+   ],
+   "pitfalls": [
+    "The code continues on p.523, where the image is loaded with `keras.utils.load_img`, converted to a NumPy array, and shown.",
+    "Without `?raw=true` you would download an HTML page, not a PNG."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why the refusal is 'just data'",
+   "kind": "breakdown",
+   "body": "Compare the three answers to the same question in this chapter:\n\n1. **Base Gemma (p.511):** continues the text and names a real president.\n2. **The authors' small instruction-tuned model (p.518):** same wrong answer, now in response format.\n3. **gemma3_instruct_4b (this page):** recognizes the false premise.\n\nThe architecture is the same kind in all three. Model 3 differs in scale and, as the authors emphasize, in **training data**: many trick questions paired with correct refusals. Training on them raises the probability of 'This is a trick question!' after a false-premise prompt. Nothing has been added that checks facts, so prompt types missing from tuning (such as asking for the current date) still produce made-up answers.",
+   "source": "inference"
+  },
+  {
+   "title": "Hard vs. soft tokens in numbers",
+   "kind": "numerical",
+   "body": "Beyond the book: Gemma 3's vocabulary has about 262k entries. A hard token is therefore one of roughly 262,000 fixed points in $\\mathbb{R}^{2560}$. A soft token can be *any* point in that 2560-dimensional space. One image's 256 soft tokens carry $256 \\times 2560 = 655{,}360$ floating-point numbers, computed fresh from the pixels each time. A vocabulary lookup could not encode an image's colours, shapes, and textures that finely.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Analogy: a translator at the door",
+   "kind": "analogy",
+   "body": "Think of the Transformer as a reader who only understands one kind of note card: a card with 2560 numbers on it. Words get their cards from a fixed card catalogue (the embedding matrix). An image cannot be found in the catalogue, so a translator (the image encoder) writes 256 new cards by hand. The reader treats them like any others, and through training it learns what such cards mean.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Shapes when an image is spliced into a prompt",
+   "why": "The page gives the exact shapes: each image becomes a (256, 2560) sequence that joins the text embeddings of Gemma's 2560-dim Transformer. The 12-token prompt is an illustrative example.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "text token ids", "shape": [12]},
+     {"op": "token embedding (hard)", "shape": [12, 2560]},
+     {"op": "image encoder → soft tokens", "shape": [256, 2560]},
+     {"op": "splice into sequence", "shape": [268, 2560]},
+     {"op": "decoder blocks (same shape)", "shape": [268, 2560]}
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {"claim": "The instruction-tuned model avoids the trick question because it uses a better architecture or reasoning module.", "correction": "The authors state it is not a new modeling technique but the result of extensive training on trick questions with responses like this one."},
+  {"claim": "The date the model gives ('November 2, 2023') reflects when the code was run.", "correction": "The model has no access to the time; the date is itself a hallucination, the 'mole' that popped up."},
+  {"claim": "To handle images, the Transformer's decoder blocks must be redesigned.", "correction": "The decoder is unchanged; a separate image encoder outputs vectors of the hidden size (2560) that are spliced in after the token embedding layer."},
+  {"claim": "Image soft tokens are new entries added to the vocabulary.", "correction": "Hard tokens are rows of the embedding matrix; soft tokens are arbitrary encoder outputs not tied to any ID."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 511, "note": "Base Gemma hallucinated 'James A. Garfield' as the 542nd president."},
+   {"page": 518, "note": "The authors' instruction-tuned model repeated the hallucination; refusal-style training data was suggested."},
+   {"page": 519, "note": "Section 16.4.1 introduced RLHF."},
+   {"page": 520, "note": "Listing 16.16 loaded the gemma3_instruct_4b model used here."},
+   {"page": 521, "note": "PROMPT_TEMPLATE and the description of how the instruct model was tuned."}
+  ],
+  "later": [
+   {"page": 523, "note": "Figure 16.6 (hard + soft token splicing) and figure 16.7 (the test image)."},
+   {"page": 524, "note": "Asking Gemma questions about the image; how <start_of_image> is expanded and how such models are trained."},
+   {"page": 525, "note": "Foundation models, and hallucination and knowledge cutoff as motivation for RAG."}
+  ],
+  "prerequisites": [
+   {"page": 497, "note": "Building the decoder-only mini-GPT."},
+   {"page": 486, "note": "Transformers as learners of refined embedding spaces."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 521, "note": "PROMPT_TEMPLATE definition used in c1."}
+  ],
+  "related_figures": [
+   {"page": 523, "note": "Figure 16.6 illustrates the soft-token mechanism described here."}
+  ]
+ },
+ "takeaways": [
+  "The instruction-tuned Gemma refuses the 542nd-president premise because of training data, not a new modeling technique.",
+  "Hallucination suppression is whack-a-mole: the same answer invents today's date.",
+  "A Transformer learns patterns in sequence data, not specifically text, so other modalities only need to be turned into sequences of vectors.",
+  "Gemma's ~420M-parameter image encoder turns an image into 256 vectors of size 2560, a (256, 2560) sequence spliced in after the token embedding layer.",
+  "Hard tokens are fixed embedding-matrix rows chosen by ID; soft tokens are arbitrary vectors produced by the encoder."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "According to the authors, why does the instruction-tuned Gemma refuse to name a 542nd president?", "options": ["It uses a new fact-checking layer in its architecture", "It was extensively trained on trick questions with responses like the one shown", "It retrieves a list of presidents from a database", "Its larger context window lets it count the presidents"], "answer": "It was extensively trained on trick questions with responses like the one shown", "explanation": "The text says explicitly that this is 'not the result of a new modeling technique' but of training data. There is no new layer (option 1), no retrieval yet (RAG comes on p.525; option 3), and context length has nothing to do with it (option 4).", "page_refs": [522]},
+  {"id": "q2", "type": "short", "question": "What new hallucination appears in the model's refusal, and why does this illustrate 'whack-a-mole'?", "options": [], "answer": "It invents today's date ('November 2, 2023'). Fixing one hallucination (the president) did not stop the model from fabricating another detail.", "explanation": "The model has no clock, yet the phrase 'As of today' calls for a date, so it produces a plausible one. Each patched failure leaves others to pop up.", "page_refs": [522]},
+  {"id": "q3", "type": "math", "question": "A prompt contains 40 text tokens and two images. Using the book's numbers for Gemma, what is the shape of the spliced input sequence to the decoder blocks?", "options": [], "answer": "(40 + 2×256, 2560) = (552, 2560)", "explanation": "Each image contributes 256 soft tokens of dimension 2560, and text tokens are embedded to 2560 dimensions, so lengths add: 40 + 512 = 552. Note this would exceed the `sequence_length = 512` set on p.524, which is why that page also limits `max_images_per_prompt = 1`.", "page_refs": [522, 524]},
+  {"id": "q4", "type": "conceptual", "question": "Why must the image encoder's output dimension equal 2560 for the splicing trick to work?", "options": [], "answer": "Because 2560 is the hidden dimensionality of the Gemma Transformer. Every position in the sequence must be a vector of that size for the decoder blocks to process it, so matching sizes let the image vectors be concatenated with text embeddings without changing the model.", "explanation": "The book: 'Because 2560 is the hidden dimensionality of the Gemma Transformer model, this image representation can simply be spliced into our text sequence after the token embedding layer.'", "page_refs": [522]},
+  {"id": "q5", "type": "mcq", "question": "What distinguishes a 'soft' token from a 'hard' token?", "options": ["Soft tokens have lower precision (bfloat16)", "Soft tokens can take any vector value output by the vision encoder, while hard tokens are limited to rows of the embedding matrix", "Soft tokens are ignored by attention", "Soft tokens are subword pieces of rare words"], "answer": "Soft tokens can take any vector value output by the vision encoder, while hard tokens are limited to rows of the embedding matrix", "explanation": "This is the book's definition. Precision (option 1) is unrelated. Soft tokens are attended to like any others (option 3); that is the whole point. Subword pieces (option 4) are hard tokens.", "page_refs": [522]},
+  {"id": "q6", "type": "conceptual", "question": "The authors say the Transformer is 'a highly effective model for learning patterns in sequence data'. What does this imply about adding audio input?", "options": [], "answer": "If audio can be coerced into a sequence of vectors with the model's hidden size (e.g. by an audio encoder applied to short frames), it can be spliced into the sequence and trained on in the same way as images.", "explanation": "The general recipe on this page is modality-agnostic: convert to a sequence, feed it to the Transformer, train. The audio-encoder detail is an extrapolation beyond the page.", "page_refs": [522]},
+  {"id": "q7", "type": "self", "question": "Can you sketch, from memory, the path of the text 'What is <img> ?' and an image into the decoder, marking where the embedding lookup and the image encoder sit?", "options": [], "answer": "Text tokens → embedding matrix → hard tokens; image → image encoder → 256 soft tokens; both merged into one sequence → decoder blocks.", "explanation": "Compare your sketch with figure 16.6 on p.523.", "page_refs": [522, 523]}
+ ]
+}

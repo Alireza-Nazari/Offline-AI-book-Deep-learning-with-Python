@@ -1,0 +1,378 @@
+{
+ "page_id": "page_081",
+ "pdf_page": 81,
+ "printed_page": "57",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-fable-5-1",
+  "generated_at": "2026-11-03T04:36:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "The GradientTape demo (x = tf.zeros(shape=()) on p.80) never calls tape.watch(x); in TensorFlow an unwatched constant yields a None gradient. The notes reproduce the code verbatim and mention this as a pitfall (beyond the book).",
+   "In the printed fit(), the batch_size argument is not passed to BatchGenerator(images, labels), so the generator always uses its default of 128. Noted as a pitfall."
+  ],
+  "extraction_quality": "Good. All four code blocks and the short body paragraphs match the page image; callouts of the GradientTape snippet were split by the extractor and are reassembled below. The test-drive listing continues on p.82."
+ },
+ "overview": {
+  "title": "GradientTape in the training step, and the full training loop",
+  "chapter": "2 The mathematical building blocks of neural networks",
+  "section": "2.5 Looking back at our first example",
+  "subsection": "2.5.3 The full training loop",
+  "main_topic": "A minimal GradientTape example (gradient of y = 2x + 3), one_training_step rewritten with GradientTape, the from-scratch fit() function looping over epochs and batches, and the start of a test drive on MNIST",
+  "central_idea": "With GradientTape recording the forward pass, the training step becomes complete: predictions, per-sample loss and average loss are computed inside the tape scope, tape.gradient(average_loss, model.weights) returns one gradient per weight, and update_weights applies them. An epoch is the training step repeated for every batch, and fit() is the epoch repeated epochs times.",
+  "importance": "This page closes the loop: the from-scratch model can now be trained exactly like keras's fit on p.76. It shows the minimal skeleton of any training loop (nested loops over epochs and batches around a gradient step), which the book generalizes in chapter 7.",
+  "learning_objectives": [
+   "Use tf.GradientTape to compute the derivative of a simple function and interpret the result (dy/dx = 2 for y = 2x + 3).",
+   "Explain which lines of one_training_step must be inside the tape scope and why.",
+   "Explain why tape.gradient is called on average_loss (a scalar) with respect to model.weights.",
+   "Read the fit() function: outer loop over epochs, a fresh BatchGenerator per epoch, inner loop over num_batches, periodic loss logging.",
+   "Prepare MNIST inputs by reshaping (60000, 28, 28) to (60000, 784)."
+  ],
+  "prerequisites": [
+   "GradientTape and automatic differentiation (p.80)",
+   "update_weights and the SGD optimizer (p.80)",
+   "Listing 2.9 and BatchGenerator (p.78-p.79)",
+   "Tensor reshaping (p.58)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes the GradientTape demonstration begun on p.80. Inside `with tf.GradientTape() as tape:` (callout: *opens a GradientTape scope*) the code computes `y = 2 * x + 3` (*applies some tensor operations to our variable*), then `grad_of_y_wrt_x = tape.gradient(y, x)` *uses the tape to retrieve the gradient of the output y with respect to our variable x*. For this affine function the gradient is 2 everywhere, in particular at x = 0.\n\n**Rewritten training step.** `one_training_step()` is rewritten with the tape, which removes the need for a separate `get_gradients_of_loss_wrt_weights()`. The forward pass (`predictions = model(images_batch)`), the per-sample `ops.sparse_categorical_crossentropy` and `average_loss = ops.mean(loss)` run inside the tape scope; then `gradients = tape.gradient(average_loss, model.weights)` gives one gradient per weight, `update_weights(gradients, model.weights)` applies them, and the function returns `average_loss`. Unlike listing 2.9 on p.79, the gradient is taken of the scalar average loss.\n\n**Section 2.5.3, The full training loop.** An epoch is the repetition of the training step for each batch in the training data, and the full loop is the repetition of the epoch. The from-scratch `fit(model, images, labels, epochs, batch_size=128)` prints the epoch number, creates a new `BatchGenerator(images, labels)`, loops `num_batches` times calling `batch_generator.next()` and `one_training_step`, and prints the loss every 100 batches (`f\"loss at batch {batch_counter}: {loss:.2f}\"`).\n\n**Test drive.** The page begins running it: load MNIST with `mnist.load_data()` and reshape the training images to `(60000, 28 * 28)`; the rest (type conversion, the call to `fit`, evaluation) continues on p.82.",
+ "paragraphs": [
+  {
+   "ref": "p081_e04",
+   "excerpt": "Let’s rewrite our function one_training_step() using the TensorFlow GradientTape (skipping the need",
+   "what_it_says": "one_training_step() is rewritten using TensorFlow's GradientTape, which removes the need for a separate get_gradients_of_loss_wrt_weights() function.",
+   "what_it_means": "The placeholder from listing 2.9 is replaced by two pieces: wrapping the forward pass and loss in a tape scope, and calling tape.gradient afterwards. The forward computation must happen inside the scope, otherwise the tape has nothing recorded to differentiate. The model's weights are keras.Variable objects and, with the TensorFlow backend, are trainable variables that the tape watches automatically.",
+   "why_it_matters": "It makes the training step fully functional and shows the canonical pattern of TensorFlow training code: record forward pass, get gradients, apply gradients.",
+   "technical_idea": "tape.gradient(average_loss, model.weights) returns a list of 4 tensors with shapes (784, 512), (512,), (512, 10), (10,), aligned with model.weights so that zip in update_weights pairs them correctly.",
+   "terminology": [
+    {"term": "tape scope", "meaning": "The with-block during which operations are recorded."},
+    {"term": "tape.gradient(target, sources)", "meaning": "Returns the gradient of the scalar target with respect to each source tensor."}
+   ],
+   "connections": ["p.79: listing 2.9 with the placeholder function.", "p.80: GradientTape introduced; update_weights defined."]
+  },
+  {
+   "ref": "p081_e06",
+   "excerpt": "Now that our per-batch training step is ready, we can move on",
+   "what_it_says": "With the per-batch training step ready, the next task is implementing an entire epoch of training.",
+   "what_it_means": "The difficult part (p.79) is done; the remaining structure is plain control flow.",
+   "why_it_matters": "It marks the transition from the mathematics of one update to the bookkeeping of many updates.",
+   "terminology": [],
+   "connections": ["p.79: the training step called 'the most difficult part'."]
+  },
+  {
+   "ref": "p081_e09",
+   "excerpt": "An epoch of training simply consists of the repetition of the training",
+   "what_it_says": "An epoch of training is the training step repeated for each batch in the training data, and the full training loop is the repetition of one epoch.",
+   "what_it_means": "Two nested loops: the inner loop runs num_batches = 469 training steps (one per batch of 128 out of 60,000 images), the outer loop runs it epochs times. A new BatchGenerator is created at the start of each epoch because its index only moves forward. Every 100 batches the current batch's average loss is printed, so you see batches 0, 100, 200, 300, 400 in each epoch.",
+   "why_it_matters": "This function is the from-scratch counterpart of model.fit(train_images, train_labels, epochs=5, batch_size=128) on p.76; with epochs=5 it performs the same 2,345 updates.",
+   "technical_idea": "Beyond the book: unlike Keras's fit, this loop does not shuffle the data between epochs, does not compute metrics like accuracy, and logs the loss of a single batch rather than a running average.",
+   "terminology": [
+    {"term": "epoch", "meaning": "One pass over all batches of the training data."},
+    {"term": "training loop", "meaning": "The repetition of epochs, each repeating the training step over all batches."}
+   ],
+   "connections": ["p.76: the Keras fit call and the 2,345-update count.", "p.239: chapter 7 reimplements fit with more features."]
+  },
+  {
+   "ref": "p081_e11",
+   "excerpt": "Let’s test-drive it:",
+   "what_it_says": "The authors start testing the from-scratch fit on MNIST.",
+   "what_it_means": "The data loading and reshape below mirror the preprocessing of the first example (p.75): images become rows of 784 pixels. The conversion to float32 and the actual fit call follow on p.82.",
+   "why_it_matters": "It shows the model's input contract: a 2-D tensor (samples, 784).",
+   "terminology": [],
+   "connections": ["p.75: the input data as float32 tensors of shape (60000, 784).", "p.82: evaluation of the trained model."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "gradient_tape",
+   "name": "tf.GradientTape",
+   "definition": "TensorFlow scope that records operations so the gradient of a scalar output with respect to inputs can be retrieved with tape.gradient.",
+   "intuition": "Record the forward computation, then replay it backward.",
+   "technical": "with tf.GradientTape() as tape: y = f(x); tape.gradient(y, x).",
+   "significance": "Provides get_gradients_of_loss_wrt_weights for the from-scratch model.",
+   "example": "y = 2 * x + 3 -> tape.gradient(y, x) = 2.",
+   "misconception": "Gradients can only be taken of operations executed inside the scope; computing the loss outside the with-block gives no gradient.",
+   "related": ["autodiff", "backpropagation"],
+   "source": "book"
+  },
+  {
+   "id": "training_step",
+   "name": "Training step (complete)",
+   "definition": "Forward pass and loss recorded on a tape, gradient of the average loss with respect to model.weights, weight update.",
+   "intuition": "Measure, attribute blame, adjust.",
+   "technical": "gradients = tape.gradient(average_loss, model.weights); update_weights(gradients, model.weights); return average_loss.",
+   "significance": "The runnable version of listing 2.9.",
+   "example": "One call on a (128, 784) batch changes all 407,050 weights by tiny amounts.",
+   "misconception": "Returning average_loss does not affect training; it is only for monitoring.",
+   "related": ["gradient_tape", "sgd"],
+   "source": "book"
+  },
+  {
+   "id": "training_loop",
+   "name": "Training loop (fit from scratch)",
+   "definition": "An outer loop over epochs and an inner loop over batches, calling the training step for each batch.",
+   "intuition": "Do the per-batch step for the whole dataset, then do that again several times.",
+   "technical": "for epoch in range(epochs): gen = BatchGenerator(...); for i in range(gen.num_batches): one_training_step(model, *gen.next()).",
+   "significance": "What Keras's fit does under the hood (p.76, p.239).",
+   "example": "epochs=5 with 469 batches per epoch -> 2,345 training steps.",
+   "misconception": "The fit here does not report accuracy or validation loss; it only prints training loss every 100 batches.",
+   "related": ["epoch", "mini_batch", "training_step"],
+   "source": "book"
+  },
+  {
+   "id": "epoch",
+   "name": "Epoch",
+   "definition": "Repetition of the training step for each batch in the training data.",
+   "intuition": "One full lap through the dataset.",
+   "technical": "Implemented by the inner loop over batch_generator.num_batches.",
+   "significance": "Unit of the outer loop in fit.",
+   "example": "469 steps per epoch for MNIST with batch size 128.",
+   "misconception": "An epoch is not a fixed number of steps; it depends on dataset size and batch size.",
+   "related": ["training_loop", "mini_batch"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "The GradientTape example",
+   "latex": "y = 2x + 3, \\qquad \\frac{dy}{dx} = 2 \\quad (\\text{at } x = 0)",
+   "source_text": "y = 2 * x + 3; grad_of_y_wrt_x = tape.gradient(y, x)",
+   "variables": [
+    {"symbol": "x", "meaning": "Scalar tensor, initialized to 0 on p.80"},
+    {"symbol": "y", "meaning": "Output computed inside the tape scope"},
+    {"symbol": "dy/dx", "meaning": "grad_of_y_wrt_x, returned by tape.gradient"}
+   ],
+   "operations": "Multiplication by 2 and addition of 3; the tape differentiates them with the chain rule.",
+   "purpose": "Smallest possible demonstration of automatic differentiation.",
+   "interpretation": "Increasing x by a small epsilon increases y by 2 epsilon, so the slope is 2.",
+   "intuition": "For an affine function the derivative is its slope, independent of x.",
+   "numerical_example": "Finite-difference check: (y(0.001) - y(0)) / 0.001 = (3.002 - 3) / 0.001 = 2.",
+   "source": "book",
+   "book_ref": "p.81"
+  },
+  {
+   "id": "m2",
+   "title": "Gradient of the average loss with respect to the weights",
+   "latex": "\\nabla_{\\theta} \\bar{\\ell}, \\quad \\bar{\\ell} = \\frac{1}{B}\\sum_{i=1}^{B} -\\log f_\\theta(x_i)_{y_i}, \\quad \\theta = (W_1, b_1, W_2, b_2)",
+   "source_text": "gradients = tape.gradient(average_loss, model.weights)",
+   "variables": [
+    {"symbol": "\\theta", "meaning": "model.weights, the four weight tensors"},
+    {"symbol": "f_\\theta(x_i)_{y_i}", "meaning": "Predicted probability of the true class for sample i"},
+    {"symbol": "\\bar{\\ell}", "meaning": "average_loss over the batch"},
+    {"symbol": "B", "meaning": "Batch size (128)"}
+   ],
+   "operations": "Reverse-mode differentiation of the recorded graph.",
+   "purpose": "States in symbols what the tape computes in the rewritten step; the formula is written for these notes.",
+   "interpretation": "A list of four tensors, each with the shape of its weight, telling how the average loss changes as each weight changes.",
+   "intuition": "Which way, and how strongly, each of the 407,050 knobs should be turned to lower the loss on this batch.",
+   "source": "ai_explanation",
+   "book_ref": "p.81"
+  },
+  {
+   "id": "m3",
+   "title": "Number of training steps performed by fit",
+   "latex": "\\text{steps} = \\text{epochs} \\times \\left\\lceil \\frac{60000}{128} \\right\\rceil = 5 \\times 469 = 2345",
+   "source_text": "for epoch_counter in range(epochs): ... for batch_counter in range(batch_generator.num_batches):",
+   "variables": [
+    {"symbol": "\\text{epochs}", "meaning": "Outer loop count (5 in the first example)"},
+    {"symbol": "\\lceil 60000/128 \\rceil", "meaning": "batch_generator.num_batches = 469"}
+   ],
+   "operations": "Product of the two loop counts.",
+   "purpose": "Links this loop to the 2,345 updates stated on p.76.",
+   "interpretation": "With epochs=5 the from-scratch fit does the same number of updates as model.fit.",
+   "intuition": "Nested loops multiply.",
+   "numerical_example": "Loss lines printed per epoch: batches 0, 100, 200, 300, 400, i.e. 5 lines per epoch, 25 in total for 5 epochs.",
+   "source": "inference",
+   "book_ref": "p.76"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Gradient of y = 2x + 3 with GradientTape",
+   "original_code": "with tf.GradientTape() as tape:\n    y = 2 * x + 3\ngrad_of_y_wrt_x = tape.gradient(y, x)",
+   "language": "python",
+   "what_it_does": "Records the computation y = 2x + 3 and asks the tape for dy/dx.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Callout: opens a GradientTape scope."},
+    {"lines": "2", "explanation": "Callout: inside the scope, applies some tensor operations to our variable."},
+    {"lines": "3", "explanation": "Callout: uses the tape to retrieve the gradient of the output y with respect to our variable x. Called after the scope closes."}
+   ],
+   "inputs_outputs": "Input: x (scalar, from p.80). Output: grad_of_y_wrt_x, expected value 2.",
+   "algorithm": "Reverse-mode automatic differentiation over two recorded operations.",
+   "theory_link": "Derivative as slope (p.65) and chain rule (p.71), automated.",
+   "parameters": [],
+   "pitfalls": [
+    "Beyond the book: x was created with tf.zeros, a constant; TensorFlow only watches trainable tf.Variable objects automatically, so without tape.watch(x) (or x = tf.Variable(0.)) tape.gradient returns None.",
+    "By default a tape can be used for only one gradient call (unless persistent=True)."
+   ],
+   "illustrative_code": "# AI-written: a version that returns 2.0\nx = tf.Variable(0.0)\nwith tf.GradientTape() as tape:\n    y = 2 * x + 3\nprint(tape.gradient(y, x))  # tf.Tensor(2.0, ...)"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "one_training_step rewritten with GradientTape",
+   "original_code": "def one_training_step(model, images_batch, labels_batch):\n    with tf.GradientTape() as tape:\n        predictions = model(images_batch)\n        loss = ops.sparse_categorical_crossentropy(labels_batch, predictions)\n        average_loss = ops.mean(loss)\n    gradients = tape.gradient(average_loss, model.weights)\n    update_weights(gradients, model.weights)\n    return average_loss",
+   "language": "python",
+   "what_it_does": "A complete training step: forward pass and loss recorded on a tape, gradients of the average loss with respect to all weights, weight update, and return of the batch's average loss.",
+   "line_explanations": [
+    {"lines": "2", "explanation": "Start recording operations."},
+    {"lines": "3", "explanation": "Forward pass through the two NaiveDense layers."},
+    {"lines": "4-5", "explanation": "Per-sample crossentropy, then its mean: the scalar to minimize."},
+    {"lines": "6", "explanation": "After leaving the scope, differentiate average_loss with respect to [W1, b1, W2, b2]."},
+    {"lines": "7", "explanation": "Apply the update (hand-written SGD or optimizers.SGD from p.80)."},
+    {"lines": "8", "explanation": "Return the scalar loss for logging."}
+   ],
+   "inputs_outputs": "Inputs: model, images_batch (128, 784), labels_batch (128,). Effect: weights updated. Returns: scalar average loss.",
+   "algorithm": "Forward, loss, backward (autodiff), update.",
+   "theory_link": "Steps 2-5 of mini-batch SGD (p.68); backpropagation (p.70-p.74) done by the tape.",
+   "parameters": [
+    {"name": "model", "role": "NaiveSequential mock model"},
+    {"name": "images_batch, labels_batch", "role": "One batch from BatchGenerator"}
+   ],
+   "pitfalls": [
+    "update_weights must be called outside or after the gradient computation; updating before tape.gradient would mismatch the recorded graph.",
+    "This version uses the TensorFlow backend; with JAX or PyTorch the gradient mechanism differs (chapter 3)."
+   ]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "fit: the full training loop from scratch",
+   "original_code": "def fit(model, images, labels, epochs, batch_size=128):\n    for epoch_counter in range(epochs):\n        print(f\"Epoch {epoch_counter}\")\n        batch_generator = BatchGenerator(images, labels)\n        for batch_counter in range(batch_generator.num_batches):\n            images_batch, labels_batch = batch_generator.next()\n            loss = one_training_step(model, images_batch, labels_batch)\n            if batch_counter % 100 == 0:\n                print(f\"loss at batch {batch_counter}: {loss:.2f}\")",
+   "language": "python",
+   "what_it_does": "Trains the model for a number of epochs, each epoch iterating over all batches and calling one_training_step, printing the loss every 100 batches.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Signature mirrors Keras's fit: model, inputs, targets, epochs, batch size."},
+    {"lines": "2-3", "explanation": "Outer loop over epochs; epochs are numbered from 0 in the printout."},
+    {"lines": "4", "explanation": "A fresh generator each epoch, so slicing restarts from index 0."},
+    {"lines": "5-7", "explanation": "Inner loop: one training step per batch, num_batches = 469 for MNIST."},
+    {"lines": "8-9", "explanation": "Every 100 batches, print the current batch's average loss with two decimals."}
+   ],
+   "inputs_outputs": "Inputs: model, images (60000, 784), labels (60000,), epochs. Effect: model trained in place; prints progress.",
+   "algorithm": "Nested loops: epochs x batches around the training step.",
+   "theory_link": "The training loop of p.63, mini-batch SGD of p.68, and model.fit of p.76.",
+   "parameters": [
+    {"name": "epochs", "role": "Number of passes over the data"},
+    {"name": "batch_size", "role": "Intended batch size (default 128)"}
+   ],
+   "pitfalls": [
+    "As printed, batch_size is not forwarded: BatchGenerator(images, labels) always uses its own default of 128, so fit(..., batch_size=64) would have no effect.",
+    "No shuffling between epochs, unlike Keras's fit (beyond the book).",
+    "The printed loss is one batch's value, so it fluctuates from batch to batch."
+   ],
+   "illustrative_code": "# AI-written: forwarding batch_size explicitly\nbatch_generator = BatchGenerator(images, labels, batch_size=batch_size)"
+  },
+  {
+   "id": "c4",
+   "listing": null,
+   "title": "Test drive: loading and reshaping MNIST (beginning)",
+   "original_code": "from keras.datasets import mnist\n\n(train_images, train_labels), (test_images, test_labels) = mnist.load_data()\n\ntrain_images = train_images.reshape((60000, 28 * 28))",
+   "language": "python",
+   "what_it_does": "Loads MNIST and flattens each 28x28 training image into a 784-vector so it matches NaiveDense(input_size=28 * 28).",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Keras ships MNIST as a built-in dataset."},
+    {"lines": "3", "explanation": "Returns NumPy arrays: train images (60000, 28, 28) uint8, train labels (60000,), and the 10,000-sample test set."},
+    {"lines": "5", "explanation": "Reshape to (60000, 784); the order of pixels is row-major."}
+   ],
+   "inputs_outputs": "Output: train_images (60000, 784), train_labels (60000,), test arrays.",
+   "algorithm": "Data loading and reshaping.",
+   "theory_link": "Tensor reshaping (p.58); the input preprocessing of the first example (p.75).",
+   "parameters": [{"name": "(60000, 28 * 28)", "role": "Target shape: samples x flattened pixels"}],
+   "pitfalls": ["The pixels are still uint8 in [0, 255] at this point; conversion to float32 and scaling follow on p.82 (as in the first example on p.75)."]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "From-scratch fit vs keras fit",
+   "kind": "breakdown",
+   "body": "| | This page | `model.fit` (p.76) |\n|---|---|---|\n| Batching | `BatchGenerator`, fixed order | built in, shuffled by default |\n| Gradients | `tf.GradientTape` | backend autodiff |\n| Update | `update_weights` (SGD, lr 1e-3) | `optimizer=\"adam\"` |\n| Logging | loss every 100 batches | loss and metrics per epoch, progress bar |\n| Steps for 5 epochs | 5 x 469 = 2,345 | 2,345 |\n\nNote that the optimizers differ (SGD here, Adam in the first example), so the loss curves will not be identical. (Comparison compiled for these notes.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the loss must be computed inside the tape",
+   "kind": "step_by_step",
+   "body": "1. The tape only knows about operations executed while it is active.\n2. `average_loss` depends on the weights through `model(images_batch)` and the crossentropy.\n3. If those operations ran before `with tf.GradientTape()`, the tape would see no path from the weights to the loss, and `tape.gradient` would return `None` for each weight.\n4. The update call is placed outside the scope because it does not need to be differentiated.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "The derivative computed by the tape: y = 2x + 3",
+   "why": "The GradientTape example on this page differentiates y = 2 * x + 3 at x = 0; the tangent slope is the gradient the tape returns (2).",
+   "widget": "derivative_tangent",
+   "params": {"expr": "2*x+3", "x0": 0, "h": 0.5}
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "The from-scratch fit()",
+   "why": "Section 2.5.3: an epoch repeats the training step for each batch; the full loop repeats the epoch.",
+   "mermaid": "flowchart TD\n  E[for epoch_counter in range epochs] --> G[batch_generator = BatchGenerator images, labels]\n  G --> B[for batch_counter in range num_batches 469]\n  B --> N[images_batch, labels_batch = next]\n  N --> S[one_training_step: tape forward + loss, tape.gradient, update_weights]\n  S --> P{batch_counter % 100 == 0?}\n  P -- yes --> L[print loss]\n  P -- no --> B\n  L --> B\n  B -- batches done --> E"
+  },
+  {
+   "id": "v3",
+   "type": "widget",
+   "title": "Reshaping MNIST for the model",
+   "why": "The test drive reshapes train_images from (60000, 28, 28) to (60000, 28 * 28) to match NaiveDense(input_size=28 * 28).",
+   "widget": "tensor_shapes",
+   "params": {"steps": [{"op": "mnist.load_data", "shape": [60000, 28, 28]}, {"op": "reshape", "shape": [60000, 784]}, {"op": "one batch", "shape": [128, 784]}, {"op": "model output", "shape": [128, 10]}]}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "tape.gradient can be called on a loss computed before the with-block.", "correction": "Only operations recorded inside the scope can be differentiated; the forward pass and loss are inside the tape in the rewritten step."},
+  {"claim": "The rewritten step still differentiates the per-sample loss vector.", "correction": "It calls tape.gradient(average_loss, model.weights), the scalar mean, and returns average_loss."},
+  {"claim": "fit(model, images, labels, epochs, batch_size=64) would train with batches of 64.", "correction": "As printed, BatchGenerator(images, labels) ignores fit's batch_size and uses its default of 128."},
+  {"claim": "An epoch is a single training step.", "correction": "An epoch repeats the training step for each batch in the training data (469 times here)."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 80, "note": "update_weights, optimizers.SGD and the start of the GradientTape example (x = tf.zeros(shape=()))."},
+   {"page": 79, "note": "BatchGenerator and listing 2.9."},
+   {"page": 78, "note": "The mock model and model.weights."},
+   {"page": 76, "note": "Keras fit with 5 epochs and batch size 128."}
+  ],
+  "later": [
+   {"page": 82, "note": "Finishing the test drive and evaluating the model with argmax over test predictions; chapter summary."},
+   {"page": 239, "note": "Chapter 7: reimplementing fit with full features in TensorFlow, PyTorch and JAX."}
+  ],
+  "prerequisites": [
+   {"page": 65, "note": "Derivative as slope."},
+   {"page": 58, "note": "Tensor reshaping."}
+  ],
+  "related_math": [
+   {"page": 68, "note": "Mini-batch SGD update."},
+   {"page": 71, "note": "Chain rule automated by the tape."}
+  ],
+  "related_code": [
+   {"page": 79, "note": "Listing 2.9 (placeholder version)."},
+   {"page": 80, "note": "update_weights implementations."}
+  ],
+  "related_figures": [
+   {"page": 75, "note": "Figure 2.26: the loop of model, loss and optimizer implemented here."}
+  ]
+ },
+ "takeaways": [
+  "GradientTape records operations in its scope; tape.gradient(y, x) returns dy/dx (2 for y = 2x + 3).",
+  "The complete training step records forward pass and loss on the tape, differentiates the scalar average loss with respect to model.weights, then updates the weights.",
+  "An epoch is the training step repeated over all batches; fit repeats the epoch epochs times, here with a fresh BatchGenerator each epoch.",
+  "With 5 epochs, the from-scratch fit performs the same 2,345 updates as Keras's fit.",
+  "Inputs must be reshaped to (60000, 784) before training."
+ ],
+ "questions": [
+  {"id": "q1", "type": "math", "question": "If the tape example used y = 5 * x * x + 3 instead, what would tape.gradient(y, x) return at x = 0 and at x = 2?", "options": [], "answer": "0 at x = 0 and 20 at x = 2", "explanation": "dy/dx = 10x. Unlike the affine example on the page (gradient 2 everywhere), this gradient depends on x.", "page_refs": [81]},
+  {"id": "q2", "type": "mcq", "question": "In the rewritten one_training_step, which value is differentiated?", "options": ["loss, the per-sample vector", "average_loss, the scalar mean over the batch", "predictions", "labels_batch"], "answer": "average_loss, the scalar mean over the batch", "explanation": "The code calls tape.gradient(average_loss, model.weights). The per-sample loss is an intermediate, predictions are model outputs, and labels are constants.", "page_refs": [81]},
+  {"id": "q3", "type": "conceptual", "question": "Why are the forward pass and the loss computation placed inside the with tf.GradientTape() block while update_weights is outside?", "options": [], "answer": "The tape must record the operations that connect the weights to the loss in order to differentiate it; the update itself does not need to be differentiated and happens after the gradients are obtained.", "explanation": "GradientTape records the tensor operations run inside it (p.80); tape.gradient replays them backward.", "page_refs": [80, 81]},
+  {"id": "q4", "type": "short", "question": "How many times is the loss printed per epoch for MNIST with batch size 128, and at which batches?", "options": [], "answer": "5 times: batches 0, 100, 200, 300, 400.", "explanation": "num_batches = 469 (batch_counter 0-468), and the print happens when batch_counter % 100 == 0.", "page_refs": [81]},
+  {"id": "q5", "type": "mcq", "question": "Why does fit create a new BatchGenerator at the beginning of every epoch?", "options": ["To shuffle the data", "Because BatchGenerator's index only increases, so a new one restarts from the first sample", "To change the batch size each epoch", "To reinitialize the weights"], "answer": "Because BatchGenerator's index only increases, so a new one restarts from the first sample", "explanation": "BatchGenerator (p.79) starts at index 0 and only advances. It does not shuffle, the batch size is always the default, and weights are untouched by it.", "page_refs": [79, 81]},
+  {"id": "q6", "type": "conceptual", "question": "Compare the from-scratch fit with model.fit(train_images, train_labels, epochs=5, batch_size=128) from p.76. What is the same and what is different?", "options": [], "answer": "Same: nested loops of 5 epochs x 469 batches of 128, forward pass, sparse categorical crossentropy, gradients by autodiff, one update per batch. Different: SGD with lr 1e-3 instead of Adam, no shuffling, no accuracy metric, simpler logging.", "explanation": "The page's definition of an epoch and full loop matches p.76; the differences come from the hand-written update (p.80) and BatchGenerator (p.79).", "page_refs": [76, 80, 81]},
+  {"id": "q7", "type": "short", "question": "What shape does train_images have before and after the reshape in the test drive?", "options": [], "answer": "(60000, 28, 28) before, (60000, 784) after.", "explanation": "reshape((60000, 28 * 28)) flattens each 28x28 image into a 784-vector, matching the first NaiveDense's input_size.", "page_refs": [81]},
+  {"id": "q8", "type": "self", "question": "Can you write the complete from-scratch pipeline (NaiveDense, NaiveSequential, BatchGenerator, update_weights, one_training_step, fit) from memory and explain what each piece corresponds to in model.fit?", "options": [], "answer": "Layers and model = keras.Sequential; update_weights = optimizer; one_training_step = one iteration inside fit; fit = epochs x batches loop.", "explanation": "This is the self-check the section is designed for: if you can do it, fit holds no more mysteries.", "page_refs": [77, 78, 79, 80, 81]}
+ ]
+}

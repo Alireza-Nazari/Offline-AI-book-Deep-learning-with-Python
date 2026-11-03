@@ -1,0 +1,450 @@
+{
+ "page_id": "page_367",
+ "pdf_page": 367,
+ "printed_page": "343",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:39:06Z",
+  "confidence": "high",
+  "review_flags": [
+   "Typo in the book: 'We can start be defining a utility' should read 'start by defining'.",
+   "The text says Redmon et al. propose 'a couple of' loss scaling tricks but then lists three (scale box loss by 5, scale empty-cell confidence loss down by 2, square root of width/height).",
+   "Possible unit mismatch (inference, not stated in the book): Listing 12.10 treats a box as (cx, cy, w, h) in one coordinate system, but in the YOLO targets x and y are relative to the grid cell (0 to 1) while w and h are relative to the whole image (p.363). When box_loss on p.368 calls intersection_over_union(true, pred) on these raw values, the IoU is computed in mixed units (center offsets effectively 6x magnified relative to sizes), so it is not the true image-space IoU. Worth a reviewer's check."
+  ],
+  "extraction_quality": "Clean extraction. Element p367_e03 begins mid-sentence ('box is.'), continuing from p.366. Listing 12.10 and its three callouts are complete."
+ },
+ "overview": {
+  "title": "IoU as the confidence target and YOLO's loss-scaling tricks",
+  "chapter": "12 Object detection",
+  "section": "12.2 Training a YOLO model from scratch",
+  "subsection": "12.2.4 Training the YOLO model",
+  "main_topic": "Using IoU between predicted and true box as the target for the confidence output, implementing IoU with keras.ops (Listing 12.10), and the three loss-scaling tricks from the YOLO paper",
+  "central_idea": "The confidence target is 0 in empty cells and the IoU between the current predicted box and the actual box in occupied cells, so confidence rises as localization improves. Listing 12.10 computes IoU for tensors of (cx, cy, w, h) boxes; the loss then weights box placement by 5, halves the confidence loss in empty cells, and compares square roots of widths and heights.",
+  "importance": "This page contains the conceptual core of the YOLO objective. IoU is the standard measure of box overlap throughout object detection, and the scaling tricks illustrate a general lesson: how loss terms are weighted determines what a multi-task model actually learns.",
+  "learning_objectives": [
+   "Explain why IoU with the predicted box is used as the confidence target",
+   "Derive the intersection of two center-format boxes from their edges",
+   "Read Listing 12.10 and explain each keras.ops call, including the clamps and divide_no_nan",
+   "State the three YOLO loss-scaling tricks and the reason for each",
+   "Explain why a sign-preserving square root is needed"
+  ],
+  "prerequisites": [
+   "IoU for segmentation masks (p.340)",
+   "YOLO box encoding (x, y, w, h, confidence) (p.363)",
+   "The basic sum-squared box loss (p.366)",
+   "keras.ops tensor operations and ellipsis indexing"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page completes the sentence from p.366: the confidence output should reflect *how good the predicted box is*. To get a **smooth estimate** of box quality the YOLO authors use **Intersection over Union (IoU)**, the metric from chapter 11 (p.340). The rule: if a grid cell is empty, the target confidence is **0**; if it contains an object, the target is the **IoU between the current box prediction and the actual box**. As the model localizes better, IoU rises and so do the learned confidences.\n\nBecause the target depends on the prediction, a **custom loss** is needed. The first building block is **Listing 12.10**, written with backend-agnostic `keras.ops`:\n\n- `unpack(box)` splits the last axis of a box tensor into `cx, cy, w, h` (the `...` keeps any leading batch/grid axes).\n- `intersection(box1, box2)` converts centers and sizes to edges, takes the larger left/bottom edge and the smaller right/top edge, and multiplies the clamped width and height of the overlap (zero if the boxes don't overlap).\n- `intersection_over_union` computes each box's area (clamping negative widths/heights to 0), the union as $a_1 + a_2 - \\text{intersection}$, and returns intersection/union via `divide_no_nan` so an empty union gives 0 instead of NaN.\n\nThe page then lists **loss scaling tricks** from Redmon et al.:\n\n1. **Scale the box placement loss up by 5**, making localization a bigger part of training.\n2. **Scale the confidence loss in empty cells down by 2**, since most cells are empty and their zero-confidence terms would otherwise overwhelm the loss.\n3. **Take the square root of width and height** before computing the error, so large boxes don't dominate small ones. The book uses a **sign-preserving** `sqrt` because an untrained model may predict negative widths and heights.\n\n\"Let's write this out\" leads to Listing 12.11 on p.368.",
+ "paragraphs": [
+  {
+   "ref": "p367_e03",
+   "excerpt": "box is. To create a smooth estimate of how good a box prediction",
+   "what_it_says": "The YOLO authors use IoU to estimate box quality. Empty cells get confidence target 0; occupied cells get the IoU between the current predicted box and the actual box. As localization improves, IoU and learned confidence increase.",
+   "what_it_means": "Confidence is trained to predict the model's own localization quality. It combines 'is there an object?' (0 vs. nonzero) and 'how well did I box it?' (the IoU value).",
+   "why_it_matters": "At inference time, ranking detections by confidence then roughly ranks them by expected overlap with a real object, which is what thresholding and evaluation rely on.",
+   "technical_idea": "IoU is continuous in the box parameters wherever boxes overlap, which makes it a 'smooth' target in contrast to a hard 0/1 label. Beyond the book: the original YOLO paper defines confidence as Pr(object) x IoU(pred, truth).",
+   "terminology": [
+    {"term": "Intersection over Union (IoU)", "meaning": "Area of overlap divided by area of union of two regions; 1 is a perfect match, 0 no overlap."},
+    {"term": "target confidence", "meaning": "The value the confidence output is regressed toward in the loss."}
+   ],
+   "connections": [
+    "p.340: IoU was introduced in chapter 11 to evaluate segmentation masks",
+    "p.366: this sentence began with 'The tricky part of the loss is the box confidence output'"
+   ]
+  },
+  {
+   "ref": "p367_e04",
+   "excerpt": "This calls for a custom loss function. We can start be defining",
+   "what_it_says": "Because of this IoU-based target a custom loss is needed, starting with a utility that computes IoU for target and predicted boxes.",
+   "what_it_means": "No built-in Keras loss computes a target from the prediction itself, so the box loss is written by hand from keras.ops primitives.",
+   "why_it_matters": "Using keras.ops keeps the loss differentiable and runnable on any backend (JAX, TensorFlow, PyTorch).",
+   "terminology": [
+    {"term": "custom loss", "meaning": "A Python function loss(y_true, y_pred) returning per-sample loss values, passed to compile()."}
+   ],
+   "connections": [
+    "p.368: box_loss in Listing 12.11 calls intersection_over_union(true, pred)"
+   ]
+  },
+  {
+   "ref": "p367_e06",
+   "excerpt": "from keras import ops",
+   "what_it_says": "Listing 12.10 defines unpack, intersection and intersection_over_union for tensors of center-format boxes.",
+   "what_it_means": "All operations are element-wise over leading axes, so one call computes IoU for every grid cell of every image in a batch at once: inputs (batch, 6, 6, 5) give an output (batch, 6, 6).",
+   "why_it_matters": "Vectorized IoU is cheap enough to compute inside the loss at every training step.",
+   "technical_idea": "Edges: left = cx - w/2, right = cx + w/2, bottom = cy - h/2, top = cy + h/2. Overlap width = max(0, min(right) - max(left)), same for height.",
+   "terminology": [
+    {"term": "box[..., 0]", "meaning": "Ellipsis indexing: take index 0 of the last axis, keeping all leading axes."},
+    {"term": "divide_no_nan", "meaning": "Division returning 0 where the denominator is 0."}
+   ],
+   "connections": [
+    "p.363: boxes are encoded as (x, y, w, h, confidence) per grid cell"
+   ]
+  },
+  {
+   "ref": "p367_e07",
+   "excerpt": "Let’s use this utility to define our custom loss. Redmon et al.",
+   "what_it_says": "The IoU utility will be used in the custom loss, and Redmon et al. propose some loss scaling tricks to improve training quality.",
+   "what_it_means": "The plain sum-squared error is reweighted term by term; the three bullets that follow are those reweightings.",
+   "why_it_matters": "Without reweighting, the loss would be dominated by the many empty cells and by large boxes.",
+   "terminology": [
+    {"term": "Redmon et al.", "meaning": "Joseph Redmon and coauthors, the authors of the original YOLO paper cited on p.360."}
+   ],
+   "connections": [
+    "p.360: the original YOLO paper by Redmon et al. is cited"
+   ]
+  },
+  {
+   "ref": "p367_e08",
+   "excerpt": "They scale up the box placement loss by a factor of five, so",
+   "what_it_says": "Box placement loss is multiplied by 5 to make it a more important part of training.",
+   "what_it_means": "The coordinate errors (x, y and the square-rooted w, h) in occupied cells are weighted 5 times relative to the confidence errors and the classification loss.",
+   "why_it_matters": "Localization is the harder, rarer signal (only a few cells per image), so amplifying it keeps the model from neglecting it.",
+   "technical_idea": "This is lambda_coord = 5 in the YOLO paper's notation (beyond the book).",
+   "terminology": [
+    {"term": "loss weight", "meaning": "A multiplicative factor on one term of a composite loss."}
+   ],
+   "connections": [
+    "p.368: implemented as xy_error * 5.0 and wh_error * 5.0"
+   ]
+  },
+  {
+   "ref": "p367_e09",
+   "excerpt": "Since most grid cells are empty, they also scale down the confidence",
+   "what_it_says": "Because most grid cells are empty, the confidence loss in empty locations is scaled down by 2 so these zero-confidence predictions don't overwhelm the loss.",
+   "what_it_means": "With a 6 x 6 grid and at most four boxes per image, at least 32 of 36 cells are empty. Their confidence errors are multiplied by 0.5.",
+   "why_it_matters": "Otherwise the easiest way to reduce the loss would be to push all confidences to zero, including in cells that do contain objects.",
+   "technical_idea": "A form of class-imbalance correction (beyond the book: lambda_noobj = 0.5 in the YOLO paper).",
+   "terminology": [
+    {"term": "class imbalance", "meaning": "One kind of example (here, empty cells) vastly outnumbers the other."}
+   ],
+   "connections": [
+    "p.360: the dataset was filtered to images with four or fewer boxes",
+    "p.368: implemented as ops.where(no_object, conf_error * 0.5, conf_error)"
+   ]
+  },
+  {
+   "ref": "p367_e10",
+   "excerpt": "They take the square root of the width and height before computing",
+   "what_it_says": "Square roots of width and height are compared, so large boxes don't matter disproportionately more than small ones. A sign-preserving sqrt is used since the model may predict negative widths and heights early in training.",
+   "what_it_means": "An absolute error of 0.1 in width is a small mistake on a wide box but a huge one on a narrow box; the square root compresses large values and makes the same absolute error cost more for small boxes.",
+   "why_it_matters": "Small objects are common in COCO and would otherwise be poorly localized. The sign-preserving version avoids NaN from sqrt of a negative number.",
+   "technical_idea": "signed_sqrt(x) = sign(x) * sqrt(|x| + eps) (p.368). The epsilon also avoids the infinite derivative of sqrt at 0.",
+   "terminology": [
+    {"term": "sign-preserving sqrt", "meaning": "sqrt applied to |x|, with the sign of x restored: odd and monotonic."}
+   ],
+   "connections": [
+    "p.368: signed_sqrt is defined at the top of Listing 12.11",
+    "p.362: the box outputs are raw Dense outputs with no activation, so negative values are possible"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "intersection_over_union",
+   "name": "Intersection over Union (IoU)",
+   "definition": "Ratio of the area where two regions overlap to the area they cover together.",
+   "intuition": "How much of the combined footprint of two boxes is shared; identical boxes score 1, disjoint boxes 0.",
+   "technical": "IoU = |A ∩ B| / (|A| + |B| - |A ∩ B|). For axis-aligned boxes the intersection is a rectangle whose edges are the inner edges of the two boxes.",
+   "significance": "Used here as the confidence target and, across object detection, for matching predictions to ground truth and for evaluation.",
+   "example": "Boxes (0.5, 0.5, 0.4, 0.4) and (0.6, 0.5, 0.4, 0.4): intersection 0.3 x 0.4 = 0.12, union 0.16 + 0.16 - 0.12 = 0.20, IoU = 0.6.",
+   "misconception": "IoU is not the fraction of the true box covered by the prediction; a huge prediction can cover the true box fully yet have low IoU.",
+   "related": ["yolo_box_loss", "object_detection", "bounding_box"],
+   "source": "book"
+  },
+  {
+   "id": "yolo_box_loss",
+   "name": "YOLO box loss",
+   "definition": "Sum-squared error of box parameters in occupied cells plus a confidence error with IoU-based targets, with scaling tricks.",
+   "intuition": "Grade the position of real boxes heavily, grade confidence everywhere, but don't let empty cells drown out the rest.",
+   "technical": "Weights: 5 for placement terms, 0.5 for confidence in empty cells, 1 for confidence in occupied cells; widths and heights compared after signed square root.",
+   "significance": "Defines what the detector optimizes.",
+   "example": "Implemented in Listing 12.11 (p.368).",
+   "misconception": "Empty cells are not ignored: they contribute a (down-weighted) confidence error.",
+   "related": ["intersection_over_union", "mse", "loss_function"],
+   "source": "book"
+  },
+  {
+   "id": "loss_weighting",
+   "name": "Loss term weighting",
+   "definition": "Multiplying individual terms of a composite loss by constants to balance their influence on gradients.",
+   "intuition": "Turning up the volume on signals that are rare or important and down on those that are numerous or easy.",
+   "technical": "Gradients scale linearly with the weight, so a factor 5 makes placement gradients 5x larger relative to other terms.",
+   "significance": "Essential whenever one loss term has many more contributing elements than another.",
+   "example": "x5 for box placement, x0.5 for empty-cell confidence.",
+   "misconception": "Weights don't change the set of perfect solutions, but they change which imperfect solutions the optimizer prefers.",
+   "related": ["multi_output_loss", "loss_function"],
+   "source": "book"
+  },
+  {
+   "id": "signed_sqrt",
+   "name": "Sign-preserving square root",
+   "definition": "sign(x) * sqrt(|x|), here with a small epsilon inside the root.",
+   "intuition": "A square root that also accepts negative inputs by mirroring the curve.",
+   "technical": "Odd, monotonic, compresses large magnitudes; derivative 1/(2 sqrt(|x|+eps)) is large near 0.",
+   "significance": "Allows the square-root trick even when the untrained model outputs negative widths or heights.",
+   "example": "signed_sqrt(0.25) = 0.5, signed_sqrt(-0.25) = -0.5.",
+   "misconception": "It does not force widths to be positive; it just keeps the loss defined while they are negative.",
+   "related": ["yolo_box_loss"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Intersection over Union",
+   "latex": "\\operatorname{IoU}(A,B) = \\frac{|A\\cap B|}{|A\\cup B|} = \\frac{I}{a_1 + a_2 - I}",
+   "source_text": "union_area = a1 + a2 - intersection_area\nreturn ops.divide_no_nan(intersection_area, union_area)",
+   "variables": [
+    {"symbol": "I", "meaning": "intersection area of the two boxes"},
+    {"symbol": "a_1, a_2", "meaning": "areas of box 1 and box 2 (w times h, with negative sizes clamped to 0)"}
+   ],
+   "operations": "Inclusion-exclusion for the union, then a ratio; divide_no_nan returns 0 if the union is 0.",
+   "purpose": "Score box agreement between 0 and 1; used as the confidence target in occupied cells.",
+   "interpretation": "1 means identical boxes; 0 means no overlap.",
+   "intuition": "Shared area as a fraction of total covered area.",
+   "numerical_example": "$A=(0.5,0.5,0.4,0.4)$, $B=(0.6,0.5,0.4,0.4)$: $I=0.3\\times0.4=0.12$, $a_1=a_2=0.16$, union $=0.20$, IoU $=0.6$.",
+   "source": "book",
+   "book_ref": "p.367"
+  },
+  {
+   "id": "m2",
+   "title": "Intersection of two center-format boxes",
+   "latex": "\\begin{aligned} \\ell &= \\max\\!\\left(c_{x1}-\\tfrac{w_1}{2},\\, c_{x2}-\\tfrac{w_2}{2}\\right), & r &= \\min\\!\\left(c_{x1}+\\tfrac{w_1}{2},\\, c_{x2}+\\tfrac{w_2}{2}\\right)\\\\ b &= \\max\\!\\left(c_{y1}-\\tfrac{h_1}{2},\\, c_{y2}-\\tfrac{h_2}{2}\\right), & t &= \\min\\!\\left(c_{y1}+\\tfrac{h_1}{2},\\, c_{y2}+\\tfrac{h_2}{2}\\right)\\\\ I &= \\max(0, r-\\ell)\\cdot\\max(0, t-b) \\end{aligned}",
+   "source_text": "left = ops.maximum(cx1 - w1 / 2, cx2 - w2 / 2) ... return ops.maximum(0.0, right - left) * ops.maximum(0.0, top - bottom)",
+   "variables": [
+    {"symbol": "c_{x}, c_{y}", "meaning": "box center coordinates"},
+    {"symbol": "w, h", "meaning": "box width and height"},
+    {"symbol": "\\ell, r, b, t", "meaning": "left, right, bottom, top edges of the overlap rectangle"}
+   ],
+   "operations": "Inner edges via max of lower edges and min of upper edges; clamp negative extents to zero.",
+   "purpose": "Compute the overlap area for any pair of axis-aligned boxes, including disjoint ones.",
+   "interpretation": "If r < l or t < b the boxes don't overlap and the clamp yields 0.",
+   "intuition": "The overlap starts where the later box starts and ends where the earlier box ends.",
+   "numerical_example": "For the example in m1: $\\ell=\\max(0.3,0.4)=0.4$, $r=\\min(0.7,0.8)=0.7$, $b=\\max(0.3,0.3)=0.3$, $t=\\min(0.7,0.7)=0.7$; $I=0.3\\times0.4=0.12$.",
+   "source": "book",
+   "book_ref": "p.367"
+  },
+  {
+   "id": "m3",
+   "title": "Confidence target",
+   "latex": "\\hat{C}^{\\text{target}}_i = \\begin{cases} 0 & \\text{if cell } i \\text{ is empty} \\\\ \\operatorname{IoU}(\\text{pred}_i, \\text{true}_i) & \\text{if cell } i \\text{ contains an object} \\end{cases}",
+   "source_text": "If a grid cell is empty, the predicted confidence at the location should be zero. However, if a grid cell contains an object, we can use the IoU score between the current box prediction and the actual box as the target confidence value.",
+   "variables": [
+    {"symbol": "\\hat{C}^{\\text{target}}_i", "meaning": "the value the confidence output of cell i is pushed toward"},
+    {"symbol": "\\text{pred}_i, \\text{true}_i", "meaning": "predicted and labeled box in cell i"}
+   ],
+   "operations": "Piecewise definition; the IoU branch depends on the current prediction.",
+   "purpose": "Make confidence express localization quality.",
+   "interpretation": "A perfectly placed box should have confidence 1; a poorly placed one lower.",
+   "intuition": "The model is asked 'how much should you trust this box?' and graded by how good the box actually is.",
+   "source": "book",
+   "book_ref": "p.367"
+  },
+  {
+   "id": "m4",
+   "title": "Scaled YOLO box loss per cell",
+   "latex": "\\begin{aligned} \\mathcal{L}_i = {} & \\mathbb{1}^{\\text{obj}}_i \\cdot 5\\left[(x_i-\\hat x_i)^2 + (y_i-\\hat y_i)^2 + (\\sqrt{w_i}-\\sqrt{\\hat w_i})^2 + (\\sqrt{h_i}-\\sqrt{\\hat h_i})^2\\right] \\\\ & + \\mathbb{1}^{\\text{obj}}_i (\\operatorname{IoU}_i - \\hat C_i)^2 + (1-\\mathbb{1}^{\\text{obj}}_i)\\cdot 0.5\\,\\hat C_i^2 \\end{aligned}",
+   "source_text": "They scale up the box placement loss by a factor of five ... scale down the confidence loss in empty locations by a factor of two ... take the square root of the width and height before computing the loss.",
+   "variables": [
+    {"symbol": "\\mathbb{1}^{\\text{obj}}_i", "meaning": "1 if cell i contains a labeled box, else 0"},
+    {"symbol": "x_i, y_i, w_i, h_i", "meaning": "target box parameters; hats denote predictions"},
+    {"symbol": "\\hat C_i", "meaning": "predicted confidence"},
+    {"symbol": "\\sqrt{\\cdot}", "meaning": "sign-preserving square root (with epsilon) in the implementation"}
+   ],
+   "operations": "Weighted sum of squared errors; summed over all cells to get the per-image loss.",
+   "purpose": "Combine the three tricks into one objective.",
+   "interpretation": "Placement errors count 5x; empty-cell confidence errors count 0.5x.",
+   "intuition": "Balance a few important box cells against many easy empty ones.",
+   "numerical_example": "Square-root trick: a width error of 0.1 on a big box ($0.8$ vs $0.9$) costs $(0.894-0.949)^2\\approx0.0030$; the same 0.1 error on a small box ($0.1$ vs $0.2$) costs $(0.316-0.447)^2\\approx0.0172$, about 6x more.",
+   "source": "inference",
+   "book_ref": "p.368"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "12.10",
+   "title": "Computing IoU for two boxes",
+   "original_code": "from keras import ops\n\ndef unpack(box):\n    return box[..., 0], box[..., 1], box[..., 2], box[..., 3]\n\ndef intersection(box1, box2):\n    cx1, cy1, w1, h1 = unpack(box1)\n    cx2, cy2, w2, h2 = unpack(box2)\n    left = ops.maximum(cx1 - w1 / 2, cx2 - w2 / 2)\n    bottom = ops.maximum(cy1 - h1 / 2, cy2 - h2 / 2)\n    right = ops.minimum(cx1 + w1 / 2, cx2 + w2 / 2)\n    top = ops.minimum(cy1 + h1 / 2, cy2 + h2 / 2)\n    return ops.maximum(0.0, right - left) * ops.maximum(0.0, top - bottom)\n\ndef intersection_over_union(box1, box2):\n    cx1, cy1, w1, h1 = unpack(box1)\n    cx2, cy2, w2, h2 = unpack(box2)\n    intersection_area = intersection(box1, box2)\n    a1 = ops.maximum(w1, 0.0) * ops.maximum(h1, 0.0)\n    a2 = ops.maximum(w2, 0.0) * ops.maximum(h2, 0.0)\n    union_area = a1 + a2 - intersection_area\n    return ops.divide_no_nan(intersection_area, union_area)",
+   "language": "python",
+   "what_it_does": "Computes, element-wise over any leading axes, the IoU between two tensors of boxes given as (cx, cy, w, h, ...) on the last axis.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "keras.ops provides backend-agnostic, differentiable tensor ops."},
+    {"lines": "3-4", "explanation": "unpack returns the first four channels (center x, center y, width, height); a fifth confidence channel, if present, is ignored (callout: 'Unpacks a tensor of boxes')."},
+    {"lines": "6-8", "explanation": "intersection unpacks both boxes."},
+    {"lines": "9-12", "explanation": "Edges of the overlap rectangle: the larger of the two left/bottom edges and the smaller of the two right/top edges."},
+    {"lines": "13", "explanation": "Overlap width times height, each clamped at 0 so disjoint boxes give 0 (callout: 'Computes the intersection area between two box tensors')."},
+    {"lines": "15-18", "explanation": "intersection_over_union unpacks again for the sizes and calls intersection."},
+    {"lines": "19-20", "explanation": "Box areas; negative predicted widths/heights are clamped to 0 so a nonsensical box has zero area."},
+    {"lines": "21", "explanation": "Inclusion-exclusion: union = a1 + a2 - intersection."},
+    {"lines": "22", "explanation": "IoU = intersection / union, returning 0 instead of NaN when the union is 0 (callout: 'Computes the IoU between two box tensors')."}
+   ],
+   "inputs_outputs": "Inputs: two tensors with the same leading shape and at least 4 channels on the last axis, e.g. (batch, 6, 6, 5). Output: IoU of shape (batch, 6, 6), values in [0, 1].",
+   "algorithm": "Center/size -> edges -> clamped overlap -> areas -> inclusion-exclusion -> safe division.",
+   "theory_link": "Implements the IoU metric of chapter 11 (p.340) for axis-aligned boxes rather than pixel masks.",
+   "parameters": [
+    {"name": "box1, box2", "role": "Box tensors in center format (cx, cy, w, h)."}
+   ],
+   "pitfalls": [
+    "Both boxes must use the same coordinate system; the YOLO targets mix cell-relative centers with image-relative sizes (p.363), so applying IoU to them directly is an approximation (see review flag).",
+    "When a predicted width is negative, intersection's edge computation still uses the raw value, but because the area is clamped and the overlap is clamped, the result stays in [0, 1].",
+    "Using plain division instead of divide_no_nan would produce NaN for two zero-area boxes and poison the gradients.",
+    "Beyond the book: wherever the clamp max(0, ...) is active, the IoU has zero gradient, so IoU alone cannot pull non-overlapping boxes together; that's why the coordinate regression terms are kept."
+   ],
+   "illustrative_code": "# AI-written check of Listing 12.10\nimport numpy as np\nfrom keras import ops\na = np.array([0.5, 0.5, 0.4, 0.4])\nb = np.array([0.6, 0.5, 0.4, 0.4])\nprint(float(intersection_over_union(a, b)))   # 0.6\nprint(float(intersection_over_union(a, a)))   # 1.0\nc = np.array([2.0, 2.0, 0.4, 0.4])\nprint(float(intersection_over_union(a, c)))   # 0.0"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Worked IoU for two overlapping boxes",
+   "kind": "step_by_step",
+   "body": "Take box 1 = (cx, cy, w, h) = (0.5, 0.5, 0.4, 0.4) and box 2 = (0.6, 0.5, 0.4, 0.4).\n\n1. Edges of box 1: x from 0.3 to 0.7, y from 0.3 to 0.7. Box 2: x from 0.4 to 0.8, y from 0.3 to 0.7.\n2. `left = max(0.3, 0.4) = 0.4`, `right = min(0.7, 0.8) = 0.7` -> overlap width 0.3.\n3. `bottom = max(0.3, 0.3) = 0.3`, `top = min(0.7, 0.7) = 0.7` -> overlap height 0.4.\n4. Intersection = 0.12; areas 0.16 each; union = 0.32 - 0.12 = 0.20.\n5. IoU = 0.12 / 0.20 = **0.6**. In the YOLO loss, if box 1 were the target and box 2 the prediction, the confidence target in this cell would be 0.6.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the empty-cell down-weighting matters, in numbers",
+   "kind": "numerical",
+   "body": "Beyond the book. Suppose an image has 2 objects, so 2 occupied cells and 34 empty ones. Early in training, say every confidence prediction is 0.3 and the IoU targets are about 0.1. Occupied-cell confidence error: $2 \\times (0.1-0.3)^2 = 0.08$. Empty-cell error without scaling: $34 \\times 0.3^2 = 3.06$, which dwarfs everything. With the 0.5 factor it becomes 1.53: still large, but no longer 38x the occupied term, only about 19x. Combined with the 5x weight on box placement, localization keeps a meaningful share of the gradient.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "The square-root trick as relative error",
+   "kind": "breakdown",
+   "body": "For small errors, $(\\sqrt{w}-\\sqrt{\\hat w})^2 \\approx \\frac{(w-\\hat w)^2}{4w}$. Dividing by $w$ means the penalty is roughly proportional to *squared error relative to box size*, which is what we want: a 2-pixel error on a 10-pixel box is worse than a 2-pixel error on a 300-pixel box. (Derivation is beyond the book; the book states the motivation.)",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "svg",
+   "title": "IoU of two boxes (worked example)",
+   "why": "Listing 12.10 computes the overlap rectangle from the inner edges of two boxes; this shows box (0.5,0.5,0.4,0.4) vs (0.6,0.5,0.4,0.4) with IoU 0.6.",
+   "svg": "<svg viewBox=\"0 0 320 220\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"11\"><rect x=\"60\" y=\"40\" width=\"120\" height=\"120\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><rect x=\"90\" y=\"40\" width=\"120\" height=\"120\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-dasharray=\"6 4\"/><rect x=\"90\" y=\"40\" width=\"90\" height=\"120\" fill=\"currentColor\" fill-opacity=\"0.25\"/><text x=\"60\" y=\"32\" fill=\"currentColor\">box 1 (true)</text><text x=\"150\" y=\"178\" fill=\"currentColor\">box 2 (pred, dashed)</text><text x=\"104\" y=\"104\" fill=\"currentColor\">I = 0.12</text><line x1=\"90\" y1=\"196\" x2=\"180\" y2=\"196\" stroke=\"currentColor\"/><text x=\"96\" y=\"212\" fill=\"currentColor\">left=0.4 .. right=0.7</text><text x=\"222\" y=\"70\" fill=\"currentColor\">a1 = a2 = 0.16</text><text x=\"222\" y=\"90\" fill=\"currentColor\">union = 0.20</text><text x=\"222\" y=\"110\" fill=\"currentColor\">IoU = 0.6</text></svg>"
+  },
+  {
+   "id": "v2",
+   "type": "chart",
+   "title": "Signed square root vs. identity",
+   "why": "The third bullet uses a sign-preserving sqrt on widths/heights; it compresses large sizes (so big boxes don't dominate) and stays defined for negative predictions.",
+   "chart": {
+    "type": "line",
+    "data": {
+     "labels": [-1, -0.75, -0.5, -0.25, -0.1, 0, 0.1, 0.25, 0.5, 0.75, 1],
+     "datasets": [
+      {"label": "signed_sqrt(x)", "data": [-1, -0.866, -0.707, -0.5, -0.316, 0, 0.316, 0.5, 0.707, 0.866, 1]},
+      {"label": "x (no transform)", "data": [-1, -0.75, -0.5, -0.25, -0.1, 0, 0.1, 0.25, 0.5, 0.75, 1]}
+     ]
+    },
+    "options": {"scales": {"x": {"title": {"display": true, "text": "width or height"}}, "y": {"title": {"display": true, "text": "transformed value"}}}}
+   }
+  }
+ ],
+ "misconceptions": [
+  {"claim": "The confidence target in an occupied cell is always 1.", "correction": "box_array stores 1 there, but the loss replaces it with the IoU between the current prediction and the true box."},
+  {"claim": "IoU measures how much of the true box the prediction covers.", "correction": "It divides by the union, so an oversized prediction that fully covers the truth is still penalized."},
+  {"claim": "Scaling the empty-cell confidence loss by 0.5 means empty cells are ignored.", "correction": "They still push confidence toward 0, just with half the weight."},
+  {"claim": "The signed sqrt is there to make the model predict positive widths.", "correction": "It only keeps the loss well-defined while the model may output negative widths; it does not constrain the outputs."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 340, "note": "IoU introduced for segmentation masks in chapter 11."},
+   {"page": 363, "note": "Box encoding: x, y relative to the cell; w, h relative to the image."},
+   {"page": 366, "note": "Basic sum-squared box loss and the start of the confidence discussion."}
+  ],
+  "later": [
+   {"page": 368, "note": "Listing 12.11 implements box_loss using intersection_over_union, the x5 / x0.5 weights and signed_sqrt; Listing 12.12 trains."},
+   {"page": 370, "note": "The trained model learns low confidences, consistent with poor IoUs early on."}
+  ],
+  "prerequisites": [
+   {"page": 340, "note": "IoU concept."},
+   {"page": 362, "note": "Box outputs are unactivated Dense outputs (can be negative)."}
+  ],
+  "related_math": [
+   {"page": 368, "note": "Full loss with concatenated scaled errors summed per sample."}
+  ],
+  "related_code": [
+   {"page": 368, "note": "signed_sqrt and box_loss."}
+  ],
+  "related_figures": [
+   {"page": 360, "note": "Figure 12.4: the model outputs a confidence score with each box."}
+  ]
+ },
+ "takeaways": [
+  "Confidence target: 0 for empty cells, IoU(pred, true) for occupied cells.",
+  "IoU = intersection / (a1 + a2 - intersection), computed from inner edges with clamping.",
+  "Listing 12.10 is vectorized with keras.ops and uses divide_no_nan for safety.",
+  "Box placement loss is scaled up by 5.",
+  "Empty-cell confidence loss is scaled down by 2 because empty cells are the vast majority.",
+  "Widths and heights are compared after a sign-preserving square root so small boxes matter."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "math",
+   "question": "Compute the IoU of boxes (cx, cy, w, h) = (0.4, 0.4, 0.2, 0.2) and (0.5, 0.5, 0.2, 0.2).",
+   "options": [],
+   "answer": "Intersection 0.1 x 0.1 = 0.01; union 0.04 + 0.04 - 0.01 = 0.07; IoU = 1/7 ≈ 0.143.",
+   "explanation": "Box 1 spans [0.3, 0.5] in both axes, box 2 spans [0.4, 0.6]; the overlap is [0.4, 0.5] in each axis.",
+   "page_refs": [367]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "What is the target confidence for a grid cell that contains an object?",
+   "options": ["Always 1", "The IoU between the current predicted box and the actual box", "The class probability of the object", "0.5"],
+   "answer": "The IoU between the current predicted box and the actual box",
+   "explanation": "The page says the IoU score between the current prediction and the actual box is used. 1 is what box_array stores but not the loss target; class probabilities belong to the class output; 0.5 is the weight for empty cells, not a target.",
+   "page_refs": [367]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "Why does intersection_over_union use ops.divide_no_nan rather than a plain division?",
+   "options": [],
+   "answer": "If both boxes have zero area (e.g. clamped negative sizes), the union is 0; divide_no_nan returns 0 instead of NaN, keeping the loss and gradients finite.",
+   "explanation": "Areas are clamped with ops.maximum(..., 0.0), so zero unions can really occur during early training.",
+   "page_refs": [367]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why does YOLO scale down the confidence loss in empty cells?",
+   "options": [],
+   "answer": "Most grid cells are empty, so their zero-confidence errors would dominate the total loss and drown out the signal from the few cells containing objects.",
+   "explanation": "Stated in the second bullet; with a 6 x 6 grid and at most four boxes, at least 32 of 36 cells are empty.",
+   "page_refs": [367]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "What is the purpose of taking the square root of width and height before computing the loss?",
+   "options": ["To ensure widths are positive", "To stop large boxes from mattering disproportionately more than small boxes", "To speed up computation", "To convert widths to grid units"],
+   "answer": "To stop large boxes from mattering disproportionately more than small boxes",
+   "explanation": "That is the reason given in the third bullet. The sign-preserving version explicitly allows negative widths, so it doesn't ensure positivity; it does not speed anything up or change units.",
+   "page_refs": [367]
+  },
+  {
+   "id": "q6",
+   "type": "math",
+   "question": "Using square roots, compare the width error when a target width of 0.04 is predicted as 0.09 with the error when a target width of 0.64 is predicted as 0.69.",
+   "options": [],
+   "answer": "Small box: (0.2 - 0.3)^2 = 0.01. Large box: (0.8 - 0.8307)^2 ≈ 0.00094. The same 0.05 absolute error costs about 10x more on the small box.",
+   "explanation": "sqrt compresses large values, so equal absolute errors weigh more for small boxes, as the third bullet intends.",
+   "page_refs": [367]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you explain, without looking, why the confidence target must be computed inside the loss instead of being stored in the dataset?",
+   "options": [],
+   "answer": "Because it is the IoU of the model's current prediction with the true box, which changes at every training step.",
+   "explanation": "If you can state this, you understand why the page says 'This calls for a custom loss function.'",
+   "page_refs": [367]
+  }
+ ]
+}

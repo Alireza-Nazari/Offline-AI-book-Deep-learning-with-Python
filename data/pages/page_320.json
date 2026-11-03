@@ -1,0 +1,410 @@
+{
+ "page_id": "page_320",
+ "pdf_page": 320,
+ "printed_page": "296",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:55:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. Two listings (10.14 and 10.15), an unnumbered two-line interactive snippet, three body paragraphs and the subsection heading match the page image. The callout fragments are reassembled into their five printed annotations."
+ },
+ "overview": {
+  "title": "The filter visualization loop and image deprocessing",
+  "chapter": "10 Interpreting what ConvNets learn",
+  "section": "10.2 Visualizing ConvNet filters",
+  "subsection": "10.2.4 The filter visualization loop",
+  "main_topic": "Putting the pieces together: generate_filter_pattern starts from a near-gray random 200×200 image and applies 30 gradient-ascent steps of amplitude 10. deprocess_image then standardizes, rescales, clips, center-crops and casts the result into a displayable uint8 image.",
+  "central_idea": "A filter visualization is the endpoint of a short optimization in pixel space. The raw result is an unbounded float tensor, so it must be mapped back to the [0, 255] range, with the unreliable border removed, before it can be shown.",
+  "importance": "This is the piece that turns the abstract step function into a picture. The deprocessing recipe (standardize, set std to 64, mean to 128, clip, crop, cast) is a reusable pattern for displaying any optimized or synthetic image, and it comes back in later chapters on image generation.",
+  "learning_objectives": [
+   "Explain each setting of generate_filter_pattern: image size, iterations, learning rate and initialization range.",
+   "Explain why the starting image is drawn uniformly from [0.4, 0.6].",
+   "Trace deprocess_image step by step and compute the pixel value that a given standardized value maps to.",
+   "Explain why the image is center-cropped by 25 pixels on each side and what the final shape is.",
+   "Run the whole pipeline for one filter index and display it with Matplotlib."
+  ],
+  "prerequisites": [
+   "gradient_ascent_step from Listings 10.11-10.13 (p.318-319)",
+   "compute_loss and the block3_sepconv1 feature extractor (p.317-318)",
+   "Standardization (subtracting the mean, dividing by the standard deviation)",
+   "Image tensors of shape (height, width, channels) (p.260)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "With the step function ready, **section 10.2.4** assembles the full procedure into a function that takes a filter index and returns the pattern that maximizes that filter's activation in the target layer (`block3_sepconv1`).\n\n**Listing 10.14, `generate_filter_pattern(filter_index)`**:\n- sets `img_width = img_height = 200`;\n- uses `iterations = 30` (\"the number of gradient ascent steps to apply\") and `learning_rate = 10.0` (\"the amplitude of a single step\");\n- initializes `image = keras.random.uniform(minval=0.4, maxval=0.6, shape=(1, img_width, img_height, 3))`. The callout explains that Xception expects inputs in $[0, 1]$, so the authors pick a narrow random range centered on 0.5, i.e. an almost gray image with slight noise;\n- loops `image = gradient_ascent_step(image, filter_index, learning_rate)` 30 times, repeatedly updating the image to maximize the loss;\n- returns `image[0]`, dropping the batch axis.\n\nThe result is a **float array of shape (200, 200, 3)** whose values need not be integers in $[0, 255]$, so it must be post-processed. **Listing 10.15, `deprocess_image`**, does this:\n1. subtracts the mean and divides by the standard deviation (zero mean, unit std);\n2. multiplies by 64 and adds 128, giving mean 128 and std 64. Together with clipping to $[0, 255]$ these lines \"normalize image values within the [0, 255] range\";\n3. center-crops with `image[25:-25, 25:-25, :]` \"to avoid border artifacts\", giving 150×150×3;\n4. casts to `uint8` and converts to NumPy.\n\nFinally, two Matplotlib lines display `deprocess_image(generate_filter_pattern(filter_index=2))` with the axes hidden. The result is figure 10.5 on the next page.",
+ "paragraphs": [
+  {
+   "ref": "p320_e04",
+   "excerpt": "Now you have all the pieces. Let’s put them together into a Python function",
+   "what_it_says": "All the components are ready. They are combined into a function that takes a filter index and returns a tensor representing the pattern that maximizes the activation of that filter in the target layer.",
+   "what_it_means": "The pieces are: a feature extractor cut at block3_sepconv1, a scalar loss (mean filter activation), and a step function that performs one normalized ascent update. The visualization is the fixed point (or at least the 30-step result) of iterating that update from a neutral starting image. The output is not a learned filter weight. It is an input image that this filter responds to strongly, which is a way of showing the filter's preferred stimulus.",
+   "why_it_matters": "This framing (filter index in, image out) is what makes it easy to sweep over every filter of a layer on the next pages to build grids like figure 10.6.",
+   "terminology": [
+    {"term": "Filter pattern", "meaning": "An input image that maximizes the mean activation of one filter, used as a picture of what the filter detects."},
+    {"term": "Target layer", "meaning": "The layer whose filter is being visualized, here block3_sepconv1 of Xception."}
+   ],
+   "connections": [
+    "p.315: the strategy of gradient ascent from a blank input is introduced",
+    "p.321: the result for filter 2 is shown as figure 10.5"
+   ]
+  },
+  {
+   "ref": "p320_e07",
+   "excerpt": "The resulting image tensor is a floating-point array of shape `(200, 200, 3)`, with values",
+   "what_it_says": "The output is a float array of shape (200, 200, 3) whose values need not be integers in [0, 255], so it has to be post-processed into a displayable image with a simple utility function.",
+   "what_it_means": "After 30 steps of size 10 starting from values near 0.5, pixel values are far outside the [0, 1] range the network expects and certainly not valid 8-bit intensities. They may be negative or in the dozens. Display libraries expect uint8 values in [0, 255] or floats in [0, 1]. deprocess_image therefore re-standardizes the tensor and maps it to a standard visible range, preserving relative contrast while discarding the absolute scale.",
+   "why_it_matters": "Without deprocessing, imshow would either clip almost everything to black and white or rescale unpredictably, hiding the pattern.",
+   "technical_idea": "Inference: because each normalized step moves pixel values by about 10 per channel vector, while the starting values span only 0.4-0.6, the final image's scale is set by the optimization, not by natural image statistics. That is why re-standardizing is better than a fixed rescale.",
+   "terminology": [
+    {"term": "Post-processing (deprocessing)", "meaning": "Undoing or replacing model-specific scaling so a tensor can be viewed as a normal image."}
+   ],
+   "connections": [
+    "p.317: inputs to Xception are expected in a specific preprocessed range",
+    "p.538: chapter 17 (image generation) also needs to turn generated tensors into viewable images"
+   ]
+  },
+  {
+   "ref": "p320_e10",
+   "excerpt": "Let’s try it (see figure 10.5):",
+   "what_it_says": "The authors run the pipeline for filter index 2 and display the result, which is figure 10.5.",
+   "what_it_means": "plt.axis(\"off\") hides the axes and plt.imshow draws the 150×150×3 uint8 array. The pattern for filter 2 of block3_sepconv1 appears on p.321.",
+   "why_it_matters": "It is the first concrete output of the whole section and a quick check that every piece works.",
+   "connections": [
+    "p.321: figure 10.5, horizontal water-like or fur-like lines"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "gradient_ascent_input_space",
+   "name": "Gradient ascent in input space",
+   "definition": "Iteratively updating an input image so that a chosen internal activation of a frozen network increases.",
+   "intuition": "Start from almost nothing (gray noise) and let the filter 'paint' what it wants to see.",
+   "technical": "x_0 ~ U(0.4, 0.6)^{200×200×3}; x_{t+1} = x_t + 10 · normalize(∇_x L(x_t)) for t = 0..29.",
+   "significance": "It is the algorithm behind figures 10.5 and 10.6.",
+   "example": "generate_filter_pattern(filter_index=2).",
+   "misconception": "More iterations do not always give a 'truer' pattern. They can produce saturated, high-frequency artifacts, which is why the iteration count is a deliberate choice.",
+   "related": ["gradient_descent", "gradient_normalization", "learning_rate"],
+   "source": "book"
+  },
+  {
+   "id": "image_deprocessing",
+   "name": "Image deprocessing for display",
+   "definition": "Converting an arbitrary float image tensor into a valid 8-bit image by standardizing, rescaling to a target mean and spread, clipping, cropping and casting.",
+   "intuition": "Auto-contrast: whatever range the pixels ended up in, map the typical values into the visible middle of [0, 255].",
+   "technical": "y = clip(64 · (x − mean(x)) / std(x) + 128, 0, 255), then crop 25 pixels per side and cast to uint8. Values within ±2 standard deviations land inside [0, 255]; more extreme values are clipped.",
+   "significance": "It is required to view any optimized image (filter patterns, DeepDream, generated images).",
+   "example": "A pixel channel 1.5 standard deviations above the mean becomes 128 + 96 = 224.",
+   "misconception": "It is not the inverse of the model's preprocessing; it is a display-oriented normalization that discards absolute intensity.",
+   "related": ["image_tensor"],
+   "source": "book"
+  },
+  {
+   "id": "border_artifacts",
+   "name": "Border artifacts",
+   "definition": "Unreliable patterns near image edges, caused by padding and by edge pixels being covered by fewer convolution windows.",
+   "intuition": "Pixels on the edge see a world that is partly 'padding', so the optimization can do strange things there.",
+   "technical": "The pipeline guards against them twice: compute_loss ignores 2 activation positions on each border (p.317-318), and deprocess_image crops 25 pixels from each side of the image.",
+   "significance": "Cropping makes the displayed patterns cleaner and more representative of the filter.",
+   "example": "200×200 → 150×150 after image[25:-25, 25:-25, :].",
+   "misconception": "The crop does not change the optimization; it only affects what is displayed.",
+   "related": ["convolution"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Initialization and iteration of generate_filter_pattern",
+   "latex": "x_0 \\sim \\mathcal{U}(0.4,\\,0.6)^{1\\times 200\\times 200\\times 3}, \\qquad x_{t+1} = x_t + 10\\,\\operatorname{normalize}\\big(\\nabla_x \\mathcal{L}(x_t, f)\\big),\\; t = 0,\\dots,29",
+   "source_text": "image = keras.random.uniform(minval=0.4, maxval=0.6, shape=(1, img_width, img_height, 3)); for i in range(iterations): image = gradient_ascent_step(image, filter_index, learning_rate)",
+   "variables": [
+    {"symbol": "x_0", "meaning": "Initial image: a batch of one 200×200 RGB image with values uniform in [0.4, 0.6]."},
+    {"symbol": "\\mathcal{L}(x, f)", "meaning": "compute_loss: mean activation of filter f in block3_sepconv1."},
+    {"symbol": "10", "meaning": "learning_rate, 'the amplitude of a single step'."},
+    {"symbol": "t", "meaning": "Iteration index; 30 iterations in total."}
+   ],
+   "operations": "Draw uniform noise, then apply 30 normalized ascent steps.",
+   "purpose": "To produce the input that strongly activates filter f.",
+   "interpretation": "Starting near 0.5 (the middle of Xception's expected [0, 1] range, per the callout) means the optimization starts from a neutral, almost uniform gray image, with the small noise breaking symmetry.",
+   "intuition": "A blank canvas with a faint grain, on which the filter's preferred texture grows.",
+   "numerical_example": "Beyond the book: with per-pixel normalization each pixel's RGB vector moves by length 10 at every step, so after 30 steps a pixel can be up to 300 units (in L2 length) away from its start. That is far beyond [0, 1], which is why the result must be deprocessed.",
+   "source": "book",
+   "book_ref": "p.320"
+  },
+  {
+   "id": "m2",
+   "title": "Display mapping in deprocess_image",
+   "latex": "y = \\operatorname{clip}\\!\\left(64\\,\\frac{x - \\mu_x}{\\sigma_x} + 128,\\; 0,\\; 255\\right)",
+   "source_text": "image -= ops.mean(image); image /= ops.std(image); image *= 64; image += 128; image = ops.clip(image, 0, 255)",
+   "variables": [
+    {"symbol": "x", "meaning": "One value of the raw float image."},
+    {"symbol": "\\mu_x, \\sigma_x", "meaning": "Mean and standard deviation over all values of the image (all pixels and channels)."},
+    {"symbol": "y", "meaning": "Display value in [0, 255], later cast to uint8."}
+   ],
+   "operations": "Standardize, scale the spread to 64, shift the center to 128, clip to [0, 255].",
+   "purpose": "'Normalizes image values within the [0, 255] range' (callout).",
+   "interpretation": "Values within 2 standard deviations of the mean map inside [0, 256), so for a roughly bell-shaped distribution only a few percent are clipped. 128 is mid-gray.",
+   "intuition": "Automatic contrast stretch.",
+   "numerical_example": "If $\\mu_x = 3.2$ and $\\sigma_x = 8$, a raw value $x = 15.2$ gives $(15.2 - 3.2)/8 = 1.5$, then $64 \\cdot 1.5 + 128 = 224$. A raw value $x = -20$ gives $-2.9 \\cdot 64 + 128 = -57.6$, which is clipped to $0$.",
+   "source": "book",
+   "book_ref": "p.320"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "10.14",
+   "title": "Function to generate filter visualizations",
+   "original_code": "img_width = 200\nimg_height = 200\n\ndef generate_filter_pattern(filter_index):\n    iterations = 30\n    learning_rate = 10.0\n    image = keras.random.uniform(\n        minval=0.4, maxval=0.6, shape=(1, img_width, img_height, 3)\n    )\n    for i in range(iterations):\n        image = gradient_ascent_step(image, filter_index, learning_rate)\n    return image[0]",
+   "language": "python",
+   "what_it_does": "Runs the complete gradient-ascent optimization for one filter of block3_sepconv1 and returns the resulting 200×200×3 float image.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Size of the synthetic image: 200×200 pixels."},
+    {"lines": "4", "explanation": "Takes only the filter index; the layer is fixed by the global feature_extractor."},
+    {"lines": "5", "explanation": "Callout: 'The number of gradient ascent steps to apply'."},
+    {"lines": "6", "explanation": "Callout: 'The amplitude of a single step'. Because the gradient is normalized, this is the actual step length."},
+    {"lines": "7-9", "explanation": "Callout: 'Initialize an image tensor with random values. (The Xception model expects input values in the [0, 1] range, so here we pick a range centered on 0.5.)' The leading 1 is a batch axis."},
+    {"lines": "10-11", "explanation": "Callout: 'Repeatedly updates the values of the image tensor to maximize our loss function.' Works with whichever backend's gradient_ascent_step is defined."},
+    {"lines": "12", "explanation": "Removes the batch axis, returning shape (200, 200, 3)."}
+   ],
+   "inputs_outputs": "Input: an integer filter index (0 to the number of filters in block3_sepconv1 minus 1). Output: a float tensor of shape (200, 200, 3).",
+   "algorithm": "Fixed-step normalized gradient ascent for 30 iterations from low-amplitude uniform noise.",
+   "theory_link": "Activation maximization: finding argmax_x of a unit's mean activation, approximated by a few gradient steps.",
+   "parameters": [
+    {"name": "iterations", "role": "Number of ascent steps (30)."},
+    {"name": "learning_rate", "role": "Step amplitude (10.0)."},
+    {"name": "minval / maxval", "role": "Initialization range 0.4-0.6, near-gray noise in Xception's [0, 1] input range."},
+    {"name": "img_width / img_height", "role": "Spatial size of the optimized image (200)."}
+   ],
+   "pitfalls": [
+    "The shape is written (1, img_width, img_height, 3), but Keras images are (batch, height, width, channels). It does not matter here because the image is square; for non-square images, swap them.",
+    "The function returns a float tensor that cannot be shown directly; pass it through deprocess_image.",
+    "Beyond the book: with the TensorFlow backend and @tf.function, a new Python int filter_index can cause a retrace, so the first call per filter is slower."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "10.15",
+   "title": "Utility function to convert a tensor into a valid image",
+   "original_code": "def deprocess_image(image):\n    image -= ops.mean(image)\n    image /= ops.std(image)\n    image *= 64\n    image += 128\n    image = ops.clip(image, 0, 255)\n    image = image[25:-25, 25:-25, :]\n    image = ops.cast(image, dtype=\"uint8\")\n    return ops.convert_to_numpy(image)",
+   "language": "python",
+   "what_it_does": "Turns the optimized float tensor into a displayable 150×150×3 uint8 NumPy image.",
+   "line_explanations": [
+    {"lines": "2-3", "explanation": "Standardize: zero mean, unit standard deviation over the whole image."},
+    {"lines": "4-6", "explanation": "Callout: 'Normalizes image values within the [0, 255] range': std 64, mean 128, then clip."},
+    {"lines": "7", "explanation": "Callout: 'Center crop to avoid border artifacts': drops 25 pixels from each edge, so 200 → 150."},
+    {"lines": "8", "explanation": "Cast to 8-bit integers (fractions are truncated)."},
+    {"lines": "9", "explanation": "Converts the backend tensor to a NumPy array for Matplotlib."}
+   ],
+   "inputs_outputs": "Input: float tensor (200, 200, 3). Output: NumPy uint8 array (150, 150, 3).",
+   "algorithm": "Global standardization, affine rescaling, clipping, cropping, casting.",
+   "theory_link": "Display normalization; the crop handles the edge effects of padded convolutions.",
+   "parameters": [
+    {"name": "64", "role": "Target standard deviation in display units."},
+    {"name": "128", "role": "Target mean (mid-gray)."},
+    {"name": "25", "role": "Crop margin per side in pixels."}
+   ],
+   "pitfalls": [
+    "If the image were constant, ops.std would be 0 and the division would produce NaNs. This does not happen after gradient ascent but can happen with a dead filter.",
+    "Casting before clipping would wrap values around (e.g. 260 → 4); the order clip-then-cast is essential.",
+    "Beyond the book: the in-place operators (-=, /=) rebind the local name and do not modify the caller's tensor for TensorFlow/JAX. For a PyTorch tensor, though, -= may modify it in place."
+   ]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Displaying the pattern for filter 2",
+   "original_code": ">>> plt.axis(\"off\")\n>>> plt.imshow(deprocess_image(generate_filter_pattern(filter_index=2)))",
+   "language": "python",
+   "what_it_does": "Generates and displays the pattern for filter index 2 of block3_sepconv1 with axes hidden. This produces figure 10.5 (p.321).",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Hides the axis ticks and frame."},
+    {"lines": "2", "explanation": "Optimizes an image for filter 2, deprocesses it and draws it."}
+   ],
+   "inputs_outputs": "Output: a Matplotlib image of size 150×150.",
+   "algorithm": "Composition of Listings 10.14 and 10.15.",
+   "theory_link": "Visual inspection of a single filter's preferred stimulus.",
+   "parameters": [
+    {"name": "filter_index=2", "role": "The third channel of block3_sepconv1."}
+   ],
+   "pitfalls": [
+    "Requires import matplotlib.pyplot as plt, imported earlier in the chapter."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why start from near-gray noise?",
+   "kind": "breakdown",
+   "body": "- **Range**: Xception expects $[0, 1]$ inputs (callout), so 0.5 is the neutral midpoint.\n- **Narrow spread (±0.1)**: the start carries almost no structure, so the final pattern reflects the filter rather than the initialization.\n- **Randomness**: a perfectly uniform image could give a gradient with symmetric, uninformative structure. A little noise breaks the symmetry and lets different runs explore slightly different optima.\n\nBeyond the book: richer feature-visualization methods add regularizers (blurring, jitter, frequency penalties) to get more natural images. This book's minimal recipe relies on a small number of iterations and on cropping.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Following one pixel through deprocess_image",
+   "kind": "numerical",
+   "body": "Suppose that after optimization the image has mean $\\mu = 2.0$ and standard deviation $\\sigma = 12.0$, and one channel value is $x = 26.0$.\n\n1. `image -= mean`: $26 - 2 = 24$\n2. `image /= std`: $24 / 12 = 2.0$\n3. `image *= 64`: $128$\n4. `image += 128`: $256$\n5. `clip(0, 255)`: $255$ (just saturated)\n6. crop: this pixel survives only if it is at least 25 pixels from every edge\n7. `cast uint8`: $255$\n\nA value one standard deviation below the mean ($x = -10$) becomes $-1 \\cdot 64 + 128 = 64$, a dark gray.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Tensor shapes through the visualization pipeline",
+   "why": "Listing 10.14 creates a (1, 200, 200, 3) tensor and returns image[0]; Listing 10.15 crops it to 150×150. This traces those exact shapes.",
+   "widget": "tensor_shapes",
+   "params": {"steps": [
+    {"op": "uniform init", "shape": [1, 200, 200, 3]},
+    {"op": "30 ascent steps", "shape": [1, 200, 200, 3]},
+    {"op": "image[0]", "shape": [200, 200, 3]},
+    {"op": "crop 25:-25", "shape": [150, 150, 3]},
+    {"op": "cast uint8", "shape": [150, 150, 3]}
+   ]}
+  },
+  {
+   "id": "v2",
+   "type": "chart",
+   "title": "deprocess_image mapping: standardized value to display intensity",
+   "why": "Visualizes the lines image *= 64; image += 128; clip(0, 255) from Listing 10.15, showing where clipping starts (±2 standard deviations).",
+   "chart": {
+    "type": "line",
+    "data": {
+     "labels": [-3, -2.5, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 2.5, 3],
+     "datasets": [
+      {"label": "display value = clip(64·z + 128, 0, 255)", "data": [0, 0, 0, 32, 64, 96, 128, 160, 192, 224, 255, 255, 255], "fill": false, "tension": 0}
+     ]
+    },
+    "options": {
+     "scales": {
+      "x": {"title": {"display": true, "text": "standardized value z = (x − mean) / std"}},
+      "y": {"title": {"display": true, "text": "pixel intensity (uint8)"}, "min": 0, "max": 260}
+     }
+    }
+   }
+  },
+  {
+   "id": "v3",
+   "type": "mermaid",
+   "title": "From filter index to displayed pattern",
+   "why": "Summarizes how Listings 10.14, 10.15 and the plotting snippet chain together.",
+   "mermaid": "flowchart LR\n  A[\"filter_index = 2\"] --> B[\"uniform noise 0.4-0.6\\n(1,200,200,3)\"]\n  B --> C[\"30 x gradient_ascent_step\\nlr = 10\"]\n  C --> D[\"image[0]\\n(200,200,3) float\"]\n  D --> E[\"standardize, x64, +128, clip\"]\n  E --> F[\"crop 25 px per side\\n(150,150,3)\"]\n  F --> G[\"uint8 NumPy\"] --> H[\"plt.imshow -> figure 10.5\"]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "The function returns the weights of filter 2.", "correction": "It returns an input image that maximizes filter 2's mean activation, not the 3×3 (or depthwise/pointwise) weights themselves."},
+  {"claim": "deprocess_image undoes Xception's preprocessing.", "correction": "It is a display normalization: it standardizes the tensor and maps it to mean 128 and std 64 in [0, 255], regardless of how the input was originally scaled."},
+  {"claim": "The 25-pixel crop is needed because the image is too large to display.", "correction": "The callout gives the reason: center crop to avoid border artifacts."},
+  {"claim": "A learning rate of 10 is too large for an image in [0, 1], so the method must be broken.", "correction": "Because the goal is only to find a pattern, and the output is re-standardized for display, leaving the natural range is acceptable. The normalized gradient keeps each step a predictable size."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 318, "note": "compute_loss and the gradient normalization trick used inside each step."},
+   {"page": 319, "note": "gradient_ascent_step implementations for TensorFlow, PyTorch and JAX."},
+   {"page": 317, "note": "The feature extractor for block3_sepconv1 and the border-artifact crop in the loss."},
+   {"page": 315, "note": "The idea of gradient ascent from a blank input image."}
+  ],
+  "later": [
+   {"page": 321, "note": "Figure 10.5 shows the result for filter 2, and Listing 10.16 builds a grid of all filter patterns."},
+   {"page": 322, "note": "Figure 10.6 shows patterns for block2_sepconv1, block4_sepconv1 and block8_sepconv1."},
+   {"page": 538, "note": "Chapter 17 on image generation also turns model outputs into viewable images."}
+  ],
+  "prerequisites": [
+   {"page": 260, "note": "Images and feature maps as rank-3 tensors (height, width, channels)."}
+  ],
+  "related_math": [
+   {"page": 318, "note": "L2 normalization of the gradient."}
+  ],
+  "related_code": [
+   {"page": 321, "note": "Listing 10.16 calls generate_filter_pattern and deprocess_image for every filter."}
+  ],
+  "related_figures": [
+   {"page": 321, "note": "Figure 10.5, the pattern this page's snippet displays."}
+  ]
+ },
+ "takeaways": [
+  "generate_filter_pattern: 200×200 near-gray noise in [0.4, 0.6], 30 ascent steps of amplitude 10, return image[0].",
+  "The starting range is centered on 0.5 because Xception expects inputs in [0, 1].",
+  "The raw result is an unbounded float (200, 200, 3) tensor and must be deprocessed for display.",
+  "deprocess_image: standardize, std 64, mean 128, clip to [0, 255], crop 25 px per side (to 150×150), cast to uint8, convert to NumPy.",
+  "Border artifacts are handled both in the loss (2-position crop) and in display (25-pixel crop)."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why is the initial image drawn from keras.random.uniform(minval=0.4, maxval=0.6, ...)?",
+   "options": [
+    "Because Xception expects inputs in [0, 255]",
+    "Because Xception expects inputs in [0, 1], so a range centered on 0.5 is neutral",
+    "To make the image look like a real photograph",
+    "To guarantee that the gradient is exactly zero at the start"
+   ],
+   "answer": "Because Xception expects inputs in [0, 1], so a range centered on 0.5 is neutral",
+   "explanation": "This is the printed callout. [0, 255] is wrong for this model, gray noise is not photographic, and a zero gradient would make ascent impossible.",
+   "page_refs": [320]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "In deprocess_image, a raw value lies 0.75 standard deviations below the image mean. What uint8 value does it become (ignoring cropping)?",
+   "options": [],
+   "answer": "−0.75 × 64 + 128 = 80.",
+   "explanation": "After standardization the value is −0.75. Multiplying by 64 and adding 128 gives 80, which is inside [0, 255], so no clipping occurs.",
+   "page_refs": [320]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What is the shape of the array returned by deprocess_image(generate_filter_pattern(2)), and why?",
+   "options": [],
+   "answer": "(150, 150, 3). generate_filter_pattern returns image[0] of shape (200, 200, 3), and the crop [25:-25, 25:-25, :] removes 25 pixels from each side.",
+   "explanation": "200 − 2×25 = 150 in each spatial dimension; the 3 channels are kept.",
+   "page_refs": [320]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why can't the output of generate_filter_pattern be passed directly to plt.imshow?",
+   "options": [],
+   "answer": "It is a float array whose values are not confined to [0, 255] (or [0, 1]) after 30 large ascent steps, so it must be rescaled, clipped and cast to be a valid image.",
+   "explanation": "The page says the values 'may not be integers within [0, 255]', so the tensor needs post-processing.",
+   "page_refs": [320]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Which two settings in Listing 10.14 control how far the image travels from its starting point?",
+   "options": [
+    "img_width and img_height",
+    "iterations and learning_rate",
+    "minval and maxval",
+    "filter_index and img_height"
+   ],
+   "answer": "iterations and learning_rate",
+   "explanation": "Normalized steps have length about learning_rate, and there are iterations of them. Image size, initialization range and filter choice do not set the step size or count.",
+   "page_refs": [320, 318]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Why must ops.clip come before ops.cast(..., 'uint8') in deprocess_image?",
+   "options": [],
+   "answer": "Casting values outside [0, 255] to uint8 would wrap them around or behave unpredictably (e.g. 260 becoming 4), producing speckle. Clipping first saturates them at 0 or 255.",
+   "explanation": "This is an AI-added explanation of the ordering in Listing 10.15.",
+   "page_refs": [320]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you modify generate_filter_pattern to visualize a filter of a different layer? Which line outside this function would you change?",
+   "options": [],
+   "answer": "Change layer_name (and rebuild feature_extractor) in the setup code on p.318; generate_filter_pattern itself can stay the same.",
+   "explanation": "The layer is chosen by the global feature_extractor used inside compute_loss. Listing 10.16 (p.321) does this to cover several layers.",
+   "page_refs": [318, 320, 321]
+  }
+ ]
+}

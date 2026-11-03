@@ -1,0 +1,370 @@
+{
+ "page_id": "page_051",
+ "pdf_page": 51,
+ "printed_page": "27",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-fable-5-1",
+  "generated_at": "2026-11-03T04:02:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction. Figure 2.3 is a simple stacked-matrices diagram with labels Features (vertical), Timesteps (horizontal), Samples (depth), fully readable in the page image. The last paragraph on the page is split across two body elements in the extraction (p051_e12 covers both the convention paragraph and the shape paragraph)."
+ },
+ "overview": {
+  "title": "Timeseries and image data tensors",
+  "chapter": "2 The mathematical building blocks of neural networks",
+  "section": "2.2 Data representations for neural networks",
+  "subsection": "2.2.8 Real-world examples of data tensors",
+  "main_topic": "Concrete shapes for vector data (documents as word counts), timeseries/sequence data (stock prices, tweets) with the time axis at index 1, and image data with a channels axis, in channels-last vs. channels-first layout.",
+  "central_idea": "A sequence sample is a matrix `(timesteps, features)`, so sequence datasets are rank-3 `(samples, timesteps, features)` with time always on axis 1; images always carry a channels axis (even grayscale, size 1), placed last in JAX/TensorFlow (`(samples, height, width, color_depth)`) or right after the batch axis in PyTorch.",
+  "importance": "These are the shapes that recurrent, Transformer and convolutional layers expect. Misplacing the time or channels axis is one of the most common bugs in real projects, and the channels-first/last distinction matters whenever you move data between frameworks.",
+  "learning_objectives": [
+   "Encode a bag-of-words document dataset as a `(samples, vocabulary_size)` tensor.",
+   "Build the shape of a timeseries dataset from the per-timestep feature vector, the sequence length and the number of samples, with time on axis 1.",
+   "Explain one-hot character encoding and derive `(1000000, 280, 128)` for a tweet dataset.",
+   "Explain why grayscale images still get a channels axis of size 1, and write the same image batch in channels-last and channels-first layout."
+  ],
+  "prerequisites": [
+   "Rank and shape (p.47)",
+   "Samples axis and batches (p.49-50)",
+   "The four data-tensor templates listed on p.50"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "This page continues the real-world data-tensor examples of 2.2.8.\n\n**Vector data, second example.** A dataset of text documents, each represented by how many times each of 20,000 common dictionary words appears in it. Every document is a vector of 20,000 counts, so 500 documents form a tensor of shape `(500, 20000)`.\n\n**Timeseries or sequence data.** Whenever time (or sequence order) matters, store the data in a rank-3 tensor with an explicit time axis: a sample is a sequence of vectors (a rank-2 tensor), so a batch is rank 3. Figure 2.3 draws this as a stack of matrices with axes Features, Timesteps and Samples. By convention the time axis is always axis 1. Two examples:\n\n- *Stock prices.* Each minute records the current price, the past minute's high and the past minute's low: a 3D vector. A trading day has 390 minutes, so one day is a `(390, 3)` matrix, and 250 days form `(250, 390, 3)`; each sample is one day.\n- *Tweets.* A tweet is a sequence of 280 characters from an alphabet of 128. Each character becomes a binary vector of size 128 (all zeros except a single 1 at the character's index), so a tweet is `(280, 128)` and one million tweets form `(1000000, 280, 128)`.\n\n**Image data.** Images have height, width and color depth. Grayscale images such as MNIST have one channel and could be stored as rank-2 tensors, but by convention image tensors are always rank 3 with a one-dimensional color channel for grayscale. A batch of 128 grayscale 256 × 256 images is `(128, 256, 256, 1)`; a batch of 128 color images is `(128, 256, 256, 3)` (figure 2.4 on p.52).\n\nTwo layout conventions exist. *Channels-last*, standard in JAX, TensorFlow and most other tools, puts the color-depth axis at the end: `(samples, height, width, color_depth)`. *Channels-first*, standard in PyTorch, puts it right after the batch axis: `(samples, color_depth, height, width)`. The next page gives the channels-first versions of the two examples and notes that Keras supports both.",
+ "paragraphs": [
+  {
+   "ref": "p051_e03",
+   "excerpt": "A dataset of text documents, where we represent each document by the counts",
+   "what_it_says": "Second vector-data example: represent each document by word counts over a dictionary of 20,000 common words. Each document is a vector of 20,000 values, so 500 documents form a tensor of shape `(500, 20000)`.",
+   "what_it_means": "This is a bag-of-words encoding: word order is discarded, only counts remain. The features axis has one slot per dictionary word, so the tensor is very wide (20,000) and very sparse (most counts are 0). Unlike the actuarial example on p.50, here the features axis is far longer than the samples axis.",
+   "why_it_matters": "Chapter 4 uses a close relative of this (multi-hot encoding over 10,000 words, p.131) for IMDB review classification; it is the simplest way to turn text into vector data a Dense layer can consume.",
+   "technical_idea": "Beyond the book: with counts rather than 0/1 presence flags the vector is called a *term-frequency* vector; both are rank-1 per document and rank-2 per dataset.",
+   "terminology": [
+    {"term": "dictionary (vocabulary)", "meaning": "The fixed list of 20,000 words whose counts are recorded; its size is the number of features."}
+   ],
+   "connections": ["p.50: the first vector-data example `(100000, 3)` and the definition of the features axis.", "p.131: multi-hot encoding of IMDB reviews into 10,000-dimensional vectors."]
+  },
+  {
+   "ref": "p051_e05",
+   "excerpt": "Whenever time matters in your data (or the notion of sequence order), it",
+   "what_it_says": "When time or sequence order matters, store the data as a rank-3 tensor with an explicit time axis. A sample is a sequence of vectors (rank 2), so a batch is rank 3 (figure 2.3).",
+   "what_it_means": "Vector data throws away order; sequence data keeps it by giving every sample its own `(timesteps, features)` matrix: row t is the feature vector at step t. Stacking the matrices for all samples yields the three-axis block drawn in figure 2.3.",
+   "why_it_matters": "Order-aware models (recurrent layers, 1D convolutions, Transformers) are defined on exactly this shape; if you flatten a sequence to a vector you lose the information those layers exploit.",
+   "technical_idea": "Rank of the dataset = 1 (samples) + rank of one sample (2).",
+   "terminology": [
+    {"term": "time axis", "meaning": "The axis along which successive timesteps of one sample are laid out; axis 1 by convention."},
+    {"term": "sequence data", "meaning": "Data where order matters even if the index is not literally time (e.g. characters in a tweet)."}
+   ],
+   "connections": ["p.50: the rank-3 template `(samples, timesteps, features)`.", "p.117: sequence tensors are typically processed by recurrent or `Conv1D` layers."]
+  },
+  {
+   "ref": "p051_e06",
+   "excerpt": "Figure 2.3 A rank-3 timeseries data tensor",
+   "what_it_says": "The figure shows several identical rectangles stacked in depth. The vertical side is labelled *Features*, the horizontal side *Timesteps*, and the depth of the stack *Samples*.",
+   "what_it_means": "Each rectangle is one sample's `(timesteps, features)` matrix; the stack direction is the samples axis. Reading the three labels in shape order gives `(samples, timesteps, features)`.",
+   "why_it_matters": "It is the mental image to keep for any rank-3 sequence tensor: a deck of matrices, one per sample, each matrix a time-by-features grid.",
+   "technical_idea": "Note that in the drawing Features runs vertically and Timesteps horizontally, but in the shape tuple Timesteps (axis 1) comes before Features (axis 2); the picture is about structure, not memory order.",
+   "terminology": [],
+   "connections": ["p.52: figure 2.4 draws the analogous picture for rank-4 image tensors."]
+  },
+  {
+   "ref": "p051_e07",
+   "excerpt": "The time axis is always the second axis (axis of index 1), by convention.",
+   "what_it_says": "The time axis is always axis 1, by convention. Examples follow.",
+   "what_it_means": "Axis 0 is samples (p.49), so the first axis *inside* a sample is time; features come last. This fixes the meaning of every position in `(samples, timesteps, features)`.",
+   "why_it_matters": "Keras sequence layers assume this layout; `x[:, t, :]` is \"the feature vectors of all samples at step t\", `x[i]` is \"the whole sequence of sample i\".",
+   "technical_idea": "Slicing (p.49) along axis 1 selects a time window: `x[:, :100, :]` keeps the first 100 timesteps of every sample.",
+   "terminology": [],
+   "connections": ["p.49: axis 0 is the samples axis; slicing syntax."]
+  },
+  {
+   "ref": "p051_e08",
+   "excerpt": "A dataset of stock prices—Every minute, we store the current price of the",
+   "what_it_says": "Stock prices: each minute stores the current price, the past minute's highest price and lowest price, a 3D vector. A trading day has 390 minutes, so a day is a `(390, 3)` matrix, and 250 days form a rank-3 tensor `(250, 390, 3)`, with each sample being one day.",
+   "what_it_means": "features = 3 (price, high, low), timesteps = 390 (minutes in the 6.5-hour trading day), samples = 250 (roughly one year of trading days). The choice of *what counts as a sample* is a modelling decision: here it is a day, so the model sees days as independent sequences.",
+   "why_it_matters": "Shows the recipe: per-step vector → per-sample matrix → dataset block. Chapter 13 (timeseries forecasting) works with tensors of exactly this kind.",
+   "technical_idea": "Total values: 250 × 390 × 3 = 292,500. `x[d, t]` is the 3-vector for minute t of day d.",
+   "terminology": [
+    {"term": "3D vector", "meaning": "Here, a vector with three entries (a 3-dimensional vector), not a rank-3 tensor; see the warning on p.46 about the two uses of \"dimension\"."}
+   ],
+   "connections": ["p.46: \"Don't confuse a 5D vector with a 5D tensor\"; the same caution applies to the \"3D vector\" here.", "p.392: chapter 13 works with `(timesteps, features)` sequences in RNNs."]
+  },
+  {
+   "ref": "p051_e09",
+   "excerpt": "A dataset of tweets, where we encode each tweet as a sequence of 280 characters",
+   "what_it_says": "Tweets: each tweet is a sequence of 280 characters from an alphabet of 128. Each character is a binary vector of size 128, all zeros except a 1 at the character's index. A tweet is then a `(280, 128)` rank-2 tensor and one million tweets form `(1000000, 280, 128)`.",
+   "what_it_means": "This is one-hot encoding at the character level: the feature vector at each timestep says *which* of the 128 symbols occurs, with no numeric ordering implied between symbols. The sequence \"axis\" is character position, not clock time, which is why the book says *sequence data* as well as *timeseries*.",
+   "why_it_matters": "The same idea (one-hot or embedded tokens along a sequence axis) underlies all of the book's text models; here it is done at the character level, later at the word/subword level with `Embedding` layers (p.131).",
+   "technical_idea": "The tensor is enormous and almost entirely zeros: 10^6 × 280 × 128 = 3.584 × 10^10 entries, of which only 10^6 × 280 are 1s. Beyond the book: this is why practical code stores integer indices `(1000000, 280)` and lets an `Embedding` layer expand them on the fly.",
+   "terminology": [
+    {"term": "one-hot (binary) vector", "meaning": "A vector with a single 1 at the index of the chosen symbol and 0 elsewhere."},
+    {"term": "alphabet", "meaning": "The set of 128 distinct characters that can appear; its size is the feature count."}
+   ],
+   "connections": ["p.131: padded integer sequences `(samples, max_length)` plus an `Embedding` layer as the compact alternative to one-hot sequences."]
+  },
+  {
+   "ref": "p051_e11",
+   "excerpt": "Images typically have three dimensions: height, width, and color depth. Although",
+   "what_it_says": "Images have height, width and color depth. Grayscale images like MNIST have one channel and could be rank 2, but by convention image tensors are always rank 3 with a size-1 color channel for grayscale. So 128 grayscale 256 × 256 images are `(128, 256, 256, 1)` and 128 color images are `(128, 256, 256, 3)` (figure 2.4).",
+   "what_it_means": "A single image is a rank-3 `(height, width, channels)` tensor; a batch adds the samples axis for rank 4. Keeping the channels axis even when it has size 1 means the same convolution code handles grayscale and RGB without special cases. This also explains why the MNIST `(60000, 28, 28)` array of p.47 is not yet in the \"image\" format a convnet expects: it is missing the trailing channel axis.",
+   "why_it_matters": "`Conv2D` layers (chapter 8) require rank-4 input; forgetting the channel axis is the classic shape error when first building a convnet on MNIST.",
+   "technical_idea": "Element counts: `(128, 256, 256, 1)` holds 8,388,608 values; `(128, 256, 256, 3)` holds 25,165,824.",
+   "terminology": [
+    {"term": "color depth / channels", "meaning": "The number of values per pixel: 1 for grayscale, 3 for RGB."},
+    {"term": "grayscale", "meaning": "Single-channel images whose pixel values encode brightness only."}
+   ],
+   "connections": ["p.47-48: MNIST as `(60000, 28, 28)` `uint8`; it needs a channel axis to match this template.", "p.52: figure 2.4, a rank-4 image data tensor.", "p.257: convnets take image tensors of shape `(image_height, image_width, image_channels)` per sample."]
+  },
+  {
+   "ref": "p051_e12",
+   "excerpt": "There are two conventions for the shapes of image tensors: the channels-last",
+   "what_it_says": "Two layout conventions exist. *Channels-last* (standard in JAX, TensorFlow and most other tools) puts color depth at the end: `(samples, height, width, color_depth)`. *Channels-first* (standard in PyTorch) puts it right after the batch axis: `(samples, color_depth, height, width)`.",
+   "what_it_means": "Both hold the same numbers; they differ in which axis is which. The same 128-image batch is `(128, 256, 256, 3)` in one layout and `(128, 3, 256, 256)` in the other (p.52). Because Keras can run on JAX, TensorFlow or PyTorch, it supports both formats (p.52).",
+   "why_it_matters": "Feeding a channels-first tensor to a channels-last layer does not usually crash; it silently treats the 3 color planes as 3 rows of pixels, which destroys the image. Knowing the convention of each library prevents this.",
+   "technical_idea": "Beyond the book: converting between the two is a transpose of axes, e.g. `np.transpose(x, (0, 3, 1, 2))` from channels-last to channels-first; reshaping would scramble the pixels.",
+   "terminology": [
+    {"term": "channels-last", "meaning": "`(samples, height, width, channels)`; JAX/TensorFlow default."},
+    {"term": "channels-first", "meaning": "`(samples, channels, height, width)`; PyTorch default."}
+   ],
+   "connections": ["p.52: the channels-first versions `(128, 1, 256, 256)` and `(128, 3, 256, 256)`, and Keras support for both."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "sequence_tensor",
+   "name": "Timeseries / sequence data tensor",
+   "definition": "A rank-3 tensor `(samples, timesteps, features)` in which each sample is a sequence of feature vectors; the time axis is axis 1 by convention.",
+   "intuition": "A deck of spreadsheets, one per sample; in each spreadsheet, rows are moments in time and columns are the measurements taken at that moment.",
+   "technical": "One sample is `(timesteps, features)`; stacking samples along axis 0 gives rank 3. `x[i, t]` is the feature vector of sample i at step t. Used whenever order matters, including non-temporal sequences such as characters.",
+   "significance": "Input format for recurrent layers, 1D convolutions and Transformers; keeps the ordering information that vector data discards.",
+   "example": "Stock prices: `(250, 390, 3)` (250 days × 390 minutes × 3 prices). Tweets: `(1000000, 280, 128)` (characters one-hot over a 128-symbol alphabet).",
+   "misconception": "That the time axis can go anywhere. The book is explicit: it is always axis 1, right after samples.",
+   "related": ["data_tensor_shapes", "samples_axis", "one_hot_encoding", "rnn"],
+   "source": "book"
+  },
+  {
+   "id": "one_hot_encoding",
+   "name": "One-hot (binary) encoding",
+   "definition": "Representing a categorical symbol from an alphabet of size K as a length-K vector that is all zeros except for a 1 at the symbol's index.",
+   "intuition": "A row of K light switches, exactly one of which is on, telling you which symbol it is without ranking the symbols.",
+   "technical": "For symbol index k, the vector e_k has e_k[k] = 1 and e_k[j] = 0 for j ≠ k. A sequence of L symbols becomes an `(L, K)` matrix; a dataset of N sequences becomes `(N, L, K)`. Very sparse: N·L ones among N·L·K entries.",
+   "significance": "The simplest way to turn discrete symbols into numeric tensors; the book's tweet example uses it at the character level, and p.131 uses the related multi-hot encoding for words.",
+   "example": "128-symbol alphabet, 280-character tweets: each character is a `(128,)` one-hot vector, a tweet is `(280, 128)`, a million tweets `(1000000, 280, 128)`.",
+   "misconception": "That you could just store the character code (0..127) as a single number feature. That would impose an arbitrary numeric order and distance between characters; one-hot avoids it (at the cost of size).",
+   "related": ["sequence_tensor", "embedding", "tokenization"],
+   "source": "book"
+  },
+  {
+   "id": "image_tensor",
+   "name": "Image data tensor and channel conventions",
+   "definition": "A single image is a rank-3 `(height, width, channels)` tensor and a batch is rank 4; channels-last puts channels at the end `(samples, height, width, color_depth)`, channels-first puts them after the batch axis `(samples, color_depth, height, width)`.",
+   "intuition": "A color image is three stacked grayscale pictures (red, green, blue); the channels axis is which of the three you are looking at. Grayscale keeps the axis with just one picture in it.",
+   "technical": "Grayscale batch of 128 images of 256 × 256: `(128, 256, 256, 1)` channels-last or `(128, 1, 256, 256)` channels-first; color: `(128, 256, 256, 3)` / `(128, 3, 256, 256)`. JAX/TensorFlow default to channels-last, PyTorch to channels-first; Keras supports both (p.52).",
+   "significance": "Input format for `Conv2D`; the convention mismatch between frameworks is a frequent source of silent bugs when transferring data or weights.",
+   "example": "MNIST `(60000, 28, 28)` must become `(60000, 28, 28, 1)` to be a channels-last image tensor.",
+   "misconception": "That grayscale images are stored without a channels axis. The book states that by convention image tensors always keep it, with size 1 for grayscale.",
+   "related": ["data_tensor_shapes", "convolution", "tensor_shape"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "One-hot encoding of a character",
+   "latex": "\\mathbf{e}_k \\in \\{0,1\\}^{128}, \\qquad (\\mathbf{e}_k)_j = \\begin{cases} 1 & j = k \\\\ 0 & j \\neq k \\end{cases}",
+   "source_text": "each character can be encoded as a binary vector of size 128 (an all-zeros vector except for a 1 entry at the index corresponding to the character)",
+   "variables": [
+    {"symbol": "k", "meaning": "the index of the character in the 128-symbol alphabet (0 ≤ k < 128)"},
+    {"symbol": "e_k", "meaning": "the binary feature vector representing that character"},
+    {"symbol": "j", "meaning": "a position in the vector"}
+   ],
+   "operations": "Construct a zero vector of length 128 and set one entry to 1.",
+   "purpose": "Turns a discrete symbol into a numeric feature vector without implying any ordering or distance between symbols.",
+   "interpretation": "A tweet of 280 characters is the matrix whose row t is e_{k_t}, giving shape (280, 128); a million tweets give (1000000, 280, 128).",
+   "intuition": "An indicator: \"this slot is the character, all others are not\".",
+   "numerical_example": "If the alphabet is ordered so that 'a' has index 0 and 'b' index 1, then 'b' → [0, 1, 0, 0, …, 0] (128 entries). The 3-character sequence \"aba\" becomes the (3, 128) matrix with rows e_0, e_1, e_0. Total entries in the full tweet tensor: 1,000,000 × 280 × 128 = 35,840,000,000, with only 280,000,000 ones (a computation added here, not in the book).",
+   "source": "book",
+   "book_ref": "p.51"
+  }
+ ],
+ "code": [],
+ "deeper": [
+  {
+   "title": "Deriving each shape on the page, step by step",
+   "kind": "step_by_step",
+   "body": "Apply the recipe \"one step → one sample → the dataset\":\n\n**Documents (vector data)**\n1. One document = 20,000 word counts → `(20000,)`.\n2. 500 documents → `(500, 20000)`, rank 2.\n\n**Stock prices (timeseries)**\n1. One minute = (price, high, low) → `(3,)`.\n2. One day = 390 minutes → `(390, 3)`.\n3. 250 days → `(250, 390, 3)`, rank 3. Time (390) sits on axis 1.\n\n**Tweets (sequence)**\n1. One character = one-hot over 128 symbols → `(128,)`.\n2. One tweet = 280 characters → `(280, 128)`.\n3. 1,000,000 tweets → `(1000000, 280, 128)`, rank 3. Position (280) sits on axis 1.\n\n**Images**\n1. One pixel = channel values → `(1,)` grayscale or `(3,)` color.\n2. One image = 256 × 256 pixels → `(256, 256, 1)` or `(256, 256, 3)`.\n3. 128 images → `(128, 256, 256, 1)` or `(128, 256, 256, 3)`, rank 4 (channels-last).\n\nIn every case the dataset rank is one more than the sample rank, and samples is axis 0.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the channel-order mismatch is dangerous",
+   "kind": "application",
+   "body": "Suppose you load a PyTorch-style batch `(128, 3, 256, 256)` and hand it to a channels-last Keras layer expecting `(128, 256, 256, 3)` but configured with `input_shape=(None, None, 3)`. Nothing catches the error at build time if the layer accepts variable height and width: the layer will interpret the axis of size 3 (the color planes) as *height*, the 256 rows as *width*, and the 256 columns as *channels*. The convolution then slides over a 3 × 256 \"image\" with 256 \"colors\", training on garbage.\n\nThe fix is an axis transpose, not a reshape: `x.transpose(0, 2, 3, 1)` in NumPy moves axis 1 (channels) to the end while keeping every pixel's values together. A `reshape` to the same target shape would reinterpret the flat memory and scramble the pixels. (This scenario is my illustration; the book only states the two conventions and that Keras supports both.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Sequence tensor as a flip-book",
+   "kind": "analogy",
+   "body": "Figure 2.3's stack of rectangles is like a shelf of flip-books. Each flip-book is one sample. Flipping through its pages moves along the time axis (one page per timestep); the content of a page is the feature vector for that moment. The shelf position is the samples axis. The stock example has 250 flip-books of 390 pages, three numbers per page; the tweet example has a million flip-books of 280 pages, each page showing which one of 128 characters is lit up.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "From one minute of prices to a year of trading days",
+   "why": "Reconstructs the page's stock-price example: a 3-vector per minute, a `(390, 3)` day, and the `(250, 390, 3)` dataset with time on axis 1.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "one minute (price, high, low)", "shape": [3]},
+     {"op": "one trading day, 390 minutes", "shape": [390, 3]},
+     {"op": "250 days", "shape": [250, 390, 3]}
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Characters to one-hot rows",
+   "why": "The tweet example encodes each character as a binary vector with a single 1; this shows a short text tokenized at the character level and turned into one-hot vectors, the rows of the `(280, 128)` matrix.",
+   "widget": "token_sequence",
+   "params": {"text": "tweet", "mode": "char"}
+  },
+  {
+   "id": "v3",
+   "type": "widget",
+   "title": "An image as an (H, W, C) tensor",
+   "why": "The page says a color image is a grid of pixels each holding a vector of channel values; this shows a small 4 × 4 × 3 image tensor and its three channel slices (the channels-last layout).",
+   "widget": "image_tensor",
+   "params": {"height": 4, "width": 4, "channels": 3}
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "In the stock example the samples axis is minutes, since every minute is a data point.",
+   "correction": "The book defines each sample as one day's worth of data; minutes are the timesteps (axis 1). What counts as a sample is a modelling choice, and here it is the day."
+  },
+  {
+   "claim": "A \"3D vector\" is a rank-3 tensor.",
+   "correction": "It is a vector with three entries (rank 1). The book warns on p.46 that \"dimension\" is used both for entries along an axis and for the number of axes."
+  },
+  {
+   "claim": "MNIST's `(60000, 28, 28)` array is already in the standard image-tensor format.",
+   "correction": "Standard image tensors keep a channels axis even for grayscale; the convnet-ready form is `(60000, 28, 28, 1)` (channels-last)."
+  },
+  {
+   "claim": "Channels-first and channels-last tensors can be converted with a reshape.",
+   "correction": "They are related by an axis transpose; reshaping to the other shape keeps the memory order and scrambles the pixels. (Not stated in the book; added as a practical caution.)"
+  },
+  {
+   "claim": "Sequence data must involve clock time.",
+   "correction": "The book says \"time matters … (or the notion of sequence order)\": character position in a tweet is a sequence axis even though it is not time."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 50, "note": "The four templates and the first vector-data example `(100000, 3)`."},
+   {"page": 49, "note": "Samples axis is axis 0; slicing lets you take time windows along axis 1."},
+   {"page": 47, "note": "MNIST as `(60000, 28, 28)` with no channels axis."},
+   {"page": 46, "note": "Warning about \"5D vector\" vs \"5D tensor\", relevant to the \"3D vector\" of prices here."}
+  ],
+  "later": [
+   {"page": 52, "note": "Channels-first versions of the image examples, Keras supporting both formats, figure 2.4, and video tensors."},
+   {"page": 117, "note": "Which layer types process which tensor formats: Dense for `(samples, features)`, recurrent/`Conv1D` for `(samples, timesteps, features)`, `Conv2D` for rank-4 images."},
+   {"page": 131, "note": "Padded integer sequences plus `Embedding` versus multi-hot vectors for text."},
+   {"page": 257, "note": "Convnets take rank-3 `(height, width, channels)` image samples."},
+   {"page": 392, "note": "RNNs over `(timesteps, features)` sequences in timeseries forecasting."}
+  ],
+  "prerequisites": [
+   {"page": 47, "note": "Rank and shape."},
+   {"page": 50, "note": "Shape templates for the four data categories."}
+  ],
+  "related_math": [],
+  "related_code": [],
+  "related_figures": [
+   {"page": 51, "note": "Figure 2.3, a rank-3 timeseries data tensor (Features × Timesteps × Samples)."},
+   {"page": 52, "note": "Figure 2.4, a rank-4 image data tensor."}
+  ]
+ },
+ "takeaways": [
+  "A bag-of-words document dataset is vector data: 500 documents × 20,000 word counts → `(500, 20000)`.",
+  "Sequence data is rank 3, `(samples, timesteps, features)`, and the time axis is always axis 1.",
+  "Stock prices: 3 values per minute, 390 minutes per day, 250 days → `(250, 390, 3)`; each sample is a day.",
+  "One-hot characters over a 128-symbol alphabet make a tweet `(280, 128)` and a million tweets `(1000000, 280, 128)`.",
+  "Image tensors always keep a channels axis (size 1 for grayscale): `(128, 256, 256, 1)` grayscale, `(128, 256, 256, 3)` color.",
+  "Channels-last `(samples, height, width, color_depth)` is standard in JAX/TensorFlow; channels-first `(samples, color_depth, height, width)` is standard in PyTorch."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In the stock-price example, what does the shape `(250, 390, 3)` represent?",
+   "options": [
+    "250 minutes, 390 stocks, 3 days",
+    "250 trading days, 390 minutes per day, 3 values per minute",
+    "250 stocks, 390 days, 3 prices",
+    "250 features, 390 timesteps, 3 samples"
+   ],
+   "answer": "250 trading days, 390 minutes per day, 3 values per minute",
+   "explanation": "Axis 0 is samples (each sample is one day), axis 1 is the time axis (390 minutes), axis 2 is features (current price, past-minute high, past-minute low). The other options either reorder the axes (features/timesteps/samples is the reverse order) or invent quantities (stocks) the example does not contain.",
+   "page_refs": [51]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Which axis is the time axis in a sequence data tensor, and why that one?",
+   "options": [],
+   "answer": "Axis 1 (the second axis), by convention: axis 0 is reserved for samples, so time is the first axis inside each sample, followed by features.",
+   "explanation": "The page states the convention explicitly; it combines with the samples-axis convention of p.49 to fix the layout `(samples, timesteps, features)`.",
+   "page_refs": [51, 49]
+  },
+  {
+   "id": "q3",
+   "type": "math",
+   "question": "A tweet is 280 characters from an alphabet of 128 symbols, one-hot encoded. What is the shape of one tweet, and of a dataset of 1 million tweets? How many 1s does the dataset tensor contain?",
+   "options": [],
+   "answer": "One tweet: `(280, 128)`; the dataset: `(1000000, 280, 128)`; it contains 1,000,000 × 280 = 280,000,000 ones (exactly one per character).",
+   "explanation": "Each character is a length-128 binary vector with a single 1, so a tweet stacks 280 of them into a `(280, 128)` matrix and the dataset stacks a million matrices. The count of ones is one per character position; the total number of entries, 3.584 × 10^10, is mostly zeros. (The count of ones is a derived number, not stated in the book.)",
+   "page_refs": [51]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "According to the book, how should a batch of 128 grayscale 256 × 256 images be stored in the channels-last convention?",
+   "options": ["(128, 256, 256)", "(128, 256, 256, 1)", "(128, 1, 256, 256)", "(256, 256, 128)"],
+   "answer": "(128, 256, 256, 1)",
+   "explanation": "Image tensors keep a channels axis even for grayscale, and channels-last puts it at the end. `(128, 256, 256)` drops the channel axis; `(128, 1, 256, 256)` is the channels-first layout (p.52); `(256, 256, 128)` has no samples axis in front.",
+   "page_refs": [51, 52]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "Why does the book store grayscale images with a channels axis of size 1 instead of as rank-2 matrices?",
+   "options": [],
+   "answer": "By convention image tensors are always rank 3 per image (`height, width, channels`), so that grayscale and color images share one format; the channel axis simply has size 1 for grayscale.",
+   "explanation": "The page says grayscale images *could* be rank 2 but that by convention image tensors are always rank 3 with a one-dimensional color channel. A uniform format lets the same layers (e.g. `Conv2D`) process both kinds of image.",
+   "page_refs": [51]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "Name the two image-layout conventions, give their shape templates, and say which frameworks use each.",
+   "options": [],
+   "answer": "Channels-last `(samples, height, width, color_depth)`, standard in JAX, TensorFlow and most other tools; channels-first `(samples, color_depth, height, width)`, standard in PyTorch.",
+   "explanation": "Both appear verbatim on the page; the next page adds that Keras supports both formats.",
+   "page_refs": [51, 52]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Given a dataset description, can you say what one sample is, write its shape, and then write the dataset shape? Test yourself: hourly temperature and humidity readings for 30 days from each of 50 weather stations, one sample per station-day.",
+   "options": [],
+   "answer": "One sample = one station-day = 24 hourly readings of 2 features → `(24, 2)`; the dataset = 50 × 30 = 1500 samples → `(1500, 24, 2)`, with time on axis 1.",
+   "explanation": "This follows the stock-price pattern: per-step vector `(2,)`, per-sample matrix `(24, 2)`, dataset `(1500, 24, 2)`. If you placed time on axis 0 or 2, revisit the convention stated on this page.",
+   "page_refs": [51]
+  }
+ ]
+}

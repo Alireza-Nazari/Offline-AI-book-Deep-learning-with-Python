@@ -1,0 +1,301 @@
+{
+ "page_id": "page_092",
+ "pdf_page": 92,
+ "printed_page": "68",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-fable-5-1",
+  "generated_at": "2026-11-03T04:34:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. Element p092_e09 merges three printed paragraphs ('This can be achieved via compilation…', 'The main benefit of compilation…', 'You can apply compilation…'); each gets its own note. The opening fragment p092_e03 completes a sentence from p.91. 'TensorFlow has two compilation modes:' (p092_e12) is completed on p.93."
+ },
+ "overview": {
+  "title": "Second-order gradients and compiling with tf.function",
+  "chapter": "3 Introduction to TensorFlow, PyTorch, JAX, and Keras",
+  "section": "3.3 Introduction to TensorFlow",
+  "subsection": "3.3.1 First steps with TensorFlow",
+  "main_topic": "Nested GradientTapes for second-order derivatives (falling apple: acceleration 9.8); eager execution versus compilation; the tf.function decorator",
+  "central_idea": "Nesting two gradient tapes lets you differentiate a gradient: for position = 4.9·time², the inner tape gives speed = 9.8·time and the outer tape gives acceleration = 9.8. Separately, eager execution is easy to debug but slow; wrapping a function in @tf.function compiles it into an optimized program (with possible operation fusion), at the cost of a slower first call and harder debugging.",
+  "importance": "Compilation is the fourth key concept announced on p.88 and the reason TensorFlow is described as fast on p.98. The 'debug eagerly, then compile' advice applies to all three backends in the chapter.",
+  "learning_objectives": [
+   "Compute a second-order derivative with nested GradientTapes and verify the result analytically.",
+   "Explain what eager execution means and why it is slow.",
+   "Describe operation fusion with the matmul + relu example.",
+   "State the benefit and the drawback of compilation and when to turn it on.",
+   "Apply @tf.function to a function and explain the first-call cost."
+  ],
+  "prerequisites": [
+   "GradientTape basics (p.91)",
+   "The dense function relu(matmul(inputs, W) + b) (p.91)",
+   "Derivatives as rates of change (chapter 2)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Second-order gradients.** Completing the sentence from p.91: the gradient of an object's position with regard to time is its speed, and the second-order gradient is its acceleration. If a falling apple's position satisfies `position(time) = 4.9 * time ** 2`, what is its acceleration? Listing 3.12 answers with two nested tapes: `time = tf.Variable(0.0)`; inside the inner tape, `position = 4.9 * time**2`; `speed = inner_tape.gradient(position, time)` is computed **inside** the outer tape's scope, so it is itself recorded; then `acceleration = outer_tape.gradient(speed, time)`. As the callout says, \"Naturally, the answer is 4.9 * 2 = 9.8\" (close to Earth's gravitational acceleration, 9.8 m/s²; that observation is ours).\n\n**Making TensorFlow functions fast using compilation.** All code so far ran **eagerly**: operations execute one after another in the Python runtime, like NumPy. That is great for debugging but typically slow. Speedups come from parallelizing computation or **fusing** operations, for example replacing `matmul` followed by `relu` with a single, more efficient operation that never materializes the intermediate output.\n\nThis is achieved via **compilation**: take Python functions, lift them out of Python, automatically rewrite them into a faster compiled program, and call that program from Python. Benefit: performance. Drawback: \"the code you write is no longer the code that gets executed,\" which can make debugging painful, so only compile once your code is debugged in the Python runtime.\n\nIn TensorFlow you wrap a function with the `@tf.function` decorator, as shown for `dense`. Every call then runs a compiled, optimized program; the first call takes longer because TensorFlow compiles the code, but this happens only once. The page closes with \"TensorFlow has two compilation modes:\", which p.93 describes (graph mode and XLA).",
+ "paragraphs": [
+  {
+   "ref": "p092_e04",
+   "excerpt": "If you measure the position of a falling apple along a vertical",
+   "what_it_says": "Given position(time) = 4.9 * time ** 2 for a falling apple, find its acceleration using two nested gradient tapes. (The preceding fragment, p092_e03, completes p.91's sentence: speed is the gradient of position with respect to time, acceleration the second-order gradient.)",
+   "what_it_means": "Acceleration is d²position/dtime². Analytically, d/dt (4.9t²) = 9.8t and d/dt (9.8t) = 9.8, independent of t. Listing 3.12 obtains this with autodiff.",
+   "why_it_matters": "It demonstrates that gradient computations are themselves differentiable operations the tape can record, which is what makes higher-order derivatives possible.",
+   "technical_idea": "The inner_tape.gradient call is executed while outer_tape is recording, so the ops computing speed (multiply by 2, by 4.9, by time) are logged and can be differentiated again.",
+   "terminology": [
+    {"term": "Second-order gradient", "meaning": "Gradient of a gradient; here, acceleration."},
+    {"term": "Nested tapes", "meaning": "One GradientTape scope inside another, so the outer one records the inner one's gradient computation."}
+   ],
+   "connections": ["p.91: the gradient tape can compute second-order gradients."]
+  },
+  {
+   "ref": "p092_e08",
+   "excerpt": "All the TensorFlow code you’ve written so far has been executing “eagerly.”",
+   "what_it_says": "Eager execution runs operations one at a time in the Python runtime, like NumPy. It is great for debugging but typically slow. Parallelizing computation or fusing operations (e.g. matmul then relu into one op without materializing the intermediate) can help.",
+   "what_it_means": "In eager mode each op is dispatched separately from Python, with overhead per call, and each intermediate result is written to memory and read back. A compiler that sees the whole function can remove that overhead and merge ops.",
+   "why_it_matters": "Explains where the speed of compiled code comes from, beyond 'magic'.",
+   "technical_idea": "Fusing matmul + relu means applying max(·, 0) to each output element as it is produced, saving a full write and read of the (batch, units) intermediate tensor; on GPUs memory bandwidth is often the bottleneck (beyond the book).",
+   "terminology": [
+    {"term": "Eager execution", "meaning": "Operations run immediately as Python executes each line."},
+    {"term": "Operation fusion", "meaning": "Combining consecutive ops into one kernel that avoids materializing intermediates."},
+    {"term": "Materialize", "meaning": "Actually allocate and store a tensor in memory."}
+   ],
+   "connections": ["p.91: dense() is exactly matmul followed by relu."]
+  },
+  {
+   "ref": "p092_e09",
+   "excerpt": "This can be achieved via compilation. The general idea of compilation is",
+   "what_it_says": "Compilation takes Python functions, lifts them out of Python, rewrites them automatically into a faster compiled program, and calls that program from Python.",
+   "what_it_means": "Python becomes a way to describe the computation; the description is converted into an optimized form that runs outside the Python interpreter.",
+   "why_it_matters": "This is the conceptual model for tf.function here, and for torch.compile and jax.jit later in the chapter.",
+   "terminology": [{"term": "Compiled program", "meaning": "An optimized representation of the function that runs without step-by-step Python interpretation."}],
+   "connections": ["p.99: 'Speeding up PyTorch by using compilation' is part of the PyTorch roadmap."]
+  },
+  {
+   "ref": "p092_e09",
+   "excerpt": "The main benefit of compilation is improved performance. There’s a drawback too:",
+   "what_it_says": "Compilation improves performance, but the code you write is no longer the code that gets executed, which can make debugging painful; only turn it on after debugging in the Python runtime.",
+   "what_it_means": "Inside a compiled function, print statements, breakpoints and stack traces refer to tracing, not to each actual execution, so errors can be harder to locate.",
+   "why_it_matters": "A practical workflow rule: develop eagerly, compile last.",
+   "terminology": [],
+   "connections": []
+  },
+  {
+   "ref": "p092_e09",
+   "excerpt": "You can apply compilation to any TensorFlow function by wrapping it in",
+   "what_it_says": "Any TensorFlow function can be compiled with the tf.function decorator, illustrated on dense.",
+   "what_it_means": "Adding one line, @tf.function, above def dense(...) is all it takes; the body is unchanged.",
+   "why_it_matters": "Low effort, potentially large speedups, especially for training steps called thousands of times.",
+   "terminology": [{"term": "tf.function", "meaning": "Decorator that compiles a Python function into a TensorFlow graph (graph mode by default)."}],
+   "connections": ["p.93: graph mode and XLA (jit_compile=True)."]
+  },
+  {
+   "ref": "p092_e11",
+   "excerpt": "When you do this, any call to dense() is replaced with a call",
+   "what_it_says": "Calls to dense() now run a compiled, optimized program; the first call is slower because TensorFlow compiles, but this happens once and later calls are fast. TensorFlow has two compilation modes (described on p.93).",
+   "what_it_means": "Compilation is a one-off cost amortized across many calls, which is why it pays off for training loops.",
+   "why_it_matters": "Explains the slow first epoch/step you may observe in practice.",
+   "technical_idea": "Beyond the book: tf.function traces the Python function for a given input signature (shapes/dtypes); calling it with a new signature can trigger retracing, i.e. another compile.",
+   "terminology": [],
+   "connections": ["p.93: graph mode (default) and XLA compilation.", "p.98: thanks to graph mode and XLA, TensorFlow is described as fast."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "second_order_gradient",
+   "name": "Second-order gradient",
+   "definition": "The gradient of a gradient.",
+   "intuition": "How quickly the slope itself is changing; for position over time, acceleration.",
+   "technical": "Computed in TensorFlow by nesting GradientTapes so the outer tape records the inner gradient computation.",
+   "significance": "Shows the tape's generality; used in some optimizers and regularizers (beyond the book).",
+   "example": "position = 4.9t² → speed = 9.8t → acceleration = 9.8.",
+   "misconception": "That speed is 0 because time = 0.0; speed at t = 0 is indeed 0, but its derivative (acceleration) is 9.8 regardless of t.",
+   "related": ["gradient_tape", "autodiff"],
+   "source": "book"
+  },
+  {
+   "id": "eager_execution",
+   "name": "Eager execution",
+   "definition": "Running each operation immediately, one after another, in the Python runtime.",
+   "intuition": "Line-by-line, like NumPy.",
+   "technical": "TensorFlow's default mode; tensors are EagerTensors with concrete values.",
+   "significance": "Great for debugging, typically slow.",
+   "example": "All code in Listings 3.1-3.12 runs eagerly.",
+   "misconception": "That eager mode is wrong or deprecated; it is the recommended mode for development.",
+   "related": ["jit_compilation", "graph_mode"],
+   "source": "book"
+  },
+  {
+   "id": "jit_compilation",
+   "name": "Compilation (tf.function)",
+   "definition": "Lifting a Python function out of Python and rewriting it into a faster compiled program.",
+   "intuition": "Translate once, run fast many times.",
+   "technical": "@tf.function compiles on first call; subsequent calls reuse the compiled program. Enables optimizations such as fusion and parallelization.",
+   "significance": "Main performance tool in TensorFlow.",
+   "example": "@tf.function def dense(inputs, W, b): ...",
+   "misconception": "That the compiled code is the code you wrote; the book warns it is not, which is why debugging is harder.",
+   "related": ["eager_execution", "operation_fusion", "xla"],
+   "source": "book"
+  },
+  {
+   "id": "operation_fusion",
+   "name": "Operation fusion",
+   "definition": "Replacing consecutive operations with a single, more efficient one that does not materialize intermediate outputs.",
+   "intuition": "Cooking and plating in one motion instead of putting food on a temporary tray.",
+   "technical": "E.g. matmul followed by relu fused into one kernel.",
+   "significance": "A key reason compiled code beats eager code.",
+   "example": "relu(matmul(x, W) + b) computed without storing matmul(x, W) separately.",
+   "misconception": "That fusion changes the math; the result is the same.",
+   "related": ["jit_compilation"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Position, speed and acceleration of the falling apple",
+   "latex": "\\begin{aligned} p(t) &= 4.9\\,t^2 \\\\ v(t) &= \\frac{dp}{dt} = 9.8\\,t \\\\ a(t) &= \\frac{d^2p}{dt^2} = \\frac{dv}{dt} = 9.8 \\end{aligned}",
+   "source_text": "position(time) = 4.9 * time ** 2; answer is 4.9 * 2 = 9.8",
+   "variables": [
+    {"symbol": "t", "meaning": "time (the tf.Variable, initialized at 0.0)"},
+    {"symbol": "p(t)", "meaning": "position along the vertical axis"},
+    {"symbol": "v(t)", "meaning": "speed, the first-order gradient (inner tape)"},
+    {"symbol": "a(t)", "meaning": "acceleration, the second-order gradient (outer tape)"}
+   ],
+   "operations": "Two successive derivatives with respect to t.",
+   "purpose": "The analytical answer that Listing 3.12 computes with nested tapes.",
+   "interpretation": "The acceleration is constant: the apple speeds up by 9.8 units of speed per unit of time.",
+   "intuition": "Each derivative brings down the exponent: 4.9·2 = 9.8, then t¹ → constant.",
+   "numerical_example": "At t = 0 (as in the listing): p = 0, v = 0, a = 9.8. At t = 2: p = 19.6, v = 19.6, a = 9.8.",
+   "source": "book",
+   "book_ref": "p.92"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "3.12",
+   "title": "Using nested gradient tapes to compute second-order gradients",
+   "original_code": "time = tf.Variable(0.0)\nwith tf.GradientTape() as outer_tape:\n    with tf.GradientTape() as inner_tape:\n        position = 4.9 * time**2\n    speed = inner_tape.gradient(position, time)\nacceleration = outer_tape.gradient(speed, time)",
+   "language": "python",
+   "what_it_does": "Computes the first derivative (speed) of position = 4.9·time² with the inner tape, while the outer tape records that computation, then differentiates speed again to get acceleration = 9.8.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "time is a trainable variable at 0.0, watched by both tapes automatically."},
+    {"lines": "2-4", "explanation": "Two nested scopes; position is recorded by both tapes."},
+    {"lines": "5", "explanation": "speed = d position/d time = 9.8·time (0.0 here); computed inside outer_tape's scope, so it is recorded."},
+    {"lines": "6", "explanation": "Callout: 'We use the outer tape to compute the gradient of the gradient from the inner tape. Naturally, the answer is 4.9 * 2 = 9.8.'"}
+   ],
+   "inputs_outputs": "Output: acceleration = 9.8 (speed = 0.0 at time = 0).",
+   "algorithm": "Reverse-mode autodiff applied twice.",
+   "theory_link": "Second derivative of a quadratic is constant.",
+   "parameters": [{"name": "time", "role": "Variable with respect to which both derivatives are taken."}],
+   "pitfalls": ["If speed were computed after leaving outer_tape's scope, the outer tape would not have recorded it and the second gradient would be None (beyond the book)."],
+   "illustrative_code": ""
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Compiling dense with tf.function",
+   "original_code": "@tf.function\ndef dense(inputs, W, b):\n    return tf.nn.relu(tf.matmul(inputs, W) + b)",
+   "language": "python",
+   "what_it_does": "Same dense layer as p.91, decorated so that calls run a compiled, optimized program instead of eager ops.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "@tf.function compiles the function (graph mode by default, p.93)."},
+    {"lines": "2-3", "explanation": "Unchanged body: matmul, bias add, relu, which the compiler may fuse."}
+   ],
+   "inputs_outputs": "Same as uncompiled dense: (batch, in), (in, units), (units,) → (batch, units).",
+   "algorithm": "Trace on first call, compile, reuse.",
+   "theory_link": "Compilation enables fusion of matmul + relu.",
+   "parameters": [],
+   "pitfalls": ["First call is slower (compilation).", "Debug before decorating: the executed code is not your Python code."],
+   "illustrative_code": "# AI-written: observe first-call cost\nimport time, tensorflow as tf\nx = tf.random.normal((1024, 512)); W = tf.random.normal((512, 512)); b = tf.zeros((512,))\nfor i in range(3):\n    t0 = time.perf_counter(); dense(x, W, b); print(i, time.perf_counter() - t0)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Eager vs compiled, in one picture",
+   "kind": "breakdown",
+   "body": "**Eager:** Python calls `matmul` → result stored → Python calls `add` → result stored → Python calls `relu` → result stored. Three dispatches, two intermediate tensors.\n\n**Compiled:** first call traces the three ops into a program and optimizes it (possibly one fused kernel); later calls run that program in one dispatch with no intermediates. The book frames the trade-off as performance versus a harder debugging experience. (The dispatch-counting detail is our explanation.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the outer tape sees the inner gradient",
+   "kind": "step_by_step",
+   "body": "1. Both tapes record `position = 4.9 * time**2`.\n2. `inner_tape.gradient(position, time)` computes speed by running ops (2 × 4.9 × time). Because this happens inside `outer_tape`'s scope, those ops are logged by the outer tape.\n3. `outer_tape.gradient(speed, time)` differentiates `9.8 × time` with respect to `time`: 9.8.\n\nThe indentation in Listing 3.12 is therefore essential: `speed` is computed at the outer level, not after both scopes close.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Falling apple: position, speed, acceleration",
+   "why": "Listing 3.12 differentiates position(time) = 4.9·time² twice; the curves show 4.9t², 9.8t and the constant 9.8.",
+   "chart": {
+    "type": "line",
+    "data": {
+     "labels": [0, 0.5, 1, 1.5, 2, 2.5, 3],
+     "datasets": [
+      {"label": "position = 4.9 t²", "data": [0, 1.225, 4.9, 11.025, 19.6, 30.625, 44.1]},
+      {"label": "speed = 9.8 t", "data": [0, 4.9, 9.8, 14.7, 19.6, 24.5, 29.4]},
+      {"label": "acceleration = 9.8", "data": [9.8, 9.8, 9.8, 9.8, 9.8, 9.8, 9.8]}
+     ]
+    },
+    "options": {"scales": {"x": {"title": {"display": true, "text": "time"}}, "y": {"title": {"display": true, "text": "value"}}}}
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Speed as the slope of position",
+   "why": "The inner tape computes the slope of 4.9·t²; move the point to see the slope equal 9.8·t.",
+   "widget": "derivative_tangent",
+   "params": {"expr": "4.9*x*x", "x0": 1, "h": 0.5}
+  },
+  {
+   "id": "v3",
+   "type": "mermaid",
+   "title": "Eager execution vs tf.function",
+   "why": "The page contrasts eager, op-by-op execution with compiling a function once and reusing it.",
+   "mermaid": "flowchart TB\n subgraph Eager\n E1[matmul] --> E2[\"+ b\"] --> E3[relu]\n end\n subgraph \"@tf.function\"\n C0[First call: trace and compile] --> C1[Optimized program, e.g. fused matmul+relu]\n C1 --> C2[Later calls: fast]\n end"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "Because time = 0.0, the acceleration computed in Listing 3.12 is 0.", "correction": "Speed at t = 0 is 0, but acceleration is the constant 9.8 for every t."},
+  {"claim": "Compilation should be turned on from the start of development.", "correction": "The authors advise compiling only after the code is debugged in the Python runtime."},
+  {"claim": "A tf.function is slow every time because it compiles on each call.", "correction": "Compilation happens only on the first call; subsequent calls are fast."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 91, "note": "GradientTape basics and the uncompiled dense function."},
+   {"page": 88, "note": "JIT compilation announced as the fourth key concept."}
+  ],
+  "later": [
+   {"page": 93, "note": "Graph mode and XLA (jit_compile=True); the end-to-end linear classifier."},
+   {"page": 98, "note": "Graph mode and XLA as the reason TensorFlow is fast."},
+   {"page": 99, "note": "Compilation in PyTorch is part of its roadmap."},
+   {"page": 318, "note": "@tf.function used to speed up gradient ascent in chapter 10."}
+  ],
+  "prerequisites": [{"page": 91, "note": "GradientTape API."}],
+  "related_math": [],
+  "related_code": [{"page": 91, "note": "Listings 3.10-3.11 and the dense function."}],
+  "related_figures": []
+ },
+ "takeaways": [
+  "Nested GradientTapes compute second-order gradients; the inner gradient must be computed inside the outer tape's scope.",
+  "For position = 4.9·t², speed = 9.8·t and acceleration = 9.8.",
+  "Eager execution is good for debugging but typically slow.",
+  "Compilation improves speed through optimizations such as fusing matmul + relu.",
+  "Compile only after debugging: the executed code is no longer your code.",
+  "@tf.function compiles on the first call; later calls are fast."
+ ],
+ "questions": [
+  {"id": "q1", "type": "math", "question": "For position(time) = 4.9 * time ** 2, what do speed and acceleration equal at time = 0.0 in Listing 3.12?", "options": [], "answer": "speed = 0.0, acceleration = 9.8", "explanation": "speed = 9.8·time = 0 at t = 0; acceleration = 9.8 for all t (the callout: 4.9 * 2 = 9.8).", "page_refs": [92]},
+  {"id": "q2", "type": "mcq", "question": "Why is speed computed inside the outer tape's with block in Listing 3.12?", "options": ["Because the inner tape is closed after that line", "So that the outer tape records the computation of speed and can differentiate it", "Because tf.Variable can only be used inside a tape", "To make the code faster"], "answer": "So that the outer tape records the computation of speed and can differentiate it", "explanation": "The outer tape can only differentiate what it recorded. Variables work anywhere; speed of execution is irrelevant; the inner tape's closing is not the reason.", "page_refs": [92]},
+  {"id": "q3", "type": "short", "question": "What is operation fusion? Give the page's example.", "options": [], "answer": "Replacing consecutive operations with a single, more efficient one that doesn't materialize the intermediate output, e.g. matmul followed by relu.", "explanation": "Stated in the paragraph on eager execution.", "page_refs": [92]},
+  {"id": "q4", "type": "mcq", "question": "What drawback of compilation do the authors mention?", "options": ["It changes the numerical results", "The code you write is no longer the code that gets executed, making debugging painful", "It only works on GPUs", "Every call becomes slower"], "answer": "The code you write is no longer the code that gets executed, making debugging painful", "explanation": "That is the stated drawback. Results are the same, compilation is not GPU-only, and only the first call is slower.", "page_refs": [92]},
+  {"id": "q5", "type": "conceptual", "question": "Why is the first call to a @tf.function-decorated dense slower than the following calls?", "options": [], "answer": "On the first call TensorFlow compiles the function into an optimized program; this happens once, and later calls reuse the compiled program.", "explanation": "Paraphrase of p092_e11.", "page_refs": [92]},
+  {"id": "q6", "type": "math", "question": "If position(time) = 2 * time ** 3, what would Listing 3.12's acceleration be at time = 1.0?", "options": [], "answer": "12.0", "explanation": "speed = 6t², acceleration = 12t = 12 at t = 1.", "page_refs": [92]},
+  {"id": "q7", "type": "self", "question": "Can you describe the workflow the authors recommend for using compilation?", "options": [], "answer": "Write and debug the code eagerly in the Python runtime first; only then turn on compilation with @tf.function for speed.", "explanation": "Recommendation from the paragraph on compilation's drawback.", "page_refs": [92]}
+ ]
+}

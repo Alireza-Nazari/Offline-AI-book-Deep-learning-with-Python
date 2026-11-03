@@ -1,0 +1,422 @@
+{
+ "page_id": "page_368",
+ "pdf_page": 368,
+ "printed_page": "344",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:39:06Z",
+  "confidence": "high",
+  "review_flags": [
+   "Typo in Listing 12.11 callout: 'Concatenates the errors weith scaling hacks' should be 'with'.",
+   "Listing 12.11 callout says 'Returns one loss value per sample; Keras will sum over the batch.' With Keras's default loss reduction ('sum_over_batch_size') the per-sample values are averaged over the batch, not summed. Likely loose wording.",
+   "Possible unit mismatch (inference): box_loss calls intersection_over_union(true, pred) on raw YOLO box encodings, where x, y are relative to the grid cell and w, h relative to the image (p.363), so the IoU used as confidence target is not the true image-space IoU. Worth a reviewer's check.",
+   "Inference, not stated in the book: conf_target is computed from pred without stop_gradient, so the confidence error also sends gradients into the predicted box coordinates through the IoU. The original YOLO formulation treats IoU as a fixed target."
+  ],
+  "extraction_quality": "Clean extraction of Listing 12.11, Listing 12.12 and two paragraphs. Callouts are listed in scrambled order in the bundle; their placement was checked against the page image."
+ },
+ "overview": {
+  "title": "The YOLO box loss in code, and training the model",
+  "chapter": "12 Object detection",
+  "section": "12.2 Training a YOLO model from scratch",
+  "subsection": "12.2.4 Training the YOLO model",
+  "main_topic": "Implementing the YOLO bounding-box loss with signed square root, IoU-based confidence targets and scaling factors (Listing 12.11), then compiling and fitting the model (Listing 12.12)",
+  "central_idea": "box_loss splits targets and predictions into center, size and confidence; masks placement errors to occupied cells and weights them by 5; uses IoU as the confidence target in occupied cells and 0 in empty ones, down-weighting empty cells by 0.5; and returns one summed loss per image. The model is compiled with Adam(2e-4) and this loss plus sparse crossentropy, and trained for 4 epochs: over an hour on a free Colab GPU and still undertrained.",
+  "importance": "This page turns the YOLO loss described in words on p.366-367 into working code and runs the actual training. It is a compact example of writing a non-trivial custom loss in keras.ops and wiring it into a multi-output model.",
+  "learning_objectives": [
+   "Trace the shapes of every tensor in box_loss from (batch, 6, 6, 5) inputs to a (batch,) output",
+   "Explain how ops.where implements masking and loss weighting",
+   "Map each of the three YOLO tricks from p.367 to a line of code",
+   "Explain why the loss returns a per-sample value",
+   "Read Listing 12.12 and describe the training configuration",
+   "Interpret the remark that the model is still undertrained after 4 epochs"
+  ],
+  "prerequisites": [
+   "IoU utility from Listing 12.10 (p.367)",
+   "YOLO loss tricks (p.367)",
+   "Datasets train_dataset and val_dataset from Listing 12.9 (p.366)",
+   "Multi-output compile with a loss dict (chapter 7)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Listing 12.11** writes the YOLO bounding-box loss.\n\n- `signed_sqrt(x) = sign(x) * sqrt(|x| + epsilon)`: a square root that preserves sign and avoids sqrt(0) issues.\n- `box_loss(true, pred)` slices both tensors along the last axis into `xy` (channels 0-1), `wh` (2-3) and `conf` (4, kept as a length-1 axis) (callout: *Unpacks values*).\n- `no_object = conf_true == 0.0` marks empty grid cells (callout: *If confidence_true is 0.0, there is no object in this grid cell*).\n- Placement errors: squared center error, and squared error between signed square roots of widths/heights (callout: *Computes box placement errors*).\n- Confidence: IoU between `true` and `pred` is the target where there is an object, 0 elsewhere; the error is squared (callout: *Computes confidence error*).\n- The three error tensors are concatenated with the **scaling hacks**: placement errors x5 and zeroed in empty cells; confidence errors x0.5 in empty cells and x1 in occupied cells.\n- `ops.sum(error, axis=(1, 2, 3))` sums over the 6 x 6 grid and the 5 error channels, returning **one loss value per sample**.\n\nThe text then notes that metrics are skipped purely to keep the example short; in a real setting you'd want several, such as accuracy at different confidence cutoffs.\n\n**Listing 12.12** compiles the model with `Adam(2e-4)` and `loss={\"box\": box_loss, \"class\": \"sparse_categorical_crossentropy\"}`, then fits on `train_dataset` with `val_dataset` for **4 epochs**.\n\nTraining takes **over an hour on the free Colab GPU**, and the model is **still undertrained**: validation loss is still falling. The next step is visualizing a prediction (figure 12.6) with a **low confidence cutoff**, because the model is not yet a good detector.",
+ "paragraphs": [
+  {
+   "ref": "p368_e04",
+   "excerpt": "def signed_sqrt(x):",
+   "what_it_says": "Listing 12.11 defines signed_sqrt and box_loss, which combines masked, scaled placement errors and IoU-targeted confidence errors and sums them per sample.",
+   "what_it_means": "Each of the three tricks on p.367 appears as one operation: x5 on xy_error and wh_error, x0.5 on conf_error where no_object, signed_sqrt on widths/heights.",
+   "why_it_matters": "This loss is what the model actually optimizes for its box output; its design choices determine how well boxes and confidences are learned.",
+   "technical_idea": "Masking by ops.where keeps tensor shapes fixed (no boolean indexing), which is efficient and works on all backends and under compilation.",
+   "terminology": [
+    {"term": "ops.where(cond, a, b)", "meaning": "Element-wise select: a where cond is true, else b, with broadcasting."},
+    {"term": "keras.config.epsilon()", "meaning": "Keras's small fuzz constant (1e-7 by default)."}
+   ],
+   "connections": [
+    "p.367: the three loss scaling tricks implemented here",
+    "p.367: intersection_over_union from Listing 12.10"
+   ]
+  },
+  {
+   "ref": "p368_e05",
+   "excerpt": "We are finally ready to start training our YOLO model. Purely to",
+   "what_it_says": "Training can begin. Metrics are skipped to keep the example short; a real setup would include several, such as model accuracy at different confidence cutoffs.",
+   "what_it_means": "The only feedback during training will be the losses (total, box and class) on training and validation data. Detection quality itself isn't measured.",
+   "why_it_matters": "Loss values alone are hard to interpret for detectors; a falling loss doesn't directly tell you how many objects are found correctly.",
+   "technical_idea": "Beyond the book: the standard detection metric is mean average precision (mAP), which sweeps confidence thresholds and matches predictions to ground truth by IoU.",
+   "terminology": [
+    {"term": "confidence cutoff", "meaning": "Threshold above which a predicted box counts as a detection."}
+   ],
+   "connections": [
+    "p.369: a low cutoff is used when drawing predictions"
+   ]
+  },
+  {
+   "ref": "p368_e07",
+   "excerpt": "model.compile(",
+   "what_it_says": "Listing 12.12 compiles with Adam at learning rate 2e-4 and a per-output loss dict, then fits for 4 epochs with validation data.",
+   "what_it_means": "The total loss is box_loss + sparse categorical crossentropy, both averaged over the batch by Keras. The small learning rate protects the pretrained ResNet backbone from being disrupted by large early gradients from the randomly initialized head.",
+   "why_it_matters": "This is the single call that trains the whole detector end to end, including fine-tuning the backbone.",
+   "technical_idea": "The loss dict keys 'box' and 'class' match both the model output names (Listing 12.6) and the label dict keys (Listing 12.9).",
+   "terminology": [
+    {"term": "Adam", "meaning": "Adaptive-moment optimizer; here with learning rate 2e-4."},
+    {"term": "validation_data", "meaning": "Dataset evaluated at the end of each epoch."}
+   ],
+   "connections": [
+    "p.366: train_dataset and val_dataset come from Listing 12.9",
+    "p.362: the model outputs dict {'box', 'class'}"
+   ]
+  },
+  {
+   "ref": "p368_e08",
+   "excerpt": "Training takes over an hour on the Colab free GPU runtime, and",
+   "what_it_says": "Training takes over an hour on Colab's free GPU and the model is still undertrained, as validation loss is still falling. A prediction will be visualized (figure 12.6) using a low confidence cutoff since the model isn't a good detector yet.",
+   "what_it_means": "Four epochs is a budget choice, not a convergence point. Because validation loss still decreases, more epochs would likely help before overfitting sets in.",
+   "why_it_matters": "It sets realistic expectations: detection from scratch is compute-hungry, which motivates the pretrained RetinaNet in section 12.3.",
+   "technical_idea": "Undertraining shows up as low predicted confidences (low IoUs), hence the low cutoff when drawing boxes.",
+   "terminology": [
+    {"term": "undertrained", "meaning": "Training stopped while validation performance was still improving."}
+   ],
+   "connections": [
+    "p.369: figure 12.6 shows the predicted boxes",
+    "p.370: list of improvements (more epochs, the whole COCO dataset, augmentation, ...) and the switch to RetinaNet"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "yolo_box_loss",
+   "name": "YOLO box loss",
+   "definition": "Per-image sum over grid cells of x5 masked placement errors, IoU-targeted confidence error in occupied cells and x0.5 confidence error in empty cells.",
+   "intuition": "Heavily grade where real boxes are, gently grade 'nothing here' cells.",
+   "technical": "Inputs (B, 6, 6, 5); error tensor (B, 6, 6, 5) after concatenation; output (B,).",
+   "significance": "The custom objective that makes this a detector rather than a classifier.",
+   "example": "Listing 12.11.",
+   "misconception": "The x/y error is not computed on sqrt values; only width and height go through signed_sqrt.",
+   "related": ["intersection_over_union", "loss_weighting", "signed_sqrt"],
+   "source": "book"
+  },
+  {
+   "id": "masking_with_where",
+   "name": "Masking with ops.where",
+   "definition": "Selecting element-wise between two tensors using a boolean condition to zero out or reweight parts of a loss.",
+   "intuition": "A stencil laid over the grid: only the holes (occupied cells) let the placement error through.",
+   "technical": "no_object has shape (B, 6, 6, 1) and broadcasts against (B, 6, 6, 2) errors.",
+   "significance": "Keeps shapes static and code backend-agnostic.",
+   "example": "ops.where(no_object, 0.0, xy_error * 5.0).",
+   "misconception": "Zeroing a value with where also zeroes its gradient for that element, so empty cells get no box-coordinate gradient at all.",
+   "related": ["yolo_box_loss"],
+   "source": "book"
+  },
+  {
+   "id": "signed_sqrt",
+   "name": "Sign-preserving square root",
+   "definition": "sign(x) * sqrt(|x| + epsilon).",
+   "intuition": "A mirrored square root that accepts negative widths.",
+   "technical": "Epsilon keeps the derivative finite at x = 0 (it is then 1/(2 sqrt(eps)), large but finite).",
+   "significance": "Implements the square-root trick safely for an untrained model.",
+   "example": "signed_sqrt(-0.09) ≈ -0.3.",
+   "misconception": "It doesn't clamp or fix negative widths; it only keeps the loss defined.",
+   "related": ["yolo_box_loss"],
+   "source": "book"
+  },
+  {
+   "id": "per_sample_loss",
+   "name": "Per-sample loss values",
+   "definition": "A custom loss returns one value per example; Keras reduces these over the batch.",
+   "intuition": "Each image gets its own score first, then the batch score is formed.",
+   "technical": "box_loss sums over axes 1, 2, 3 and leaves axis 0; Keras's default reduction averages the per-sample values (the callout says 'sum').",
+   "significance": "Lets Keras apply sample weights and consistent reductions.",
+   "example": "Batch of 16 -> box_loss returns shape (16,).",
+   "misconception": "Returning a scalar is not required; returning per-sample values is the convention.",
+   "related": ["loss_function", "multi_output_loss"],
+   "source": "book"
+  },
+  {
+   "id": "adam",
+   "name": "Adam optimizer",
+   "definition": "Gradient-based optimizer with per-parameter adaptive step sizes from running first and second moment estimates.",
+   "intuition": "SGD with momentum plus automatic per-weight step-size tuning.",
+   "technical": "Here keras.optimizers.Adam(2e-4).",
+   "significance": "A small rate suits fine-tuning a pretrained backbone together with a new head.",
+   "example": "Listing 12.12.",
+   "misconception": "Adam's adaptivity doesn't make the learning rate irrelevant.",
+   "related": ["optimizer", "learning_rate"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Signed square root",
+   "latex": "\\operatorname{ssqrt}(x) = \\operatorname{sign}(x)\\,\\sqrt{|x| + \\varepsilon}",
+   "source_text": "return ops.sign(x) * ops.sqrt(ops.absolute(x) + keras.config.epsilon())",
+   "variables": [
+    {"symbol": "x", "meaning": "a width or height (target or predicted)"},
+    {"symbol": "\\varepsilon", "meaning": "keras.config.epsilon(), a small constant (1e-7 by default)"}
+   ],
+   "operations": "Absolute value, add epsilon, square root, restore sign.",
+   "purpose": "Apply the square-root trick to possibly negative predictions without NaNs.",
+   "interpretation": "Odd, monotonic and compressive.",
+   "intuition": "A square root that works on both sides of zero.",
+   "numerical_example": "$\\operatorname{ssqrt}(0.25)\\approx0.5$, $\\operatorname{ssqrt}(-0.25)\\approx-0.5$, $\\operatorname{ssqrt}(0)=0$ since $\\operatorname{sign}(0)=0$.",
+   "source": "book",
+   "book_ref": "p.368"
+  },
+  {
+   "id": "m2",
+   "title": "Per-sample box loss as implemented",
+   "latex": "\\begin{aligned} \\mathcal{L}_{\\text{box}} = \\sum_{i,j} \\Big[ & m_{ij}\\cdot 5\\,\\big\\|xy_{ij}-\\hat{xy}_{ij}\\big\\|^2 + m_{ij}\\cdot 5\\,\\big\\|\\operatorname{ssqrt}(wh_{ij})-\\operatorname{ssqrt}(\\hat{wh}_{ij})\\big\\|^2 \\\\ & + m_{ij}\\,(\\operatorname{IoU}_{ij}-\\hat c_{ij})^2 + (1-m_{ij})\\cdot 0.5\\,\\hat c_{ij}^{\\,2} \\Big] \\end{aligned}",
+   "source_text": "ops.where(no_object, 0.0, xy_error * 5.0), ops.where(no_object, 0.0, wh_error * 5.0), ops.where(no_object, conf_error * 0.5, conf_error) ... return ops.sum(error, axis=(1, 2, 3))",
+   "variables": [
+    {"symbol": "i, j", "meaning": "grid row and column (6 x 6)"},
+    {"symbol": "m_{ij}", "meaning": "1 if conf_true is nonzero (object present), 0 if no_object"},
+    {"symbol": "xy, wh", "meaning": "target center (cell-relative) and size (image-relative); hats are predictions"},
+    {"symbol": "\\hat c_{ij}", "meaning": "predicted confidence"},
+    {"symbol": "\\operatorname{IoU}_{ij}", "meaning": "intersection_over_union(true, pred) in cell (i, j)"}
+   ],
+   "operations": "Squared errors, masked and weighted by ops.where, concatenated to 5 channels, summed over grid and channels.",
+   "purpose": "One scalar loss per image for the box output.",
+   "interpretation": "Placement matters 5x; empty-cell confidence 0.5x.",
+   "intuition": "The few object cells dominate localization; empty cells contribute only through confidence.",
+   "numerical_example": "One occupied cell: target $(0.5,0.5,0.25,0.36)$, prediction $(0.4,0.5,0.16,0.36,\\hat c=0.2)$. IoU as the code computes it on these raw values: intersection $0.105\\times0.36=0.0378$, union $0.09+0.0576-0.0378=0.1098$, IoU $\\approx0.344$. xy: $5(0.01+0)=0.05$; wh: $5((0.5-0.4)^2+0)=0.05$; conf: $(0.344-0.2)^2\\approx0.021$. Plus 35 empty cells each predicting $\\hat c=0.1$: $35\\times0.5\\times0.01=0.175$. Total $\\approx0.296$.",
+   "source": "book",
+   "book_ref": "p.368"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "12.11",
+   "title": "Defining the YOLO bounding box loss",
+   "original_code": "def signed_sqrt(x):\n    return ops.sign(x) * ops.sqrt(ops.absolute(x) + keras.config.epsilon())\n\ndef box_loss(true, pred):\n    xy_true, wh_true, conf_true = true[..., :2], true[..., 2:4], true[..., 4:]\n    xy_pred, wh_pred, conf_pred = pred[..., :2], pred[..., 2:4], pred[..., 4:]\n    no_object = conf_true == 0.0\n    xy_error = ops.square(xy_true - xy_pred)\n    wh_error = ops.square(signed_sqrt(wh_true) - signed_sqrt(wh_pred))\n    iou = intersection_over_union(true, pred)\n    conf_target = ops.where(no_object, 0.0, ops.expand_dims(iou, -1))\n    conf_error = ops.square(conf_target - conf_pred)\n    error = ops.concatenate(\n        (\n            ops.where(no_object, 0.0, xy_error * 5.0),\n            ops.where(no_object, 0.0, wh_error * 5.0),\n            ops.where(no_object, conf_error * 0.5, conf_error),\n        ),\n        axis=-1,\n    )\n    return ops.sum(error, axis=(1, 2, 3))",
+   "language": "python",
+   "what_it_does": "Computes the YOLO box loss for a batch: masked and scaled squared errors of centers, square-rooted sizes and IoU-targeted confidences, summed into one value per image.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "signed_sqrt: sqrt of |x| plus epsilon, multiplied by sign(x), so negative predicted sizes are allowed."},
+    {"lines": "4-6", "explanation": "Slice the last axis: centers (0:2), sizes (2:4), confidence (4:, keeping a length-1 axis). Shapes (B,6,6,2), (B,6,6,2), (B,6,6,1). Callout: 'Unpacks values'."},
+    {"lines": "7", "explanation": "Boolean mask (B,6,6,1): True where the target confidence is 0, i.e. no object in this cell (callout)."},
+    {"lines": "8-9", "explanation": "Squared center error and squared error of signed square roots of sizes (callout: 'Computes box placement errors')."},
+    {"lines": "10", "explanation": "IoU between target and predicted boxes in every cell, shape (B,6,6); unpack ignores the confidence channel."},
+    {"lines": "11", "explanation": "Confidence target: 0 in empty cells, IoU (expanded to (B,6,6,1)) in occupied cells."},
+    {"lines": "12", "explanation": "Squared confidence error (callout: 'Computes confidence error')."},
+    {"lines": "13-20", "explanation": "Concatenate along the last axis into (B,6,6,5): placement errors x5 and zeroed where no object; confidence error x0.5 where no object, x1 otherwise (callout: 'Concatenates the errors with scaling hacks')."},
+    {"lines": "21", "explanation": "Sum over grid rows, columns and error channels, returning shape (B,): one loss per sample (callout: Keras then reduces over the batch)."}
+   ],
+   "inputs_outputs": "Inputs: true and pred of shape (batch, 6, 6, 5) with channels (x, y, w, h, confidence). Output: (batch,) loss values.",
+   "algorithm": "Split -> mask -> per-component squared error -> IoU-based target -> weighted select -> concatenate -> sum.",
+   "theory_link": "Implements the three scaling tricks of Redmon et al. described on p.367 and the IoU confidence target.",
+   "parameters": [
+    {"name": "5.0", "role": "Weight on box placement errors (trick 1)."},
+    {"name": "0.5", "role": "Weight on confidence error in empty cells (trick 2)."},
+    {"name": "keras.config.epsilon()", "role": "Stabilizer inside the square root."}
+   ],
+   "pitfalls": [
+    "no_object relies on exact float equality with 0.0; it works because box_array was initialized with np.zeros and set to exactly 1.0 for boxes (p.364).",
+    "conf_true must keep its last axis (slice 4:, not index 4) so the mask broadcasts with the 2-channel errors; that's why iou needs expand_dims.",
+    "IoU is computed on cell-relative centers and image-relative sizes (see review flag).",
+    "No stop_gradient on conf_target: gradients of the confidence error also flow into the box coordinates through IoU (inference).",
+    "The box loss is a sum over 36 cells x 5 channels while the class loss is averaged per cell, so their relative magnitudes are not obviously balanced."
+   ],
+   "illustrative_code": "# AI-written: a quick shape and value check of box_loss\nimport numpy as np\ntrue = np.zeros((1, 6, 6, 5), dtype=\"float32\")\ntrue[0, 2, 3] = [0.5, 0.5, 0.25, 0.36, 1.0]\npred = np.zeros((1, 6, 6, 5), dtype=\"float32\")\npred[..., 4] = 0.1\npred[0, 2, 3] = [0.4, 0.5, 0.16, 0.36, 0.2]\nprint(box_loss(true, pred))   # one value, shape (1,)"
+  },
+  {
+   "id": "c2",
+   "listing": "12.12",
+   "title": "Training the YOLO model",
+   "original_code": "model.compile(\n    optimizer=keras.optimizers.Adam(2e-4),\n    loss={\"box\": box_loss, \"class\": \"sparse_categorical_crossentropy\"},\n)\nmodel.fit(\n    train_dataset,\n    validation_data=val_dataset,\n    epochs=4,\n)",
+   "language": "python",
+   "what_it_does": "Compiles the YOLO model with Adam and a loss per output, then trains it for 4 epochs, evaluating on the validation split after each epoch.",
+   "line_explanations": [
+    {"lines": "1-4", "explanation": "Adam with learning rate 2e-4; loss dict maps output 'box' to the custom box_loss and output 'class' to sparse categorical crossentropy. No metrics, to keep the example short."},
+    {"lines": "5-9", "explanation": "Fit on the streamed training batches, validate on the 500 held-out batches, 4 epochs."}
+   ],
+   "inputs_outputs": "Inputs: model (p.362), train_dataset and val_dataset (p.366). Output: a trained model (and a History object, not stored here).",
+   "algorithm": "Mini-batch gradient descent with Adam on L = L_box + L_class.",
+   "theory_link": "Per-output losses are summed by Keras (p.366); the pretrained backbone is fine-tuned along with the new head.",
+   "parameters": [
+    {"name": "Adam(2e-4)", "role": "Optimizer and learning rate."},
+    {"name": "loss dict", "role": "One loss per named output."},
+    {"name": "epochs=4", "role": "Training budget; the book notes the model is still undertrained."}
+   ],
+   "pitfalls": [
+    "Without metrics, only losses are reported; they do not directly reflect detection quality.",
+    "Four epochs is too few for convergence (validation loss still falling).",
+    "Expect over an hour per run on a free Colab GPU."
+   ],
+   "illustrative_code": "# AI-written: optionally weight the two losses and keep the history\nmodel.compile(\n    optimizer=keras.optimizers.Adam(2e-4),\n    loss={\"box\": box_loss, \"class\": \"sparse_categorical_crossentropy\"},\n    loss_weights={\"box\": 1.0, \"class\": 1.0},\n)\nhistory = model.fit(train_dataset, validation_data=val_dataset, epochs=4)\nprint(history.history[\"val_loss\"])"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Shape trace through box_loss",
+   "kind": "breakdown",
+   "body": "With batch size $B=16$:\n\n| tensor | shape |\n|---|---|\n| `true`, `pred` | (16, 6, 6, 5) |\n| `xy_*`, `wh_*` | (16, 6, 6, 2) |\n| `conf_*`, `no_object` | (16, 6, 6, 1) |\n| `iou` | (16, 6, 6) |\n| `ops.expand_dims(iou, -1)`, `conf_target`, `conf_error` | (16, 6, 6, 1) |\n| `error` after concatenate | (16, 6, 6, 5) |\n| returned value | (16,) |\n\nThe slice `4:` (instead of index `4`) is what keeps the trailing axis of size 1 so the mask broadcasts.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Gradients through the IoU target",
+   "kind": "alternative",
+   "body": "Inference, not in the book. `conf_target` is built from `pred` via `intersection_over_union(true, pred)`, and nothing stops gradients from flowing through it. So the term $(\\operatorname{IoU}-\\hat c)^2$ has two effects: it pulls $\\hat c$ toward the IoU (intended) and pulls the IoU toward $\\hat c$ by moving the predicted box (unintended). If the confidence is lower than the IoU, this second effect pushes the box to overlap the target *less*. Wrapping the target with `ops.stop_gradient(...)` makes it a pure target, as in the original YOLO formulation. The placement terms (weighted x5) usually dominate, which helps explain why training still works.",
+   "source": "inference"
+  },
+  {
+   "title": "Why a small learning rate",
+   "kind": "application",
+   "body": "Beyond the book: the backbone is a pretrained ResNet (p.360), while the conv layer and dense head (about 54 million parameters: the model summary on p.362-363 reports 77.85 million in total, 23.58 million of them in the backbone) start from random weights. Large early gradients from the random head can wreck the pretrained features. A learning rate of 2e-4 for Adam is a common compromise when fine-tuning end to end without freezing the backbone.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Tensor shapes inside box_loss",
+   "why": "Listing 12.11 slices (16, 6, 6, 5) tensors, builds a (16, 6, 6, 5) error tensor and sums it to one value per sample.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "true / pred", "shape": [16, 6, 6, 5]},
+     {"op": "xy or wh slice", "shape": [16, 6, 6, 2]},
+     {"op": "conf slice / mask", "shape": [16, 6, 6, 1]},
+     {"op": "iou", "shape": [16, 6, 6]},
+     {"op": "concatenate errors", "shape": [16, 6, 6, 5]},
+     {"op": "sum axis (1,2,3)", "shape": [16]}
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "Data flow of box_loss",
+   "why": "Shows how each line of Listing 12.11 contributes to the final per-sample loss and where the x5 and x0.5 weights enter.",
+   "mermaid": "flowchart TD\n  T[true] --> S1[xy_true, wh_true, conf_true]\n  P[pred] --> S2[xy_pred, wh_pred, conf_pred]\n  S1 --> M[no_object = conf_true == 0]\n  S1 --> XY[xy_error]\n  S2 --> XY\n  S1 --> WH[wh_error via signed_sqrt]\n  S2 --> WH\n  T --> IOU[IoU true vs pred]\n  P --> IOU\n  IOU --> CT[conf_target: 0 or IoU]\n  M --> CT\n  CT --> CE[conf_error]\n  S2 --> CE\n  XY --> W1[x5, 0 if empty]\n  WH --> W2[x5, 0 if empty]\n  CE --> W3[x0.5 if empty]\n  M --> W1\n  M --> W2\n  M --> W3\n  W1 --> C[concatenate]\n  W2 --> C\n  W3 --> C\n  C --> SUM[sum over grid and channels]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "Keras sums the per-sample loss values over the batch.", "correction": "By default Keras averages them (sum_over_batch_size), despite the callout's wording."},
+  {"claim": "Empty grid cells contribute nothing to the box loss.", "correction": "They contribute the confidence error, at half weight."},
+  {"claim": "Signed sqrt is applied to all four box parameters.", "correction": "Only width and height; centers use plain squared error."},
+  {"claim": "Four epochs trains the model to convergence.", "correction": "The book says the model is still undertrained; validation loss is still falling."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 362, "note": "Listing 12.6: the model whose 'box' and 'class' outputs are trained here."},
+   {"page": 364, "note": "box_array confidence is exactly 1.0 for boxes and 0.0 elsewhere, which no_object relies on."},
+   {"page": 366, "note": "Listing 12.9: the train/val datasets; the per-output loss idea."},
+   {"page": 367, "note": "Listing 12.10 IoU utility and the three scaling tricks."}
+  ],
+  "later": [
+   {"page": 369, "note": "Figure 12.6: predictions drawn with a low confidence cutoff."},
+   {"page": 370, "note": "Why confidences are low and how to improve; switch to pretrained RetinaNet."}
+  ],
+  "prerequisites": [
+   {"page": 367, "note": "IoU and loss tricks."},
+   {"page": 366, "note": "Datasets used in fit()."}
+  ],
+  "related_math": [
+   {"page": 367, "note": "IoU and the scaled loss formulas."}
+  ],
+  "related_code": [
+   {"page": 367, "note": "intersection_over_union used inside box_loss."},
+   {"page": 366, "note": "Listing 12.9 datasets."}
+  ],
+  "related_figures": [
+   {"page": 369, "note": "Figure 12.6 output of the trained model."}
+  ]
+ },
+ "takeaways": [
+  "box_loss slices targets/predictions into centers, sizes and confidence and masks by conf_true == 0.",
+  "Placement errors are x5 and only in occupied cells; empty-cell confidence errors are x0.5.",
+  "The confidence target is IoU(true, pred) in occupied cells and 0 elsewhere.",
+  "Widths/heights are compared via signed square roots.",
+  "The loss returns one value per image; Keras reduces over the batch.",
+  "Training: Adam(2e-4), loss dict, 4 epochs, over an hour on free Colab, still undertrained."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In box_loss, what weight does the confidence error receive in a cell that contains an object?",
+   "options": ["0", "0.5", "1", "5"],
+   "answer": "1",
+   "explanation": "ops.where(no_object, conf_error * 0.5, conf_error) leaves it unscaled in occupied cells. 0.5 applies to empty cells, 5 to placement errors, and 0 is what placement errors get in empty cells.",
+   "page_refs": [368]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Why does the code slice conf_true as true[..., 4:] rather than true[..., 4]?",
+   "options": [],
+   "answer": "To keep a trailing axis of size 1 so the mask (B, 6, 6, 1) broadcasts against the (B, 6, 6, 2) errors and the confidence error can be concatenated with them.",
+   "explanation": "That is also why iou (B, 6, 6) needs ops.expand_dims(iou, -1).",
+   "page_refs": [368]
+  },
+  {
+   "id": "q3",
+   "type": "math",
+   "question": "A cell has target (0.5, 0.5, 0.25, 0.36, 1) and prediction (0.4, 0.5, 0.16, 0.36, c=0.2); intersection_over_union returns about 0.34 for this pair. Compute this cell's contribution to box_loss (ignore epsilon).",
+   "options": [],
+   "answer": "xy: 5 x 0.01 = 0.05; wh: 5 x (0.5 - 0.4)^2 = 0.05; conf: (0.34 - 0.2)^2 ≈ 0.0196. Total ≈ 0.12.",
+   "explanation": "sqrt(0.25) = 0.5, sqrt(0.16) = 0.4, sqrt(0.36) is equal on both sides; placement errors are x5 and the occupied-cell confidence error is x1.",
+   "page_refs": [368]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "What does box_loss return for a batch of 16 images?",
+   "options": ["A single scalar", "A tensor of shape (16,)", "A tensor of shape (16, 6, 6)", "A tensor of shape (16, 6, 6, 5)"],
+   "answer": "A tensor of shape (16,)",
+   "explanation": "ops.sum over axes (1, 2, 3) removes the grid and channel axes, leaving one value per sample. Keras then reduces over the batch; the other shapes are intermediate tensors.",
+   "page_refs": [368]
+  },
+  {
+   "id": "q5",
+   "type": "conceptual",
+   "question": "What evidence does the book give that the model is undertrained after Listing 12.12, and what does it imply?",
+   "options": [],
+   "answer": "Validation loss is still falling after 4 epochs, so training more would likely keep improving the model before overfitting starts.",
+   "explanation": "The last paragraph says so, and p.370 lists 'Train for more epochs' among the improvements.",
+   "page_refs": [368, 370]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Why does the book skip metrics, and which metric does it suggest you'd want in practice?",
+   "options": [],
+   "answer": "Purely to keep the example short; in practice you'd want metrics such as model accuracy at different confidence cutoff levels.",
+   "explanation": "Stated in the paragraph before Listing 12.12.",
+   "page_refs": [368]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you point to the exact line in Listing 12.11 that implements each of the three tricks from p.367?",
+   "options": [],
+   "answer": "x5: the two ops.where(no_object, 0.0, ... * 5.0) lines; x0.5: ops.where(no_object, conf_error * 0.5, conf_error); sqrt: wh_error = ops.square(signed_sqrt(wh_true) - signed_sqrt(wh_pred)).",
+   "explanation": "Linking prose to code is the key skill for reading custom losses.",
+   "page_refs": [367, 368]
+  }
+ ]
+}

@@ -1,0 +1,617 @@
+{
+ "page_id": "page_449",
+ "pdf_page": 449,
+ "printed_page": "425",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T10:40:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. Listing 15.4, the model summary and the first three lines of Listing 15.5 (continued on p.450, read for context). Summary numbers were checked against the image and recomputed."
+ },
+ "overview": {
+  "title": "A miniature GRU character language model",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.1 The language model",
+  "subsection": "15.1.1 Training a Shakespeare language model",
+  "main_topic": "Listing 15.4 (Embedding 256 -> GRU 1024 with return_sequences -> Dropout -> per-step softmax over 67 characters), its 4,024,131-parameter summary, and why language modeling is many simultaneous classification problems (6,400 labels per batch)",
+  "central_idea": "A character language model is just a sequence classifier that makes one softmax prediction per time step: at each of the 100 positions it outputs a probability distribution over the 67-token vocabulary for the next character, trained with sparse categorical cross-entropy averaged over positions and batch.",
+  "importance": "This model is the first generative model of the text chapters and the template for everything that follows: the same next-token setup, with a Transformer instead of a GRU, becomes the mini-GPT of chapter 16.",
+  "learning_objectives": [
+   "Read Listing 15.4 and explain each layer's role and output shape",
+   "Explain why return_sequences=True is needed for language modeling",
+   "Recompute the parameter counts 17,152, 3,938,304 and 68,675",
+   "Explain why language modeling is still a classification problem",
+   "Explain how Keras averages loss and accuracy over 64 x 100 = 6,400 predictions"
+  ],
+  "prerequisites": [
+   "Character tokenization and the shifted (x, y) pairs (p.447-448)",
+   "Embedding layers (chapter 14)",
+   "GRU / recurrent layers (chapter 13)",
+   "Softmax and sparse categorical cross-entropy"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Listing 15.4** defines the miniature language model. With `embedding_dim = 256` and `hidden_dim = 1024`:\n\n1. `layers.Input(shape=(sequence_length,), dtype=\"int\", name=\"token_ids\")`: 100 character IDs.\n2. `Embedding(vocabulary_size, embedding_dim)`: each of the 67 tokens becomes a 256-d vector.\n3. `GRU(hidden_dim, return_sequences=True)`: a 1,024-unit GRU that returns its output at **every** step, not just the last.\n4. `Dropout(0.1)`.\n5. `Dense(vocabulary_size, activation=\"softmax\")`: applied at each step, it \"outputs a probability distribution over all potential tokens in our vocabulary\" (callout).\n\n`model.summary()` shows output shapes (None, 100) -> (None, 100, 256) -> (None, 100, 1024) -> (None, 100, 67) and parameter counts **17,152** (Embedding), **3,938,304** (GRU) and **68,675** (Dense), for a total of **4,024,131 parameters (15.35 MB)**, all trainable. Almost 98% of the parameters are in the GRU.\n\nThe model outputs a softmax probability for every character and is compiled with a cross-entropy loss. The authors stress that it is **still a classification problem**; it just makes one classification prediction per token of the sequence. A batch of 64 samples of 100 characters means **6,400 individual labels**. Keras's reported loss and accuracy are averaged first across each sequence, then across the batch.\n\n**Listing 15.5** begins: `model.compile(optimizer=\"adam\", loss=\"sparse_categorical_crossentropy\", ...)`. It continues on p.450 with `sparse_categorical_accuracy` and `model.fit(training_data, epochs=20)`, after which the model predicts the next character about 70% of the time.",
+ "paragraphs": [
+  {
+   "ref": "p449_e05",
+   "excerpt": "Let’s take a look at our model summary:",
+   "what_it_says": "Introduces the model summary printed below Listing 15.4.",
+   "what_it_means": "The summary confirms the shapes: the time axis (100) is preserved through every layer because the GRU returns full sequences and Dense acts on the last axis only. Parameters: Embedding $67\\times256=17{,}152$; GRU $3\\times(256\\cdot1024+1024\\cdot1024+2\\cdot1024)=3{,}938{,}304$; Dense $1024\\times67+67=68{,}675$.",
+   "why_it_matters": "Reading shapes and counts is the quickest way to verify that a sequence-to-sequence-shaped model does what you intend, i.e. predicts at every position.",
+   "technical_idea": "Beyond the book: Keras's GRU defaults to reset_after=True, which uses two bias vectors per gate (input and recurrent), hence the $2\\cdot1024$ term per gate. The three gates/candidates are update, reset and the new candidate state.",
+   "terminology": [
+    {
+     "term": "return_sequences=True",
+     "meaning": "The recurrent layer outputs its hidden state at every time step: shape (batch, steps, units) instead of (batch, units)."
+    }
+   ],
+   "connections": [
+    "p.448: why a GRU was chosen (fast, simpler state than an LSTM)"
+   ]
+  },
+  {
+   "ref": "p449_e07",
+   "excerpt": "This model outputs a softmax probability for every possible character in our vocabulary,",
+   "what_it_says": "The model outputs a softmax over the vocabulary and is compiled with cross-entropy. It is still a classification problem, but with one prediction per token: 6,400 labels for a batch of 64 x 100. Reported loss and accuracy are averaged across each sequence, then across each batch.",
+   "what_it_means": "Each position $t$ is a 67-way classification whose label is character $t+1$ of the text (the labels are the inputs shifted by one, p.447). Because the GRU only passes information forward, the prediction at $t$ depends only on characters $1..t$, so it really estimates $p(c_{t+1}\\mid c_1,\\dots,c_t)$. Averaging means the loss is the mean negative log-probability of the true next character over all 6,400 positions.",
+   "why_it_matters": "Framing generation as repeated classification is what makes language models trainable with the same tools used throughout the book, and it is the foundation of every LLM.",
+   "technical_idea": "Since every sequence has the same length (100) and no masking is used, averaging per sequence then per batch equals the plain mean over all 6,400 predictions.",
+   "terminology": [
+    {
+     "term": "Sparse categorical cross-entropy",
+     "meaning": "Cross-entropy where the label is an integer class ID rather than a one-hot vector."
+    },
+    {
+     "term": "Language model",
+     "meaning": "A model of the probability of the next token given past tokens."
+    }
+   ],
+   "connections": [
+    "p.447: labels are inputs offset by one character",
+    "p.452: replacing the GRU with Bidirectional(GRU) would let it cheat by seeing the next token"
+   ]
+  },
+  {
+   "ref": "p449_e08",
+   "excerpt": "Let’s go ahead and train our language model.",
+   "what_it_says": "Introduces Listing 15.5, which compiles with Adam and sparse categorical cross-entropy (continued on p.450).",
+   "what_it_means": "Integer labels from the tokenizer can be used directly with the sparse loss; no one-hot encoding of 67 classes per position is needed.",
+   "why_it_matters": "The compile/fit loop is the standard one; nothing special is needed for language modeling beyond per-step outputs.",
+   "terminology": [],
+   "connections": [
+    "p.450: rest of Listing 15.5, 20 epochs, ~70% next-character accuracy"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "language_model",
+   "name": "Character-level language model",
+   "definition": "A model that, at each position, predicts a probability distribution over the next character given all previous ones.",
+   "intuition": "Autocomplete for single characters.",
+   "technical": "Outputs shape (batch, 100, 67); trained with sparse categorical cross-entropy against the input shifted by one.",
+   "significance": "Self-supervised (labels come from the text itself) and the basis for text generation (p.450).",
+   "example": "Given 'To be or not to b', a good model puts high probability on 'e'.",
+   "misconception": "It is not a new kind of learning problem; it is ordinary classification repeated at every step.",
+   "related": [
+    "rnn",
+    "softmax",
+    "cross_entropy"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "return_sequences",
+   "name": "return_sequences",
+   "definition": "Recurrent-layer option to output the hidden state at every time step.",
+   "intuition": "Instead of a single summary at the end, you get a running commentary.",
+   "technical": "GRU(1024, return_sequences=True): (None, 100, 256) -> (None, 100, 1024).",
+   "significance": "Required to make one prediction per token.",
+   "example": "Without it, the output is (None, 1024) and only one next character could be predicted.",
+   "misconception": "It does not make the layer bidirectional or let it see the future.",
+   "related": [
+    "rnn",
+    "gru"
+   ],
+   "source": "ai_explanation"
+  },
+  {
+   "id": "gru",
+   "name": "GRU layer",
+   "definition": "Gated recurrent unit: a recurrent layer with update and reset gates and a single state vector.",
+   "intuition": "A lighter LSTM with no separate cell state.",
+   "technical": "Parameters $3(d_{in}h + h^2 + 2h)$ with Keras's default reset_after=True.",
+   "significance": "Fast and holds 98% of this model's parameters.",
+   "example": "3,938,304 parameters for $d_{in}=256$, $h=1024$.",
+   "misconception": "GRUs are not strictly worse than LSTMs; they are often comparable.",
+   "related": [
+    "lstm",
+    "rnn"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "softmax",
+   "name": "Per-step softmax output",
+   "definition": "A Dense layer with softmax applied independently at every time step.",
+   "intuition": "67 probabilities summing to 1 at each position.",
+   "technical": "Dense acts on the last axis, sharing the same weights across all 100 positions.",
+   "significance": "Defines the predicted next-character distribution, later sampled during generation.",
+   "example": "Output (None, 100, 67).",
+   "misconception": "Dense does not mix information across time steps.",
+   "related": [
+    "language_model",
+    "cross_entropy"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Next-character prediction at every position",
+   "latex": "\\hat{p}_t = \\operatorname{softmax}(W h_t + b) \\approx p(c_{t+1}\\mid c_1,\\dots,c_t),\\quad t=1,\\dots,100",
+   "source_text": "This model outputs a softmax probability for every possible character in our vocabulary",
+   "variables": [
+    {
+     "symbol": "h_t",
+     "meaning": "GRU output at step t (1,024-d), after dropout"
+    },
+    {
+     "symbol": "W, b",
+     "meaning": "Dense weights (1024 x 67) and bias (67)"
+    },
+    {
+     "symbol": "\\hat{p}_t",
+     "meaning": "67-d probability vector"
+    },
+    {
+     "symbol": "c_t",
+     "meaning": "character ID at position t"
+    }
+   ],
+   "operations": "Affine map then softmax at each step, with weights shared across steps.",
+   "purpose": "Formalizes 'one classification prediction for every token'.",
+   "interpretation": "Because the GRU is unidirectional, $h_t$ only sees $c_1..c_t$, so $\\hat p_t$ is a genuine next-token prediction.",
+   "intuition": "The same small classifier reads the GRU's running summary at each step.",
+   "source": "inference",
+   "book_ref": "p.449"
+  },
+  {
+   "id": "m2",
+   "title": "Loss averaged over 6,400 predictions",
+   "latex": "\\mathcal{L} = -\\frac{1}{B}\\sum_{i=1}^{B}\\frac{1}{T}\\sum_{t=1}^{T}\\log \\hat{p}_{i,t}\\big[y_{i,t}\\big],\\qquad B=64,\\ T=100",
+   "source_text": "averaged first across each sequence and, second, across each batch",
+   "variables": [
+    {
+     "symbol": "B",
+     "meaning": "batch size, 64"
+    },
+    {
+     "symbol": "T",
+     "meaning": "sequence length, 100"
+    },
+    {
+     "symbol": "y_{i,t}",
+     "meaning": "true next-character ID for sample i at step t"
+    },
+    {
+     "symbol": "\\hat{p}_{i,t}[k]",
+     "meaning": "predicted probability of class k"
+    }
+   ],
+   "operations": "Negative log-likelihood of the correct class, averaged over time then batch.",
+   "purpose": "The sparse categorical cross-entropy objective in Listing 15.5.",
+   "interpretation": "Equivalent to the mean over all $BT=6{,}400$ predictions here.",
+   "intuition": "Each character in the batch is a small exam question; the loss is the average penalty.",
+   "numerical_example": "A uniform guess gives $-\\log(1/67) \\approx 4.20$ nats per character. If the model gives the true character probability 0.5 on average (geometrically), the loss is $\\log 2 \\approx 0.69$.",
+   "source": "book",
+   "book_ref": "p.449"
+  },
+  {
+   "id": "m3",
+   "title": "GRU parameter count",
+   "latex": "3\\,(d_{in}h + h^2 + 2h) = 3\\,(256\\cdot1024 + 1024^2 + 2\\cdot1024) = 3{,}938{,}304",
+   "source_text": "gru (GRU) (None, 100, 1024) 3,938,304",
+   "variables": [
+    {
+     "symbol": "d_{in}",
+     "meaning": "input size, 256"
+    },
+    {
+     "symbol": "h",
+     "meaning": "units, 1024"
+    }
+   ],
+   "operations": "Three gate/candidate blocks, each with input kernel, recurrent kernel and two biases.",
+   "purpose": "Verifies the summary.",
+   "interpretation": "The $h^2$ recurrent term (1,048,576 per block) dominates.",
+   "intuition": "Doubling hidden_dim roughly quadruples the GRU size.",
+   "numerical_example": "$3 \\times (262{,}144 + 1{,}048{,}576 + 2{,}048) = 3 \\times 1{,}312{,}768 = 3{,}938{,}304$.",
+   "source": "ai_explanation",
+   "book_ref": "p.449"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "15.4",
+   "title": "Building a miniature language model",
+   "original_code": "embedding_dim = 256\nhidden_dim = 1024\n\ninputs = layers.Input(shape=(sequence_length,), dtype=\"int\", name=\"token_ids\")\nx = layers.Embedding(vocabulary_size, embedding_dim)(inputs)\nx = layers.GRU(hidden_dim, return_sequences=True)(x)\nx = layers.Dropout(0.1)(x)\noutputs = layers.Dense(vocabulary_size, activation=\"softmax\")(x)\nmodel = keras.Model(inputs, outputs)",
+   "language": "python",
+   "what_it_does": "Defines an Embedding -> GRU -> Dropout -> softmax model that predicts the next character at each of 100 positions.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "256-d character embeddings and a 1,024-unit GRU."
+    },
+    {
+     "lines": "4",
+     "explanation": "Integer input of length sequence_length (100), named token_ids."
+    },
+    {
+     "lines": "5",
+     "explanation": "Lookup: (None, 100) -> (None, 100, 256)."
+    },
+    {
+     "lines": "6",
+     "explanation": "GRU returning all states: (None, 100, 1024)."
+    },
+    {
+     "lines": "7",
+     "explanation": "Light dropout (10%)."
+    },
+    {
+     "lines": "8",
+     "explanation": "Per-step softmax over the 67 tokens (callout: a probability distribution over all potential tokens)."
+    },
+    {
+     "lines": "9",
+     "explanation": "Functional model."
+    }
+   ],
+   "inputs_outputs": "Input (batch, 100) ints; output (batch, 100, 67) probabilities.",
+   "algorithm": "Unidirectional recurrent language model.",
+   "theory_link": "Estimates $p(c_{t+1}\\mid c_{\\le t})$ at each step.",
+   "parameters": [
+    {
+     "name": "embedding_dim",
+     "role": "Size of character vectors (256)."
+    },
+    {
+     "name": "hidden_dim",
+     "role": "GRU state size (1024); also reused for the generation model on p.450."
+    },
+    {
+     "name": "vocabulary_size",
+     "role": "67, from tokenizer.vocabulary_size() on p.448."
+    }
+   ],
+   "pitfalls": [
+    "Forgetting return_sequences=True gives one output per sequence and a shape mismatch with the (batch, 100) labels.",
+    "Using a Bidirectional GRU would leak future characters (p.452)."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Model summary",
+   "original_code": ">>> model.summary()\nModel: \"functional\"\n┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓\n┃ Layer (type)                      ┃ Output Shape             ┃       Param # ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩\n│ token_ids (InputLayer)            │ (None, 100)              │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ embedding (Embedding)             │ (None, 100, 256)         │        17,152 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ gru (GRU)                         │ (None, 100, 1024)        │     3,938,304 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ dropout (Dropout)                 │ (None, 100, 1024)        │             0 │\n├───────────────────────────────────┼──────────────────────────┼───────────────┤\n│ dense (Dense)                     │ (None, 100, 67)          │        68,675 │\n└───────────────────────────────────┴──────────────────────────┴───────────────┘\n Total params: 4,024,131 (15.35 MB)\n Trainable params: 4,024,131 (15.35 MB)\n Non-trainable params: 0 (0.00 B)",
+   "language": "text",
+   "what_it_does": "Prints layers, output shapes and parameter counts.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "Call and default model name."
+    },
+    {
+     "lines": "table",
+     "explanation": "Embedding 67*256=17,152; GRU 3,938,304; Dense 1024*67+67=68,675."
+    },
+    {
+     "lines": "totals",
+     "explanation": "4,024,131 params x 4 bytes = 15.35 MB (float32, MiB)."
+    }
+   ],
+   "inputs_outputs": "Printed table.",
+   "algorithm": "n/a",
+   "theory_link": "Confirms per-step outputs of shape (None, 100, 67).",
+   "parameters": [],
+   "pitfalls": [
+    "The 'MB' figure is computed with 1 MB = 2^20 bytes."
+   ]
+  },
+  {
+   "id": "c3",
+   "listing": "15.5",
+   "title": "Training a miniature language model (beginning)",
+   "original_code": "model.compile(\n    optimizer=\"adam\",\n    loss=\"sparse_categorical_crossentropy\",",
+   "language": "python",
+   "what_it_does": "Starts compiling the model with Adam and sparse categorical cross-entropy; continues on p.450 with metrics=[\"sparse_categorical_accuracy\"] and model.fit(training_data, epochs=20).",
+   "line_explanations": [
+    {
+     "lines": "1-3",
+     "explanation": "Adam optimizer; integer-label cross-entropy computed at each of the 100 positions."
+    }
+   ],
+   "inputs_outputs": "Labels (batch, 100) ints vs predictions (batch, 100, 67).",
+   "algorithm": "Maximum likelihood training of the next-character distribution.",
+   "theory_link": "Loss m2.",
+   "parameters": [
+    {
+     "name": "loss",
+     "role": "sparse categorical cross-entropy over the 67 classes."
+    }
+   ],
+   "pitfalls": [
+    "Using categorical_crossentropy would require one-hot labels."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Where the 4 million parameters go",
+   "kind": "numerical",
+   "body": "| Layer | Params | Share |\n|---|---|---|\n| Embedding | 17,152 | 0.4% |\n| GRU | 3,938,304 | 97.9% |\n| Dense | 68,675 | 1.7% |\n\nWith a tiny 67-token vocabulary, the input and output layers are cheap; the recurrent layer is everything. Contrast the word-level models of chapter 14, where the 30,000-word embedding dominated.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why one sequence gives 100 training examples",
+   "kind": "step_by_step",
+   "body": "For a chunk 'ROMEO:' with labels 'OMEO: ' (shifted by one), position 1 learns R->O, position 2 learns RO->M, position 3 learns ROM->E, and so on. A single forward pass of the GRU produces all these predictions at once, so a batch of 64 chunks yields 6,400 supervised examples at the cost of one sequential pass.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Analogy: a typist guessing ahead",
+   "kind": "analogy",
+   "body": "Imagine a typist who, after every keystroke, writes down a guess for the next letter. Grading every guess (not just the last one) gives 100 grades per line of text; the loss is the average grade.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Listing 15.4 layer by layer",
+   "why": "Click through the layers of the miniature language model; shapes match the summary on this page (the widget's dense-parameter formula applies to the final Dense: 1024*67+67 = 68,675).",
+   "widget": "nn_architecture",
+   "params": {
+    "layers": [
+     {
+      "name": "token_ids",
+      "type": "input",
+      "shape": "(None, 100)"
+     },
+     {
+      "name": "embedding",
+      "type": "embedding",
+      "units": 256,
+      "shape": "(None, 100, 256)"
+     },
+     {
+      "name": "gru",
+      "type": "rnn",
+      "units": 1024,
+      "shape": "(None, 100, 1024)"
+     },
+     {
+      "name": "dropout",
+      "type": "dropout",
+      "shape": "(None, 100, 1024)"
+     },
+     {
+      "name": "dense",
+      "type": "output",
+      "units": 67,
+      "activation": "softmax",
+      "shape": "(None, 100, 67)"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Shapes through the language model",
+   "why": "Follows one batch of 64 sequences through the shapes printed in the summary, ending in 6,400 predictions.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "input",
+      "shape": [
+       64,
+       100
+      ]
+     },
+     {
+      "op": "Embedding",
+      "shape": [
+       64,
+       100,
+       256
+      ]
+     },
+     {
+      "op": "GRU seq",
+      "shape": [
+       64,
+       100,
+       1024
+      ]
+     },
+     {
+      "op": "Dense softmax",
+      "shape": [
+       64,
+       100,
+       67
+      ]
+     },
+     {
+      "op": "labels",
+      "shape": [
+       64,
+       100
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "A language model needs a special non-classification loss.",
+   "correction": "It uses ordinary sparse categorical cross-entropy, applied at every position."
+  },
+  {
+   "claim": "The model only predicts the 101st character.",
+   "correction": "It predicts the next character at every one of the 100 positions."
+  },
+  {
+   "claim": "The Dense layer looks at all time steps to make each prediction.",
+   "correction": "Dense applies independently per step; context comes only from the GRU state."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 447,
+    "note": "Listing 15.2: chunks and labels shifted by one character."
+   },
+   {
+    "page": 448,
+    "note": "Character TextVectorization (67 tokens) and the choice of a GRU with 256-d embeddings."
+   },
+   {
+    "page": 446,
+    "note": "Why we predict token sequences one token at a time."
+   }
+  ],
+  "later": [
+   {
+    "page": 450,
+    "note": "Training for 20 epochs (~70% accuracy) and the stateful generation model that copies these weights."
+   },
+   {
+    "page": 452,
+    "note": "Why a Bidirectional GRU would cheat."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 435,
+    "note": "Embedding layers."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 450,
+    "note": "Listing 15.6 reuses embedding_dim and hidden_dim and calls set_weights(model.get_weights())."
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "The language model is Embedding(67, 256) -> GRU(1024, return_sequences=True) -> Dropout(0.1) -> Dense(67, softmax).",
+  "4,024,131 parameters, 98% in the GRU.",
+  "It makes a 67-way classification at each of 100 positions: 6,400 labels per batch of 64.",
+  "Loss and accuracy are averaged over the sequence, then over the batch.",
+  "return_sequences=True is what turns a sequence classifier into a per-token predictor."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "math",
+   "question": "Verify the Embedding and Dense parameter counts.",
+   "options": [],
+   "answer": "Embedding 67 x 256 = 17,152; Dense 1024 x 67 + 67 = 68,675.",
+   "explanation": "Embedding has one 256-d row per token and no bias; Dense has a weight per input-output pair plus one bias per output.",
+   "page_refs": [
+    449
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "Why is return_sequences=True needed?",
+   "options": [
+    "To make the GRU bidirectional",
+    "To output a state at every step so a prediction can be made for every token",
+    "To reduce the number of parameters",
+    "To return the GRU's internal cell state for generation"
+   ],
+   "answer": "To output a state at every step so a prediction can be made for every token",
+   "explanation": "Labels have shape (batch, 100). It does not add a backward pass, does not change parameter count, and returning the state is return_state (used on p.450).",
+   "page_refs": [
+    449,
+    450
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "How many individual labels does one training batch contain, and why?",
+   "options": [],
+   "answer": "6,400 = 64 samples x 100 characters, one next-character label per position.",
+   "explanation": "Stated on the page.",
+   "page_refs": [
+    449
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "In what sense is the language model 'still training on a classification problem'?",
+   "options": [],
+   "answer": "Each position is a 67-way classification of the next character with softmax and cross-entropy; there are just many of them per sequence.",
+   "explanation": "The authors' framing: one classification prediction for every token.",
+   "page_refs": [
+    449
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "math",
+   "question": "What loss would a model that outputs a uniform distribution over the vocabulary get?",
+   "options": [],
+   "answer": "-log(1/67) = log 67 ≈ 4.20 nats.",
+   "explanation": "Cross-entropy of the true class under a uniform 67-way distribution.",
+   "page_refs": [
+    449
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "mcq",
+   "question": "Which layer holds most parameters?",
+   "options": [
+    "Embedding",
+    "GRU",
+    "Dropout",
+    "Dense"
+   ],
+   "answer": "GRU",
+   "explanation": "3,938,304 of 4,024,131. Embedding (17,152) and Dense (68,675) are small because the vocabulary is only 67; Dropout has none.",
+   "page_refs": [
+    449
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you derive the GRU's 3,938,304 parameters from embedding_dim and hidden_dim?",
+   "options": [],
+   "answer": "3 x (256*1024 + 1024*1024 + 2*1024) = 3,938,304.",
+   "explanation": "Three blocks (update, reset, candidate), each with input kernel, recurrent kernel and two biases (Keras reset_after=True).",
+   "page_refs": [
+    449
+   ]
+  }
+ ]
+}

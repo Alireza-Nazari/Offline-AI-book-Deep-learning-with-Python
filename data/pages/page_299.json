@@ -1,0 +1,279 @@
+{
+ "page_id": "page_299",
+ "pdf_page": 299,
+ "printed_page": "275",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:09:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. Two code elements: the end of the residual ConvNet example begun on p.298, and the first part of its model.summary() output (the table continues on p.300, which also gives the total of 297,697 parameters). Callouts matched to lines using the page image. Parameter counts in the table were checked arithmetically and agree with the printed values."
+ },
+ "overview": {
+  "title": "Finishing the residual ConvNet and reading its model summary",
+  "chapter": "9 ConvNet architecture patterns",
+  "section": "9.2 Residual connections",
+  "subsection": "",
+  "main_topic": "The rest of the residual_block utility (projecting the residual only when the channel count changes), the three-block ConvNet with 32, 64 and 128 filters ending in global average pooling and a sigmoid unit, and the first half of the model's summary, which shows the residual projections as extra Conv2D layers connected to earlier tensors.",
+  "central_idea": "residual_block projects the residual with a strided 1x1 conv when pooling, with a plain 1x1 conv when only channels change, and otherwise uses the identity; three such blocks with growing filter counts plus a global-average-pooling head make a small residual ConvNet for binary classification. The summary's 'Connected to' column reveals the non-sequential residual wiring.",
+  "importance": "It completes a working, reusable example of residual connections in Keras and teaches how to read a functional model summary, including how to spot shortcut branches and verify parameter counts.",
+  "learning_objectives": [
+    "Explain the elif branch: project the residual only if the number of channels changed.",
+    "Describe the full model: three residual blocks (32, 64, 128 filters), GlobalAveragePooling2D, Dense(1, sigmoid).",
+    "Explain why the last block has no max pooling.",
+    "Read the summary's Output Shape, Param # and Connected to columns and identify the residual projection layers.",
+    "Verify Conv2D parameter counts with kernel_h * kernel_w * C_in * C_out + C_out."
+  ],
+  "prerequisites": [
+    "residual_block beginning and Listings 9.2-9.3 (p.298)",
+    "Residual connections (p.297)",
+    "GlobalAveragePooling2D and sigmoid binary classifiers (chapter 8)",
+    "Conv2D parameter counting"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**End of `residual_block`.** After the `if pooling:` branch (p.298), the function has\n\n```\nelif filters != residual.shape[-1]:\n    residual = layers.Conv2D(filters, 1)(residual)\n```\n\nIf we don't use max pooling, we only project the residual if the number of channels has changed. Then `x = layers.add([x, residual])` and `return x`.\n\n**The model.** Three calls build the body:\n\n- `residual_block(x, filters=32, pooling=True)`: first block;\n- `residual_block(x, filters=64, pooling=True)`: second block (note the increasing filter count in each block);\n- `residual_block(x, filters=128, pooling=False)`: the last block doesn't need max pooling, since global average pooling is applied right after it.\n\nThen `GlobalAveragePooling2D()`, `Dense(1, activation=\"sigmoid\")`, and `keras.Model(inputs=inputs, outputs=outputs)`.\n\n**`model.summary()`** (first part; the table ends on p.300). Shapes go (None, 32, 32, 3) -> Rescaling -> block 1: `conv2d_6` and `conv2d_7` at (None, 32, 32, 32) with 896 and 9,248 parameters, `max_pooling2d_1` to (None, 16, 16, 32), the residual projection `conv2d_8` (128 parameters) **connected to `rescaling`**, and `add_2` merging `max_pooling2d_1` and `conv2d_8`. Block 2 starts: `conv2d_9` (18,496) and `conv2d_10` (36,928) at (None, 16, 16, 64), `max_pooling2d_2` to (None, 8, 8, 64). On p.300 the table continues with the second projection (2,112), the third block (73,856; 147,584; projection 8,320), global average pooling, the Dense layer (129), and **297,697 total parameters**.\n\nThe \"Connected to\" column is what shows the residual structure: projection layers take their input from the block's input tensor, not from the preceding row.",
+ "paragraphs": [
+  {
+   "ref": "p299_e04",
+   "excerpt": "Let’s take a look at the model summary:",
+   "what_it_says": "A one-line transition introducing the output of model.summary() for the residual ConvNet.",
+   "what_it_means": "The summary is used as a check that the residual wiring and shapes are what we intended. For functional models with branches, Keras adds a 'Connected to' column listing each layer's inputs.",
+   "why_it_matters": "Reading a summary is the quickest way to verify a non-sequential architecture: you can see which layers are shortcut projections, which tensors each add layer merges, and where parameters are concentrated.",
+   "technical_idea": "Beyond the book: rows are listed in graph order, not in a single chain, so conv2d_8 appears after max_pooling2d_1 even though its input is rescaling. Reading 'Connected to' rather than row order is what reveals the shortcut.",
+   "terminology": [
+    {"term": "model.summary()", "meaning": "Keras method that prints each layer's name, type, output shape, parameter count and (for functional models) inputs."},
+    {"term": "Connected to", "meaning": "The tensors a layer takes as input, written layer_name[node][tensor]."}
+   ],
+   "connections": ["p.300: the rest of the summary table and the total parameter count."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "residual_connection",
+   "name": "Residual connection",
+   "definition": "Adding a block's input, projected if needed, back to its output.",
+   "intuition": "Preserve the input's information with a shortcut around the block.",
+   "technical": "Three cases in residual_block: strided 1x1 projection when pooling, 1x1 projection when filters != residual.shape[-1], identity otherwise.",
+   "significance": "With residual connections, networks can be made arbitrarily deep without worrying about vanishing gradients (p.300).",
+   "example": "add_2 merges max_pooling2d_1 with the projection conv2d_8 of the rescaled input.",
+   "misconception": "The shortcut does not always skip from the previous row in the summary; it comes from the block's input tensor.",
+   "related": ["pointwise_convolution", "conv_block", "global_average_pooling"],
+   "source": "book"
+  },
+  {
+   "id": "conv_block",
+   "name": "Reusable residual block",
+   "definition": "The residual_block function applied three times with filters 32, 64, 128.",
+   "intuition": "One template, three instances of increasing width.",
+   "technical": "Each call adds two 3x3 same-padded ReLU convolutions, optional 2x2 pooling, a residual projection if needed, and an add.",
+   "significance": "Implements modularity, reuse and the filter pyramid (p.294) together with residual connections.",
+   "example": "residual_block(x, filters=64, pooling=True).",
+   "misconception": "The blocks do not share weights.",
+   "related": ["residual_connection", "feature_hierarchy"],
+   "source": "book"
+  },
+  {
+   "id": "global_average_pooling",
+   "name": "Global average pooling",
+   "definition": "Averaging each feature map over all spatial positions, turning (H, W, C) into (C).",
+   "intuition": "Summarize each channel by its average activation over the image.",
+   "technical": "Here (None, 8, 8, 128) -> (None, 128), with no parameters.",
+   "significance": "Explains why the last block needs no max pooling: the spatial dimensions are collapsed right after.",
+   "example": "layers.GlobalAveragePooling2D()(x).",
+   "misconception": "It is not a learned layer; it has 0 parameters.",
+   "related": ["conv_block"],
+   "source": "book"
+  },
+  {
+   "id": "feature_hierarchy",
+   "name": "Feature hierarchy (pyramid structure)",
+   "definition": "More filters, smaller feature maps, as depth increases.",
+   "intuition": "Trade spatial resolution for channel richness.",
+   "technical": "This model: 32x32x32 -> 16x16x64 -> 8x8x128.",
+   "significance": "The callout 'Note the increasing filter count in each block' points to it.",
+   "example": "Blocks with 32, 64, 128 filters.",
+   "misconception": "",
+   "related": ["conv_block"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Conv2D parameter count",
+   "latex": "\\#\\text{params} = k_h \\cdot k_w \\cdot C_{in} \\cdot C_{out} + C_{out}",
+   "source_text": "Not printed as a formula; it reproduces the Param # column of the summary.",
+   "variables": [
+    {"symbol": "k_h, k_w", "meaning": "Kernel height and width (3 x 3 for block convolutions, 1 x 1 for projections)."},
+    {"symbol": "C_{in}", "meaning": "Number of input channels."},
+    {"symbol": "C_{out}", "meaning": "Number of filters (output channels); one bias each."}
+   ],
+   "operations": "Each filter has k_h * k_w * C_in weights plus a bias.",
+   "purpose": "Verify the summary and see where the parameters are.",
+   "interpretation": "1x1 projections are cheap compared with 3x3 convolutions at the same width.",
+   "intuition": "Count the weights in one filter, multiply by the number of filters, add biases.",
+   "numerical_example": "- `conv2d_6`: $3\\cdot3\\cdot3\\cdot32+32 = 896$\n- `conv2d_7`: $3\\cdot3\\cdot32\\cdot32+32 = 9{,}248$\n- `conv2d_8` (projection of the 3-channel rescaled input): $1\\cdot1\\cdot3\\cdot32+32 = 128$\n- `conv2d_9`: $3\\cdot3\\cdot32\\cdot64+64 = 18{,}496$\n- `conv2d_10`: $3\\cdot3\\cdot64\\cdot64+64 = 36{,}928$\n\nOn p.300: `conv2d_11` $= 32\\cdot64+64 = 2{,}112$; `conv2d_12` $= 73{,}856$; `conv2d_13` $= 147{,}584$; `conv2d_14` $= 64\\cdot128+128 = 8{,}320$; `dense` $= 128+1 = 129$. Sum: $297{,}697$.",
+   "source": "ai_explanation",
+   "book_ref": "p.299"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "A simple ConvNet with residual blocks (continued from p.298)",
+   "original_code": "    elif filters != residual.shape[-1]:\n        residual = layers.Conv2D(filters, 1)(residual)\n    x = layers.add([x, residual])\n    return x\n\nx = residual_block(x, filters=32, pooling=True)\nx = residual_block(x, filters=64, pooling=True)\nx = residual_block(x, filters=128, pooling=False)\n\nx = layers.GlobalAveragePooling2D()(x)\noutputs = layers.Dense(1, activation=\"sigmoid\")(x)\nmodel = keras.Model(inputs=inputs, outputs=outputs)",
+   "language": "python",
+   "what_it_does": "Completes residual_block (projection without pooling when channels change, the add, the return) and builds the model from three residual blocks plus a global-average-pooling classifier head. The input, Rescaling layer and the start of residual_block are on p.298.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "If we don't use max pooling, we only project the residual if the number of channels has changed: residual.shape[-1] is the channel count of the block input."},
+    {"lines": "3-4", "explanation": "Add the (possibly projected) residual to the block output and return the result."},
+    {"lines": "6", "explanation": "First block: 32 filters with pooling, (None, 32, 32, 3) -> (None, 16, 16, 32)."},
+    {"lines": "7", "explanation": "Second block: 64 filters with pooling, -> (None, 8, 8, 64). Note the increasing filter count in each block."},
+    {"lines": "8", "explanation": "Third block: 128 filters, no pooling; the last block doesn't need a max pooling layer, since global average pooling is applied right after it. Output (None, 8, 8, 128); channels change 64 -> 128, so the elif branch projects the residual."},
+    {"lines": "10", "explanation": "GlobalAveragePooling2D: (None, 8, 8, 128) -> (None, 128)."},
+    {"lines": "11", "explanation": "Single sigmoid unit giving a probability for binary classification."},
+    {"lines": "12", "explanation": "Create the functional model from inputs to outputs."}
+   ],
+   "inputs_outputs": "Input: (None, 32, 32, 3) images. Output: (None, 1) probabilities. 297,697 parameters in total (p.300).",
+   "algorithm": "Stack three residual blocks with a filter pyramid, collapse spatial dimensions, classify.",
+   "theory_link": "Applies MHR reuse (one block function), the filter pyramid (32, 64, 128) and residual connections (p.297).",
+   "parameters": [
+    {"name": "filters", "role": "Block width: 32, 64, 128."},
+    {"name": "pooling", "role": "True for the first two blocks (downsampling), False for the last."},
+    {"name": "Dense(1, activation=\"sigmoid\")", "role": "Binary classification head."}
+   ],
+   "pitfalls": ["The elif uses residual.shape[-1], which is known symbolically in the functional API; it would not work if channel count were undefined.", "For the first block the residual is the 3-channel rescaled input, so the projection maps 3 -> 32 channels."],
+   "illustrative_code": "# AI-written: deepen the model by adding identity-shortcut blocks (not from the book)\nx = residual_block(x, filters=32, pooling=True)\nx = residual_block(x, filters=32)            # identity shortcut: same channels, no pooling\nx = residual_block(x, filters=64, pooling=True)\nx = residual_block(x, filters=64)\nx = residual_block(x, filters=128)\nx = residual_block(x, filters=128)"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "model.summary() output (first part; continues on p.300)",
+   "original_code": ">>> model.summary()\nModel: \"functional\"\n┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓\n┃ Layer (type)         ┃ Output Shape       ┃    Param # ┃ Connected to        ┃\n┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩\n│ input_layer_2        │ (None, 32, 32, 3)  │          0 │ -                   │\n│ (InputLayer)         │                    │            │                     │\n├──────────────────────┼────────────────────┼────────────┼─────────────────────┤\n│ rescaling (Rescaling)│ (None, 32, 32, 3)  │          0 │ input_layer_2[0][0] │\n├──────────────────────┼────────────────────┼────────────┼─────────────────────┤\n│ conv2d_6 (Conv2D)    │ (None, 32, 32, 32) │        896 │ rescaling[0][0]     │\n├──────────────────────┼────────────────────┼────────────┼─────────────────────┤\n│ conv2d_7 (Conv2D)    │ (None, 32, 32, 32) │      9,248 │ conv2d_6[0][0]      │\n├──────────────────────┼────────────────────┼────────────┼─────────────────────┤\n│ max_pooling2d_1      │ (None, 16, 16, 32) │          0 │ conv2d_7[0][0]      │\n│ (MaxPooling2D)       │                    │            │                     │\n├──────────────────────┼────────────────────┼────────────┼─────────────────────┤\n│ conv2d_8 (Conv2D)    │ (None, 16, 16, 32) │        128 │ rescaling[0][0]     │\n├──────────────────────┼────────────────────┼────────────┼─────────────────────┤\n│ add_2 (Add)          │ (None, 16, 16, 32) │          0 │ max_pooling2d_1[0]… │\n│                      │                    │            │ conv2d_8[0][0]      │\n├──────────────────────┼────────────────────┼────────────┼─────────────────────┤\n│ conv2d_9 (Conv2D)    │ (None, 16, 16, 64) │     18,496 │ add_2[0][0]         │\n├──────────────────────┼────────────────────┼────────────┼─────────────────────┤\n│ conv2d_10 (Conv2D)   │ (None, 16, 16, 64) │     36,928 │ conv2d_9[0][0]      │\n├──────────────────────┼────────────────────┼────────────┼─────────────────────┤\n│ max_pooling2d_2      │ (None, 8, 8, 64)   │          0 │ conv2d_10[0][0]     │\n│ (MaxPooling2D)       │                    │            │                     │",
+   "language": "text",
+   "what_it_does": "Printed summary of the residual ConvNet, covering the input, Rescaling, the whole first block and the first part of the second block. The rest of the table and the totals are on p.300.",
+   "line_explanations": [
+    {"lines": "1-5", "explanation": "Call and header: the model is named 'functional'; columns are layer name/type, output shape, parameter count, and input connections."},
+    {"lines": "6-9", "explanation": "Input (None, 32, 32, 3) and Rescaling, both without parameters."},
+    {"lines": "10-15", "explanation": "Block 1 main path: conv2d_6 (896 params) and conv2d_7 (9,248) at 32 x 32 x 32, then max_pooling2d_1 to 16 x 16 x 32."},
+    {"lines": "16-17", "explanation": "conv2d_8: the residual projection Conv2D(32, 1, strides=2), 128 parameters, connected to rescaling[0][0], i.e. the block input, not the previous row."},
+    {"lines": "18-20", "explanation": "add_2 merges max_pooling2d_1 and conv2d_8: the residual connection of block 1."},
+    {"lines": "21-27", "explanation": "Block 2 main path: conv2d_9 (18,496) and conv2d_10 (36,928) at 16 x 16 x 64, then max_pooling2d_2 to 8 x 8 x 64. Its projection (conv2d_11, 2,112 parameters, connected to add_2) appears on p.300."}
+   ],
+   "inputs_outputs": "Diagnostic output; no tensors.",
+   "algorithm": "",
+   "theory_link": "The 'Connected to' column exposes the shortcut branches of the residual blocks.",
+   "parameters": [],
+   "pitfalls": ["Layer name suffixes (input_layer_2, conv2d_6, add_2) depend on how many layers were created earlier in the session; yours may differ.", "Row order is not data-flow order for branches; use the Connected to column."],
+   "illustrative_code": ""
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Where the parameters are",
+   "kind": "numerical",
+   "body": "Beyond the book, using the counts on pp.299-300 (total 297,697):\n\n- Block 1: 896 + 9,248 + 128 = 10,272 (3.5%)\n- Block 2: 18,496 + 36,928 + 2,112 = 57,536 (19.3%)\n- Block 3: 73,856 + 147,584 + 8,320 = 229,760 (77.2%)\n- Dense head: 129\n\nThe three residual projections together cost 10,560 parameters, about 3.5% of the model. Most parameters sit in the widest block, since a 3x3 conv's cost grows with $C_{in} \\cdot C_{out}$. Global average pooling keeps the head tiny: flattening 8 x 8 x 128 into a Dense(1) would need 8,193 weights instead of 129.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Reading 'Connected to' to find the shortcut",
+   "kind": "step_by_step",
+   "body": "1. Follow each row's input: conv2d_6 <- rescaling, conv2d_7 <- conv2d_6, max_pooling2d_1 <- conv2d_7: the main path.\n2. conv2d_8 <- rescaling: it skips three rows back, so it's a branch from the block input.\n3. add_2 <- max_pooling2d_1 and conv2d_8: the merge.\n4. The next block (conv2d_9) reads from add_2, the block output, and its projection conv2d_11 (p.300) also reads from add_2.\n\nThe pattern 'a layer reading from the same tensor as an earlier layer, followed by an Add of two branches' is how residual connections look in any Keras summary.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Main-path shapes of the residual ConvNet",
+   "why": "Follow the shapes printed in the summary (pp.299-300) through the three residual blocks to the sigmoid output.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "input", "shape": [null, 32, 32, 3]},
+     {"op": "rescaling", "shape": [null, 32, 32, 3]},
+     {"op": "block 32 + pool", "shape": [null, 16, 16, 32]},
+     {"op": "block 64 + pool", "shape": [null, 8, 8, 64]},
+     {"op": "block 128", "shape": [null, 8, 8, 128]},
+     {"op": "global avg pool", "shape": [null, 128]},
+     {"op": "Dense sigmoid", "shape": [null, 1]}
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "chart",
+   "title": "Parameters per layer (from the summary, pp.299-300)",
+   "why": "The Param # column shows how cheap the 1x1 residual projections are compared with the 3x3 convolutions.",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": ["conv2d_6", "conv2d_7", "conv2d_8 (proj)", "conv2d_9", "conv2d_10", "conv2d_11 (proj)", "conv2d_12", "conv2d_13", "conv2d_14 (proj)", "dense"],
+     "datasets": [
+      {"label": "parameters", "data": [896, 9248, 128, 18496, 36928, 2112, 73856, 147584, 8320, 129]}
+     ]
+    },
+    "options": {
+     "scales": {"y": {"title": {"display": true, "text": "parameters"}}}
+    }
+   }
+  },
+  {
+   "id": "v3",
+   "type": "mermaid",
+   "title": "The residual ConvNet as a graph",
+   "why": "Shows the shortcut branches that the summary's 'Connected to' column encodes.",
+   "mermaid": "flowchart TB\n  I[Input 32x32x3] --> R[Rescaling]\n  R --> A1[2x Conv2D 32 + MaxPool] --> S1((add_2))\n  R --> P1[conv2d_8: 1x1, 32, s2] --> S1\n  S1 --> A2[2x Conv2D 64 + MaxPool] --> S2((add_3))\n  S1 --> P2[conv2d_11: 1x1, 64, s2] --> S2\n  S2 --> A3[2x Conv2D 128] --> S3((add_4))\n  S2 --> P3[conv2d_14: 1x1, 128] --> S3\n  S3 --> G[GlobalAveragePooling2D] --> D[Dense 1, sigmoid]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "The residual is projected in every block.", "correction": "Without pooling, it is projected only if filters != residual.shape[-1]; with matching channels the identity shortcut is used. In this model all three blocks change channels, so all three project."},
+  {"claim": "The last block omits max pooling by mistake.", "correction": "The callout explains it: global average pooling is applied right after it, so extra downsampling is unnecessary."},
+  {"claim": "conv2d_8 processes the output of max_pooling2d_1 because it is listed right after it.", "correction": "Its 'Connected to' entry is rescaling[0][0]: it is the shortcut branch from the block input."},
+  {"claim": "Residual connections add many parameters.", "correction": "Here the three projections total 10,560 of 297,697 parameters; identity shortcuts add none."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 298, "note": "Input, Rescaling and the first part of residual_block; Listings 9.2-9.3."},
+   {"page": 297, "note": "Residual connections and shape-matching rules."},
+   {"page": 294, "note": "Filter pyramid (32, 64, 128) and blocks."}
+  ],
+  "later": [
+   {"page": 300, "note": "Rest of the summary (297,697 parameters); residual connections allow arbitrary depth; section 9.3 Batch normalization."},
+   {"page": 305, "note": "Mini Xception-like model with residual blocks, batch normalization and separable convolutions."}
+  ],
+  "prerequisites": [
+   {"page": 298, "note": "The residual_block function's first half."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 298, "note": "Beginning of this example."},
+   {"page": 300, "note": "Continuation of the model summary."}
+  ],
+  "related_figures": [
+   {"page": 297, "note": "Figure 9.3, a residual connection."},
+   {"page": 295, "note": "Figure 9.2, Xception's residual blocks."}
+  ]
+ },
+ "takeaways": [
+  "residual_block projects the residual with a strided 1x1 conv when pooling, a plain 1x1 conv when only channels change, and uses the identity otherwise.",
+  "The example model stacks three residual blocks (32, 64, 128 filters) and ends with GlobalAveragePooling2D and Dense(1, sigmoid).",
+  "The last block skips max pooling because global average pooling follows.",
+  "In the summary, residual projections appear as Conv2D layers connected to the block input, and Add layers merge the two branches.",
+  "Projections are cheap: conv2d_8 has only 128 parameters."
+ ],
+ "questions": [
+  {"id": "q1", "type": "short", "question": "When pooling=False, under what condition does residual_block project the residual?", "options": [], "answer": "Only when filters != residual.shape[-1], i.e. when the number of channels changes.", "explanation": "From the elif branch and its callout.", "page_refs": [299]},
+  {"id": "q2", "type": "mcq", "question": "Why does the third residual block use pooling=False?", "options": ["Because 128 filters cannot be pooled", "Because global average pooling is applied right after it", "Because the residual projection would fail", "To increase the number of parameters"], "answer": "Because global average pooling is applied right after it", "explanation": "The callout says the last block doesn't need max pooling since global average pooling follows. Pooling works with any filter count, the projection would work with strides, and parameters are not the reason.", "page_refs": [299]},
+  {"id": "q3", "type": "math", "question": "Verify the 128 parameters of conv2d_8 and explain why its input has 3 channels.", "options": [], "answer": "1*1*3*32 + 32 = 128. It projects the residual of the first block, which is the rescaled input image with 3 channels.", "explanation": "The 'Connected to' column shows rescaling[0][0] as its input.", "page_refs": [299]},
+  {"id": "q4", "type": "math", "question": "Compute the parameter count of conv2d_10 and check it against the summary.", "options": [], "answer": "3*3*64*64 + 64 = 36,928, matching the table.", "explanation": "Kernel 3x3, 64 input channels (from conv2d_9), 64 filters, plus biases.", "page_refs": [299]},
+  {"id": "q5", "type": "conceptual", "question": "How can you tell from the summary that the model has residual connections, even though there is no explicit 'residual' label?", "options": [], "answer": "Some Conv2D layers (e.g. conv2d_8) are connected to an earlier tensor (rescaling) rather than the previous row, and Add layers (add_2) take two inputs, the main path and that projection.", "explanation": "The Connected to column encodes the graph; branches and merges indicate shortcuts.", "page_refs": [299, 300]},
+  {"id": "q6", "type": "mcq", "question": "What is the output shape after max_pooling2d_2?", "options": ["(None, 16, 16, 64)", "(None, 8, 8, 64)", "(None, 8, 8, 128)", "(None, 16, 16, 32)"], "answer": "(None, 8, 8, 64)", "explanation": "Read from the table: block 2's convolutions are 16 x 16 x 64 and 2x2 pooling halves height and width. (None, 8, 8, 128) is block 3's output; the others are earlier layers.", "page_refs": [299]},
+  {"id": "q7", "type": "self", "question": "Could you modify the model to have six residual blocks (two per width) and predict which blocks would use identity shortcuts?", "options": [], "answer": "The second block at each width (same filters, no pooling) would use the identity shortcut; the others would project.", "explanation": "Tests understanding of the three shortcut cases in residual_block.", "page_refs": [298, 299]}
+ ]
+}

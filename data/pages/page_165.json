@@ -1,0 +1,211 @@
+{
+ "page_id": "page_165",
+ "pdf_page": 165,
+ "printed_page": "141",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:37:20Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Page contains only code: Listing 5.2 in full and the beginning of Listing 5.3, which continues on p.166. Both match the page image; blank lines restored from the image."
+ },
+ "overview": {
+  "title": "Training on noise vs. zero channels (Listings 5.2-5.3)",
+  "chapter": "5 Fundamentals of machine learning",
+  "section": "5.1 Generalization: The goal of machine learning",
+  "subsection": "5.1.1 Underfitting and overfitting",
+  "main_topic": "Code for the controlled experiment set up on p.164: train an identical two-layer MNIST model on the noise-augmented and zero-augmented datasets, and start plotting their validation accuracies.",
+  "central_idea": "To isolate the effect of spurious correlations, the same freshly initialized model (via a get_model() factory) is trained with identical hyperparameters on both datasets, recording the History objects so their validation accuracy curves can be compared.",
+  "importance": "It shows good experimental practice, using one factory function, fresh models and identical settings, and produces the evidence (figure 5.6, p.166) behind the claim that noisy features cause overfitting.",
+  "learning_objectives": [
+   "Explain why a get_model() function is used rather than reusing one model object.",
+   "Describe the model architecture and its compile settings.",
+   "Understand validation_split=0.2 and what history.history['val_accuracy'] contains.",
+   "Read the first part of the plotting code in Listing 5.3."
+  ],
+  "prerequisites": [
+   "Listing 5.1 (p.164), which creates the two datasets.",
+   "Keras Sequential, Dense, compile and fit (chapters 2-4).",
+   "sparse_categorical_crossentropy for integer labels.",
+   "matplotlib basics."
+  ],
+  "page_kind": "content"
+ },
+ "summary": "This page is entirely code, implementing the experiment announced at the end of p.164.\n\n**Listing 5.2** defines `get_model()`, a factory that builds and compiles the same network each time: a `keras.Sequential` with `Dense(512, activation=\"relu\")` followed by `Dense(10, activation=\"softmax\")`, which is the chapter 2 MNIST model. It is compiled with the **Adam** optimizer, `sparse_categorical_crossentropy` loss (labels are integers 0-9) and an `accuracy` metric. The listing then calls `get_model()` twice to obtain two **independent, freshly initialized** models. One is trained on `train_images_with_noise_channels`, the other on `train_images_with_zeros_channels`, both for **10 epochs**, **batch size 128**, with **`validation_split=0.2`**: Keras holds out the last 20% of the arrays (12,000 samples) as validation data and trains on the first 48,000. The returned `History` objects are stored as `history_noise` and `history_zeros`.\n\nBecause the input now has 1,568 features, the first Dense layer has 1568 × 512 + 512 = 803,328 parameters (twice the 401,920 of the plain 784-input model). In the zeros model, half of those weights receive no gradient.\n\n**Listing 5.3** begins the comparison plot. It extracts the per-epoch validation accuracy lists `history_noise.history[\"val_accuracy\"]` and `history_zeros.history[\"val_accuracy\"]`, builds `epochs = range(1, 11)` for the x-axis, and calls `plt.plot` for the noise curve with a blue solid line style `\"b-\"` and the label \"Validation accuracy with noise channels\". A second `plt.plot(epochs, …` call starts at the bottom of the page and is completed on p.166, where the zeros curve, the title, axis labels and legend are added and the resulting figure 5.6 is discussed.",
+ "paragraphs": [],
+ "concepts": [
+  {
+   "id": "controlled_experiment",
+   "name": "Controlled comparison of training runs",
+   "definition": "Comparing models that differ in exactly one factor (here, the type of extra input columns) while keeping architecture, optimizer, epochs, batch size and validation scheme identical.",
+   "intuition": "Change one thing at a time, so any difference in results can be attributed to it.",
+   "technical": "get_model() guarantees identical architecture and compile settings, and fresh initialization for each run. Remaining differences are the dataset and random initialization/shuffling noise.",
+   "significance": "It lets the book attribute the accuracy gap in figure 5.6 to spurious correlations.",
+   "example": "history_noise vs. history_zeros, both from model.fit(..., epochs=10, batch_size=128, validation_split=0.2).",
+   "misconception": "Reusing the same model object for the second run would continue training already trained weights and invalidate the comparison.",
+   "related": ["validation_set", "overfitting"],
+   "source": "inference"
+  },
+  {
+   "id": "validation_set",
+   "name": "Validation split",
+   "definition": "A portion of the training data held out from gradient updates and used to evaluate the model after each epoch.",
+   "intuition": "A practice exam the student never studies from.",
+   "technical": "validation_split=0.2 takes the last 20% of the provided arrays (before any shuffling) as validation data; metrics are logged with a val_ prefix in history.history.",
+   "significance": "val_accuracy is the measurement of generalization used for figure 5.6.",
+   "example": "60,000 samples → 48,000 for training, 12,000 for validation.",
+   "misconception": "validation_split does not pick a random subset; it takes the last fraction of the data, so the data should be shuffled beforehand if it is ordered. MNIST's training order is not sorted by class.",
+   "related": ["generalization", "data_split"],
+   "source": "ai_explanation"
+  },
+  {
+   "id": "history_object",
+   "name": "Keras History object",
+   "definition": "The return value of model.fit(); its .history attribute is a dict mapping metric names to per-epoch lists.",
+   "intuition": "A training logbook, one entry per epoch.",
+   "technical": "Keys here: 'loss', 'accuracy', 'val_loss', 'val_accuracy', each a list of 10 floats.",
+   "significance": "Provides the data plotted in Listing 5.3.",
+   "example": "history_noise.history[\"val_accuracy\"] is a list of 10 validation accuracies.",
+   "misconception": "The History object doesn't store the model's weights per epoch, only metric values.",
+   "related": ["validation_set"],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "5.2",
+   "title": "Training the same model on MNIST data with noise channels or all-zero channels",
+   "original_code": "import keras\nfrom keras import layers\n\ndef get_model():\n    model = keras.Sequential(\n        [\n            layers.Dense(512, activation=\"relu\"),\n            layers.Dense(10, activation=\"softmax\"),\n        ]\n    )\n    model.compile(\n        optimizer=\"adam\",\n        loss=\"sparse_categorical_crossentropy\",\n        metrics=[\"accuracy\"],\n    )\n    return model\n\nmodel = get_model()\nhistory_noise = model.fit(\n    train_images_with_noise_channels,\n    train_labels,\n    epochs=10,\n    batch_size=128,\n    validation_split=0.2,\n)\n\nmodel = get_model()\nhistory_zeros = model.fit(\n    train_images_with_zeros_channels,\n    train_labels,\n    epochs=10,\n    batch_size=128,\n    validation_split=0.2,\n)",
+   "language": "python",
+   "what_it_does": "Defines a factory for the two-layer MNIST classifier, then trains one fresh instance on the noise-augmented data and another fresh instance on the zero-augmented data, keeping each run's training History.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Import Keras and its layers module."},
+    {"lines": "4-10", "explanation": "get_model() builds a Sequential model: Dense(512, relu) then Dense(10, softmax). No input shape is given; the model is built on the first call to fit, inferring 1,568 input features."},
+    {"lines": "11-15", "explanation": "Compile with the Adam optimizer, sparse categorical crossentropy (integer labels, 10-way softmax) and accuracy as metric."},
+    {"lines": "16", "explanation": "Return the compiled, untrained model."},
+    {"lines": "18-25", "explanation": "First fresh model, trained on train_images_with_noise_channels (60000, 1568) with train_labels, 10 epochs, mini-batches of 128, holding out 20% for validation. Result stored in history_noise."},
+    {"lines": "27-34", "explanation": "Rebind model to a second fresh model and train it identically on train_images_with_zeros_channels. Result stored in history_zeros."}
+   ],
+   "inputs_outputs": "Inputs: the two (60000, 1568) arrays from Listing 5.1 and train_labels (60000,). Outputs: history_noise and history_zeros, Keras History objects with 10 epochs of loss/accuracy/val_loss/val_accuracy each.",
+   "algorithm": "For each dataset: build fresh model → mini-batch training with Adam for 10 epochs (375 steps per epoch: 48,000 / 128) → evaluate on the 12,000 held-out samples after each epoch.",
+   "theory_link": "Implements the controlled experiment on spurious correlations (p.164); the validation accuracies measure generalization.",
+   "parameters": [
+    {"name": "Dense(512, activation=\"relu\")", "role": "Hidden layer; with 1,568 inputs it has 1568·512 + 512 = 803,328 parameters."},
+    {"name": "Dense(10, activation=\"softmax\")", "role": "Output layer, probability over 10 digits; 512·10 + 10 = 5,130 parameters."},
+    {"name": "optimizer=\"adam\"", "role": "Adaptive gradient optimizer, as in the chapter 2 MNIST example (p.42); note that Listing 5.4 on p.167 switches to rmsprop."},
+    {"name": "epochs=10", "role": "Ten full passes over the 48,000 training samples."},
+    {"name": "batch_size=128", "role": "Samples per gradient update."},
+    {"name": "validation_split=0.2", "role": "Last 20% of the arrays (12,000 samples) held out for validation."}
+   ],
+   "pitfalls": [
+    "Calling get_model() again is essential; reusing the first model would start the zeros run from weights already trained on noise data.",
+    "Run-to-run randomness (weight initialization, batch shuffling, the random noise itself) means the exact gap will vary; for a firmer conclusion, average several runs per condition or fix seeds with keras.utils.set_random_seed.",
+    "validation_split slices the end of the arrays without shuffling them; fine for MNIST, risky for data sorted by class.",
+    "Listing 5.1 must have been run first in the same session, or train_images_with_noise_channels is undefined."
+   ],
+   "illustrative_code": "# AI-written (not from the book): average over several seeds for a fairer comparison\nimport numpy as np\nscores = {\"noise\": [], \"zeros\": []}\nfor seed in range(3):\n    for name, x in [(\"noise\", train_images_with_noise_channels),\n                    (\"zeros\", train_images_with_zeros_channels)]:\n        keras.utils.set_random_seed(seed)\n        h = get_model().fit(x, train_labels, epochs=10, batch_size=128,\n                            validation_split=0.2, verbose=0)\n        scores[name].append(max(h.history[\"val_accuracy\"]))\nprint({k: np.mean(v) for k, v in scores.items()})"
+  },
+  {
+   "id": "c2",
+   "listing": "5.3",
+   "title": "Plotting a validation accuracy comparison (first part; continues on p.166)",
+   "original_code": "import matplotlib.pyplot as plt\n\nval_acc_noise = history_noise.history[\"val_accuracy\"]\nval_acc_zeros = history_zeros.history[\"val_accuracy\"]\nepochs = range(1, 11)\nplt.plot(\n    epochs,\n    val_acc_noise,\n    \"b-\",\n    label=\"Validation accuracy with noise channels\",\n)\nplt.plot(\n    epochs,",
+   "language": "python",
+   "what_it_does": "Pulls the per-epoch validation accuracies from both History objects and plots the noise-channel curve as a solid blue line; the second plt.plot call (zeros curve) begins here and is finished on p.166.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Import matplotlib's pyplot interface."},
+    {"lines": "3-4", "explanation": "Extract the lists of 10 validation accuracies for each run."},
+    {"lines": "5", "explanation": "x-axis values 1…10, one per epoch (range end is exclusive)."},
+    {"lines": "6-11", "explanation": "Plot the noise run: x = epochs, y = val_acc_noise, format string \"b-\" (blue solid line), with a legend label."},
+    {"lines": "12-13", "explanation": "Start of the second plt.plot call; its remaining arguments (val_acc_zeros, \"r--\", label) and the title/axes/legend/show calls are on p.166."}
+   ],
+   "inputs_outputs": "Inputs: history_noise and history_zeros from Listing 5.2. Output (once completed on p.166): figure 5.6.",
+   "algorithm": "Extract metric lists → plot each against epoch index → decorate and show (p.166).",
+   "theory_link": "Visualizes generalization (validation accuracy) for the two conditions so the effect of spurious correlations can be seen.",
+   "parameters": [
+    {"name": "\"b-\"", "role": "matplotlib format string: blue color, solid line."},
+    {"name": "range(1, 11)", "role": "Epoch numbers 1 to 10, matching epochs=10 in Listing 5.2."},
+    {"name": "label", "role": "Text used by plt.legend() on p.166."}
+   ],
+   "pitfalls": [
+    "If epochs in fit() is changed, range(1, 11) must change too, or x and y lengths won't match.",
+    "The metric key is 'val_accuracy' because metrics=[\"accuracy\"]; older Keras versions used 'val_acc'.",
+    "The listing is incomplete on this page; running only these lines leaves an unclosed parenthesis."
+   ],
+   "illustrative_code": ""
+  }
+ ],
+ "deeper": [
+  {
+   "title": "What happens to the 784 extra weights per hidden unit",
+   "kind": "breakdown",
+   "body": "Beyond the book: the first layer's kernel has shape (1568, 512). Split it into the rows for real pixels (784 × 512) and the rows for extra columns (784 × 512).\n\n- **Zeros model**: the extra rows multiply zeros, so they don't affect outputs and their gradient is zero. Adam leaves them at their initial values. Effectively this is the chapter 2 model.\n- **Noise model**: the extra rows multiply random values, so they get updated. With 401,408 such weights and 48,000 training samples, there are plenty of degrees of freedom to fit coincidental noise-label associations. On validation data the noise is different, so these weights contribute random perturbations to the hidden activations, which costs accuracy (figure 5.6, p.166).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why a factory function?",
+   "kind": "alternative",
+   "body": "Beyond the book: Keras models are stateful objects; fit() updates their weights in place. A factory (get_model) is the simplest way to get an identical but untrained model for each experiment. Alternatives include keras.models.clone_model(model) (copies architecture, re-initializes weights, but requires recompiling) or saving initial weights with model.get_weights() and restoring them, which would also remove initialization as a source of difference between runs.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "The get_model() network on 1,568-feature inputs",
+   "why": "Listing 5.2's model is Dense(512, relu) → Dense(10, softmax) fed with the (None, 1568) arrays built on p.164; click the layers to see shapes and parameter counts (803,328 in the first layer, twice the plain-MNIST count).",
+   "widget": "nn_architecture",
+   "params": {"layers": [
+    {"name": "input (pixels + noise/zeros)", "type": "input", "shape": "(None, 1568)"},
+    {"name": "Dense 512", "type": "dense", "units": 512, "activation": "relu"},
+    {"name": "Dense 10", "type": "output", "units": 10, "activation": "softmax"}
+   ]}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "The second model = get_model() just renames the first model.", "correction": "It builds a brand-new, randomly initialized and freshly compiled model; the first model's trained weights are not carried over."},
+  {"claim": "validation_split takes a random 20% of the data.", "correction": "Keras takes the last 20% of the arrays as given, before shuffling for training."},
+  {"claim": "The extra 784 zero columns make the zeros model larger and therefore different from the chapter 2 model.", "correction": "It does have more parameters, but the extra ones never receive gradient or affect outputs, so functionally it matches a 784-input model."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 164, "note": "Listing 5.1 creates train_images_with_noise_channels and train_images_with_zeros_channels; the experiment's rationale."}
+  ],
+  "later": [
+   {"page": 166, "note": "Rest of Listing 5.3 and figure 5.6: the noise model ends about one percentage point lower in validation accuracy."},
+   {"page": 167, "note": "Listing 5.4 uses the same architecture to fit randomly shuffled labels."}
+  ],
+  "prerequisites": [
+   {"page": 164, "note": "Spurious correlations and the noise-channel idea."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 164, "note": "Listing 5.1 builds the inputs."},
+   {"page": 166, "note": "Listing 5.3 continued."},
+   {"page": 167, "note": "Listing 5.4, same Dense(512)/Dense(10) model with shuffled labels."}
+  ],
+  "related_figures": [
+   {"page": 166, "note": "Figure 5.6 Effect of noise channels on validation accuracy, produced by Listing 5.3."}
+  ]
+ },
+ "takeaways": [
+  "get_model() returns a fresh, identically configured model, so the two runs differ only in their data.",
+  "Model: Dense(512, relu) → Dense(10, softmax), Adam, sparse categorical crossentropy, accuracy.",
+  "Both runs: 10 epochs, batch size 128, last 20% of the data held out for validation.",
+  "history.history['val_accuracy'] provides the curves compared in figure 5.6.",
+  "Listing 5.3 starts here and finishes on p.166."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "Why does Listing 5.2 call get_model() a second time before training on the zeros dataset?", "options": ["To change the optimizer", "To start from a fresh, untrained model so both runs are comparable", "Because Keras models can only be fit once", "To load pretrained weights"], "answer": "To start from a fresh, untrained model so both runs are comparable", "explanation": "Reusing the first model would continue from weights trained on noise data. The optimizer is the same (adam); Keras models can be fit repeatedly; no pretrained weights are involved.", "page_refs": [165]},
+  {"id": "q2", "type": "short", "question": "With validation_split=0.2 on 60,000 samples, how many samples are used for training and how many for validation?", "options": [], "answer": "48,000 for training and 12,000 for validation.", "explanation": "20% of 60,000 is 12,000, taken from the end of the arrays.", "page_refs": [165]},
+  {"id": "q3", "type": "math", "question": "How many trainable parameters does the first Dense layer have when the input has 1,568 features? How does that compare with plain 784-feature MNIST?", "options": [], "answer": "1568 × 512 + 512 = 803,328, versus 784 × 512 + 512 = 401,920 for plain MNIST.", "explanation": "A Dense layer has (inputs × units) weights plus one bias per unit. Doubling the inputs roughly doubles the count.", "page_refs": [165, 164]},
+  {"id": "q4", "type": "mcq", "question": "What does the format string \"b-\" in Listing 5.3 specify?", "options": ["Bold line", "Blue solid line", "Blue dashed line", "Bar chart"], "answer": "Blue solid line", "explanation": "In matplotlib, 'b' is blue and '-' is a solid line. A dashed line would be '--' (used for the zeros curve, \"r--\", on p.166).", "page_refs": [165, 166]},
+  {"id": "q5", "type": "conceptual", "question": "Why is sparse_categorical_crossentropy the right loss here rather than categorical_crossentropy?", "options": [], "answer": "train_labels are integer class indices (0-9), not one-hot vectors; the sparse variant accepts integer targets directly with a 10-way softmax output.", "explanation": "categorical_crossentropy would require one-hot encoded labels of shape (60000, 10).", "page_refs": [165]},
+  {"id": "q6", "type": "self", "question": "Can you list the keys you'd expect in history_noise.history and say which one Listing 5.3 plots?", "options": [], "answer": "'loss', 'accuracy', 'val_loss', 'val_accuracy'; Listing 5.3 plots 'val_accuracy'.", "explanation": "Keras logs the loss plus each compiled metric, for training and (because of validation_split) for validation.", "page_refs": [165]}
+ ]
+}

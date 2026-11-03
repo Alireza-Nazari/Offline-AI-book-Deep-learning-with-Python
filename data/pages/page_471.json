@@ -1,0 +1,327 @@
+{
+ "page_id": "page_471",
+ "pdf_page": 471,
+ "printed_page": "447",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:14:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. Listing 15.15 is complete on this page; the last paragraph continues on p.472 (\"…our model will learn to pass the next token…\")."
+ },
+ "overview": {
+  "title": "Listing 15.15: the Transformer decoder block",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "15.3.3 Transformer decoder block",
+  "main_topic": "The TransformerDecoder layer: causal self-attention over the target, cross-attention to the encoder output with a padding mask, and a feedforward network, each with residual + LayerNormalization.",
+  "central_idea": "The decoder block extends the encoder block with a cross-attention sublayer that lets target positions query the source sequence. Its self-attention must be causal, because attention is inherently bidirectional and would otherwise let the model see the very token it is supposed to predict.",
+  "importance": "Together with listing 15.14 this completes the building blocks of the encoder-decoder Transformer for translation (p.472-473), and the causal decoder is the basis of the GPT model in chapter 16 (p.498).",
+  "learning_objectives": [
+   "Define cross-attention and identify its query, key and value in listing 15.15.",
+   "Read the TransformerDecoder layer line by line and name its three sublayers.",
+   "Explain why source_mask is used in cross-attention and what True/False mean.",
+   "Explain why the decoder's self-attention needs a different (causal) mask, by analogy with avoiding a Bidirectional RNN decoder.",
+   "Use use_causal_mask=True in a MultiHeadAttention call."
+  ],
+  "prerequisites": [
+   "Listing 15.14, TransformerEncoder (p.469)",
+   "attention_mask and padding masks (p.470)",
+   "The RNN seq2seq decoder and teacher forcing (pp.456-460)",
+   "Cross-attention call query=target, key=source, value=source (p.468)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page completes the sentence begun on p.470: the decoder's second `MultiHeadAttention` layer takes both source and target sequences as input, and the book names it **cross-attention**, \"as it brings information across the encoder and decoder.\"\n\n**Listing 15.15** defines `TransformerDecoder(keras.Layer)` with the same constructor arguments as the encoder (`hidden_dim`, `intermediate_dim`, `num_heads`, with `key_dim = hidden_dim // num_heads`). It has three sublayers, each with its own `LayerNormalization`: a self-attention `MultiHeadAttention`, a cross-attention `MultiHeadAttention`, and a feedforward pair `Dense(intermediate_dim, activation=\"relu\")` / `Dense(hidden_dim)`. In `call(target, source, source_mask)`:\n\n1. **Self-attention computation**: `self_attention(query=x, key=x, value=x, use_causal_mask=True)`, add residual, normalize.\n2. **Cross-attention computation**: reshape `source_mask[:, None, :]`, then `cross_attention(query=x, key=source, value=source, attention_mask=mask)`, add residual, normalize.\n3. **Feedforward computation**: Dense-ReLU, Dense, add residual, normalize.\n\nThe text explains that the decoder takes both `target` and `source`, and, as in the encoder, a `source_mask` marking padding in the source (True for non-padding, False for padding) is used as the `attention_mask` of the cross-attention layer.\n\nThe decoder's self-attention needs a *different* kind of mask. When building the RNN decoder, the book avoided a `Bidirectional` RNN because the model could cheat by seeing the label it was trying to predict as a feature. Attention is inherently bidirectional: in self-attention any target position can attend to any other. Without special care (continued on p.472) the model would learn to pass the next token along as the current label, which the `use_causal_mask=True` argument prevents.",
+ "paragraphs": [
+  {
+   "ref": "p471_e03",
+   "excerpt": "source and target sequence as input. We will call this attention layer",
+   "what_it_says": "Completing p.470: the second MultiHeadAttention layer receives both the source and target sequences. It is called cross-attention because it brings information across the encoder and decoder.",
+   "what_it_means": "In cross-attention, queries come from the decoder's current target representation and keys/values come from the encoder output. Each Spanish position asks which English positions are relevant to it.",
+   "why_it_matters": "Cross-attention is the only channel through which the source sentence influences the translation in this architecture; it replaces passing the RNN encoder's final state.",
+   "terminology": [{"term": "Cross-attention", "meaning": "Attention with queries from one sequence (target) and keys/values from another (source/encoder output)."}],
+   "connections": ["p.468: the cross-attention call multi_head_attention(query=target, key=source, value=source)", "p.470: the decoder 'can use attention twice'"]
+  },
+  {
+   "ref": "p471_e06",
+   "excerpt": "Our decoder layer takes in both a target and source. Like with",
+   "what_it_says": "The decoder layer takes a target and a source. As with the TransformerEncoder, it receives a source_mask marking padding in the source (True for non-padding, False for padding) and uses it as the attention_mask of the cross-attention layer.",
+   "what_it_means": "Padding exists in the English source, so when Spanish positions query the encoder output they must not attend to padded English positions. The same (batch, 1, source_length) reshape broadcasts the mask across all target positions.",
+   "why_it_matters": "Mask conventions are a common source of bugs; the book makes explicit that True means 'real token, may be attended'.",
+   "technical_idea": "Beyond the book: in cross-attention the score tensor has shape (batch, target_length, source_length) with target_length ≠ source_length in general, which is exactly the shape the p.470 text quoted.",
+   "terminology": [
+    {"term": "source_mask", "meaning": "Boolean (batch, source_length) tensor, True at non-padding source tokens."}
+   ],
+   "connections": ["p.470: attention_mask broadcast to (batch_size, target_length, source_length)", "p.469: the encoder uses the same source_mask for self-attention"]
+  },
+  {
+   "ref": "p471_e07",
+   "excerpt": "For the decoder’s self-attention layer, we need a different type of attention",
+   "what_it_says": "The decoder's self-attention needs another kind of mask. The RNN decoder avoided a Bidirectional RNN, because the model could cheat by seeing the label it was trying to predict as a feature. Attention is inherently bidirectional: in self-attention any target position can attend to any other. Without special care, [continued on p.472: the model will learn to pass the next token in the sequence as the current label and won't be able to generate novel translations].",
+   "what_it_means": "During training the decoder input is the target sequence and the labels are the same sequence shifted by one. If position i could see position i+1, the label for position i would be sitting right there in the input; the model would learn to copy it rather than to predict it. At inference time the future tokens don't exist yet, so such a model would fail.",
+   "why_it_matters": "Causal masking is what makes a Transformer decoder a valid autoregressive model; it underlies text generation in chapter 16.",
+   "technical_idea": "The fix (p.472) is a lower-triangular mask so position i attends only to positions ≤ i; in code, use_causal_mask=True in listing 15.15.",
+   "terminology": [
+    {"term": "Bidirectional RNN", "meaning": "An RNN that processes a sequence forward and backward, so each position sees both past and future."},
+    {"term": "Causal mask", "meaning": "A mask allowing each position to attend only to itself and earlier positions."},
+    {"term": "Label leakage", "meaning": "When information about the target to be predicted is available as an input feature."}
+   ],
+   "connections": ["p.472: the lower-triangular causal mask and use of use_causal_mask", "p.456: the RNN seq2seq model and its decoder"]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "cross_attention",
+   "name": "Cross-attention",
+   "definition": "Attention in which the queries come from the decoder's target sequence and the keys and values come from the encoder's output sequence.",
+   "intuition": "While writing each Spanish word, look back at the relevant English words.",
+   "technical": "cross_attention(query=x, key=source, value=source, attention_mask=source_mask[:, None, :]); scores shape (batch, target_len, source_len).",
+   "significance": "Brings information across the encoder and decoder; the link between the two halves of the Transformer.",
+   "example": "Listing 15.15, second sublayer.",
+   "misconception": "Cross-attention does not need a causal mask: the whole source sentence is known in advance.",
+   "related": ["attention", "self_attention", "transformer_decoder"],
+   "source": "book"
+  },
+  {
+   "id": "transformer_decoder",
+   "name": "Transformer decoder block",
+   "definition": "A layer with three residual sublayers: causal self-attention, cross-attention to the encoder output, and a feedforward network, each followed by LayerNormalization.",
+   "intuition": "Look at what you've written so far, consult the source, then think.",
+   "technical": "h1 = LN(x + SelfAttn_causal(x)); h2 = LN(h1 + CrossAttn(h1, source)); y = LN(h2 + FFN(h2)).",
+   "significance": "Produces representations from which the next target token is predicted.",
+   "example": "TransformerDecoder(hidden_dim, intermediate_dim, num_heads)(target, source, source_mask).",
+   "misconception": "Only the decoder's self-attention is causal, not its cross-attention.",
+   "related": ["transformer_encoder", "cross_attention", "causal_mask"],
+   "source": "book"
+  },
+  {
+   "id": "causal_mask",
+   "name": "Causal attention mask",
+   "definition": "A mask allowing each target position to attend only to itself and preceding positions.",
+   "intuition": "No peeking at future words.",
+   "technical": "Lower-triangular Boolean matrix (p.472); enabled with use_causal_mask=True when calling MultiHeadAttention.",
+   "significance": "Prevents the decoder from cheating by seeing the label it must predict; equivalent to the one-directional flow of a non-bidirectional RNN.",
+   "example": "use_causal_mask=True in the decoder's self-attention call.",
+   "misconception": "It is not needed in the encoder, which is meant to see the whole source sentence.",
+   "related": ["attention_mask", "self_attention", "language_model"],
+   "source": "book"
+  },
+  {
+   "id": "self_attention",
+   "name": "Self-attention (decoder use)",
+   "definition": "Attention of the target sequence to itself, restricted causally in the decoder.",
+   "intuition": "Each position gathers context from earlier target words.",
+   "technical": "self_attention(query=x, key=x, value=x, use_causal_mask=True).",
+   "significance": "Lets the decoder model dependencies among target tokens.",
+   "example": "First sublayer of listing 15.15.",
+   "misconception": "Self-attention is not inherently one-directional; the page stresses it is \"inherently bidirectional\".",
+   "related": ["causal_mask", "attention"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "The decoder block as three residual sublayers",
+   "latex": "\\begin{aligned} h_1 &= \\operatorname{LN}_1\\big(x + \\operatorname{MHA}_{\\text{self}}(x, x, x;\\ \\text{causal})\\big) \\\\ h_2 &= \\operatorname{LN}_2\\big(h_1 + \\operatorname{MHA}_{\\text{cross}}(h_1, s, s;\\ m_{\\text{src}})\\big) \\\\ y &= \\operatorname{LN}_3\\big(h_2 + W_2\\,\\operatorname{relu}(W_1 h_2 + b_1) + b_2\\big) \\end{aligned}",
+   "source_text": "x = self.self_attention(query=x, key=x, value=x, use_causal_mask=True) … x = self.cross_attention(query=x, key=source, value=source, attention_mask=mask) … x = self.feed_forward_1(x); x = self.feed_forward_2(x) …",
+   "variables": [
+    {"symbol": "x", "meaning": "Embedded target sequence, (batch, target_len, hidden_dim)."},
+    {"symbol": "s", "meaning": "source: the encoder output, (batch, source_len, hidden_dim)."},
+    {"symbol": "m_src", "meaning": "source_mask[:, None, :], (batch, 1, source_len)."},
+    {"symbol": "MHA(q, k, v; mask)", "meaning": "Multi-head attention with query q, key k, value v."},
+    {"symbol": "LN_1, LN_2, LN_3", "meaning": "self_attention_layernorm, cross_attention_layernorm, feed_forward_layernorm."},
+    {"symbol": "W_1, b_1, W_2, b_2", "meaning": "feed_forward_1 (relu) and feed_forward_2 weights."}
+   ],
+   "operations": "Three add-and-norm sublayers in sequence.",
+   "purpose": "Writes listing 15.15's call() as equations.",
+   "interpretation": "Only the second line uses the source; the first line is restricted causally.",
+   "intuition": "Each sublayer refines the target representation with a different source of information.",
+   "numerical_example": "Beyond the book: with hidden_dim=256, num_heads=8 (key_dim=32), each MultiHeadAttention has 4 projections of about 256×256 weights + biases ≈ 263k parameters, so the decoder has two of these versus one in the encoder.",
+   "source": "book",
+   "book_ref": "p.471"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "15.15",
+   "title": "A Transformer decoder block",
+   "original_code": "class TransformerDecoder(keras.Layer):\n    def __init__(self, hidden_dim, intermediate_dim, num_heads):\n        super().__init__()\n        key_dim = hidden_dim // num_heads\n        self.self_attention = layers.MultiHeadAttention(num_heads, key_dim)\n        self.self_attention_layernorm = layers.LayerNormalization()\n        self.cross_attention = layers.MultiHeadAttention(num_heads, key_dim)\n        self.cross_attention_layernorm = layers.LayerNormalization()\n        self.feed_forward_1 = layers.Dense(intermediate_dim, activation=\"relu\")\n        self.feed_forward_2 = layers.Dense(hidden_dim)\n        self.feed_forward_layernorm = layers.LayerNormalization()\n    def call(self, target, source, source_mask):\n        residual = x = target\n        x = self.self_attention(query=x, key=x, value=x, use_causal_mask=True)\n        x = x + residual\n        x = self.self_attention_layernorm(x)\n        residual = x\n        mask = source_mask[:, None, :]\n        x = self.cross_attention(\n            query=x, key=source, value=source, attention_mask=mask\n        )\n        x = x + residual\n        x = self.cross_attention_layernorm(x)\n        residual = x\n        x = self.feed_forward_1(x)\n        x = self.feed_forward_2(x)\n        x = x + residual\n        x = self.feed_forward_layernorm(x)\n        return x",
+   "language": "python",
+   "what_it_does": "Defines one Transformer decoder block: causal self-attention over the target, cross-attention to the encoder output (masking source padding), and a feedforward network, each with residual and LayerNormalization.",
+   "line_explanations": [
+    {"lines": "1-4", "explanation": "Same signature and key_dim computation as TransformerEncoder (listing 15.14)."},
+    {"lines": "5-6", "explanation": "Self-attention layers (callout): MultiHeadAttention + LayerNormalization."},
+    {"lines": "7-8", "explanation": "Cross-attention layers (callout): a second, separately parameterized MultiHeadAttention + LayerNormalization."},
+    {"lines": "9-11", "explanation": "Feedforward layers (callout): Dense(relu) → Dense(hidden_dim) + LayerNormalization."},
+    {"lines": "12-13", "explanation": "call takes target (embedded Spanish input), source (encoder output) and source_mask; keep residual."},
+    {"lines": "14-16", "explanation": "Self-attention computation: query=key=value=x with use_causal_mask=True, so each position sees only itself and earlier positions; add & norm."},
+    {"lines": "17-23", "explanation": "Cross-attention computation: reshape source_mask to (batch, 1, source_len); query is the target representation, key and value are the encoder output; add & norm."},
+    {"lines": "24-28", "explanation": "Feedforward computation: same as in the encoder; add & norm."},
+    {"lines": "29", "explanation": "Output has the target's shape, so decoder blocks can be stacked."}
+   ],
+   "inputs_outputs": "target: (batch, target_len, hidden_dim); source: (batch, source_len, hidden_dim); source_mask: (batch, source_len) Boolean. Output: (batch, target_len, hidden_dim).",
+   "algorithm": "Post-norm Transformer decoder layer with causal self-attention and masked cross-attention.",
+   "theory_link": "Cross-attention is the original attention of RNN translators (p.468); the causal mask replaces the RNN's built-in one-directional flow (p.472).",
+   "parameters": [
+    {"name": "hidden_dim", "role": "Width of target and source token vectors (must match the encoder's)."},
+    {"name": "intermediate_dim", "role": "FFN hidden width."},
+    {"name": "num_heads", "role": "Heads in both attention layers."},
+    {"name": "use_causal_mask=True", "role": "Applies the lower-triangular mask in self-attention."},
+    {"name": "attention_mask=mask", "role": "Hides padded source positions from cross-attention."}
+   ],
+   "pitfalls": [
+    "Forgetting use_causal_mask=True lets the model see future target tokens: training accuracy looks excellent, but generation fails.",
+    "Passing the source mask to self-attention instead of cross-attention: in self-attention the keys are target positions, so a source mask has the wrong length.",
+    "The listing does not mask target padding in self-attention; padded target positions are typically ignored via the loss instead (Beyond the book).",
+    "Source and target hidden sizes must match because cross-attention output is added to the target residual."
+   ],
+   "illustrative_code": "# AI-written shape check, not from the book\nimport numpy as np\ndec = TransformerDecoder(hidden_dim=256, intermediate_dim=1024, num_heads=8)\ntgt = np.random.rand(2, 12, 256).astype('float32')\nsrc = np.random.rand(2, 20, 256).astype('float32')\nsrc_mask = np.ones((2, 20), dtype=bool); src_mask[:, 16:] = False\nprint(dec(tgt, src, src_mask).shape)  # (2, 12, 256)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "How cheating would happen without a causal mask",
+   "kind": "step_by_step",
+   "body": "Inference from the book's setup (teacher forcing, as in the RNN model):\n1. Decoder input: `[start] el gato duerme`; labels: `el gato duerme [end]`.\n2. At position 0 the model must predict \"el\", but with full self-attention it can attend to position 1, whose input token *is* \"el\".\n3. The easiest way to minimize the loss is to learn \"copy the next input token\", reaching near-perfect training accuracy.\n4. At inference, the decoder is fed only the tokens generated so far; there is no next token to copy, so it cannot produce novel translations (p.472).\n\nA causal mask removes step 2's shortcut, forcing real prediction.",
+   "source": "inference"
+  },
+  {
+   "title": "Three masks, three purposes",
+   "kind": "breakdown",
+   "body": "Beyond the book, summarizing chapter 15's masks:\n\n| Where | Mask | Shape | Purpose |\n|---|---|---|---|\n| Encoder self-attention | source padding | (B, 1, S) | ignore source padding |\n| Decoder self-attention | causal | (T, T) lower-triangular | no peeking ahead |\n| Decoder cross-attention | source padding | (B, 1, S) | ignore source padding |\n\nThe cross-attention mask is the same `source_mask` as the encoder's, as the page states.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Writer with a reference book",
+   "kind": "analogy",
+   "body": "The decoder is a translator writing one word at a time. Causal self-attention is rereading what they have already written (never what they haven't written yet). Cross-attention is glancing at the original English page, which is entirely available. The feedforward sublayer is the translator's own reasoning about the next word.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Data flow through TransformerDecoder.call()",
+   "why": "Traces listing 15.15: causal self-attention, cross-attention with the source mask, and the feedforward computation, each with a residual and LayerNormalization.",
+   "mermaid": "flowchart TD\n  T[target] --> SA[\"self_attention\\nquery=key=value=x\\nuse_causal_mask=True\"]\n  SA --> A1((+))\n  T -->|residual| A1\n  A1 --> N1[self_attention_layernorm]\n  N1 --> CA[\"cross_attention\\nquery=x, key=value=source\"]\n  S[source: encoder output] --> CA\n  M[source_mask] -->|\"[:, None, :]\"| CA\n  CA --> A2((+))\n  N1 -->|residual| A2\n  A2 --> N2[cross_attention_layernorm]\n  N2 --> F1[\"Dense intermediate_dim, relu\"] --> F2[Dense hidden_dim]\n  F2 --> A3((+))\n  N2 -->|residual| A3\n  A3 --> N3[feed_forward_layernorm] --> O[output]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Encoder-decoder Transformer",
+   "why": "Listing 15.15 is the decoder half; see where cross-attention connects it to the encoder from listing 15.14.",
+   "widget": "transformer_block",
+   "params": {"kind": "encoder_decoder"}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "Self-attention only looks backward by default.", "correction": "The page stresses that attention is inherently bidirectional; a causal mask must be added explicitly (use_causal_mask=True)."},
+  {"claim": "Cross-attention also needs a causal mask.", "correction": "The full source sentence is available, so cross-attention only needs the padding mask (source_mask)."},
+  {"claim": "In source_mask, True marks padding.", "correction": "The page says True for non-padding and False for padding."},
+  {"claim": "The decoder can reuse the encoder's attention layer for cross-attention.", "correction": "Listing 15.15 creates a separate self.cross_attention MultiHeadAttention with its own weights."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 470, "note": "Introduction of the decoder block and of attention_mask shapes."},
+   {"page": 469, "note": "Listing 15.14, TransformerEncoder, which this decoder mirrors."},
+   {"page": 468, "note": "Cross-attention call query=target, key=source, value=source."},
+   {"page": 456, "note": "The RNN seq2seq decoder that avoided a Bidirectional RNN."}
+  ],
+  "later": [
+   {"page": 472, "note": "The causal lower-triangular mask is shown and figure 15.8 depicts both blocks."},
+   {"page": 473, "note": "Encoder and decoder assembled into the Transformer translation model."},
+   {"page": 498, "note": "Chapter 16 copies this decoder but removes the cross-attention layer for a GPT-style model."},
+   {"page": 489, "note": "Summary: a Transformer decoder uses causal attention to predict the next word."}
+  ],
+  "prerequisites": [
+   {"page": 469, "note": "Encoder block structure."},
+   {"page": 470, "note": "Padding masks and broadcasting."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 469, "note": "Listing 15.14, TransformerEncoder."},
+   {"page": 498, "note": "Listing 16.4, decoder block without cross-attention."}
+  ],
+  "related_figures": [
+   {"page": 472, "note": "Figure 15.8, encoder and decoder computations."}
+  ]
+ },
+ "takeaways": [
+  "Cross-attention: queries from the target, keys/values from the encoder output; it brings information across encoder and decoder.",
+  "TransformerDecoder = causal self-attention → cross-attention → feedforward, each with add & LayerNorm.",
+  "source_mask (True = non-padding) is reshaped and used as the cross-attention mask.",
+  "Attention is inherently bidirectional, so the decoder's self-attention uses use_causal_mask=True.",
+  "Without a causal mask the decoder would cheat by seeing the label it predicts, like a Bidirectional RNN decoder would."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In listing 15.15's cross-attention call, which tensors serve as query and as key/value?",
+   "options": ["query=source, key=value=x", "query=x (target representation), key=value=source", "query=key=value=x", "query=x, key=x, value=source"],
+   "answer": "query=x (target representation), key=value=source",
+   "explanation": "The call is cross_attention(query=x, key=source, value=source, attention_mask=mask). Option 1 reverses the roles (output would have source length); option 3 is self-attention; option 4 mixes keys and values from different sequences.",
+   "page_refs": [471]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Why is this layer called cross-attention?",
+   "options": [],
+   "answer": "Because it brings information across the encoder and decoder: decoder (target) positions attend to the encoder's output sequence.",
+   "explanation": "Stated in the first lines of the page.",
+   "page_refs": [471]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Explain why the decoder's self-attention needs a causal mask, referring to the book's comparison with a Bidirectional RNN.",
+   "options": [],
+   "answer": "The book avoided a Bidirectional RNN decoder because it would let the model see the label it was predicting as a feature. Self-attention is inherently bidirectional: any target position can attend to any other, including later ones that contain the next token. Without a causal mask the model would learn to copy the next token and could not generate novel translations.",
+   "explanation": "The argument starts on this page and finishes on p.472.",
+   "page_refs": [471, 472]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "Which mask setting does listing 15.15 use for the decoder's self-attention?",
+   "options": ["attention_mask=source_mask[:, None, :]", "use_causal_mask=True", "No mask", "attention_mask=target_mask"],
+   "answer": "use_causal_mask=True",
+   "explanation": "The self-attention call is self_attention(query=x, key=x, value=x, use_causal_mask=True). The source mask is used in cross-attention; no mask would allow cheating; target_mask does not appear in the listing.",
+   "page_refs": [471]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "In source_mask, what do True and False mean, and where is it used in the decoder?",
+   "options": [],
+   "answer": "True marks non-padding tokens, False marks padding. It is reshaped to (batch, 1, source_len) and used as attention_mask for the cross-attention layer.",
+   "explanation": "Stated in the paragraph after the listing.",
+   "page_refs": [471]
+  },
+  {
+   "id": "q6",
+   "type": "math",
+   "question": "For target_len = 12 and source_len = 20, what are the shapes of the per-head attention score matrices in the decoder's self-attention and cross-attention?",
+   "options": [],
+   "answer": "Self-attention: 12 × 12 (lower triangle allowed by the causal mask). Cross-attention: 12 × 20 (columns for padded source positions masked).",
+   "explanation": "Rows correspond to queries (target positions), columns to keys: target positions for self-attention, source positions for cross-attention (p.470 gives the general shape (batch, target_length, source_length)).",
+   "page_refs": [471, 470]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you list the three sublayers of TransformerDecoder in order and say which one(s) use the encoder output and which use a causal mask?",
+   "options": [],
+   "answer": "1) self-attention (causal mask), 2) cross-attention (uses the encoder output and the source padding mask), 3) feedforward network (neither).",
+   "explanation": "Compare with the callouts of listing 15.15.",
+   "page_refs": [471]
+  }
+ ]
+}

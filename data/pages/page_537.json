@@ -1,0 +1,466 @@
+{
+ "pdf_page": 537,
+ "printed_page": "513",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:10:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. Element e12 holds only the first lines of the encoder.summary() output (the header row); the table body continues on p.538. Callouts: 'Dimensionality of the latent space: a 2D plane' points to latent_dim = 2; 'The input image ends up being encoded into these two parameters' points to the z_mean/z_log_var lines."
+ },
+ "overview": {
+  "title": "Implementing a VAE: overview and the encoder network",
+  "chapter": "17 Image generation",
+  "section": "17.1 Deep learning for image generation",
+  "subsection": "17.1.3 Implementing a VAE with Keras",
+  "main_topic": "The three components of the MNIST VAE and the strided-convolution encoder that maps a 28x28 image to z_mean and z_log_var in a 2-D latent space",
+  "central_idea": "The VAE is built from an encoder, a sampling layer and a decoder. The encoder is a small ConvNet that downsamples with strides (not max pooling), because the model must keep information about where things are, and it ends in two parallel Dense heads that output the 2-D mean and log-variance.",
+  "importance": "This is the first concrete code of the VAE. It turns the abstract `encoder(input_img)` of the schematic on p.536 into real Keras layers, and it uses the functional API to build a model with two outputs.",
+  "learning_objectives": [
+   "List the three parts of the VAE and what each one does",
+   "Read Listing 17.1 and trace the tensor shapes from (28, 28, 1) to two (2,) vectors",
+   "Explain why strided convolutions are used instead of max pooling here",
+   "Explain why the encoder has two separate Dense output heads with no activation",
+   "Explain the choice latent_dim = 2"
+  ],
+  "prerequisites": [
+   "VAE concept and figure 17.4 (p.536)",
+   "Conv2D, strides and padding (chapter 8)",
+   "Functional API models with multiple outputs (chapter 7)",
+   "Image segmentation model with strided convolutions (chapter 11)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "Section **17.1.3** starts the implementation of a VAE that can generate **MNIST digits**. The model has three parts:\n\n1. an **encoder network** that turns a real image into a mean and a variance in the latent space;\n2. a **sampling layer** that takes that mean and variance and samples a random latent point;\n3. a **decoder network** that turns latent points back into images.\n\n**Listing 17.1** defines the encoder. It is a simple ConvNet that maps the input image `x` to two vectors, `z_mean` and `z_log_var`. The authors point out one design detail: it **downsamples with strides instead of max pooling**, as in the image segmentation example of chapter 11. Strides are generally preferable to max pooling whenever a model cares about **information location**, that is, *where* things are in the image. A VAE does, because its encoding must be good enough to reconstruct a valid image.\n\nThe listing sets `latent_dim = 2`, so the latent space is a **2-D plane** (callout). That is small, but it means the learned space can be plotted directly later (p.542). The input is `keras.Input(shape=(28, 28, 1))`. Two `Conv2D` layers with `strides=2, padding=\"same\"` take it to 14x14x32 and then 7x7x64. `Flatten` gives 3,136 values and `Dense(16, relu)` compresses them. Two **parallel** `Dense(latent_dim)` heads, named `\"z_mean\"` and `\"z_log_var\"`, have no activation, so their outputs can be any real number. `keras.Model(image_inputs, [z_mean, z_log_var], name=\"encoder\")` packages this as a **two-output** functional model (callout: \"The input image ends up being encoded into these two parameters\").\n\nThe page ends with the start of `encoder.summary()`, which continues on p.538 (69,076 parameters in total).",
+ "paragraphs": [
+  {
+   "ref": "p537_e04",
+   "excerpt": "We’re going to be implementing a VAE that can generate MNIST digits",
+   "what_it_says": "The VAE will generate MNIST digits and has three parts, listed as bullets: an encoder (image to mean and variance), a sampling layer (mean and variance to a random latent point) and a decoder (latent point to image).",
+   "what_it_means": "The three bullets map one to one onto the first three lines of the schematic on p.536 and onto Listings 17.1, 17.2 and 17.3. Making sampling its own layer keeps the randomness in one place and lets encoder and decoder be ordinary deterministic models that you can reuse separately. After training, only the decoder is needed for generation.",
+   "why_it_matters": "This modular design is what makes the later step ('use the decoder network to turn arbitrary latent space vectors into images', p.541) possible.",
+   "terminology": [
+    {
+     "term": "MNIST",
+     "meaning": "Dataset of 70,000 28x28 grayscale handwritten digits used since chapter 2."
+    },
+    {
+     "term": "sampling layer",
+     "meaning": "A custom Keras layer (`Sampler`, p.538) that draws z from N(z_mean, exp(z_log_var))."
+    }
+   ],
+   "connections": [
+    "p.536: schematic VAE with the same three steps",
+    "p.538: Sampler layer",
+    "p.539: decoder"
+   ]
+  },
+  {
+   "ref": "p537_e08",
+   "excerpt": "The following listing shows the encoder network you’ll use, mapping images to the parameters",
+   "what_it_says": "The encoder is a simple ConvNet that maps image `x` to `z_mean` and `z_log_var`. It downsamples with strides instead of max pooling, as in chapter 11's segmentation model, because strides are preferable for models that care about information location, and a VAE does since its encoding must allow reconstruction.",
+   "what_it_means": "Max pooling keeps only the largest activation in each 2x2 window and throws away *which* of the four positions it came from. That is fine for classification, where 'is there an edge somewhere here' is enough. A reconstructing model, however, needs to know exactly where strokes are. A stride-2 convolution also halves the resolution, but its learned weights combine all positions in the window, so spatial information can be kept in the channels.",
+   "why_it_matters": "This choice is mirrored in the decoder (p.539), which uses stride-2 `Conv2DTranspose` layers to upsample. Encoder and decoder become near-symmetric.",
+   "technical_idea": "With `padding=\"same\"` and stride 2, output size = ceil(input / 2): 28 to 14 to 7.",
+   "terminology": [
+    {
+     "term": "strided convolution",
+     "meaning": "A convolution whose window moves by more than one pixel, reducing spatial resolution."
+    },
+    {
+     "term": "information location",
+     "meaning": "Where in the image a feature occurs, as opposed to whether it occurs."
+    }
+   ],
+   "connections": [
+    "Chapter 11 (image segmentation): strides preferred to pooling",
+    "p.539: decoder reverses these Conv2D layers"
+   ]
+  },
+  {
+   "ref": "p537_e11",
+   "excerpt": "Its summary looks like this:",
+   "what_it_says": "Introduces the `encoder.summary()` output, whose table starts at the bottom of this page and continues on p.538.",
+   "what_it_means": "The summary checks the shapes: (None, 14, 14, 32), then (None, 7, 7, 64), then (None, 3136), (None, 16), and two (None, 2) outputs. The table has a 'Connected to' column because this is a functional model with branches.",
+   "why_it_matters": "Reading summaries is the quickest way to confirm that strides and flattening produced the expected sizes before training.",
+   "connections": [
+    "p.538: rest of the summary table, 69,076 parameters"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "vae",
+   "name": "Variational autoencoder (VAE)",
+   "definition": "An autoencoder whose encoder outputs distribution parameters and whose latent point is sampled before decoding.",
+   "intuition": "Encode to a fuzzy region, not a point.",
+   "technical": "Implemented here as encoder (Listing 17.1) + Sampler (17.2) + decoder (17.3).",
+   "significance": "First generative model implemented in chapter 17.",
+   "example": "MNIST VAE with a 2-D latent space.",
+   "misconception": "The sampling step is not part of the encoder model; it is a separate layer.",
+   "related": [
+    "latent_space",
+    "kl_divergence"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "strided_convolution",
+   "name": "Strided convolution for downsampling",
+   "definition": "A Conv2D layer with strides > 1, used to reduce spatial resolution in place of max pooling.",
+   "intuition": "A learned, location-aware way to shrink an image, unlike pooling, which simply keeps the strongest response.",
+   "technical": "Conv2D(32, 3, strides=2, padding='same') maps 28x28 to 14x14; parameters = 3*3*1*32 + 32 = 320.",
+   "significance": "Preserves information about where features are, which reconstruction requires.",
+   "example": "Both Conv2D layers of the VAE encoder.",
+   "misconception": "Strides do not discard information the way pooling does: the learned kernel can encode positional detail in its channels.",
+   "related": [
+    "convolution",
+    "pooling"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "functional_api",
+   "name": "Functional API with multiple outputs",
+   "definition": "Building a keras.Model from an input tensor and a list of output tensors.",
+   "intuition": "One trunk, two heads.",
+   "technical": "keras.Model(image_inputs, [z_mean, z_log_var]) returns a list of two tensors when called.",
+   "significance": "Lets the encoder emit both distribution parameters in one call.",
+   "example": "`z_mean, z_log_var = encoder(x)`",
+   "misconception": "The two heads share all layers up to Dense(16); they are not separate networks.",
+   "related": [
+    "keras_model"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "17.1",
+   "title": "VAE encoder network",
+   "original_code": "import keras\nfrom keras import layers\nlatent_dim = 2\nimage_inputs = keras.Input(shape=(28, 28, 1))\nx = layers.Conv2D(32, 3, activation=\"relu\", strides=2, padding=\"same\")(\n    image_inputs\n)\nx = layers.Conv2D(64, 3, activation=\"relu\", strides=2, padding=\"same\")(x)\nx = layers.Flatten()(x)\nx = layers.Dense(16, activation=\"relu\")(x)\nz_mean = layers.Dense(latent_dim, name=\"z_mean\")(x)\nz_log_var = layers.Dense(latent_dim, name=\"z_log_var\")(x)\nencoder = keras.Model(image_inputs, [z_mean, z_log_var], name=\"encoder\")",
+   "language": "python",
+   "what_it_does": "Builds a functional Keras model that maps a 28x28x1 image to two 2-D vectors, `z_mean` and `z_log_var`.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "Imports Keras and the layers module."
+    },
+    {
+     "lines": "3",
+     "explanation": "`latent_dim = 2`: the latent space is a 2D plane (callout), which allows direct visualization later."
+    },
+    {
+     "lines": "4",
+     "explanation": "Input of shape (28, 28, 1): a grayscale MNIST image; the batch axis is implicit."
+    },
+    {
+     "lines": "5-7",
+     "explanation": "Conv2D with 32 filters of size 3x3, ReLU, stride 2, 'same' padding: output (14, 14, 32), 320 parameters."
+    },
+    {
+     "lines": "8",
+     "explanation": "Conv2D with 64 filters, stride 2: output (7, 7, 64), 18,496 parameters."
+    },
+    {
+     "lines": "9",
+     "explanation": "Flatten to a 3,136-dim vector (7*7*64)."
+    },
+    {
+     "lines": "10",
+     "explanation": "Dense(16, relu): a compact bottleneck shared by both heads (50,192 parameters)."
+    },
+    {
+     "lines": "11-12",
+     "explanation": "Two linear Dense(2) heads, named z_mean and z_log_var. No activation, because a mean and a log-variance can be any real number."
+    },
+    {
+     "lines": "13",
+     "explanation": "Packages the graph as a model with two outputs. Callout: the input image ends up encoded into these two parameters."
+    }
+   ],
+   "inputs_outputs": "Input: batch of shape (N, 28, 28, 1) with float pixel values in [0, 1] (prepared on p.541). Output: list [z_mean (N, 2), z_log_var (N, 2)].",
+   "algorithm": "Two stride-2 convolutions downsample 28 -> 14 -> 7, then flatten, compress to 16 features and project to the distribution parameters.",
+   "theory_link": "Implements `z_mean, z_log_variance = encoder(input_img)` from the schematic on p.536.",
+   "parameters": [
+    {
+     "name": "latent_dim",
+     "role": "Number of latent dimensions (2)."
+    },
+    {
+     "name": "strides=2",
+     "role": "Halves spatial resolution instead of pooling."
+    },
+    {
+     "name": "padding=\"same\"",
+     "role": "Pads so the output size is exactly input/stride (rounded up)."
+    }
+   ],
+   "pitfalls": [
+    "Do not put an activation such as relu on z_log_var: log-variances must be allowed to be negative.",
+    "latent_dim = 2 limits reconstruction quality; it was chosen for visualization, not fidelity.",
+    "The two heads must be distinct layers; reusing one Dense layer would force mean = log-variance."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Start of encoder.summary() output",
+   "original_code": ">>> encoder.summary()\nModel: \"encoder\"\n┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓\n┃ Layer (type)          ┃ Output Shape      ┃     Param # ┃ Connected to       ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩",
+   "language": "text",
+   "what_it_does": "Calls `summary()` on the encoder and prints the header of the layer table. The rows are on p.538.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Prints a summary of the model."
+    },
+    {
+     "lines": "2",
+     "explanation": "Model name set by name=\"encoder\"."
+    },
+    {
+     "lines": "3-5",
+     "explanation": "Table header: layer name/type, output shape, parameter count and 'Connected to' (shown for branching functional models)."
+    }
+   ],
+   "inputs_outputs": "Printed text only.",
+   "algorithm": "N/A",
+   "theory_link": "Lets you verify the shape flow described above.",
+   "parameters": [],
+   "pitfalls": [
+    "Layer names like conv2d, dense get suffixes (_1, _2) depending on how many layers were created earlier in the session."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Shape and parameter arithmetic for the encoder",
+   "kind": "numerical",
+   "source": "ai_explanation",
+   "body": "| Layer | Output | Params |\n|---|---|---|\n| Input | (28,28,1) | 0 |\n| Conv2D 32, s2 | (14,14,32) | $3\\cdot3\\cdot1\\cdot32+32=320$ |\n| Conv2D 64, s2 | (7,7,64) | $3\\cdot3\\cdot32\\cdot64+64=18{,}496$ |\n| Flatten | (3136) | 0 |\n| Dense 16 | (16) | $3136\\cdot16+16=50{,}192$ |\n| z_mean | (2) | $16\\cdot2+2=34$ |\n| z_log_var | (2) | 34 |\n\nTotal: 69,076, matching the summary on p.538. About 73% of the parameters are in the Flatten-to-Dense connection."
+  },
+  {
+   "title": "Why output log-variance rather than variance?",
+   "kind": "alternative",
+   "source": "ai_explanation",
+   "body": "A variance must be positive. Predicting $\\log\\sigma^2$ with a linear layer gives an unconstrained real number, and exponentiating later guarantees positivity. Alternatives such as a softplus activation on a variance head exist, but log-variance also makes the KL formula on p.541 simple."
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Encoder shape flow (Listing 17.1)",
+   "why": "Traces the exact tensor shapes of the encoder as the summary will show them.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "input",
+      "shape": [
+       null,
+       28,
+       28,
+       1
+      ]
+     },
+     {
+      "op": "Conv2D 32, stride 2",
+      "shape": [
+       null,
+       14,
+       14,
+       32
+      ]
+     },
+     {
+      "op": "Conv2D 64, stride 2",
+      "shape": [
+       null,
+       7,
+       7,
+       64
+      ]
+     },
+     {
+      "op": "Flatten",
+      "shape": [
+       null,
+       3136
+      ]
+     },
+     {
+      "op": "Dense 16",
+      "shape": [
+       null,
+       16
+      ]
+     },
+     {
+      "op": "z_mean / z_log_var",
+      "shape": [
+       null,
+       2
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "Encoder with two heads",
+   "why": "Shows the branching that gives the encoder two outputs.",
+   "mermaid": "flowchart LR\n  I[Input 28x28x1] --> C1[Conv2D 32 s2] --> C2[Conv2D 64 s2] --> F[Flatten 3136] --> D[Dense 16 relu]\n  D --> M[Dense 2: z_mean]\n  D --> V[Dense 2: z_log_var]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Max pooling and strided convolutions are interchangeable ways to downsample.",
+   "correction": "Pooling discards where the maximum came from; strided convolutions are learned and can preserve location information, which reconstruction needs."
+  },
+  {
+   "claim": "The encoder outputs a variance directly.",
+   "correction": "It outputs the log of the variance, z_log_var, from a linear layer."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 536,
+    "note": "Schematic VAE and figure 17.4"
+   },
+   {
+    "page": 535,
+    "note": "Autoencoders"
+   }
+  ],
+  "later": [
+   {
+    "page": 538,
+    "note": "Encoder summary and Sampler layer"
+   },
+   {
+    "page": 539,
+    "note": "Decoder mirrors this encoder"
+   },
+   {
+    "page": 541,
+    "note": "Training on MNIST"
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 536,
+    "note": "VAE concept"
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 539,
+    "note": "Listing 17.3 decoder"
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 536,
+    "note": "Figure 17.4"
+   }
+  ]
+ },
+ "takeaways": [
+  "The VAE consists of an encoder, a sampling layer and a decoder.",
+  "The encoder is a ConvNet with stride-2 convolutions (28 to 14 to 7), Flatten, Dense(16) and two linear Dense(2) heads.",
+  "Strides are used instead of max pooling because a reconstructing model must keep information about where things are.",
+  "latent_dim = 2 makes the latent space a plane that can be visualized.",
+  "The encoder is a functional model with two outputs: [z_mean, z_log_var]."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why does the VAE encoder use strides rather than max pooling to downsample?",
+   "options": [
+    "Strides use fewer parameters than pooling",
+    "Max pooling cannot be used with 28x28 inputs",
+    "The model cares about information location, which pooling discards",
+    "Strides make training deterministic"
+   ],
+   "answer": "The model cares about information location, which pooling discards",
+   "explanation": "The page says strides are preferable for models that care about where stuff is in the image. Pooling actually has zero parameters, so option 1 is wrong. Pooling works on 28x28 inputs, and determinism is unrelated.",
+   "page_refs": [
+    537
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "What are the output shapes after each Conv2D layer in Listing 17.1?",
+   "options": [],
+   "answer": "(None, 14, 14, 32) and then (None, 7, 7, 64).",
+   "explanation": "Stride 2 with same padding halves 28 to 14 and 14 to 7; the channel counts are the filter numbers.",
+   "page_refs": [
+    537,
+    538
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why do the z_mean and z_log_var Dense layers have no activation function?",
+   "options": [],
+   "answer": "Both a mean and a log-variance can be any real number, positive or negative; an activation such as ReLU or sigmoid would wrongly restrict their range.",
+   "explanation": "Beyond the book: the variance is recovered later as exp(z_log_var), which is always positive.",
+   "page_refs": [
+    537
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "math",
+   "question": "Compute the number of parameters of the Dense(16) layer in the encoder.",
+   "options": [],
+   "answer": "3136 * 16 + 16 = 50,192",
+   "explanation": "Flatten outputs 7*7*64 = 3136 values; each of the 16 units has 3136 weights plus one bias. This matches the summary on p.538.",
+   "page_refs": [
+    537,
+    538
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "What does the callout on `latent_dim = 2` say?",
+   "options": [
+    "Number of output classes",
+    "Dimensionality of the latent space: a 2D plane",
+    "Number of convolution layers",
+    "Batch size for training"
+   ],
+   "answer": "Dimensionality of the latent space: a 2D plane",
+   "explanation": "The other options misread the variable: the classes are not predicted, there are two conv layers but that is a coincidence, and the batch size is 128 (p.541).",
+   "page_refs": [
+    537
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "self",
+   "question": "Can you list the three components of the VAE and point to the listing that implements each?",
+   "options": [],
+   "answer": "Encoder: Listing 17.1 (p.537). Sampler: Listing 17.2 (p.538). Decoder: Listing 17.3 (p.539).",
+   "explanation": "Mapping components to code helps when reading the training model on p.540-541.",
+   "page_refs": [
+    537,
+    538,
+    539
+   ]
+  }
+ ],
+ "page_id": "page_537",
+ "book_id": "dlwp3"
+}

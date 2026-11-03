@@ -1,0 +1,258 @@
+{
+ "page_id": "page_579",
+ "pdf_page": 579,
+ "printed_page": "555",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:00:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. The inline code `variable.value.sharding` and `dataset.prefetch(...)` are split across line breaks in the extraction but are intact on the page image. The last paragraph continues on p.580."
+ },
+ "overview": {
+  "title": "Inspecting shardings, tf.data tips, and TPU training",
+  "chapter": "18 Best practices for the real world",
+  "section": "18.2 Scaling up model training with multiple devices",
+  "subsection": "18.2.3 TPU training",
+  "main_topic": "Verifying how variables were sharded (NamedSharding, jax.debug.visualize_sharding), feeding data efficiently in distributed training, and the motivation for training on TPUs",
+  "central_idea": "After setting a ModelParallel distribution, you can confirm each variable's placement through `kernel.value.sharding`, a JAX NamedSharding with a mesh and a PartitionSpec, and draw it with jax.debug.visualize_sharding. Distributed training also needs an efficient input pipeline (tf.data with prefetch). Beyond GPUs, specialized ASICs such as Google's TPUs offer large speed and cost advantages.",
+  "importance": "Inspecting shardings is how you debug a layout map. The tf.data advice stops fast accelerators from waiting on input. The TPU section starts the practical guide to the most widely available deep-learning ASIC, which you can use for free in Colab.",
+  "learning_objectives": [
+   "Read a NamedSharding: mesh axis sizes and the PartitionSpec per dimension",
+   "Use jax.debug.visualize_sharding to see which devices hold which block of a tensor",
+   "Explain why tf.data.Dataset and prefetching matter in distributed training",
+   "Define an ASIC and situate the TPU among deep-learning accelerators",
+   "Recall the book's speed and cost comparisons between TPU v2 and NVIDIA P100"
+  ],
+  "prerequisites": [
+   "LayoutMap and ModelParallel setup (p.578)",
+   "DeviceMesh with axes data and model (p.577)",
+   "tf.data.Dataset objects (p.272)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page first finishes the sentence from p.578: the few lines of distribution configuration are enough to distribute the computation of *any large language model training run*, scaling to as many devices as you have and to arbitrary model sizes.\n\n**Checking the sharding.** You can confirm what happened to a variable by inspecting `variable.value.sharding`. For the first Dense kernel of the listing 18.4 model, `model.layers[0].kernel.value.sharding` returns a `NamedSharding` whose `mesh` is `Mesh(\"data\": 2, \"model\": 4)` and whose `spec` is `PartitionSpec(None, \"model\")`. This is the layout from the LayoutMap: rows replicated, columns sharded over the four-device model axis. Because this is the JAX backend, the underlying value is a JAX array, so the JAX utility `jax.debug.visualize_sharding(value.shape, value.sharding)` can draw the tensor as a grid of blocks labeled with the devices holding each block.\n\n**tf.data performance tips (sidebar).** In distributed training, always feed data as a `tf.data.Dataset` for the best performance. NumPy arrays also work, because `fit()` converts them into `Dataset` objects. Also enable prefetching with `dataset.prefetch(buffer_size)`, or let TensorFlow choose with `dataset.prefetch(tf.data.AUTOTUNE)`, so that data preparation overlaps with device computation.\n\n**18.2.3 TPU training.** The authors note a trend toward specialized single-purpose chips, ASICs (application-specific integrated circuits), with Google's Tensor Processing Unit (TPU) as the most prominent, available on Google Cloud and in Colab. TPUs take some extra setup, but they are \"really, really fast\": the book says a TPU v2 (on Colab) is typically 15x faster than an NVIDIA P100 GPU, and TPU training is on average 3x more cost-effective than GPU training for most models. TPU v2 is free in Colab via Runtime > Change Runtime Type; the sentence continues on p.580.",
+ "paragraphs": [
+  {
+   "ref": "p579_e03",
+   "excerpt": "computation for any large language model training run—it scales to as many",
+   "what_it_says": "This completes p.578's claim: the small LayoutMap/ModelParallel snippets are enough to distribute any LLM training run, scaling to any number of devices and any model size.",
+   "what_it_means": "The same API that splits a two-layer MLP across four GPUs is what you would use for a multi-billion-parameter Transformer on a pod of hundreds of chips. Only the mesh shape and the layout map get bigger.",
+   "why_it_matters": "You can learn the mechanism on a toy model and expect it to carry over to production-scale work.",
+   "technical_idea": "Inference: \"arbitrary model sizes\" assumes you can find a layout whose shards fit in device memory. For very large models, people also shard optimizer state and use additional parallelism axes, which this simple rule of thumb does not cover.",
+   "terminology": [],
+   "connections": ["p.578: the LayoutMap and ModelParallel code this sentence refers to"]
+  },
+  {
+   "ref": "p579_e04",
+   "excerpt": "To check how your variables were sharded, you can inspect the",
+   "what_it_says": "You can check how a variable was sharded through `variable.value.sharding`. For the first layer's kernel it returns `NamedSharding(mesh=Mesh(\"data\": 2, \"model\": 4), spec=PartitionSpec(None, \"model\"))`.",
+   "what_it_means": "`kernel` is a Keras variable and `.value` is the backend tensor it wraps (a `jax.Array`). A JAX array carries a `.sharding` describing its distribution. `NamedSharding` pairs a mesh, here 2 devices on \"data\" and 4 on \"model\", with a `PartitionSpec`, one entry per array dimension. This is the same `(None, \"model\")` tuple you wrote in the LayoutMap, now confirmed by the runtime.",
+   "why_it_matters": "This is the quickest way to debug a layout. If a path in your LayoutMap had a typo, that variable would show a fully replicated spec instead of the one you intended.",
+   "technical_idea": "The spec does not mention \"data\" for the kernel, so the kernel is replicated across the data axis: devices in the two data rows hold identical copies of each column block.",
+   "terminology": [
+    {"term": "NamedSharding", "meaning": "JAX sharding object combining a device Mesh with a PartitionSpec."},
+    {"term": "PartitionSpec", "meaning": "Per-dimension list of mesh axis names (or None for replicated)."}
+   ],
+   "connections": ["p.578: the LayoutMap entry (None, \"model\") for sequential/dense/kernel", "p.577: the (2, 4) mesh with axes data and model"]
+  },
+  {
+   "ref": "p579_e06",
+   "excerpt": "You can even visualize it via the JAX utility jax.debug.visualize_sharding:",
+   "what_it_says": "The code takes `model.layers[0].kernel.value` and calls `jax.debug.visualize_sharding(value.shape, value.sharding)` to draw the sharding.",
+   "what_it_means": "The utility prints a small text-art grid of the 2-D array with rectangles for each shard, each labeled with the devices that hold it. For a `(16000, 64000)` kernel with spec `(None, \"model\")` you would see four vertical column blocks, each labeled with two devices, one from each data row.",
+   "why_it_matters": "A picture makes mistakes obvious, such as a dimension sharded on the wrong axis or a variable left fully replicated.",
+   "technical_idea": "Beyond the book: visualize_sharding only supports 1-D and 2-D shapes; for higher-rank tensors, inspect the PartitionSpec directly.",
+   "terminology": [
+    {"term": "jax.debug.visualize_sharding", "meaning": "JAX helper that renders how an array of a given shape is split across devices."}
+   ],
+   "connections": []
+  },
+  {
+   "ref": "p579_e09",
+   "excerpt": "When doing distributed training, always provide your data as a tf.data.Dataset object",
+   "what_it_says": "In distributed training, provide data as a `tf.data.Dataset` (NumPy arrays also work since `fit()` converts them to Datasets). Use prefetching, `dataset.prefetch(buffer_size)`, or `dataset.prefetch(tf.data.AUTOTUNE)` to let the buffer size be picked automatically.",
+   "what_it_means": "With many accelerators consuming batches in parallel, the host-side input pipeline becomes the likely bottleneck. Prefetching overlaps CPU-side preparation of batch *n+1* with device-side training on batch *n*, so devices don't wait for data. `AUTOTUNE` lets the tf.data runtime tune the buffer dynamically.",
+   "why_it_matters": "A badly fed accelerator wastes money: the faster your hardware, the more an input stall costs you.",
+   "technical_idea": "Beyond the book: tf.data pipelines work with Keras on any backend (JAX, PyTorch, TensorFlow), because Keras iterates over them and converts batches to backend tensors.",
+   "terminology": [
+    {"term": "prefetch", "meaning": "Prepare upcoming batches in the background while the current one is being processed."},
+    {"term": "tf.data.AUTOTUNE", "meaning": "Special value telling tf.data to choose a parameter (e.g. buffer size) dynamically."}
+   ],
+   "connections": ["p.272: tf.data.Dataset objects introduced in chapter 8", "p.580: dataset.cache() to avoid repeated reads from Google Cloud Storage on TPUs"]
+  },
+  {
+   "ref": "p579_e11",
+   "excerpt": "Beyond just GPUs, there is generally a trend in the deep learning world",
+   "what_it_says": "There is a trend toward specialized hardware for deep learning, single-purpose chips called ASICs (application-specific integrated circuits). Many companies are building them, and Google's TPU is the most prominent, available on Google Cloud and Google Colab.",
+   "what_it_means": "GPUs were designed for graphics and repurposed for deep learning. ASICs drop generality to dedicate silicon to what deep learning needs most: dense matrix multiplication at low precision with high memory bandwidth.",
+   "why_it_matters": "Hardware choice affects cost and speed of training as much as model choice. The JAX + Keras stack covered in this chapter runs natively on TPUs.",
+   "technical_idea": "Beyond the book: a TPU core is built around a large systolic array (matrix multiply unit) that streams operands through a grid of multiply-accumulate cells, and it natively favors bfloat16 (see p.582).",
+   "terminology": [
+    {"term": "ASIC", "meaning": "Application-specific integrated circuit: a chip designed for one class of workload."},
+    {"term": "TPU", "meaning": "Tensor Processing Unit, Google's deep-learning ASIC."}
+   ],
+   "connections": ["p.582: bfloat16 is noted to work better on some devices, in particular TPUs"]
+  },
+  {
+   "ref": "p579_e12",
+   "excerpt": "Training on TPU does involve jumping through some hoops. But it’s worth the",
+   "what_it_says": "TPU training takes some extra work but is worth it: TPU v2 (on Colab) is typically 15x faster than an NVIDIA P100 GPU, and TPU training is about 3x more cost-effective than GPU training on average. TPU v2 can be used for free in Colab by switching the runtime type (continued on p.580).",
+   "what_it_means": "The figures compare specific hardware generations (TPU v2 vs. P100). They indicate the order of magnitude of the benefit and are not a fixed rule. Newer GPUs (A100, H100) and newer TPUs (v3 through v5, mentioned on p.580) shift the numbers.",
+   "why_it_matters": "For students, free TPU access in Colab can turn hours of training into minutes, if the input pipeline and batch sizes are set up to keep the chip busy (p.580).",
+   "technical_idea": "Inference: these speedups are reached only when the TPU is well utilized. The next page explains that this requires very large batches or step fusing.",
+   "terminology": [
+    {"term": "Colab runtime type", "meaning": "Colab setting that selects CPU, GPU, or TPU hardware for the notebook."}
+   ],
+   "connections": ["p.580: how to use TPU cores via set_distribution and how to keep them busy with steps_per_execution"]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "named_sharding",
+   "name": "NamedSharding and PartitionSpec",
+   "definition": "JAX's description of how an array is distributed: a device Mesh with named axes plus a PartitionSpec listing, per array dimension, which mesh axis it is split along (or None for replicated).",
+   "intuition": "A label on the tensor that says \"columns split over the model team, rows copied everywhere.\"",
+   "technical": "`NamedSharding(mesh=Mesh(\"data\": 2, \"model\": 4), spec=PartitionSpec(None, \"model\"))` for the first Dense kernel.",
+   "significance": "It is the runtime ground truth for checking that a LayoutMap was applied.",
+   "example": "PartitionSpec(None, \"model\") on a (16000, 64000) array means four (16000, 16000) shards, each stored on 2 devices.",
+   "misconception": "Axes not mentioned in the spec are not unused. Data is replicated across them.",
+   "related": ["layout_map", "device_mesh", "sharding"],
+   "source": "book"
+  },
+  {
+   "id": "data_prefetching",
+   "name": "Data prefetching with tf.data",
+   "definition": "Preparing upcoming batches in the background while the accelerator processes the current batch, via dataset.prefetch(buffer_size).",
+   "intuition": "Like a waiter bringing the next dish while you're still eating the current one.",
+   "technical": "`dataset.prefetch(tf.data.AUTOTUNE)` lets tf.data choose the buffer size automatically.",
+   "significance": "It keeps expensive accelerators from idling on I/O, which matters more as devices multiply.",
+   "example": "`train_ds = train_ds.batch(256).prefetch(tf.data.AUTOTUNE)` (AI-written example).",
+   "misconception": "Prefetch does not make data loading itself faster. It hides the latency by overlapping it with compute.",
+   "related": ["tf_data", "data_parallelism"],
+   "source": "book"
+  },
+  {
+   "id": "tpu",
+   "name": "Tensor Processing Unit (TPU)",
+   "definition": "Google's application-specific integrated circuit (ASIC) for deep learning, available on Google Cloud and Colab.",
+   "intuition": "A chip with almost all of its silicon devoted to large matrix multiplications.",
+   "technical": "Per the book: TPU v2 is typically 15x faster than an NVIDIA P100 and on average 3x more cost-effective than GPU training.",
+   "significance": "Fast and cheap training for those willing to adapt their pipeline (large batches, cached data, step fusing).",
+   "example": "Free TPU v2 runtime in Colab.",
+   "misconception": "A TPU is not automatically fast. Small batches or a slow input pipeline can leave it mostly idle (p.580).",
+   "related": ["asic", "step_fusing", "bfloat16"],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Inspecting a variable's sharding",
+   "original_code": ">>> model.layers[0].kernel.value.sharding\nNamedSharding(\n    mesh=Mesh(\"data\": 2, \"model\": 4),\n    spec=PartitionSpec(None, \"model\")\n)",
+   "language": "python",
+   "what_it_does": "Queries the JAX sharding of the first Dense layer's kernel and shows the printed result.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "`model.layers[0]` is the Dense(64000) layer (the Input is not counted as a layer in Sequential). `.kernel` is the Keras variable; `.value` is the underlying jax.Array; `.sharding` is its distribution."},
+    {"lines": "2-5", "explanation": "Output: a NamedSharding on a mesh with 2 devices along \"data\" and 4 along \"model\", with PartitionSpec(None, \"model\"), i.e. dimension 0 replicated and dimension 1 sharded on \"model\"."}
+   ],
+   "inputs_outputs": "Input: a model created after set_distribution. Output: a NamedSharding object.",
+   "algorithm": "Attribute lookup.",
+   "theory_link": "Confirms that the LayoutMap entry (None, \"model\") was applied.",
+   "parameters": [],
+   "pitfalls": ["Works only with the JAX backend, where .value is a jax.Array.", "If the model was created before set_distribution, the spec will show no sharding."],
+   "illustrative_code": "# AI-written: print the spec of every variable\nfor v in model.variables:\n    print(v.path, v.value.sharding.spec)"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Visualizing the sharding with JAX",
+   "original_code": "import jax\nvalue = model.layers[0].kernel.value\njax.debug.visualize_sharding(value.shape, value.sharding)",
+   "language": "python",
+   "what_it_does": "Renders a grid diagram showing which devices hold which block of the (16000, 64000) kernel.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Imports JAX directly (Keras uses it as its backend)."},
+    {"lines": "2", "explanation": "Gets the raw jax.Array behind the Keras variable."},
+    {"lines": "3", "explanation": "Draws the layout from the array shape and its sharding."}
+   ],
+   "inputs_outputs": "Output: a text/rich diagram printed to the console or notebook.",
+   "algorithm": "Maps each device's index range onto a rectangle of the 2-D array.",
+   "theory_link": "Makes the PartitionSpec visible: four column blocks, each held by two devices (one per data row).",
+   "parameters": [
+    {"name": "value.shape", "role": "Global shape of the array (not the per-device shard shape)."},
+    {"name": "value.sharding", "role": "The NamedSharding to draw."}
+   ],
+   "pitfalls": ["Only 1-D and 2-D shapes are supported by the visualizer (not stated in the book)."]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Reading the sharding: which device holds what",
+   "kind": "breakdown",
+   "body": "With `devices = [\"gpu:0\", ..., \"gpu:7\"]` reshaped into a (2, 4) mesh (p.577), row 0 is gpu:0-3 and row 1 is gpu:4-7. With spec `(None, \"model\")` on the (16000, 64000) kernel:\n\n- columns 0-15999 on gpu:0 and gpu:4\n- columns 16000-31999 on gpu:1 and gpu:5\n- columns 32000-47999 on gpu:2 and gpu:6\n- columns 48000-63999 on gpu:3 and gpu:7\n\nThis is what `visualize_sharding` would label in each of the four column blocks. The exact device-to-mesh mapping is an AI reconstruction from the mesh definition; the book does not show the rendered output.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why input pipelines matter more with more devices",
+   "kind": "numerical",
+   "body": "Suppose one training step on one GPU takes 100 ms and loading a batch takes 20 ms on the CPU. Without prefetching, each step costs 120 ms, so the GPU is busy 83% of the time. With 8 GPUs in data parallel and a global batch 8x larger, compute per step stays about 100 ms, but naive loading of 8x the data can take about 160 ms, so the GPUs idle most of the time. Prefetching (overlap) plus parallel map/AUTOTUNE are what bring utilization back up. Illustrative numbers, not from the book.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "svg",
+   "title": "What visualize_sharding shows for the first Dense kernel",
+   "why": "The page calls jax.debug.visualize_sharding on the (16000, 64000) kernel with PartitionSpec(None, \"model\"). This sketch shows the expected block layout (AI reconstruction).",
+   "svg": "<svg viewBox=\"0 0 420 140\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"monospace\" font-size=\"12\" fill=\"currentColor\"><g fill=\"none\" stroke=\"currentColor\"><rect x=\"10\" y=\"20\" width=\"100\" height=\"90\"/><rect x=\"110\" y=\"20\" width=\"100\" height=\"90\"/><rect x=\"210\" y=\"20\" width=\"100\" height=\"90\"/><rect x=\"310\" y=\"20\" width=\"100\" height=\"90\"/></g><text x=\"30\" y=\"70\">GPU 0,4</text><text x=\"130\" y=\"70\">GPU 1,5</text><text x=\"230\" y=\"70\">GPU 2,6</text><text x=\"330\" y=\"70\">GPU 3,7</text><text x=\"10\" y=\"14\">kernel (16000, 64000), spec (None, \"model\")</text><text x=\"10\" y=\"128\">each block: (16000, 16000), replicated on both data rows</text></svg>"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "PartitionSpec(None, \"model\") means the kernel is not distributed along the data axis, so half the devices don't have it.", "correction": "Axes absent from the spec are replicated: every device in both data rows holds one column block."},
+  {"claim": "You must convert NumPy arrays to tf.data yourself or fit() will fail.", "correction": "The sidebar says NumPy arrays work because fit() converts them to Datasets. tf.data is recommended for performance, not required."},
+  {"claim": "TPUs are always 15x faster than GPUs.", "correction": "The book's figure compares TPU v2 with an NVIDIA P100, and gains depend on keeping the TPU busy (large batches, step fusing, fast input)."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 577, "note": "The DeviceMesh(shape=(2, 4), axis_names=[\"data\", \"model\"]) shown in the NamedSharding."},
+   {"page": 578, "note": "The LayoutMap entries whose effect is inspected here."},
+   {"page": 572, "note": "Start of section 18.2 on multi-device training."},
+   {"page": 573, "note": "Data parallelism, the setting in which input pipelines must feed several devices."},
+   {"page": 272, "note": "tf.data.Dataset objects introduced for image classification."}
+  ],
+  "later": [
+   {"page": 580, "note": "Using TPUs with set_distribution, caching data from GCS, and step fusing."},
+   {"page": 582, "note": "bfloat16, a 16-bit format that works especially well on TPUs."}
+  ],
+  "prerequisites": [
+   {"page": 578, "note": "ModelParallel and set_distribution."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 578, "note": "LayoutMap and ModelParallel code."}
+  ],
+  "related_figures": [
+   {"page": 575, "note": "Figure 18.2: two replicas, each over four devices."}
+  ]
+ },
+ "takeaways": [
+  "The LayoutMap + ModelParallel recipe scales to LLM-size training runs on any number of devices.",
+  "Check sharding with `variable.value.sharding`, which returns a NamedSharding (mesh + PartitionSpec).",
+  "`jax.debug.visualize_sharding(value.shape, value.sharding)` draws which devices hold which block.",
+  "Feed distributed training with tf.data.Dataset and prefetch (AUTOTUNE if unsure).",
+  "TPUs are deep-learning ASICs. The book cites TPU v2 as typically 15x faster than a P100 and 3x more cost-effective, and free in Colab."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "What does `PartitionSpec(None, \"model\")` mean for the (16000, 64000) kernel?", "options": ["Both dimensions are sharded", "Rows are replicated; columns are split across the model axis", "Rows are split across the model axis; columns replicated", "The kernel is only stored on the model devices of the first data row"], "answer": "Rows are replicated; columns are split across the model axis", "explanation": "Each spec entry refers to one dimension: None means replicated and \"model\" means sharded over the model axis. The data axis is unmentioned, so the kernel is replicated across both data rows, which rules out the last option.", "page_refs": [579, 578]},
+  {"id": "q2", "type": "short", "question": "Which attribute chain does the book use to inspect the sharding of the first layer's kernel?", "options": [], "answer": "model.layers[0].kernel.value.sharding", "explanation": "`.value` exposes the backend jax.Array, which carries `.sharding`.", "page_refs": [579]},
+  {"id": "q3", "type": "conceptual", "question": "Why does prefetching help especially in distributed training?", "options": [], "answer": "More devices consume batches faster, so the host input pipeline easily becomes the bottleneck. Prefetching overlaps preparing the next batches with the current computation, so devices don't sit idle.", "explanation": "The sidebar recommends tf.data plus prefetch for best performance in distributed training.", "page_refs": [579]},
+  {"id": "q4", "type": "mcq", "question": "What is an ASIC?", "options": ["A general-purpose graphics processor", "An application-specific integrated circuit designed for one kind of workload", "A software library for distributed training", "A Keras distribution strategy"], "answer": "An application-specific integrated circuit designed for one kind of workload", "explanation": "The page defines single-purpose deep-learning chips as ASICs (application-specific integrated circuits), with the TPU as the main example. GPUs are general purpose, and the other two options are software.", "page_refs": [579]},
+  {"id": "q5", "type": "short", "question": "According to the book, how does TPU v2 compare to an NVIDIA P100 in speed and cost-effectiveness?", "options": [], "answer": "Typically 15x faster, and about 3x more cost-effective on average for most models.", "explanation": "Both figures are stated in the TPU training paragraph.", "page_refs": [579]},
+  {"id": "q6", "type": "self", "question": "If one of your LayoutMap paths had a typo, how would you notice it using the tools on this page?", "options": [], "answer": "Inspect `.value.sharding` (or visualize_sharding) for each variable. The misnamed variable would not show the intended PartitionSpec and would appear unsharded/replicated.", "explanation": "Inspecting shardings is the debugging tool introduced on this page.", "page_refs": [579, 578]}
+ ]
+}

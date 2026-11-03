@@ -1,0 +1,323 @@
+{
+  "page_id": "page_417",
+  "pdf_page": 417,
+  "printed_page": "393",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:52:40Z",
+    "confidence": "medium",
+    "review_flags": [
+      "Listing 14.7 is corrupted in the printed book itself (visible on the page image, not just in extraction): after `vocab = [\"[` the listing jumps straight to `<!\\S)\\S+ \\S+(?!\\S)\", word, overlapped=True)`. The rest of compute_sub_word_vocabulary (vocabulary initialization, merge loop, return of vocab and merges), the SubWordTokenizer class header, __init__, standardize, and the start of bpe_merge (`while True:` / `pairs = re.findall(r\"(?`) are missing. The typesetting probably swallowed text after a '<' character as if it were markup.",
+      "Same corruption in SubWordTokenizer.split: `for word in re.findall(r\"[` is cut off (the regex `[\\w]+|[.,!?;]\", inputs):` is missing), and the line that joins characters with a space, which the callout 'Joins all characters with a space' points to, is blank.",
+      "The reconstruction in illustrative_code is AI-written from the surviving fragments, Listing 14.6 (p.416) and the outputs on p.418. It is not the authors' verbatim code."
+    ],
+    "extraction_quality": "Extraction faithfully reproduces what is printed, but the printed listing is broken (see review flags). Notes explain both the printed fragments and a clearly labeled reconstruction."
+  },
+  "overview": {
+    "title": "Learning a BPE vocabulary and the SubWordTokenizer (Listing 14.7)",
+    "chapter": "14 Text classification",
+    "section": "14.2 Preparing text data",
+    "subsection": "14.2.2 Subword tokenization",
+    "main_topic": "Turning the merge loop into a full vocabulary-learning function with ranked merge rules, and a tokenizer that applies those rules to new text",
+    "central_idea": "A BPE vocabulary starts with every character in the corpus and grows by one merged symbol per merge until it reaches the target size. The merges are stored with their rank. To tokenize new text, each word is split into characters and the learned merges are applied in rank order (earliest learned first) until no learned merge applies.",
+    "importance": "This is the complete subword tokenizer that the authors train on Moby Dick on p.418. The tokenizer RoBERTa uses is described as almost the same (p.480). It also shows that BPE has two phases: learning merges from a corpus and applying them to new text.",
+    "learning_objectives": [
+      "Describe how compute_sub_word_vocabulary initializes the vocabulary from character frequencies and grows it with merges",
+      "Explain why merge rules are stored with a rank and how bpe_merge uses the rank",
+      "Explain why bpe_merge needs overlapping matches of adjacent symbol pairs",
+      "Trace SubWordTokenizer on a new word using ranked merges",
+      "Recognize which parts of the printed Listing 14.7 are missing"
+    ],
+    "prerequisites": [
+      "count_and_split_words (Listing 14.5, p.415)",
+      "count_pairs and merge_pair (Listing 14.6, p.416)",
+      "The CharTokenizer/WordTokenizer interface: standardize, split, index, __call__ (pp.411-412)",
+      "`import regex as re` from p.408, which provides the overlapped= argument"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The authors extend the merge loop of p.416 into a **full function for computing a BPE vocabulary**. The vocabulary **starts with all characters found in the input text**, and **merged symbols (larger and larger subwords) are added until it reaches the desired length**. A **separate dictionary of merge rules** is also kept, **including the rank order in which they were applied**. These ranked rules are what the tokenizer uses on new text.\n\n**Listing 14.7** has two parts:\n\n1. `compute_sub_word_vocabulary(dataset, vocab_size)` calls `count_and_split_words`, then sums **character frequencies** weighted by word counts (`char_counts[char] += counts[word]`) and sorts them with `most_common()`. This is why the vocabulary on p.418 begins `\"[UNK]\", \"e\", \"t\", \"a\", ...`. It then builds `vocab = [\"[UNK]\", ...]`.\n2. A `SubWordTokenizer` class with the same interface as the earlier tokenizers. Its key method, **`bpe_merge(word)`**, loops: find all adjacent symbol pairs with `re.findall(r\"(?<!\\S)\\S+ \\S+(?!\\S)\", word, overlapped=True)`; stop if there are none; pick `best = min(pairs, key=lambda pair: self.merges.get(pair, 1e9))`, the pair with the **lowest rank** (\"we apply merge rules in 'rank' order; more frequent pairs are merged first\"); stop if `best` isn't a known merge; otherwise merge it with the same lookaround regex as `merge_pair`. `split` finds words, joins their characters with spaces, applies `bpe_merge` and collects the resulting symbols. `index` and `__call__` are the same as in the other tokenizers.\n\n**Caution:** the printed listing is **typographically corrupted**. A large block after `vocab = [\"[` (the rest of the training function, the class header and `__init__`, the start of `bpe_merge`) is missing, and so are the splitting regex and the character-joining line in `split`. These notes explain the surviving lines and give a clearly labeled reconstruction. The page ends by introducing a test on the full text of Moby Dick (p.418).",
+  "paragraphs": [
+    {
+      "ref": "p417_e03",
+      "excerpt": "We can now extend this to a full function for computing a byte-pair encoding",
+      "what_it_says": "The merging procedure becomes a full vocabulary-learning function. The vocabulary starts with all characters in the input text, and merged symbols are added until it reaches the desired length. A separate dictionary records the merge rules with the rank order in which they were applied. Next comes using these rules to tokenize new text.",
+      "what_it_means": "Training BPE produces two things. (1) A vocabulary: all base characters plus one entry per merge, so vocab_size directly sets the number of merges (vocab_size minus the number of characters minus 1 for \"[UNK]\"). (2) An ordered list of merges: the recipe for segmenting any new word in the same way the training corpus was segmented.",
+      "why_it_matters": "Starting from all characters is why the tokenizer never needs \"[UNK]\" on its training text (p.418): any word can at worst be spelled character by character. Ranked merges make tokenization deterministic and consistent with training.",
+      "technical_idea": "Applying merges in training order reproduces how the training procedure would have segmented that word, since BPE learned the merges greedily in that order.",
+      "terminology": [
+        {"term": "merge rule rank", "meaning": "The position (0, 1, 2, ...) at which a merge was learned; lower rank means learned earlier, i.e. more frequent."},
+        {"term": "vocab_size", "meaning": "The target number of vocabulary entries, which determines how many merges are learned."}
+      ],
+      "connections": [
+        "p.416: count_pairs/merge_pair, the inner step of training",
+        "p.418: vocab_size=2,000 on Moby Dick; vocabulary starts with [UNK] and characters by frequency"
+      ]
+    },
+    {
+      "ref": "p417_e06",
+      "excerpt": "Let's try out our tokenizer on the full text of Moby Dick:",
+      "what_it_says": "This sentence introduces the experiment of training and running the subword tokenizer on Moby Dick.",
+      "what_it_means": "The same benchmark used for the character and word tokenizers (pp.413-414) is now applied to the subword tokenizer.",
+      "why_it_matters": "It sets up the three-way comparison: 63 (char), 13 (word), 16 (subword) tokens for the test sentence.",
+      "connections": [
+        "p.418: results of the Moby Dick run"
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "byte_pair_encoding",
+      "name": "Byte-pair encoding (BPE)",
+      "definition": "A subword algorithm with a training phase (learn ranked merges from a corpus) and an encoding phase (apply them to new words in rank order).",
+      "intuition": "Training writes the recipe; encoding follows it step by step.",
+      "technical": "Training: vocabulary = [UNK] + characters, then greedy merges until vocab_size. Encoding: split a word into characters, repeatedly merge the present pair with the lowest rank, stop when no pair has a rank.",
+      "significance": "Gives deterministic segmentation of any input with a fixed-size vocabulary.",
+      "example": "With the toy merges of p.416, 'brownie' → 'brown i e'.",
+      "misconception": "Encoding does not recount pair frequencies in the new text; it only uses the stored ranks.",
+      "related": ["subword_tokenization", "merge_rule", "tokenization"],
+      "source": "book"
+    },
+    {
+      "id": "merge_rule",
+      "name": "Ranked merge rules",
+      "definition": "A dictionary mapping a pair string such as \"o w\" to its rank (the order in which it was learned).",
+      "intuition": "A prioritized list: try the most important shortcuts first.",
+      "technical": "bpe_merge picks min(pairs, key=lambda pair: self.merges.get(pair, 1e9)); unknown pairs get rank 1e9, effectively infinity.",
+      "significance": "Makes encoding match the training procedure; more frequent pairs are merged first.",
+      "example": "Toy ranks: 'o w'→0, 't h'→1, 'th e'→2, 'b r'→3, ...",
+      "misconception": "Merging the most frequent pair in the input word is not the same thing; rank comes from the training corpus.",
+      "related": ["byte_pair_encoding"],
+      "source": "book"
+    },
+    {
+      "id": "subword_tokenization",
+      "name": "Subword tokenization",
+      "definition": "Tokenization with learned units between characters and words.",
+      "intuition": "Frequent words whole, rare words in pieces.",
+      "technical": "SubWordTokenizer implements it with standardize → split (words → chars → bpe_merge) → index.",
+      "significance": "Achieves short sequences with no [UNK] on the training text (p.418).",
+      "example": "Test line: 16 subword tokens vs. 13 words vs. 63 characters.",
+      "misconception": "Subword tokenizers can still produce [UNK] for characters never seen in training.",
+      "related": ["byte_pair_encoding", "tokenization"],
+      "source": "book"
+    },
+    {
+      "id": "overlapping_matches",
+      "name": "Overlapping regex matches",
+      "definition": "Returning every match even when matches share characters; offered by the third-party regex module via overlapped=True.",
+      "intuition": "In 'b r o w n' you want b r, r o, o w and w n, not just b r and o w.",
+      "technical": "Standard findall resumes after the end of each match, so adjacent pairs that share a symbol would be skipped. The book imports `regex as re` on p.408; the stdlib re module has no overlapped argument.",
+      "significance": "Without it, bpe_merge could miss the lowest-ranked pair and segment words inconsistently.",
+      "example": "Non-overlapping on 'f o x': ['f o'] only; overlapping: ['f o', 'o x'].",
+      "misconception": "This listing doesn't run with Python's built-in re; you need the regex package.",
+      "related": ["regex_lookaround"],
+      "source": "ai_explanation"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Choosing the next merge during encoding",
+      "latex": "p^{*} = \\arg\\min_{p \\in P(w)} \\operatorname{rank}(p), \\quad \\operatorname{rank}(p)=10^{9} \\text{ if } p \\notin \\text{merges}",
+      "source_text": "best = min(pairs, key=lambda pair: self.merges.get(pair, 1e9))",
+      "variables": [
+        {"symbol": "P(w)", "meaning": "set of adjacent symbol pairs in the current segmentation of word w"},
+        {"symbol": "\\operatorname{rank}(p)", "meaning": "order index at which merge p was learned (0 = first)"},
+        {"symbol": "p^{*}", "meaning": "pair merged next; if rank(p*) = 10^9, encoding stops"}
+      ],
+      "operations": "Look up each present pair's rank and take the smallest.",
+      "purpose": "Applies learned merges in the same order as training.",
+      "interpretation": "Earlier-learned (more frequent in training) merges take priority. The sentinel 1e9 marks 'no rule'.",
+      "intuition": "Always apply the most important shortcut that is available.",
+      "numerical_example": "Word 'b r o w n i e' with toy ranks: present known pairs b r (3), o w (0) → merge o w first.",
+      "source": "book",
+      "book_ref": "p.417"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": "14.7",
+      "title": "Computing a byte-pair encoding vocabulary (as printed; corrupted)",
+      "original_code": "def compute_sub_word_vocabulary(dataset, vocab_size):\n    counts = count_and_split_words(dataset)\n\n    char_counts = collections.Counter()\n    for word in counts:\n        for char in word.split():\n            char_counts[char] += counts[word]\n    most_common = char_counts.most_common()\n    vocab = [\"[\n            <\n            <!\\S)\\S+ \\S+(?!\\S)\", word, overlapped=True)\n            if not pairs:\n                break\n            best = min(pairs, key=lambda pair: self.merges.get(pair, 1e9))\n            if best not in self.merges:\n                break\n            first, second = best.split()\n            split = re.compile(f\"(?<!\\S){first} {second}(?!\\S)\")\n            merged = f\"{first}{second}\"\n            word = split.sub(merged, word)\n        return word\n\n    def split(self, inputs):\n        tokens = []\n        for word in re.findall(r\"[\n\n            word=self.bpe_merge(word)\n\n            tokens.extend(word.split())\n        return tokens\n\n    def index(self, tokens):\n        return [self.vocabulary.get(t, self.unk_id) for t in tokens]\n\n    def __call__(self, inputs):\n        inputs = self.standardize(inputs)\n        tokens = self.split(inputs)\n        indices = self.index(tokens)\n        return indices",
+      "language": "python",
+      "what_it_does": "Learns a BPE vocabulary plus ranked merges (first part, mostly cut off in print) and defines a SubWordTokenizer that applies them to new text.",
+      "line_explanations": [
+        {"lines": "1-2", "explanation": "Build the character-split word counts of the training corpus (Listing 14.5)."},
+        {"lines": "4-8", "explanation": "Count each character weighted by word frequency, then sort by frequency. This fixes the order of the base vocabulary: on Moby Dick, e, t, a, o, n, ... (p.418)."},
+        {"lines": "9-10", "explanation": "Printed fragment `vocab = [\"[` followed by a stray '<'. The rest of the training function and the class beginning are missing from the printed book; see the reconstruction."},
+        {"lines": "11", "explanation": "Tail of `pairs = re.findall(r\"(?<!\\S)\\S+ \\S+(?!\\S)\", word, overlapped=True)` inside bpe_merge (callout 'Matches all symbol pairs in the text'). It finds every adjacent pair 'A B' of whole symbols, overlapping, so pairs that share a symbol are all returned."},
+        {"lines": "12-13", "explanation": "No pairs left (the word is a single symbol): stop."},
+        {"lines": "14", "explanation": "Choose the pair with the lowest learned rank; pairs without a rule get 1e9 (callout: 'We apply merge rules in rank order. More frequent pairs are merged first.')."},
+        {"lines": "15-16", "explanation": "If even the best pair has no rule, no further merge is possible: stop."},
+        {"lines": "17-20", "explanation": "Split the pair string 'A B' into its two symbols and merge every whole-symbol occurrence, exactly as merge_pair does on p.416."},
+        {"lines": "21", "explanation": "Return the final space-separated segmentation."},
+        {"lines": "23-29", "explanation": "split: find words (regex cut off in print; callout 'Split words'), join characters with spaces (line missing; callout 'Joins all characters with a space'), apply bpe_merge (callout 'Applies byte-pair encoding merge rules'), and extend the token list with the resulting symbols."},
+        {"lines": "31-38", "explanation": "index and __call__ are identical to the Char/Word tokenizers: look up IDs with an [UNK] fallback; run standardize → split → index."}
+      ],
+      "inputs_outputs": "Training: dataset (list of strings), vocab_size → (vocabulary dict, merges dict) per p.418's usage. Tokenizer: string → list of int IDs.",
+      "algorithm": "BPE training (greedy merges until vocab_size) and BPE encoding (repeated lowest-rank merge per word).",
+      "theory_link": "Implements the subword goals of p.414: frequent words compress to one token, while rare words fall back to pieces and characters.",
+      "parameters": [
+        {"name": "vocab_size", "role": "Target vocabulary size (2,000 on p.418), which determines the number of merges."},
+        {"name": "overlapped=True", "role": "regex-module option so every adjacent pair is found."},
+        {"name": "1e9", "role": "Sentinel rank for pairs that aren't learned merges."}
+      ],
+      "pitfalls": [
+        "The printed listing is incomplete and won't run as printed; see the reconstruction and the review flags.",
+        "overlapped= requires `import regex as re` (p.408); the stdlib re module raises TypeError.",
+        "bpe_merge recompiles a regex for every merge of every word, which is slow; real tokenizers cache word segmentations.",
+        "Characters absent from training map to [UNK]; characters not matched by the word regex are dropped entirely."
+      ],
+      "illustrative_code": "# AI RECONSTRUCTION (not verbatim from the book) of the missing parts,\n# consistent with Listing 14.6, the printed fragments and p.418's outputs.\nimport collections\nimport regex as re  # p.408; needed for overlapped=True\n\ndef compute_sub_word_vocabulary(dataset, vocab_size):\n    counts = count_and_split_words(dataset)\n    char_counts = collections.Counter()\n    for word in counts:\n        for char in word.split():\n            char_counts[char] += counts[word]\n    most_common = char_counts.most_common()\n    vocab = [\"[UNK]\"] + [char for char, freq in most_common]\n    merges = []\n    while len(vocab) < vocab_size:\n        pairs = count_pairs(counts)\n        if not pairs:\n            break\n        first, second = max(pairs, key=pairs.get)\n        counts = merge_pair(counts, first, second)\n        vocab.append(f\"{first}{second}\")\n        merges.append(f\"{first} {second}\")\n    vocab = dict((token, i) for i, token in enumerate(vocab))\n    merges = dict((pair, rank) for rank, pair in enumerate(merges))\n    return vocab, merges\n\nclass SubWordTokenizer:\n    def __init__(self, vocabulary, merges):\n        self.vocabulary = vocabulary\n        self.merges = merges\n        self.unk_id = vocabulary[\"[UNK]\"]\n\n    def standardize(self, inputs):\n        return inputs.lower()\n\n    def bpe_merge(self, word):\n        while True:\n            pairs = re.findall(r\"(?<!\\S)\\S+ \\S+(?!\\S)\", word, overlapped=True)\n            if not pairs:\n                break\n            best = min(pairs, key=lambda pair: self.merges.get(pair, 1e9))\n            if best not in self.merges:\n                break\n            first, second = best.split()\n            split = re.compile(rf\"(?<!\\S){first} {second}(?!\\S)\")\n            word = split.sub(f\"{first}{second}\", word)\n        return word\n\n    def split(self, inputs):\n        tokens = []\n        for word in re.findall(r\"[\\w]+|[.,!?;]\", inputs):\n            word = \" \".join(re.findall(r\".\", word))\n            word = self.bpe_merge(word)\n            tokens.extend(word.split())\n        return tokens\n\n    def index(self, tokens):\n        return [self.vocabulary.get(t, self.unk_id) for t in tokens]\n\n    def __call__(self, inputs):\n        return self.index(self.split(self.standardize(inputs)))"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Encoding a new word with the toy merges",
+      "kind": "step_by_step",
+      "body": "Suppose training on the toy data of p.416 produced ranks `o w`→0, `t h`→1, `th e`→2, `b r`→3, `br ow`→4, `brow n`→5, `f o`→6, `fo x`→7, `q u`→8, `qu i`→9. Tokenize **\"brownie\"**:\n\n1. `b r o w n i e`: known pairs b r (3), o w (0) → merge `o w` → `b r ow n i e`\n2. known pairs: b r (3) → `br ow n i e`\n3. br ow (4) → `brow n i e`\n4. brow n (5) → `brown i e`\n5. pairs `brown i`, `i e`: neither is a rule → stop.\n\nTokens: `brown`, `i`, `e`. 'brownie' never appeared in training, but it is encoded with no [UNK] and reuses the learned 'brown'. (Illustrative example, not in the book.)",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Why overlapping matches are required",
+      "kind": "breakdown",
+      "body": "In `b r ow n`, a non-overlapping search for `\\S+ \\S+` would return `b r` and then `ow n`, skipping `r ow`. If `r ow` had the lowest rank, bpe_merge would never see it and would segment the word differently from training. `overlapped=True` (from the `regex` package the chapter imports on p.408) returns all three pairs.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Two phases, two costs",
+      "kind": "application",
+      "body": "Training recounts pairs over the whole corpus once per merge, so for about 1,900 merges on Moby Dick that is slow (p.418: about a minute). Encoding only touches one word at a time and needs at most (number of characters − 1) merges per word. Production tokenizers (SentencePiece, used for the mini-GPT on p.495, or Hugging Face tokenizers) implement both in compiled code with caching.",
+      "source": "inference"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "SubWordTokenizer pipeline",
+      "why": "Shows the call chain of the printed class: standardize → split (words → characters → bpe_merge) → index.",
+      "mermaid": "flowchart LR\n A[\"input text\"] --> B[\"standardize<br/>lowercase\"]\n B --> C[\"find words<br/>[\\\\w]+ or punctuation\"]\n C --> D[\"join chars with spaces<br/>'b r o w n'\"]\n D --> E[\"bpe_merge<br/>apply ranked merges\"]\n E --> F[\"symbols<br/>'brown'\"]\n F --> G[\"index<br/>vocabulary.get(t, unk_id)\"]\n G --> H[\"token IDs\"]"
+    },
+    {
+      "id": "v2",
+      "type": "mermaid",
+      "title": "The bpe_merge loop",
+      "why": "Shows the control flow of the surviving fragment of bpe_merge, including both stopping conditions.",
+      "mermaid": "flowchart TD\n S[\"word = 'a b c ...'\"] --> P[\"pairs = all adjacent pairs<br/>(overlapped)\"]\n P --> Q{\"pairs empty?\"}\n Q -- yes --> R[\"return word\"]\n Q -- no --> B[\"best = pair with lowest rank<br/>(unknown = 1e9)\"]\n B --> K{\"best in merges?\"}\n K -- no --> R\n K -- yes --> M[\"merge best everywhere\"]\n M --> P"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "To tokenize new text, BPE counts pair frequencies in that text.",
+      "correction": "Encoding only uses the ranks learned during training; the lowest-rank pair present is merged first."
+    },
+    {
+      "claim": "The vocabulary only contains merged subwords.",
+      "correction": "It starts with \"[UNK]\" and every character in the training text, and merged symbols are added after them, so any word from that character set can be encoded."
+    },
+    {
+      "claim": "Listing 14.7 as printed is runnable.",
+      "correction": "The printed listing is missing a large block and part of split. Use the book's companion code or a reconstruction like the one above."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 408, "note": "`import regex as re`, which provides findall(..., overlapped=True)"},
+      {"page": 415, "note": "count_and_split_words (Listing 14.5)"},
+      {"page": 416, "note": "count_pairs and merge_pair (Listing 14.6), reused inside training and mirrored in bpe_merge"},
+      {"page": 411, "note": "Tokenizer interface: standardize, split, index, __call__"}
+    ],
+    "later": [
+      {"page": 418, "note": "Training on Moby Dick with vocab_size 2,000; 16 tokens for the test line; no [UNK]"},
+      {"page": 480, "note": "RoBERTa's tokenizer is almost the same as this SubWordTokenizer"},
+      {"page": 495, "note": "SentencePiece implements the same BPE technique in C++"}
+    ],
+    "prerequisites": [
+      {"page": 416, "note": "The greedy merge step"}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 416, "note": "Listing 14.6"},
+      {"page": 418, "note": "Code that calls compute_sub_word_vocabulary and SubWordTokenizer"}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "The BPE vocabulary starts with [UNK] plus all characters (ordered by frequency) and grows by one merged symbol per merge until vocab_size.",
+    "Training also returns a merges dict that maps each pair string to its rank.",
+    "bpe_merge repeatedly merges the present pair with the lowest rank and stops when no pair has a learned rule.",
+    "Finding pairs needs overlapping matches (regex module, overlapped=True).",
+    "SubWordTokenizer has the same standardize/split/index/__call__ interface as the earlier tokenizers.",
+    "The printed Listing 14.7 is corrupted; a large middle section and part of split are missing."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "In bpe_merge, which pair is merged at each step?",
+      "options": ["The most frequent pair in the input word", "The pair with the lowest rank in self.merges", "The leftmost pair", "A random pair from the vocabulary"],
+      "answer": "The pair with the lowest rank in self.merges",
+      "explanation": "best = min(pairs, key=lambda pair: self.merges.get(pair, 1e9)). The callout says merge rules are applied in rank order. Frequency in the input word isn't used. The leftmost pair is only chosen if it has the lowest rank. Nothing is random.",
+      "page_refs": [417]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "What are the two conditions under which bpe_merge stops?",
+      "options": [],
+      "answer": "(1) No pairs remain (the word is a single symbol); (2) the best pair is not in self.merges, meaning no learned rule applies to any present pair.",
+      "explanation": "The two `break` statements in the printed loop.",
+      "page_refs": [417]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "Why does the vocabulary start with all characters of the training text, and what does that guarantee?",
+      "options": [],
+      "answer": "So any word made of those characters can be encoded, at worst one character per token. That guarantees no [UNK] on text using the training character set.",
+      "explanation": "p.418 confirms: the vocabulary contains every character in the source text, so the worst case is tokenizing a word into individual characters.",
+      "page_refs": [417, 418]
+    },
+    {
+      "id": "q4",
+      "type": "short",
+      "question": "Why does the pair search use overlapped=True?",
+      "options": [],
+      "answer": "Adjacent pairs share symbols ('b r', 'r o', 'o w'); a normal findall would skip every other pair, so the lowest-rank pair might be missed.",
+      "explanation": "overlapped is a feature of the third-party regex module, which the chapter imports as re on p.408.",
+      "page_refs": [408, 417]
+    },
+    {
+      "id": "q5",
+      "type": "math",
+      "question": "If the training corpus contains 60 distinct characters and vocab_size = 2,000, how many merges does compute_sub_word_vocabulary learn (assuming pairs never run out)?",
+      "options": [],
+      "answer": "2,000 − 1 ([UNK]) − 60 = 1,939 merges.",
+      "explanation": "Each merge adds exactly one vocabulary entry on top of [UNK] and the base characters (structure per the page's description; the exact character count for Moby Dick isn't given on this page).",
+      "page_refs": [417, 418]
+    },
+    {
+      "id": "q6",
+      "type": "conceptual",
+      "question": "Which parts of Listing 14.7 are missing in the printed book, and how can you tell?",
+      "options": [],
+      "answer": "After `vocab = [\"[` the code jumps into the middle of bpe_merge: the end of the training function, the class definition, __init__, standardize and the start of bpe_merge are missing. In split, the regex after r\"[ and the line joining characters with a space (the target of the 'Joins all characters with a space' callout) are also missing.",
+      "explanation": "The indentation jumps from function level to deep inside a method, a stray '<' appears, and a callout points at a blank line.",
+      "page_refs": [417]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Using the toy ranks from p.416, can you tokenize 'flow'?",
+      "options": [],
+      "answer": "'f l o w' → merge 'o w' (rank 0) → 'f l ow'; pairs 'f l' and 'l ow' have no rules → tokens f, l, ow.",
+      "explanation": "Only learned merges apply, in rank order.",
+      "page_refs": [416, 417]
+    }
+  ]
+}

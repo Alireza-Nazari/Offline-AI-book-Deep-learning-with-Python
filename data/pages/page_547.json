@@ -1,0 +1,637 @@
+{
+ "page_id": "page_547",
+ "pdf_page": 547,
+ "printed_page": "523",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T10:00:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. The code (continuation of the block begun on p.546) is extracted verbatim; blank lines between groups are not preserved in the extraction but are visible on the page. Callouts captured, including the printed typo 'Dowsampling stage'. The last paragraph is cut mid-sentence ('between 1') and continues on p.548."
+ },
+ "overview": {
+  "title": "get_model(): the full U-Net denoiser; diffusion time introduced",
+  "chapter": "17 Image generation",
+  "section": "17.2 Diffusion models",
+  "subsection": "17.2.3 The concepts of diffusion time and diffusion schedule",
+  "main_topic": "The end of residual_block and the complete get_model() function that builds the two-input U-Net (noisy images + noise rates → predicted noise masks), how the widths argument shapes it, and the start of section 17.2.3 defining diffusion time.",
+  "central_idea": "get_model() conditions the U-Net on the noise rate by broadcasting it to a full-resolution channel, runs downsampling, middle and upsampling stages built from residual blocks with concatenated skips, and ends with a zero-initialized 1 × 1 convolution so that the untrained model predicts 'no noise'. Diffusion time indexes progress through the denoising loop.",
+  "importance": "This is the complete denoising network used for the rest of section 17.2. Understanding its shapes and design choices (noise conditioning, skip stack, zero init) is needed to follow training (p.549-550) and generation (p.551).",
+  "learning_objectives": [
+   "Finish residual_block: 3 × 3 swish convolution, 3 × 3 linear convolution, residual addition.",
+   "Explain how the scalar noise rate is injected into the network via UpSampling2D and Concatenate.",
+   "Trace the tensor shapes through get_model() for widths=[32, 64, 96, 128] and block_depth=2.",
+   "Explain the LIFO use of the skips list and why the last layer is zero-initialized.",
+   "Define diffusion time and the direction in which it runs (from pure noise toward pure signal)."
+  ],
+  "prerequisites": [
+   "The U-Net architecture and residual_block start on p.546",
+   "Keras Functional API with multiple inputs",
+   "Pooling, upsampling and 1 × 1 convolutions",
+   "Figure 17.7's diffusion-time axis (p.544)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The code continues `residual_block` from p.546: a **3 × 3 `Conv2D` with `swish` activation**, a second **3 × 3 `Conv2D` without activation**, then **`x = x + residual`**.\n\n`get_model(image_size, widths, block_depth)` builds the denoiser:\n\n- Two inputs: `noisy_images` of shape `(image_size, image_size, 3)` and `noise_rates` of shape `(1, 1, 1)`.\n- The image goes through a 1 × 1 `Conv2D(widths[0])`. The noise rate is stretched to full resolution with `UpSampling2D(image_size, interpolation=\"nearest\")` and **concatenated** as an extra channel.\n- **Downsampling stage**: for each width except the last, `block_depth` residual blocks (each output pushed onto `skips`), then `AveragePooling2D(pool_size=2)`.\n- **Middle stage**: `block_depth` residual blocks at `widths[-1]`.\n- **Upsampling stage**: for each width in reverse, `UpSampling2D(size=2, interpolation=\"bilinear\")`, then `block_depth` times: concatenate with `skips.pop()` and apply a residual block.\n- Output: `Conv2D(3, 1, kernel_initializer=\"zeros\")` produces `pred_noise_masks`. The callout explains that zero init makes the model predict only zeros at first, i.e. the default assumption before training is 'no noise'.\n\nThe model is instantiated with something like `get_model(image_size=128, widths=[32, 64, 96, 128], block_depth=2)`. `widths` lists the `Conv2D` sizes per stage: layers get bigger as resolution shrinks (32 to 128) and smaller as it grows back (128 to 32).\n\n**Section 17.2.3** begins: the diffusion process is a series of denoising steps from a pure-noise image to a pure-signal image. The index of the current step is the **diffusion time** (Figure 17.7). The book uses a continuous value between 1 and 0 (the sentence finishes on p.548).",
+ "paragraphs": [
+  {
+   "ref": "p547_e04",
+   "excerpt": "You would instantiate the model with something like `get_model(image_size=128, ` `widths=[32,",
+   "what_it_says": "The model is instantiated with something like `get_model(image_size=128, widths=[32, 64, 96, 128], block_depth=2)`. `widths` lists the `Conv2D` layer sizes for each successive downsampling or upsampling stage. Layers typically get bigger as the inputs are downsampled (32 to 128 units) and smaller as they are upsampled (128 back to 32).",
+   "what_it_means": "With four widths, the first three (32, 64, 96) define three resolution levels on the way down (128, 64, 32 pixels), and the last (128) is used by the middle stage at 16 × 16. The way up reuses 96, 64, 32 in reverse. `block_depth=2` means two residual blocks per level, so each level stores two skip tensors. Increasing channels while decreasing resolution keeps the computation per layer roughly balanced and gives the low-resolution layers capacity for more abstract features.",
+   "why_it_matters": "These are exactly the arguments used for the real training run (p.553: `DiffusionModel(image_size, widths=[32, 64, 96, 128], block_depth=2)`). Knowing how they map to the architecture lets you scale the model up or down.",
+   "technical_idea": "Precision note: strictly, `widths[-1]` (128) is the width of the middle stage only; the down and up stages use `widths[:-1]`. Minor typos on the page: 'as as upsample' (doubled word) in this paragraph, and the callout 'Dowsampling stage' in the listing.",
+   "terminology": [
+    {
+     "term": "widths",
+     "meaning": "List of channel counts per resolution level; the last entry is the bottleneck width."
+    },
+    {
+     "term": "block_depth",
+     "meaning": "Number of residual blocks per resolution level (and in the middle stage)."
+    }
+   ],
+   "connections": [
+    "p.546: the 128 × 128 → 16 × 16 → 128 × 128 structure these widths produce.",
+    "p.553: the same configuration is used to create the DiffusionModel."
+   ]
+  },
+  {
+   "ref": "p547_e06",
+   "excerpt": "The diffusion process is a series of steps in which we apply our",
+   "what_it_says": "The diffusion process is a series of steps, each applying the denoising autoencoder to erase a small amount of noise, starting from a pure-noise image and ending with a pure-signal image. The index of the current step in the loop is called the diffusion time (Figure 17.7). The book uses a continuous value between 1 (and 0, continued on p.548).",
+   "what_it_means": "Diffusion time is a progress counter for generation. Instead of integer step numbers (step 0, 1, 2, ...), it is a real number between 1 and 0, so the same trained model works for any number of steps: you can generate with 20 steps or 1,000 by choosing how finely to divide [0, 1]. Diffusion time itself is not a noise amount; a separate function, the diffusion schedule (p.548), maps it to noise and signal rates.",
+   "why_it_matters": "It separates when you are in the process from how much noise there is at that point. That split appears directly in the code: training samples random diffusion times (p.550), the schedule converts them to `noise_rates` (the model's second input), and generation steps diffusion time down from 1 to 0 (p.551).",
+   "technical_idea": "Beyond the book: many papers use integer timesteps t = 1..T with T = 1000. The continuous [0, 1] version used here is equivalent to t/T and makes the number of sampling steps a free choice at generation time.",
+   "terminology": [
+    {
+     "term": "diffusion time",
+     "meaning": "The index of the current step in the denoising loop, a continuous value from 1 (start, pure noise) to 0 (end, almost pure signal)."
+    },
+    {
+     "term": "pure signal",
+     "meaning": "An image with (almost) no noise left."
+    }
+   ],
+   "connections": [
+    "p.544: Figure 17.7 labels diffusion times 1, 0.75, 0.5, 0.25, 0.",
+    "p.548: 1 is the start (maximal noise), 0 the end (almost all signal); the diffusion schedule maps time to rates.",
+    "p.550: random diffusion times are sampled during training."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "u_net",
+   "name": "U-Net (implementation)",
+   "definition": "The concrete denoiser built by get_model(): two inputs, residual blocks with average pooling down, bilinear upsampling up, concatenated skips, and a 1 × 1 output convolution.",
+   "intuition": "Down the U to understand the image, back up to draw the noise mask, with skips carrying detail across.",
+   "technical": "For widths=[32, 64, 96, 128], block_depth=2: 6 residual blocks down, 2 in the middle, 6 up, 6 skip tensors, output (None, 128, 128, 3).",
+   "significance": "The network trained as the diffusion model's denoiser for the rest of section 17.2.",
+   "example": "get_model(image_size=128, widths=[32, 64, 96, 128], block_depth=2).",
+   "misconception": "That each up level uses one skip. With block_depth=2 each up level concatenates two skips, one before each residual block.",
+   "related": [
+    "skip_connection",
+    "residual_connection",
+    "functional_api"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "noise_conditioning",
+   "name": "Noise-rate conditioning by concatenation",
+   "definition": "Feeding the scalar noise rate into a convolutional network by tiling it into a full-resolution channel and concatenating it with the image features.",
+   "intuition": "Write the damage level on every pixel so every convolution can see it.",
+   "technical": "UpSampling2D(128, interpolation=\"nearest\") turns (None, 1, 1, 1) into (None, 128, 128, 1); Concatenate with the (None, 128, 128, 32) image features gives 33 channels.",
+   "significance": "Lets one network behave differently at different noise levels (p.545-546).",
+   "example": "noise rate 0.7 → a 128 × 128 channel filled with 0.7.",
+   "misconception": "That the noise rate is applied as a multiplier on the image. It is just an extra input channel; the network learns how to use it.",
+   "related": [
+    "diffusion_time",
+    "diffusion_schedule"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "zero_init_output",
+   "name": "Zero-initialized output layer",
+   "definition": "Initializing the final layer's kernel to zeros so that the untrained model outputs zeros.",
+   "intuition": "Start from 'I see no noise' and learn corrections, rather than starting with random large noise predictions.",
+   "technical": "Conv2D(3, 1, kernel_initializer=\"zeros\"); the bias defaults to zeros too, so the initial output is exactly 0. Gradients still flow because the layer's input activations are non-zero.",
+   "significance": "A sensible, stable starting point; the book's callout calls it the default assumption of 'no noise'.",
+   "example": "Before training, model.predict on any input returns an all-zero (128, 128, 3) mask.",
+   "misconception": "That zero initialization prevents learning. Symmetry is only a problem when hidden layers are zero-initialized; for the last layer the gradient w.r.t. its kernel depends on its non-zero inputs.",
+   "related": [
+    "noise_prediction"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "diffusion_time",
+   "name": "Diffusion time",
+   "definition": "The index of the current step in the diffusion loop, a continuous value from 1 (pure noise) to 0 (pure signal).",
+   "intuition": "A progress bar for denoising that runs backward from 1 to 0.",
+   "technical": "Mapped to noise and signal rates by the diffusion schedule (p.548); sampled uniformly at random during training (p.550).",
+   "significance": "Decouples the process position from the noise amount and the number of sampling steps.",
+   "example": "Figure 17.7: t = 1 pure noise, t = 0.5 half-formed image, t = 0 final image.",
+   "misconception": "That diffusion time equals the noise fraction. The schedule defines that mapping, and it is not linear (cosine, p.548).",
+   "related": [
+    "diffusion_schedule",
+    "diffusion_model",
+    "reverse_diffusion"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "swish",
+   "name": "Swish activation",
+   "definition": "swish(x) = x · sigmoid(x), a smooth, non-monotonic alternative to ReLU.",
+   "intuition": "Like ReLU for large positive inputs, but smooth around zero and slightly negative for small negative inputs.",
+   "technical": "Used in the first 3 × 3 convolution of each residual block; the second convolution is linear so the residual sum is not clipped.",
+   "significance": "Common in modern ConvNets and diffusion U-Nets.",
+   "example": "swish(1) ≈ 0.731, swish(−1) ≈ −0.269.",
+   "misconception": "That swish is always positive; it dips to about −0.278 near x ≈ −1.28.",
+   "related": [
+    "relu",
+    "activation_functions"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Spatial resolution and channel bookkeeping in get_model()",
+   "latex": "\\begin{aligned} H_k &= \\frac{128}{2^{k}},\\quad k = 0,1,2,3 \\;\\Rightarrow\\; 128,\\,64,\\,32,\\,16 \\\\ C_{\\text{in, first block}} &= w_0 + 1 = 33 \\\\ C_{\\text{concat}} &= C_{\\text{current}} + C_{\\text{skip}} \\end{aligned}",
+   "source_text": "get_model(image_size=128, widths=[32, 64, 96, 128], block_depth=2); AveragePooling2D(pool_size=2); Concatenate()([x, n]); Concatenate()([x, skips.pop()])",
+   "variables": [
+    {
+     "symbol": "H_k",
+     "meaning": "Height (and width) of the feature maps at level k after k average-pooling steps."
+    },
+    {
+     "symbol": "w_0",
+     "meaning": "widths[0] = 32, channels after the initial 1 × 1 convolution."
+    },
+    {
+     "symbol": "C_{\\text{concat}}",
+     "meaning": "Channel count after concatenating the current feature map with a skip tensor."
+    }
+   ],
+   "operations": "Each AveragePooling2D(pool_size=2) halves H and W; each UpSampling2D(size=2) doubles them. Concatenate adds channel counts.",
+   "purpose": "To make the shapes in get_model() concrete and to show why residual_block often needs its 1 × 1 projection.",
+   "interpretation": "Three poolings give the 16 × 16 bottleneck of Figure 17.9. Every concatenation changes the channel count away from `width`, so the following residual block projects its shortcut.",
+   "intuition": "Halve the map, double the depth (roughly) on the way down; the reverse on the way up, with skips adding extra channels.",
+   "numerical_example": "Upsampling stage, first level: middle output (16, 16, 128) → upsample → (32, 32, 128); concat with skip (32, 32, 96) → 224 channels → residual_block(96) → (32, 32, 96); concat with the other skip (32, 32, 96) → 192 → residual_block(96) → (32, 32, 96). Last level: (128, 128, 64) + skip 32 → 96 → 32; + skip 32 → 64 → 32; final 1 × 1 conv → (128, 128, 3).",
+   "source": "inference",
+   "book_ref": "p.547"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "End of residual_block and get_model(): building the U-Net denoiser",
+   "original_code": "    x = layers.Conv2D(width, 3, padding=\"same\", activation=\"swish\")(x)\n    x = layers.Conv2D(width, 3, padding=\"same\")(x)\n    x = x + residual\n    return x\ndef get_model(image_size, widths, block_depth):\n    noisy_images = keras.Input(shape=(image_size, image_size, 3))\n    noise_rates = keras.Input(shape=(1, 1, 1))\n    x = layers.Conv2D(widths[0], 1)(noisy_images)\n    n = layers.UpSampling2D(image_size, interpolation=\"nearest\")(noise_rates)\n    x = layers.Concatenate()([x, n])\n    skips = []\n    for width in widths[:-1]:\n        for _ in range(block_depth):\n            x = residual_block(x, width)\n            skips.append(x)\n        x = layers.AveragePooling2D(pool_size=2)(x)\n    for _ in range(block_depth):\n        x = residual_block(x, widths[-1])\n    for width in reversed(widths[:-1]):\n        x = layers.UpSampling2D(size=2, interpolation=\"bilinear\")(x)\n        for _ in range(block_depth):\n            x = layers.Concatenate()([x, skips.pop()])\n            x = residual_block(x, width)\n    pred_noise_masks = layers.Conv2D(3, 1, kernel_initializer=\"zeros\")(x)\n    return keras.Model([noisy_images, noise_rates], pred_noise_masks)",
+   "language": "python",
+   "what_it_does": "Completes residual_block (two 3 × 3 convolutions and the residual addition) and defines get_model(), which builds a two-input Functional model mapping (noisy images, noise rates) to predicted noise masks through a U-Net with residual blocks and concatenated skip connections.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "(Inside residual_block, after BatchNormalization on p.546.) 3 × 3 convolution with `width` filters, 'same' padding (spatial size preserved) and swish activation."
+    },
+    {
+     "lines": "2",
+     "explanation": "Second 3 × 3 convolution, linear (no activation)."
+    },
+    {
+     "lines": "3-4",
+     "explanation": "Adds the shortcut (identity or 1 × 1 projection from p.546) and returns the result."
+    },
+    {
+     "lines": "5-7",
+     "explanation": "get_model defines two inputs: noisy images (128, 128, 3) and per-image noise rates shaped (1, 1, 1) so they can be treated as a tiny image."
+    },
+    {
+     "lines": "8",
+     "explanation": "1 × 1 convolution lifts the RGB image to widths[0] = 32 channels."
+    },
+    {
+     "lines": "9",
+     "explanation": "UpSampling2D(image_size, interpolation=\"nearest\") repeats the single noise-rate value 128 times along each axis → (128, 128, 1), a constant map."
+    },
+    {
+     "lines": "10",
+     "explanation": "Concatenates image features and the noise map along channels → (128, 128, 33)."
+    },
+    {
+     "lines": "11",
+     "explanation": "A Python list used as a stack of skip tensors."
+    },
+    {
+     "lines": "12-16",
+     "explanation": "Downsampling stage (callout 'Dowsampling stage', sic): for widths 32, 64, 96, apply block_depth residual blocks, saving each output in skips, then halve the resolution with average pooling: 128 → 64 → 32 → 16."
+    },
+    {
+     "lines": "17-18",
+     "explanation": "Middle stage: block_depth residual blocks at widths[-1] = 128 on the 16 × 16 map."
+    },
+    {
+     "lines": "19-23",
+     "explanation": "Upsampling stage: for widths 96, 64, 32, double the resolution with bilinear upsampling, then, block_depth times, concatenate with the most recently stored skip (`skips.pop()`, last in, first out, so resolutions match) and apply a residual block."
+    },
+    {
+     "lines": "24",
+     "explanation": "1 × 1 convolution to 3 channels with kernel initialized to zeros: the untrained model predicts all-zero noise masks, i.e. 'no noise' (callout)."
+    },
+    {
+     "lines": "25",
+     "explanation": "Creates the Functional model with two inputs and one output (callout 'Creates the functional model')."
+    }
+   ],
+   "inputs_outputs": "Inputs: noisy_images (None, 128, 128, 3) and noise_rates (None, 1, 1, 1). Output: pred_noise_masks (None, 128, 128, 3).",
+   "algorithm": "Embed image (1 × 1 conv) ⊕ tiled noise rate → [residual blocks + save skip] × depth, avg-pool, for each level → middle residual blocks → for each level in reverse: bilinear ×2 upsample, [concat skip + residual block] × depth → 1 × 1 zero-init conv.",
+   "theory_link": "Implements Figure 17.9 (p.546). Pooling and upsampling give a large receptive field; the stack of skips is what makes it a U-Net. Conditioning on noise_rates lets one network serve every diffusion time (p.545). Predicting the noise mask matches the MAE noise loss (p.549).",
+   "parameters": [
+    {
+     "name": "image_size",
+     "role": "Side length of input images (128); also the upsampling factor applied to the 1 × 1 noise-rate map."
+    },
+    {
+     "name": "widths",
+     "role": "Channel counts per level; widths[:-1] for down/up levels, widths[-1] for the middle stage. Its length − 1 is the number of 2× downsamplings."
+    },
+    {
+     "name": "block_depth",
+     "role": "Residual blocks per level, and also the number of skip tensors stored per level."
+    },
+    {
+     "name": "interpolation=\"nearest\" / \"bilinear\"",
+     "role": "Nearest for tiling a constant value exactly; bilinear for smoother feature-map upsampling."
+    },
+    {
+     "name": "kernel_initializer=\"zeros\"",
+     "role": "Makes the initial prediction exactly zero noise."
+    }
+   ],
+   "pitfalls": [
+    "image_size must be divisible by 2^(len(widths) − 1) (here 8); otherwise pooled and upsampled sizes won't match their skips and Concatenate fails.",
+    "skips is consumed with pop(); the number of pops (block_depth per up level) must equal the number of appends, which this symmetric loop structure guarantees.",
+    "The noise_rates input must be shaped (batch, 1, 1, 1), not (batch,) or (batch, 1).",
+    "The listing defines get_model() at the top level after residual_block; in the printed code the two functions share one block that starts on p.546."
+   ],
+   "illustrative_code": "# AI-written check (not in the book): build the model and inspect it\nmodel = get_model(image_size=128, widths=[32, 64, 96, 128], block_depth=2)\nmodel.summary()                       # two inputs, output (None, 128, 128, 3)\nimport numpy as np\nout = model.predict([np.random.normal(size=(2, 128, 128, 3)),\n                     np.full((2, 1, 1, 1), 0.5)])\nprint(out.shape, np.abs(out).max())   # (2, 128, 128, 3) 0.0  <- zero-initialized last layer"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Full shape trace for widths=[32, 64, 96, 128], block_depth=2",
+   "kind": "step_by_step",
+   "body": "Derived from the code (batch axis omitted):\n\n1. noisy_images (128, 128, 3) → 1 × 1 conv → (128, 128, 32); noise_rates (1, 1, 1) → upsample ×128 → (128, 128, 1); concat → (128, 128, 33).\n2. Level 128px: res(32) → (128, 128, 32) [skip 1]; res(32) → (128, 128, 32) [skip 2]; pool → (64, 64, 32).\n3. Level 64px: res(64) ×2 → (64, 64, 64) [skips 3, 4]; pool → (32, 32, 64).\n4. Level 32px: res(96) ×2 → (32, 32, 96) [skips 5, 6]; pool → (16, 16, 96).\n5. Middle: res(128) ×2 → (16, 16, 128).\n6. Up to 32px: (32, 32, 128) ⊕ skip 6 → 224 → res(96); ⊕ skip 5 → 192 → res(96) → (32, 32, 96).\n7. Up to 64px: (64, 64, 96) ⊕ skip 4 → 160 → res(64); ⊕ skip 3 → 128 → res(64) → (64, 64, 64).\n8. Up to 128px: (128, 128, 64) ⊕ skip 2 → 96 → res(32); ⊕ skip 1 → 64 → res(32) → (128, 128, 32).\n9. 1 × 1 conv (zeros) → (128, 128, 3).\n\nNote that every up-path residual block receives a channel count different from its width, so all of them use the 1 × 1 shortcut projection.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why the second convolution in residual_block has no activation",
+   "kind": "breakdown",
+   "body": "Beyond the book: if the last convolution applied swish (or ReLU) before the addition, the residual branch could only push values in a limited direction (ReLU outputs are never negative; swish is bounded below by about −0.28). Keeping it linear lets the block add arbitrary positive or negative corrections to the shortcut. This 'norm → conv → act → conv → add' pattern is common in diffusion U-Nets.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Zero init as a calm starting point",
+   "kind": "analogy",
+   "body": "A new restoration assistant is told: 'If unsure, don't touch the photo.' Before training, the model's noise prediction is all zeros, so subtracting it changes nothing. Training then teaches it, gradient step by gradient step, which parts to remove. Random initial predictions would be like an assistant who starts by scribbling randomly on every photo.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Tensor shapes through get_model(128, [32, 64, 96, 128], 2)",
+   "why": "Follows the exact shapes produced by the code on this page, from the 33-channel input concat through the 16 × 16 middle stage and back to the 3-channel noise mask.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "noisy_images",
+      "shape": [
+       null,
+       128,
+       128,
+       3
+      ]
+     },
+     {
+      "op": "1x1 conv + noise concat",
+      "shape": [
+       null,
+       128,
+       128,
+       33
+      ]
+     },
+     {
+      "op": "res(32) x2",
+      "shape": [
+       null,
+       128,
+       128,
+       32
+      ]
+     },
+     {
+      "op": "avg pool",
+      "shape": [
+       null,
+       64,
+       64,
+       32
+      ]
+     },
+     {
+      "op": "res(64) x2",
+      "shape": [
+       null,
+       64,
+       64,
+       64
+      ]
+     },
+     {
+      "op": "avg pool",
+      "shape": [
+       null,
+       32,
+       32,
+       64
+      ]
+     },
+     {
+      "op": "res(96) x2",
+      "shape": [
+       null,
+       32,
+       32,
+       96
+      ]
+     },
+     {
+      "op": "avg pool",
+      "shape": [
+       null,
+       16,
+       16,
+       96
+      ]
+     },
+     {
+      "op": "middle res(128) x2",
+      "shape": [
+       null,
+       16,
+       16,
+       128
+      ]
+     },
+     {
+      "op": "up + skips, res(96)",
+      "shape": [
+       null,
+       32,
+       32,
+       96
+      ]
+     },
+     {
+      "op": "up + skips, res(64)",
+      "shape": [
+       null,
+       64,
+       64,
+       64
+      ]
+     },
+     {
+      "op": "up + skips, res(32)",
+      "shape": [
+       null,
+       128,
+       128,
+       32
+      ]
+     },
+     {
+      "op": "1x1 conv (zeros)",
+      "shape": [
+       null,
+       128,
+       128,
+       3
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Swish vs ReLU",
+   "why": "The first convolution in every residual_block uses activation=\"swish\"; compare it with the more familiar ReLU.",
+   "widget": "activation_functions",
+   "params": {
+    "functions": [
+     "swish",
+     "relu"
+    ],
+    "show_derivative": true
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The noise rate is multiplied into the image inside the model.",
+   "correction": "It is tiled into a constant 128 × 128 channel and concatenated with the image features; the network learns how to use it."
+  },
+  {
+   "claim": "skips.pop() takes the first skip that was stored.",
+   "correction": "pop() removes the last element (LIFO), so the deepest, lowest-resolution skips are used first, matching the upsampling order."
+  },
+  {
+   "claim": "A zero-initialized last layer cannot learn.",
+   "correction": "Its gradient depends on its non-zero input activations, so it learns normally; zero init just makes the initial prediction 'no noise'."
+  },
+  {
+   "claim": "Diffusion time counts up from 0 during generation.",
+   "correction": "In this book it runs from 1 (pure noise, start) to 0 (pure signal, end)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 546,
+    "note": "Figure 17.9 and the first lines of residual_block."
+   },
+   {
+    "page": 545,
+    "note": "The 128 × 128 image size and the idea of telling the model the noise level."
+   },
+   {
+    "page": 544,
+    "note": "Figure 17.7's diffusion-time axis from 1 to 0."
+   }
+  ],
+  "later": [
+   {
+    "page": 548,
+    "note": "Diffusion time continued; the cosine diffusion schedule (Listing 17.7)."
+   },
+   {
+    "page": 549,
+    "note": "DiffusionModel wraps this denoiser with a normalizer and MAE loss."
+   },
+   {
+    "page": 550,
+    "note": "call() samples diffusion times, adds noise, and runs this model."
+   },
+   {
+    "page": 553,
+    "note": "DiffusionModel(image_size, widths=[32, 64, 96, 128], block_depth=2) is instantiated and trained."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 546,
+    "note": "U-Net stages and the residual connection helper."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 548,
+    "note": "Diffusion schedule relating diffusion time to noise and signal rates."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 546,
+    "note": "Start of this code block (residual_block)."
+   },
+   {
+    "page": 548,
+    "note": "Listing 17.7 diffusion_schedule()."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 546,
+    "note": "Figure 17.9 Our U-Net-style denoising autoencoder architecture."
+   },
+   {
+    "page": 544,
+    "note": "Figure 17.7 Reverse diffusion over diffusion time."
+   }
+  ]
+ },
+ "takeaways": [
+  "residual_block = BatchNorm (non-affine) → 3 × 3 conv (swish) → 3 × 3 conv (linear) → add shortcut.",
+  "The noise rate is tiled to a 128 × 128 channel with nearest-neighbour upsampling and concatenated with the image features.",
+  "Down levels store skips; up levels pop them in reverse order (LIFO) and concatenate before each residual block.",
+  "The last layer is a zero-initialized 1 × 1 conv, so the untrained model predicts 'no noise'.",
+  "widths=[32, 64, 96, 128], block_depth=2 gives three resolution levels (128, 64, 32) plus a 16 × 16 middle stage with 128 channels.",
+  "Diffusion time indexes the denoising loop, running continuously from 1 (pure noise) to 0 (pure signal)."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "short",
+   "question": "How does get_model() feed the scalar noise rate into a convolutional network?",
+   "options": [],
+   "answer": "The (1, 1, 1) noise-rate input is upsampled by a factor of image_size with nearest-neighbour interpolation to a constant (128, 128, 1) map, then concatenated with the (128, 128, 32) image features.",
+   "explanation": "Lines `n = layers.UpSampling2D(image_size, interpolation=\"nearest\")(noise_rates)` and `x = layers.Concatenate()([x, n])`.",
+   "page_refs": [
+    547
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "Why is the final Conv2D initialized with kernel_initializer=\"zeros\"?",
+   "options": [
+    "So the untrained model predicts only zeros, i.e. 'no noise'",
+    "To prevent the model from overfitting",
+    "Because 1 × 1 convolutions cannot use random initialization",
+    "To make the output layer non-trainable"
+   ],
+   "answer": "So the untrained model predicts only zeros, i.e. 'no noise'",
+   "explanation": "The callout states this directly. Zero init is not a regularizer, 1 × 1 convs can be randomly initialized, and the layer remains trainable.",
+   "page_refs": [
+    547
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "math",
+   "question": "With widths=[32, 64, 96, 128] and block_depth=2, how many skip tensors are stored, and what is the channel count right after the first concatenation in the upsampling stage?",
+   "options": [],
+   "answer": "6 skips; 128 + 96 = 224 channels.",
+   "explanation": "3 down levels × 2 blocks = 6 appends. The middle output has 128 channels; after upsampling to 32 × 32 it is concatenated with the last stored skip, which has 96 channels.",
+   "page_refs": [
+    547
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why does the upsampling loop use skips.pop() rather than skips[0]?",
+   "options": [],
+   "answer": "Skips are appended from high to low resolution on the way down; pop() returns the most recently appended (lowest-resolution) one first, matching the order in which the up path returns to each resolution, so spatial sizes match for concatenation.",
+   "explanation": "Last in, first out mirrors the U shape: the innermost down block connects to the first up block.",
+   "page_refs": [
+    546,
+    547
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Which spatial resolution does the middle stage operate at for image_size=128 and widths=[32, 64, 96, 128]?",
+   "options": [
+    "16 × 16",
+    "32 × 32",
+    "8 × 8",
+    "64 × 64"
+   ],
+   "answer": "16 × 16",
+   "explanation": "widths[:-1] has three entries, so there are three 2× average poolings: 128 → 64 → 32 → 16. 8 × 8 would need four, and 32 or 64 fewer.",
+   "page_refs": [
+    546,
+    547
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "What is diffusion time, and which values mark the start and end of the process?",
+   "options": [],
+   "answer": "The index of the current step in the denoising loop, a continuous value; 1 is the start (pure noise) and 0 is the end (pure signal).",
+   "explanation": "Defined at the start of 17.2.3; the sentence finishes on p.548.",
+   "page_refs": [
+    547,
+    548
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Without looking, can you write the four layers of residual_block in order and say which one has an activation?",
+   "options": [],
+   "answer": "BatchNormalization(center=False, scale=False) → Conv2D(width, 3, same, swish) → Conv2D(width, 3, same) → add residual. Only the first convolution has an activation (swish).",
+   "explanation": "From the code on p.546-547.",
+   "page_refs": [
+    546,
+    547
+   ]
+  }
+ ]
+}

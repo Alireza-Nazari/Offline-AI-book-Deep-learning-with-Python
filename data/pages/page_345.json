@@ -1,0 +1,311 @@
+{
+  "page_id": "page_345",
+  "pdf_page": 345,
+  "printed_page": "321",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:38:03Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean. Figure 11.8 is a diagram (labels: Image encoder, Prompt encoder, Mask decoder, three '…, score' outputs), interpreted from the page image. The code listing and its four callouts are complete on this page; the resulting image (Figure 11.9) is on p.346."
+  },
+  "overview": {
+    "title": "SAM architecture overview, sampling training prompts, loading a test image",
+    "chapter": "11 Image segmentation",
+    "section": "11.3 Using a pretrained segmentation model",
+    "subsection": "11.3.3 Preparing a test image",
+    "main_topic": "Figure 11.8's high-level view of SAM, how (image, prompt, mask) training triples are generated from SA-1B, and loading the fruit-bowl test image with Keras utilities.",
+    "central_idea": "All SAM components are trained jointly on triples sampled from SA-1B: pick a random mask, then make a point prompt (a random pixel inside it) or a box prompt (its bounding box). In practice, you start by loading an image into a NumPy array.",
+    "importance": "It shows how simple the prompt-generation recipe is, which explains why SAM accepts points and boxes, and it starts the hands-on part that the next pages build on (resizing to 1024×1024, then prompting).",
+    "learning_objectives": [
+      "Read Figure 11.8: inputs, the three components and the scored candidate masks.",
+      "Explain how point and box prompts are generated from a ground-truth mask.",
+      "Explain why one image can produce many training examples.",
+      "Use `keras.utils.get_file`, `load_img` and `img_to_array` to load an image as a NumPy array.",
+      "Explain why `.astype(\"uint8\")` is used before `plt.imshow`."
+    ],
+    "prerequisites": [
+      "SAM's image encoder, prompt encoder and mask decoder (p.344).",
+      "(image, prompt, mask) triples (p.344).",
+      "Keras image utilities and Matplotlib display (used for the pets data, p.336–337)."
+    ],
+    "page_kind": "content"
+  },
+  "summary": "**Figure 11.8** gives SAM's high-level architecture. An input image (a stylized landscape with a sun, mountains and water) goes into an **image encoder**; prompts, drawn as a red box, a purple star (a point) and a small blue box, go into a **prompt encoder**. Both feed a larger **mask decoder**, which outputs **three candidate masks, each with a score**; in the drawing, each candidate highlights a different region (for example the sun or the mountains), which illustrates that one prompt can have several plausible answers.\n\nAll components are **trained simultaneously** on batches of new (image, prompt, mask) triples built from SA-1B. The recipe is simple:\n\n1. For an input image, choose a **random mask**.\n2. Randomly choose a **box** or a **point** prompt.\n3. Point prompt: a **random pixel inside** the mask. Box prompt: a **box around all points** of the mask (its bounding box).\n\nRepeating this indefinitely samples many triples from each image, so SA-1B's ~100 masks per image (p.343) yield a huge supply of training examples.\n\n**11.3.3 Preparing a test image.** To make this concrete, the authors load a picture of a bowl of fruits (Figure 11.9, p.346). `keras.utils.get_file` downloads `fruits.jpg` and returns the local path; `keras.utils.load_img` opens it as a PIL image; `keras.utils.img_to_array` turns it into a NumPy array (float32, shape height × width × 3); and `plt.imshow(image_array.astype(\"uint8\"))` displays it with axes turned off. The next page resizes it to SAM's expected 1024 × 1024 input without distorting the aspect ratio.",
+  "paragraphs": [
+    {
+      "ref": "p345_e04",
+      "excerpt": "All of these subcomponents are trained simultaneously by forming batches of new",
+      "what_it_says": "The image encoder, prompt encoder and mask decoder are trained together on batches of new (image, prompt, mask) triples from SA-1B. Pick a random mask in an image, randomly decide between a box and a point prompt, take a random pixel inside the mask for a point or the box around all mask pixels for a box, and repeat as often as you like.",
+      "what_it_means": "SA-1B stores images and masks, not prompts. Prompts are generated on the fly from the masks, so the dataset effectively becomes infinite: each (image, mask) pair can give many different point prompts (any pixel of the mask), and each image has around 100 masks. Joint (end-to-end) training means the encoders learn representations useful for the decoder's task.",
+      "why_it_matters": "It explains exactly which prompt types SAM understands (because those are what it was trained with) and how the model sees an enormous variety of training examples.",
+      "technical_idea": "Online data generation / prompt simulation. A box prompt from a mask is $[\\min x, \\min y, \\max x, \\max y]$ over the mask's pixels. Beyond the book: the SAM paper also adds noise to boxes and samples follow-up points from the error regions of earlier predictions, so the model learns to refine interactively.",
+      "terminology": [
+        {"term": "Trained simultaneously (end to end)", "meaning": "All components' weights are updated together from the same loss."},
+        {"term": "Bounding box", "meaning": "The smallest axis-aligned rectangle containing all pixels of the mask."}
+      ],
+      "connections": [
+        "p.344: the triples and the two prompt forms.",
+        "p.343: ~100 masks per image, so many triples per image.",
+        "p.354: a segmentation mask determines the smallest enclosing box, which is why segmentation is a superset of detection."
+      ]
+    },
+    {
+      "ref": "p345_e06",
+      "excerpt": "Let’s make this a little more concrete by trying the model out. We can",
+      "what_it_says": "To make things concrete, we load a test image, a picture of a bowl of fruits (Figure 11.9).",
+      "what_it_means": "The rest of section 11.3 works with this one image: preprocessing it, then prompting SAM with a point (p.347) and a box (p.351) to segment individual fruits.",
+      "why_it_matters": "A bowl of fruits holds many adjacent, similar-looking objects, which is a good test of whether a prompt can isolate one of them.",
+      "terminology": [],
+      "connections": [
+        "p.346: Figure 11.9 shows the image; it is resized to 1024 × 1024 with padding.",
+        "p.352: Figure 11.15 shows a segmented mango."
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "prompt_sampling",
+      "name": "Sampling prompts from masks",
+      "definition": "Generating training prompts from ground-truth masks: a random pixel inside the mask (point) or the box around the mask (box).",
+      "intuition": "Pretend to be a user who clicks somewhere on the object or draws a box around it.",
+      "technical": "For a mask $M$: point $= (x, y)$ drawn uniformly from $\\{(x, y): M_{yx}=1\\}$; box $= (\\min x, \\min y, \\max x, \\max y)$ over the same set.",
+      "significance": "It turns a dataset of masks into an unlimited stream of (image, prompt, mask) triples.",
+      "example": "For a mask of an apple, any pixel on the apple is a valid point prompt; its bounding rectangle is the box prompt.",
+      "misconception": "The prompts are not human-made clicks stored in the dataset; they are simulated during training.",
+      "related": ["promptable_segmentation", "segment_anything_model"],
+      "source": "book"
+    },
+    {
+      "id": "mask_decoder",
+      "name": "Mask decoder with scored candidates",
+      "definition": "The component that combines image and prompt embeddings and outputs a few candidate masks, each with a score (Figure 11.8).",
+      "intuition": "Several guesses, each with a confidence.",
+      "technical": "Figure 11.8 shows three outputs labelled '…, score'.",
+      "significance": "Downstream code can choose the mask with the highest score or show all candidates.",
+      "example": "For the fruit image, candidates might be one fruit, a cluster of fruits, or the whole bowl.",
+      "misconception": "The score is the model's own estimate of mask quality, not a class probability.",
+      "related": ["prompt_encoder", "image_encoder"],
+      "source": "book"
+    },
+    {
+      "id": "end_to_end_training",
+      "name": "Joint (end-to-end) training",
+      "definition": "Training all components of a model together from a single objective.",
+      "intuition": "The encoders learn whatever features help the decoder predict good masks.",
+      "technical": "Gradients from the mask loss flow back through the decoder into both encoders.",
+      "significance": "The page states that all subcomponents are trained simultaneously.",
+      "example": "Image encoder, prompt encoder and mask decoder are updated on each batch of triples.",
+      "misconception": "The components are not trained separately and glued together afterward.",
+      "related": ["backpropagation"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Point and box prompts derived from a mask",
+      "latex": "\\begin{aligned} S &= \\{(x,y) : M_{y,x} = 1\\} \\\\ \\text{point} &\\sim \\operatorname{Uniform}(S) \\\\ \\text{box} &= \\big(\\min_{S} x,\\ \\min_{S} y,\\ \\max_{S} x,\\ \\max_{S} y\\big) \\end{aligned}",
+      "source_text": "To create a point prompt, choose a random pixel inside the mask label. To create a box prompt, draw a box around all points inside the mask label.",
+      "variables": [
+        {"symbol": "M", "meaning": "The chosen binary ground-truth mask (1 inside the object)."},
+        {"symbol": "S", "meaning": "The set of pixel coordinates inside the mask."},
+        {"symbol": "(x, y)", "meaning": "Column and row coordinates of a pixel."}
+      ],
+      "operations": "Uniform random choice from a set; min and max over coordinates.",
+      "purpose": "Formalizes the prompt-generation recipe described in words on the page.",
+      "interpretation": "A point is any location on the object; a box is the tightest rectangle containing it.",
+      "intuition": "These simulate the two ways a user would indicate an object.",
+      "numerical_example": "If the mask covers pixels with $x \\in [40, 90]$ and $y \\in [10, 55]$, the box prompt is $(40, 10, 90, 55)$, and e.g. $(63, 31)$ could be a point prompt if that pixel is inside the mask.",
+      "source": "inference",
+      "book_ref": "p.345"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Downloading, loading and displaying the test image",
+      "original_code": "path = keras.utils.get_file(\n    origin=\"https://s3.amazonaws.com/keras.io/img/book/fruits.jpg\"\n)\npil_image = keras.utils.load_img(path)\nimage_array = keras.utils.img_to_array(pil_image)\nplt.imshow(image_array.astype(\"uint8\"))\nplt.axis(\"off\")\nplt.show()",
+      "language": "python",
+      "what_it_does": "Downloads the fruit-bowl image, loads it as a PIL image, converts it to a NumPy array and displays it (Figure 11.9 on p.346).",
+      "line_explanations": [
+        {"lines": "1-3", "explanation": "`keras.utils.get_file` downloads the file from the given URL and returns the local file path (callout). Beyond the book: it caches the file (by default under `~/.keras/datasets`), so later calls don't download it again."},
+        {"lines": "4", "explanation": "`keras.utils.load_img` loads the image as a Python Imaging Library (PIL) object (callout). No `target_size` is given, so the original resolution is kept."},
+        {"lines": "5", "explanation": "`keras.utils.img_to_array` turns the PIL object into a NumPy array (callout) of shape (height, width, 3) with float32 values in 0–255."},
+        {"lines": "6", "explanation": "Displays the NumPy array (callout). The cast to `uint8` matters: Matplotlib expects floats in [0, 1] or integers in [0, 255], so float values in 0–255 would be clipped and show as mostly white."},
+        {"lines": "7-8", "explanation": "Hides the axes and renders the figure."}
+      ],
+      "inputs_outputs": "Input: a URL. Output: `image_array`, a float32 (H, W, 3) array, plus a displayed image.",
+      "algorithm": "Download → decode to PIL → convert to array → display.",
+      "theory_link": "Models take tensors, not files; this is the first step in preparing SAM's input, followed on p.346 by resizing to 1024 × 1024 with padding.",
+      "parameters": [
+        {"name": "origin", "role": "URL to download from."},
+        {"name": "\"uint8\"", "role": "Integer dtype so imshow reads 0–255 values correctly."}
+      ],
+      "pitfalls": [
+        "Passing the float32 array straight to `plt.imshow` gives a washed-out or clipped image, which is why `.astype(\"uint8\")` is used.",
+        "The image is not square and not 1024 × 1024; it must be resized and padded before SAM can use it (p.346)."
+      ],
+      "illustrative_code": "# AI-written: check what you loaded\nprint(image_array.shape, image_array.dtype, image_array.min(), image_array.max())\n# e.g. (H, W, 3) float32 0.0 255.0"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Reading Figure 11.8",
+      "kind": "breakdown",
+      "body": "- **Left top:** the input image (a sun, mountains, water), going into the *image encoder* (a trapezoid narrowing to the right, i.e., compression into an embedding).\n- **Left bottom:** prompt symbols (a red box, a purple star for a point, a blue box) going into the *prompt encoder*.\n- **Middle:** the *mask decoder* receives both embeddings.\n- **Right:** three output images, each with a different region highlighted in pink (the mountains, the sky/upper region, the sun), each followed by ', score'.\n\nThe three outputs illustrate the 'few possible predicted masks' of p.344: the same prompt can correspond to different objects, and each candidate gets a score. (This reading of which region is highlighted is based on the printed colors.)",
+      "source": "inference"
+    },
+    {
+      "title": "How many training triples does one image give?",
+      "kind": "numerical",
+      "body": "Take an image with 100 masks (the SA-1B average, p.343). Each mask gives 1 box prompt and as many point prompts as it has pixels. A mask of only 50 × 50 = 2,500 pixels already gives 2,500 distinct point prompts. So one image gives on the order of $100 \\times 2{,}500 = 250{,}000$ distinct point triples, which is why the authors say the process can be repeated indefinitely.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Why simulated prompts match real use",
+      "kind": "application",
+      "body": "At inference time, a user clicks on an object or drags a box around it. The training recipe simulates exactly these two gestures from ground-truth masks. Beyond the book: because of this match, SAM is used in annotation tools where a few clicks produce a mask, which is the kind of model-assisted labeling that built SA-1B in the first place (p.344).",
+      "source": "inference"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "Generating a training triple from SA-1B",
+      "why": "The paragraph under Figure 11.8 gives a step-by-step recipe (random mask → random choice of point or box → point inside / box around); this diagrams it.",
+      "mermaid": "flowchart TD\n  A[SA-1B image] --> B[Choose a random mask]\n  B --> C{Box or point?}\n  C -->|point| D[Random pixel inside the mask]\n  C -->|box| E[Box around all mask pixels]\n  D --> F[\"(image, prompt, mask) triple\"]\n  E --> F\n  F --> G[Add to batch; train all components jointly]\n  G -.repeat indefinitely.-> B"
+    },
+    {
+      "id": "v2",
+      "type": "widget",
+      "title": "The test image as a tensor",
+      "why": "`img_to_array` turns the fruit photo into an (H, W, 3) array; this widget shows how an RGB image is laid out as height × width × channels (small sizes for illustration, not the real resolution).",
+      "widget": "image_tensor",
+      "params": {"height": 4, "width": 6, "channels": 3}
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "SA-1B contains stored human clicks and boxes for every mask.",
+      "correction": "Prompts are generated on the fly from the masks: a random pixel inside, or the box around."
+    },
+    {
+      "claim": "The three components of SAM are trained separately.",
+      "correction": "The page says they are trained simultaneously."
+    },
+    {
+      "claim": "`img_to_array` returns uint8 data ready for imshow.",
+      "correction": "It returns float32 values in 0–255; the code casts to uint8 before display."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 344, "note": "SAM's (image, prompt, mask) training triples, the two prompt forms and the three components."},
+      {"page": 343, "note": "SA-1B has ~100 masks per image, some over 500."},
+      {"page": 337, "note": "`load_img` / `img_to_array` were used to load the pets images and masks."}
+    ],
+    "later": [
+      {"page": 346, "note": "Figure 11.9 (the test image) and resizing to 1024 × 1024 with `pad_to_aspect_ratio`."},
+      {"page": 347, "note": "Prompting the model with a target point."},
+      {"page": 351, "note": "Prompting the model with a target box."}
+    ],
+    "prerequisites": [
+      {"page": 344, "note": "SAM architecture."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 337, "note": "Image loading utilities used for the pets dataset."}
+    ],
+    "related_figures": [
+      {"page": 344, "note": "Figure 11.7: a densely segmented SA-1B image."},
+      {"page": 346, "note": "Figure 11.9: the fruit-bowl test image loaded by this page's code."}
+    ]
+  },
+  "takeaways": [
+    "Figure 11.8: image → image encoder, prompt → prompt encoder, both → mask decoder → three masks, each with a score.",
+    "All SAM components are trained jointly on (image, prompt, mask) triples sampled from SA-1B.",
+    "Point prompt = random pixel inside the mask; box prompt = box around all mask pixels.",
+    "Sampling can be repeated indefinitely, giving many triples per image.",
+    "The test image is loaded with `get_file` → `load_img` → `img_to_array`, and cast to uint8 for display."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "How is a point prompt created during SAM training, according to the page?",
+      "options": [
+        "A human annotator clicks the object center",
+        "A random pixel inside the chosen mask label",
+        "The center of the image",
+        "The corner of the mask's bounding box"
+      ],
+      "answer": "A random pixel inside the chosen mask label",
+      "explanation": "The page says: 'To create a point prompt, choose a random pixel inside the mask label.' Prompts are not stored human clicks, the image center may not be on the object, and box corners are often outside the object.",
+      "page_refs": [345]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "How is a box prompt created from a mask?",
+      "options": [],
+      "answer": "By drawing a box around all points inside the mask label (its bounding box).",
+      "explanation": "Directly stated on the page.",
+      "page_refs": [345]
+    },
+    {
+      "id": "q3",
+      "type": "math",
+      "question": "A mask's pixels span columns 120–260 and rows 80–190. What is the box prompt in (x_min, y_min, x_max, y_max) form?",
+      "options": [],
+      "answer": "(120, 80, 260, 190)",
+      "explanation": "The box around all mask points is given by the min and max of the column and row coordinates. The coordinate ordering is a common convention, not one the book specifies here.",
+      "page_refs": [345]
+    },
+    {
+      "id": "q4",
+      "type": "conceptual",
+      "question": "Why can the triple-sampling process be 'repeated indefinitely' on a finite dataset?",
+      "options": [],
+      "answer": "Each image has many masks, and each mask allows many different point prompts (any interior pixel), so random sampling keeps producing new (image, prompt, mask) combinations.",
+      "explanation": "Combines the page's recipe with the ~100 masks per image from p.343.",
+      "page_refs": [345, 343]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "Why does the code call `image_array.astype(\"uint8\")` before `plt.imshow`?",
+      "options": [
+        "SAM requires uint8 input",
+        "`img_to_array` returns float32 in 0–255, which imshow would clip as if the range were [0, 1]",
+        "To reduce the image resolution",
+        "To convert RGB to grayscale"
+      ],
+      "answer": "`img_to_array` returns float32 in 0–255, which imshow would clip as if the range were [0, 1]",
+      "explanation": "Matplotlib reads floats as [0, 1] and integers as [0, 255]. The cast changes neither the resolution nor the number of channels, and has nothing to do with SAM's input format.",
+      "page_refs": [345]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "In Figure 11.8, how many candidate masks does the mask decoder output, and what accompanies each?",
+      "options": [],
+      "answer": "Three, each with a score.",
+      "explanation": "The figure shows three output images, each labelled ', score'.",
+      "page_refs": [345]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you explain why the prompt types SAM accepts at inference time are linked to how its training prompts were generated?",
+      "options": [],
+      "answer": "SAM learned from point and box prompts simulated from masks, so those are the inputs it understands at inference time.",
+      "explanation": "Check that you link the training recipe (this page) to the prompting sections (pp.347, 351).",
+      "page_refs": [345, 347, 351]
+    }
+  ]
+}

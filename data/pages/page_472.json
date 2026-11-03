@@ -1,0 +1,474 @@
+{
+ "page_id": "page_472",
+ "pdf_page": 472,
+ "printed_page": "448",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T11:20:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Typo in an API name: e06 says to pass `use_casual_mask` to `MultiHeadAttention`. The actual Keras argument, and the one used in Listing 15.15 on p.471, is `use_causal_mask`. Copying the text's spelling would raise a TypeError (unexpected keyword argument)."
+  ],
+  "extraction_quality": "Good. e03 finishes a sentence from p.471. The Figure 15.8 caption is split across e07 and e08 (e08 is tagged as body but is the caption's second line: 'TransformerEncoder and TransformerDecoder blocks'). The figure's labels were read from the image: encoder = multi-head attention → add & norm → feed forward → add & norm, repeated N×; decoder = masked multi-head attention → add & norm → multi-head (cross) attention fed by the encoder output → add & norm → feed forward → add & norm, repeated N×. e10 continues on p.473."
+ },
+ "overview": {
+  "title": "The causal attention mask and the full Transformer diagram",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "15.3.4 Sequence-to-sequence learning with a Transformer",
+  "main_topic": "Why the decoder's self-attention needs a lower-triangular causal mask, how to read the mask, the Keras shortcut for it, Figure 15.8 (encoder and decoder blocks), and the start of section 15.3.4",
+  "central_idea": "Self-attention is inherently bidirectional, so without a mask a decoder position could look at the next target token, the very label it must predict, and learn to copy it. A lower-triangular mask lets position i attend only to positions 0…i. This restores the forward-only information flow an RNN decoder has, and Keras applies it with the `use_causal_mask=True` call argument.",
+  "importance": "Causal masking is what makes a Transformer decoder a valid language model. The same mask underlies GPT-style models (chapter 16). Figure 15.8 is the canonical Transformer picture that ties together pp.468-471.",
+  "learning_objectives": [
+   "Explain the label-leakage problem that the causal mask prevents",
+   "Read a causal mask row by row and generate it for any length",
+   "Relate the masked decoder to the unidirectional RNN decoder",
+   "Name each sublayer in Figure 15.8 and the data flow between encoder and decoder",
+   "Use the correct Keras argument `use_causal_mask=True`"
+  ],
+  "prerequisites": [
+   "Self-attention and the Transformer encoder block (pp.468-470)",
+   "Decoder block with cross-attention (Listing 15.15, p.471)",
+   "Offset-by-one targets for next-token prediction (p.456)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes the argument started on p.471. Attention is bidirectional, so without special care the decoder's self-attention could see future target tokens, and \"our model will learn to pass the next token in the sequence as the current label and will have no ability to generate novel translations.\"\n\nThe fix is a special **causal attention mask** with ones in the lower triangle. For 5 positions:\n```\n[1,0,0,0,0]\n[1,1,0,0,0]\n[1,1,1,0,0]\n[1,1,1,1,0]\n[1,1,1,1,1]\n```\nRow `i` is the attention mask for the target token at position `i`. The first token attends only to itself, the second to the first two, and so on. This gives \"the same effect as our RNN layer, where information can only propagate forward in the sequence, not backward.\" In Keras, the lower-triangular mask is requested with a call argument to `MultiHeadAttention`. The text prints it as `use_casual_mask`, a typo for **`use_causal_mask`**, which is the spelling used in Listing 15.15.\n\n**Figure 15.8** shows the full stack. The encoder block (repeated N×) is multi-head self-attention → add & norm → feed forward → add & norm. The decoder block (repeated N×) is *masked* multi-head self-attention → add & norm → multi-head cross-attention whose keys/values come from the encoder output → add & norm → feed forward → add & norm. Each \"add\" is a residual connection, drawn as the bypass arrows.\n\n**Section 15.3.4** begins. The plan is to reuse the RNN translator's setup and replace its `GRU` layers with `TransformerEncoder` and `TransformerDecoder` (continued on p.473).",
+ "paragraphs": [
+  {
+   "ref": "p472_e03",
+   "excerpt": "our model will learn to pass the next token in the sequence",
+   "what_it_says": "(Completing the sentence from p.471: 'Without special care,') the model will learn to pass the next token in the sequence through as the current label, and will be unable to generate new translations.",
+   "what_it_means": "During training the decoder input is the target shifted right (`[start] el plan …`) and the label at position i is the token at input position i+1. If position i can attend to position i+1, the answer is sitting in its input. The easiest way to minimize the loss is to copy it. Training accuracy would approach 100%, but at inference there is no future token to copy, so the model would produce garbage.",
+   "why_it_matters": "This is label leakage, the same reason the RNN decoder could not be `Bidirectional` (p.458). Any autoregressive model must make sure predictions depend only on the past.",
+   "terminology": [
+    {
+     "term": "Label leakage",
+     "meaning": "When information about the target leaks into the inputs during training, making the task trivially easy and the model useless at test time."
+    }
+   ],
+   "connections": [
+    "p.471: attention is inherently bidirectional, so the decoder needs a different mask.",
+    "p.458: why the RNN decoder is not Bidirectional."
+   ]
+  },
+  {
+   "ref": "p472_e04",
+   "excerpt": "We can achieve one-directional information flow with a special “causal” attention mask.",
+   "what_it_says": "One-directional information flow is achieved with a special 'causal' attention mask, an attention mask with ones in the lower-triangular part.",
+   "what_it_means": "An attention mask has the same (target_len × source_len) shape as the score matrix. Entries with 1 are allowed, and entries with 0 are blocked: their scores are pushed to a very negative number before the softmax, so their weights become 0. For self-attention, query and key positions index the same sequence, so 'lower triangular' means key position j ≤ query position i.",
+   "why_it_matters": "'Causal' means each output can only depend on causes that came before it, which is the defining property of a language model.",
+   "technical_idea": "$M_{ij} = 1$ if $j \\le i$ else $0$, and $\\alpha_{ij} = \\operatorname{softmax}_j\\big(s_{ij} + (M_{ij}-1)\\cdot\\infty\\big)$.",
+   "terminology": [
+    {
+     "term": "Causal mask",
+     "meaning": "A lower-triangular attention mask that prevents each position from attending to later positions."
+    },
+    {
+     "term": "Lower-triangular",
+     "meaning": "A matrix whose entries above the main diagonal are zero."
+    }
+   ],
+   "connections": [
+    "p.470: attention_mask semantics for padding in the encoder."
+   ]
+  },
+  {
+   "ref": "p472_e06",
+   "excerpt": "Each row i can be read as a mask for attention for the",
+   "what_it_says": "Row i is the attention mask for the target token at position i. The first token can only attend to itself, the second to the first and second tokens, and so on. This gives the same effect as the RNN layer, where information propagates only forward. In Keras you specify this lower-triangular mask by passing `use_casual_mask` [sic, `use_causal_mask`] to the `MultiHeadAttention` layer when calling it. Figure 15.8 shows the layers of the encoder and decoder stacked into a Transformer.",
+   "what_it_means": "Row i lists which keys query i may see: exactly the prefix `0..i`. Combined with the shift-by-one targets, the prediction at position i is a function of tokens `0..i` only, matching the definition $p(y_{i+1} \\mid y_{\\le i}, x)$. Unlike an RNN, all rows are computed simultaneously in one masked matrix operation, so training stays parallel. The mask is passed at *call* time (`self.self_attention(query=x, key=x, value=x, use_causal_mask=True)` in Listing 15.15), not in the constructor.",
+   "why_it_matters": "This single argument turns bidirectional self-attention into a valid autoregressive decoder. It is the key difference between the encoder and the decoder's first sublayer, the 'Masked multi-head attention' box in figure 15.8.",
+   "technical_idea": "Number of allowed pairs for length T: T(T+1)/2. For T = 5 that is 15 of 25. Keras combines the causal mask with any padding mask by logical AND.",
+   "terminology": [
+    {
+     "term": "use_causal_mask",
+     "meaning": "Boolean call argument of `keras.layers.MultiHeadAttention` that applies a lower-triangular mask."
+    }
+   ],
+   "connections": [
+    "p.471: Listing 15.15 uses `use_causal_mask=True` in the decoder self-attention.",
+    "p.457: RNN decoders process the target left to right."
+   ]
+  },
+  {
+   "ref": "p472_e10",
+   "excerpt": "Let’s try putting this all together. We will use the same basic",
+   "what_it_says": "Section 15.3.4 starts: the components are put together using the same basic setup as the RNN model, replacing the `GRU` layers with `TransformerEncoder` and `TransformerDecoder`. (Continued on p.473.)",
+   "what_it_means": "Same data pipeline (p.456), same embeddings, same Dense softmax output, same loss and metric. Only the sequence-mixing layers change. That makes the comparison with the RNN's 65% accuracy a fair test of attention vs. recurrence.",
+   "why_it_matters": "It sets up a controlled experiment. On p.474 the result (58%) reveals the missing ingredient, positional information.",
+   "terminology": [],
+   "connections": [
+    "p.473: Listing 15.16 builds the Transformer model.",
+    "p.474: training result and the word-order problem."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "causal_mask",
+   "name": "Causal attention mask",
+   "definition": "A lower-triangular mask that lets each position attend only to itself and earlier positions.",
+   "intuition": "Reading a sentence with a card covering everything to the right of the current word.",
+   "technical": "$M = \\operatorname{tril}(\\mathbf 1_{T\\times T})$. Blocked scores are set to a large negative value before the softmax, so their weights are 0, and each row renormalizes over the allowed prefix.",
+   "significance": "It makes Transformer decoders and GPT-style language models valid next-token predictors while keeping training parallel across positions.",
+   "example": "For 'el plan fue', the query at 'plan' may attend to '[start]', 'el' and 'plan', but not to 'fue'.",
+   "misconception": "That the causal mask hides future *source* tokens. It is applied only to the decoder's self-attention. Cross-attention to the English source is unrestricted (apart from padding).",
+   "related": [
+    "self_attention",
+    "language_model",
+    "attention_mask"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "attention_mask",
+   "name": "Attention mask",
+   "definition": "A boolean or 0/1 tensor broadcast to the score shape (batch, target, source) that marks which query-key pairs are allowed.",
+   "intuition": "A permission table for who may look at whom.",
+   "technical": "Keras accepts `attention_mask` (e.g. a padding mask of shape (b, 1, s)) and `use_causal_mask`. When both are given they are combined.",
+   "significance": "Masks handle both padding (p.470) and causality (this page).",
+   "example": "Padding mask for 'tú lo sabes [pad] [pad]': [1,1,1,0,0] in every row.",
+   "misconception": "That masked positions get a score of exactly 0. Their *weights* become 0. Their scores are pushed toward −∞ before the softmax.",
+   "related": [
+    "causal_mask",
+    "padding"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "transformer",
+   "name": "Transformer encoder-decoder (figure 15.8)",
+   "definition": "A stack of N encoder blocks (self-attention + feedforward) and N decoder blocks (masked self-attention + cross-attention + feedforward), each sublayer followed by a residual add and layer normalization.",
+   "intuition": "The encoder builds a context-aware reading of the English sentence. The decoder writes Spanish left to right, consulting that reading through cross-attention.",
+   "technical": "Encoder: $x \\leftarrow \\operatorname{LN}(x + \\operatorname{MHA}(x,x,x))$, then $x \\leftarrow \\operatorname{LN}(x + \\operatorname{FFN}(x))$. Decoder: $y \\leftarrow \\operatorname{LN}(y + \\operatorname{MHA}_{causal}(y,y,y))$, then $y \\leftarrow \\operatorname{LN}(y + \\operatorname{MHA}(y, h_{enc}, h_{enc}))$, then $y \\leftarrow \\operatorname{LN}(y + \\operatorname{FFN}(y))$.",
+   "significance": "The architecture of 'Attention Is All You Need' and the template for later encoder-only (BERT-style) and decoder-only (GPT-style) models.",
+   "example": "The book's model uses N = 1 block of each, 256-dim, 8 heads (p.473).",
+   "misconception": "That 'N×' means the encoder output feeds only the last decoder block. In the standard design, the final encoder output feeds the cross-attention of every decoder block.",
+   "related": [
+    "self_attention",
+    "multi_head_attention",
+    "residual_connection",
+    "layer_normalization"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Causal mask",
+   "latex": "M_{ij} = \\begin{cases}1 & j \\le i\\\\ 0 & j > i\\end{cases}, \\qquad M = \\begin{pmatrix}1&0&0&0&0\\\\1&1&0&0&0\\\\1&1&1&0&0\\\\1&1&1&1&0\\\\1&1&1&1&1\\end{pmatrix}",
+   "source_text": "[[1, 0, 0, 0, 0], [1, 1, 0, 0, 0], [1, 1, 1, 0, 0], [1, 1, 1, 1, 0], [1, 1, 1, 1, 1]]",
+   "variables": [
+    {
+     "symbol": "i",
+     "meaning": "Query (target) position, the row"
+    },
+    {
+     "symbol": "j",
+     "meaning": "Key position in the same target sequence, the column"
+    },
+    {
+     "symbol": "M_{ij}",
+     "meaning": "1 if position i may attend to position j"
+    }
+   ],
+   "operations": "Elementwise comparison of positions, giving a lower-triangular 0/1 matrix.",
+   "purpose": "Forbid attention to future positions.",
+   "interpretation": "Row i is the visibility set of token i: the prefix 0…i.",
+   "intuition": "Look back, never ahead.",
+   "numerical_example": "For T = 5, row 2 = [1,1,1,0,0]: the third token sees tokens 0, 1, 2. The number of allowed pairs is 5·6/2 = 15.",
+   "source": "book",
+   "book_ref": "p.472"
+  },
+  {
+   "id": "m2",
+   "title": "Masked attention weights",
+   "latex": "\\alpha_{ij} = \\frac{M_{ij}\\, e^{s_{ij}}}{\\sum_{j'} M_{ij'}\\, e^{s_{ij'}}}, \\qquad s_{ij} = \\frac{q_i\\cdot k_j}{\\sqrt{d_h}}",
+   "source_text": "(not printed; implied by passing the mask to MultiHeadAttention)",
+   "variables": [
+    {
+     "symbol": "s_{ij}",
+     "meaning": "Scaled score of query i against key j (p.466)"
+    },
+    {
+     "symbol": "\\alpha_{ij}",
+     "meaning": "Attention weight after masking and softmax"
+    }
+   ],
+   "operations": "Exclude masked positions from the softmax and renormalize over the allowed ones.",
+   "purpose": "Show how the 0/1 mask changes the attention computation.",
+   "interpretation": "Future positions get weight exactly 0, and the remaining weights still sum to 1.",
+   "intuition": "Softmax only over the words you are allowed to see.",
+   "numerical_example": "Row 1 with scores (0.5, 1.5, 3.0, …): only j = 0, 1 are allowed → weights e^0.5/(e^0.5+e^1.5) ≈ 0.269 and ≈ 0.731. The score 3.0 is ignored.",
+   "source": "ai_explanation",
+   "book_ref": "p.472"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "A 5×5 causal (lower-triangular) attention mask",
+   "original_code": "[\n    [1, 0, 0, 0, 0],\n    [1, 1, 0, 0, 0],\n    [1, 1, 1, 0, 0],\n    [1, 1, 1, 1, 0],\n    [1, 1, 1, 1, 1],\n]",
+   "language": "python",
+   "what_it_does": "Shows the attention mask for a target sequence of length 5: ones on and below the diagonal, zeros above it.",
+   "line_explanations": [
+    {
+     "lines": "2",
+     "explanation": "Row 0: the first token attends only to itself."
+    },
+    {
+     "lines": "3",
+     "explanation": "Row 1: the second token attends to tokens 0 and 1."
+    },
+    {
+     "lines": "4-5",
+     "explanation": "Rows 2-3: each token sees the prefix up to and including itself."
+    },
+    {
+     "lines": "6",
+     "explanation": "Row 4: the last token sees the whole sequence."
+    }
+   ],
+   "inputs_outputs": "A (target_len × target_len) 0/1 matrix, broadcast over batch and heads inside `MultiHeadAttention`.",
+   "algorithm": "M[i][j] = 1 if j <= i else 0, equivalent to `np.tril(np.ones((T, T)))`.",
+   "theory_link": "It enforces the autoregressive factorization $p(y) = \\prod_i p(y_{i+1}\\mid y_{\\le i})$ inside a parallel attention computation.",
+   "parameters": [],
+   "pitfalls": [
+    "The Keras argument is `use_causal_mask` (call-time), not `use_casual_mask` as printed in the text.",
+    "Don't use the causal mask in the encoder: the source sentence is fully known, and bidirectional context is desired (p.457).",
+    "Transposing the mask (upper-triangular) would let each token see only the future, which is the opposite of what you want."
+   ],
+   "illustrative_code": "# AI-written (not from the book): build the causal mask and see what it does.\nimport numpy as np\nfrom keras import layers, ops\n\nT = 5\ncausal = np.tril(np.ones((T, T), dtype=\"int32\"))   # the matrix printed in the book\nprint(causal)\n\n# Masked softmax by hand: blocked positions get -inf-like logits, so weight 0.\nscores = np.random.randn(T, T)\nmasked = np.where(causal == 1, scores, -1e9)\nweights = np.exp(masked - masked.max(-1, keepdims=True))\nweights /= weights.sum(-1, keepdims=True)\nprint(np.round(weights, 2))                  # upper triangle is exactly 0\n\n# In Keras the keyword is spelled use_causal_mask (the text prints \"use_casual_mask\"):\nmha = layers.MultiHeadAttention(num_heads=2, key_dim=8)\nx = ops.ones((1, T, 16))\ny = mha(query=x, value=x, key=x, use_causal_mask=True)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "How training stays parallel with a mask",
+   "kind": "step_by_step",
+   "body": "1. Decoder input: `[start] el plan fue` (positions 0-3). Labels: `el plan fue [end]`.\n2. One self-attention call computes all 4×4 scores at once.\n3. The causal mask zeroes the weights above the diagonal, so position 1 ('el') mixes only `[start]` and 'el'.\n4. All four next-token predictions and their losses are computed in a single forward pass.\n\nAn RNN would need 4 sequential steps. The mask gives the RNN's information flow without its sequential cost. That is the 'no sequence-length loops at training time' property (p.489).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Reading Figure 15.8 against the code",
+   "kind": "breakdown",
+   "body": "- Left tower = `TransformerEncoder` (Listing 15.14, p.469): `self_attention` → `x + residual` → `self_attention_layernorm` → `feed_forward_1/2` → `x + residual` → `feed_forward_layernorm`.\n- Right tower = `TransformerDecoder` (Listing 15.15, p.471): masked `self_attention(use_causal_mask=True)` → add & norm → `cross_attention(query=x, key=source, value=source)` → add & norm → feedforward → add & norm.\n- The line from the top of the encoder into the decoder's middle attention box is `encoder_output` passed as `source`. Two arrows enter (key and value), and the third (query) comes from below.\n- The curved bypass lines are residual connections.\n- 'N×' means the blocks can be stacked. The book's model uses one of each (p.473).",
+   "source": "inference"
+  },
+  {
+   "title": "Causal mask in GPT-style models",
+   "kind": "application",
+   "body": "A decoder-only language model, such as the mini-GPT in chapter 16, is essentially the decoder tower without cross-attention: masked self-attention + feedforward, stacked. The same lower-triangular mask is what lets it be trained on next-token prediction over whole documents in parallel.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "svg",
+   "title": "The 5×5 causal mask as a grid",
+   "why": "Visualizes the mask printed on this page: row i (query position) may attend to columns j ≤ i (shaded).",
+   "svg": "<svg viewBox=\"0 0 260 230\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" fill=\"currentColor\"><g stroke=\"currentColor\" stroke-opacity=\".4\" width=\"34\" height=\"34\"><rect x=\"40\" y=\"30\" fill-opacity=\"0.5\" width=\"34\" height=\"34\"/><rect x=\"76\" y=\"30\" fill-opacity=\"0.06\" width=\"34\" height=\"34\"/><rect x=\"112\" y=\"30\" fill-opacity=\"0.06\" width=\"34\" height=\"34\"/><rect x=\"148\" y=\"30\" fill-opacity=\"0.06\" width=\"34\" height=\"34\"/><rect x=\"184\" y=\"30\" fill-opacity=\"0.06\" width=\"34\" height=\"34\"/><rect x=\"40\" y=\"66\" fill-opacity=\"0.5\" width=\"34\" height=\"34\"/><rect x=\"76\" y=\"66\" fill-opacity=\"0.5\" width=\"34\" height=\"34\"/><rect x=\"112\" y=\"66\" fill-opacity=\"0.06\" width=\"34\" height=\"34\"/><rect x=\"148\" y=\"66\" fill-opacity=\"0.06\" width=\"34\" height=\"34\"/><rect x=\"184\" y=\"66\" fill-opacity=\"0.06\" width=\"34\" height=\"34\"/><rect x=\"40\" y=\"102\" fill-opacity=\"0.5\" width=\"34\" height=\"34\"/><rect x=\"76\" y=\"102\" fill-opacity=\"0.5\" width=\"34\" height=\"34\"/><rect x=\"112\" y=\"102\" fill-opacity=\"0.5\" width=\"34\" height=\"34\"/><rect x=\"148\" y=\"102\" fill-opacity=\"0.06\" width=\"34\" height=\"34\"/><rect x=\"184\" y=\"102\" fill-opacity=\"0.06\" width=\"34\" height=\"34\"/><rect x=\"40\" y=\"138\" fill-opacity=\"0.5\" width=\"34\" height=\"34\"/><rect x=\"76\" y=\"138\" fill-opacity=\"0.5\" width=\"34\" height=\"34\"/><rect x=\"112\" y=\"138\" fill-opacity=\"0.5\" width=\"34\" height=\"34\"/><rect x=\"148\" y=\"138\" fill-opacity=\"0.5\" width=\"34\" height=\"34\"/><rect x=\"184\" y=\"138\" fill-opacity=\"0.06\" width=\"34\" height=\"34\"/><rect x=\"40\" y=\"174\" fill-opacity=\"0.5\" width=\"34\" height=\"34\"/><rect x=\"76\" y=\"174\" fill-opacity=\"0.5\" width=\"34\" height=\"34\"/><rect x=\"112\" y=\"174\" fill-opacity=\"0.5\" width=\"34\" height=\"34\"/><rect x=\"148\" y=\"174\" fill-opacity=\"0.5\" width=\"34\" height=\"34\"/><rect x=\"184\" y=\"174\" fill-opacity=\"0.5\" width=\"34\" height=\"34\"/></g><g text-anchor=\"middle\" font-size=\"14\"><text x=\"57\" y=\"52\">1</text><text x=\"93\" y=\"52\">0</text><text x=\"129\" y=\"52\">0</text><text x=\"165\" y=\"52\">0</text><text x=\"201\" y=\"52\">0</text><text x=\"57\" y=\"88\">1</text><text x=\"93\" y=\"88\">1</text><text x=\"129\" y=\"88\">0</text><text x=\"165\" y=\"88\">0</text><text x=\"201\" y=\"88\">0</text><text x=\"57\" y=\"124\">1</text><text x=\"93\" y=\"124\">1</text><text x=\"129\" y=\"124\">1</text><text x=\"165\" y=\"124\">0</text><text x=\"201\" y=\"124\">0</text><text x=\"57\" y=\"160\">1</text><text x=\"93\" y=\"160\">1</text><text x=\"129\" y=\"160\">1</text><text x=\"165\" y=\"160\">1</text><text x=\"201\" y=\"160\">0</text><text x=\"57\" y=\"196\">1</text><text x=\"93\" y=\"196\">1</text><text x=\"129\" y=\"196\">1</text><text x=\"165\" y=\"196\">1</text><text x=\"201\" y=\"196\">1</text></g><g text-anchor=\"middle\" font-size=\"11\"><text x=\"57\" y=\"24\">k0</text><text x=\"93\" y=\"24\">k1</text><text x=\"129\" y=\"24\">k2</text><text x=\"165\" y=\"24\">k3</text><text x=\"201\" y=\"24\">k4</text><text x=\"22\" y=\"52\">q0</text><text x=\"22\" y=\"88\">q1</text><text x=\"22\" y=\"124\">q2</text><text x=\"22\" y=\"160\">q3</text><text x=\"22\" y=\"196\">q4</text><text x=\"130\" y=\"222\">row i = query position, column j = key position; 1 = may attend</text></g></svg>"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Figure 15.8 interactively",
+   "widget": "transformer_block",
+   "params": {
+    "kind": "encoder_decoder"
+   },
+   "why": "Hover the sublayers of figure 15.8: encoder self-attention and feedforward, decoder masked self-attention, cross-attention fed by the encoder, and the add & norm residual steps."
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The Keras argument is `use_casual_mask`.",
+   "correction": "It is `use_causal_mask` ('causal', as in cause and effect), passed when calling the layer, as in Listing 15.15."
+  },
+  {
+   "claim": "The causal mask is needed in the encoder too.",
+   "correction": "Only the decoder's self-attention needs it. The encoder sees the whole known source bidirectionally, and cross-attention only needs the padding mask."
+  },
+  {
+   "claim": "Masking makes the Transformer process tokens one at a time during training.",
+   "correction": "All positions are still computed in parallel. The mask only zeros certain attention weights."
+  },
+  {
+   "claim": "Without a mask the model would simply be slightly better.",
+   "correction": "It would learn to copy the next input token as the label, reach near-perfect training accuracy, and be unable to generate at inference."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 471,
+    "note": "Listing 15.15 decoder with `use_causal_mask=True` and the start of the leakage argument."
+   },
+   {
+    "page": 470,
+    "note": "attention_mask for padding and the start of the decoder block."
+   },
+   {
+    "page": 469,
+    "note": "Listing 15.14 Transformer encoder block."
+   },
+   {
+    "page": 458,
+    "note": "Why the RNN decoder could not be Bidirectional."
+   }
+  ],
+  "later": [
+   {
+    "page": 473,
+    "note": "Listing 15.16 builds the full Transformer translator."
+   },
+   {
+    "page": 474,
+    "note": "Training gives 58% accuracy, revealing the missing positional information."
+   },
+   {
+    "page": 475,
+    "note": "15.3.5 Embedding positional information."
+   },
+   {
+    "page": 489,
+    "note": "Summary: decoders use causal attention to predict the next word."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 468,
+    "note": "Self-attention."
+   },
+   {
+    "page": 456,
+    "note": "Offset-by-one targets."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 466,
+    "note": "Scaled dot-product scores that the mask modifies."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 471,
+    "note": "`self.self_attention(query=x, key=x, value=x, use_causal_mask=True)`."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 457,
+    "note": "Figure 15.2, the RNN seq2seq counterpart of figure 15.8."
+   }
+  ]
+ },
+ "takeaways": [
+  "Unmasked self-attention in the decoder would leak the next token (the label) and make generation impossible.",
+  "A lower-triangular causal mask lets position i attend only to positions 0…i, which is forward-only information flow like an RNN.",
+  "Keras applies it with `use_causal_mask=True` at call time (the text's `use_casual_mask` is a typo).",
+  "Figure 15.8: encoder = self-attention + FFN; decoder = masked self-attention + cross-attention + FFN; every sublayer has add & norm.",
+  "Section 15.3.4 swaps the RNN's GRU layers for Transformer blocks while keeping everything else the same."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In the causal mask, what does row i specify?",
+   "options": [
+    "Which positions the token at position i may attend to",
+    "Which positions may attend to the token at position i",
+    "The attention weights of token i",
+    "The padding positions of sequence i in the batch"
+   ],
+   "answer": "Which positions the token at position i may attend to",
+   "explanation": "The book: 'Each row i can be read as a mask for attention for the target token at position i.' Columns (not rows) describe who can see a given token. The mask is 0/1, not weights. Padding is a separate mask.",
+   "page_refs": [
+    472
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "conceptual",
+   "question": "Explain what would go wrong if the decoder's self-attention were left unmasked during training.",
+   "options": [],
+   "answer": "Each position could attend to the next input token, which is exactly its label. The model would learn to copy it, getting a very low training loss without learning to translate. At inference, future tokens don't exist, so it couldn't generate novel translations.",
+   "explanation": "From e03 and p.471.",
+   "page_refs": [
+    471,
+    472
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "math",
+   "question": "How many query-key pairs are allowed by a causal mask for a target length of 20, compared with no mask?",
+   "options": [],
+   "answer": "20·21/2 = 210 allowed pairs, versus 400 without a mask.",
+   "explanation": "Lower triangle including the diagonal: T(T+1)/2.",
+   "page_refs": [
+    472
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "short",
+   "question": "What is the exact Keras argument for applying a causal mask in `MultiHeadAttention`, and where is it passed?",
+   "options": [],
+   "answer": "`use_causal_mask=True`, passed when calling the layer (e.g. `mha(query=x, key=x, value=x, use_causal_mask=True)`).",
+   "explanation": "The text prints `use_casual_mask`, a typo. Listing 15.15 on p.471 shows the correct spelling.",
+   "page_refs": [
+    471,
+    472
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "In Figure 15.8, where does the encoder output enter the decoder?",
+   "options": [
+    "As key and value of the decoder's second (cross-)attention sublayer",
+    "As the query of the masked self-attention",
+    "Added to the decoder's embedding input",
+    "As input to the decoder's feedforward sublayer"
+   ],
+   "answer": "As key and value of the decoder's second (cross-)attention sublayer",
+   "explanation": "The encoder line enters the middle multi-head attention box of the decoder. The query comes from the decoder's own masked self-attention output. In Listing 15.15: `cross_attention(query=x, key=source, value=source)`.",
+   "page_refs": [
+    471,
+    472
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "In what sense does the causal mask give 'the same effect as our RNN layer', and in what sense is it different?",
+   "options": [],
+   "answer": "Same: information flows only forward, so each prediction depends only on earlier tokens. Different: an RNN carries that information through a sequential state, one step at a time, while masked attention lets each position read every earlier position directly, and all positions are computed in parallel.",
+   "explanation": "The book states the similarity. The difference follows from pp.461-466.",
+   "page_refs": [
+    472,
+    461
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you redraw Figure 15.8 from memory, naming every sublayer and residual connection?",
+   "options": [],
+   "answer": "Self-check: encoder [MHA → add&norm → FFN → add&norm]×N; decoder [masked MHA → add&norm → cross MHA(enc) → add&norm → FFN → add&norm]×N.",
+   "explanation": "Compare with Listings 15.14 and 15.15.",
+   "page_refs": [
+    469,
+    471,
+    472
+   ]
+  }
+ ]
+}

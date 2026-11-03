@@ -1,0 +1,574 @@
+{
+ "page_id": "page_515",
+ "pdf_page": 515,
+ "printed_page": "491",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T10:40:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "The text says 'The LoRA authors suggest freezing the entire Transformer and adding LoRA weights to only the query and key projections in the attention layer.' In Hu et al. (2021), the configuration studied and recommended (e.g. Table 5, and the GPT-3 experiments) adapts the query and VALUE projections (W_q, W_v), and KerasHub's `enable_lora()` default targets are, to my knowledge, query and value as well. The sidebar on p.516 also enables LoRA on `key_dense` and `query_dense`. Likely 'key' should read 'value' (same issue flagged on p.516)."
+  ],
+  "extraction_quality": "Good. Blank lines between `__init__` and `call` in both class listings were dropped by extraction and restored from the page image."
+ },
+ "overview": {
+  "title": "LoRA: freezing the kernel and learning a low-rank update",
+  "chapter": "16 Text generation",
+  "section": "16.3 Using a pretrained LLM",
+  "subsection": "16.3.3 Low-Rank Adaptation (LoRA)",
+  "main_topic": "How Low-Rank Adaptation replaces the update to a frozen weight matrix with the product of two thin trainable matrices, and how to enable it in KerasHub.",
+  "central_idea": "Freeze the pretrained kernel W and learn its update as alpha @ beta with a small inner rank; for a 2048×2048 kernel and rank 8 this cuts trainable parameters from 4,194,304 to 32,768, which is enough expressive power for fine-tuning.",
+  "importance": "LoRA is the standard way to fine-tune LLMs on limited hardware, and it solves the out-of-memory problem posed on p.514.",
+  "learning_objectives": [
+   "Write the forward pass of a LoRA linear layer.",
+   "Compute the parameter count of a low-rank update and compare it to the full kernel.",
+   "Explain why a low-rank update is less expressive yet sufficient for fine-tuning.",
+   "Enable LoRA on a KerasHub backbone with one call."
+  ],
+  "prerequisites": [
+   "The memory problem of full fine-tuning (p.514)",
+   "Matrix multiplication and matrix rank",
+   "Custom Keras layers with add_weight and trainable=False",
+   "Attention query/key/value projections (chapter 15)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "In 2021, Microsoft researchers proposed **LoRA (Low-Rank Adaptation of Large Language Models)** to solve exactly the memory problem described on p.514. To explain it, the authors start from a minimal `Linear` layer: one `kernel` weight of shape `(input_dim, output_dim)` and `call` returning `ops.matmul(inputs, self.kernel)`.\n\nLoRA **freezes the kernel** and adds a **low-rank decomposition** of the kernel projection: two new matrices, `alpha` with shape `(input_dim, rank)` and `beta` with shape `(rank, output_dim)`, which project down to and back up from a small inner `rank`. The `LoraLinear` layer creates the kernel with `trainable=False`, computes `frozen = inputs @ kernel` and `update = (inputs @ alpha) @ beta`, and returns their sum.\n\nThe savings are dramatic. A **2048 × 2048** kernel has **4,194,304** frozen parameters; with **rank 8**, the decomposition has only **32,768** (2 × 2048 × 8), 128 times fewer. The update is less expressive than the full kernel: at the narrow middle the whole update must pass through just **eight floats**. But fine-tuning does not need the expressive power pretraining needed (figure 16.4, on p.516).\n\nThe authors then state that the LoRA paper suggests freezing the entire Transformer and adding LoRA weights only to the **query and key** projections of attention (the paper itself recommends query and *value*; see the review flag). KerasHub has this built in: **Listing 16.13** enables it with one line, `gemma_lm.backbone.enable_lora(rank=8)`. A footnote cites J. Edward Hu et al., arXiv:2106.09685.",
+ "paragraphs": [
+  {
+   "ref": "p515_e03",
+   "excerpt": "In 2021, researchers at Microsoft proposed a technique called LoRA, short for",
+   "what_it_says": "LoRA, proposed by Microsoft researchers in 2021, was designed to solve this memory issue; it is explained starting from a simple linear projection layer.",
+   "what_it_means": "The memory problem is the optimizer state and gradients of trainable weights. LoRA keeps the pretrained weights fixed and trains a tiny number of new ones.",
+   "why_it_matters": "It names the technique used for the rest of the section and anchors it to a primary source (footnote 4).",
+   "terminology": [
+    {
+     "term": "LoRA",
+     "meaning": "Low-Rank Adaptation: train a low-rank additive update to frozen weight matrices."
+    },
+    {
+     "term": "linear projection",
+     "meaning": "Multiplication of inputs by a weight matrix, the core of Dense layers and attention projections."
+    }
+   ],
+   "connections": [
+    "p.514: 15 GB of weights and optimizer state on a 16 GB GPU."
+   ]
+  },
+  {
+   "ref": "p515_e05",
+   "excerpt": "The LoRA paper proposes freezing the kernel matrix and adding a new “low",
+   "what_it_says": "LoRA freezes `kernel` and adds a low-rank decomposition with two new matrices, `alpha` and `beta`, projecting to and from an inner `rank`.",
+   "what_it_means": "The effective weight becomes $W + \\alpha\\beta$. The product of an $(d_{in}\\times r)$ and an $(r \\times d_{out})$ matrix has rank at most $r$, so the update lives in a small subspace.",
+   "why_it_matters": "Only alpha and beta are trainable, so gradients and Adam state exist only for them.",
+   "technical_idea": "Computing `(inputs @ alpha) @ beta` instead of materializing `alpha @ beta` keeps compute low: two thin matmuls. Note (not in the book): the paper names these A and B, initializes one of them to zero so the update starts at 0, and scales the update by a separate hyperparameter also called α (divided by r). The book's `alpha` is a matrix, not that scalar.",
+   "terminology": [
+    {
+     "term": "rank",
+     "meaning": "Dimension of the inner bottleneck; also the maximum matrix rank of the update."
+    },
+    {
+     "term": "low-rank decomposition",
+     "meaning": "Expressing a matrix as a product of two thin matrices."
+    }
+   ],
+   "connections": [
+    "p.516: Figure 16.4 draws the frozen weights beside the alpha/beta bottleneck."
+   ]
+  },
+  {
+   "ref": "p515_e07",
+   "excerpt": "If our kernel is shape 2048 × 2048, that is 4,194,304 frozen",
+   "what_it_says": "A 2048×2048 kernel has 4,194,304 frozen parameters; with rank 8 the decomposition has only 32,768. The update is less expressive (it squeezes through eight floats) but fine-tuning does not need pretraining's expressive power.",
+   "what_it_means": "$2048^2 = 4{,}194{,}304$, while $2048\\cdot 8 + 8 \\cdot 2048 = 32{,}768$: a 128× reduction. The bet is that the change needed to adapt a pretrained model is intrinsically low-dimensional.",
+   "why_it_matters": "This is the core trade-off of parameter-efficient fine-tuning: expressiveness for memory.",
+   "technical_idea": "The LoRA paper motivates this with the observation that adaptation updates have low 'intrinsic rank'.",
+   "terminology": [
+    {
+     "term": "expressive power",
+     "meaning": "The range of functions/updates a parameterization can represent."
+    }
+   ],
+   "connections": [
+    "p.516: Figure 16.4.",
+    "p.517: the whole Gemma backbone ends up with 1,304,576 trainable parameters (4.98 MB)."
+   ]
+  },
+  {
+   "ref": "p515_e08",
+   "excerpt": "The LoRA authors suggest freezing the entire Transformer and adding LoRA weights to",
+   "what_it_says": "The book says the LoRA authors suggest freezing the whole Transformer and adding LoRA weights only to the attention layers' query and key projections, and that KerasHub has a built-in LoRA method.",
+   "what_it_means": "Instead of writing LoraLinear layers yourself, `enable_lora` freezes the backbone and wraps selected attention projections with low-rank adapters.",
+   "why_it_matters": "One line of code makes the 1B-parameter model trainable on a 16 GB GPU.",
+   "technical_idea": "Correction (not in the book): Hu et al. found adapting W_q and W_v the best use of a fixed parameter budget; see review flag.",
+   "terminology": [
+    {
+     "term": "query/key/value projections",
+     "meaning": "The three Dense projections that produce Q, K, V in attention."
+    }
+   ],
+   "connections": [
+    "p.516: sidebar showing the per-layer equivalent with `enable_lora` on individual Dense layers.",
+    "p.517: model summary after enabling LoRA and listing 16.14."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "lora",
+   "name": "Low-Rank Adaptation (LoRA)",
+   "definition": "A fine-tuning method that freezes pretrained weight matrices and learns an additive update factored as the product of two thin matrices.",
+   "intuition": "Instead of repainting the whole wall, you add a thin stripe; most fine-tuning changes can be described with very few directions.",
+   "technical": "$y = xW + (x\\,\\alpha)\\,\\beta$, $W\\in\\mathbb{R}^{d_{in}\\times d_{out}}$ frozen, $\\alpha\\in\\mathbb{R}^{d_{in}\\times r}$, $\\beta\\in\\mathbb{R}^{r\\times d_{out}}$ trainable.",
+   "significance": "Cuts trainable parameters and optimizer memory by orders of magnitude.",
+   "example": "2048×2048 kernel, rank 8: 32,768 trainable vs 4,194,304 frozen.",
+   "misconception": "That LoRA compresses the model; the full frozen weights stay in memory.",
+   "related": [
+    "freezing_layers",
+    "transfer_learning",
+    "instruction_fine_tuning",
+    "low_rank_matrix"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "low_rank_matrix",
+   "name": "Low-rank matrix",
+   "definition": "A matrix whose rank (number of independent rows/columns) is much smaller than its dimensions; it factors as a product of thin matrices.",
+   "intuition": "A big table that can be rebuilt from a few column patterns and a few row weightings.",
+   "technical": "$\\operatorname{rank}(\\alpha\\beta) \\le r$ for $\\alpha \\in \\mathbb{R}^{m\\times r}, \\beta \\in \\mathbb{R}^{r\\times n}$.",
+   "significance": "Storing it factored costs $r(m+n)$ numbers instead of $mn$.",
+   "example": "$m=n=2048$, $r=8$: 32,768 vs 4,194,304.",
+   "misconception": "That low rank means small values; it means few independent directions.",
+   "related": [
+    "lora",
+    "matrix_product"
+   ],
+   "source": "ai_explanation"
+  },
+  {
+   "id": "freezing_layers",
+   "name": "Freezing parameters",
+   "definition": "Marking weights non-trainable so they are not updated.",
+   "intuition": "Lock the knobs you do not want to touch.",
+   "technical": "`add_weight(..., trainable=False)` for the LoRA kernel.",
+   "significance": "Frozen weights need no gradients or optimizer state (p.514).",
+   "example": "`self.kernel = self.add_weight(shape=(input_dim, output_dim), trainable=False)`.",
+   "misconception": "That frozen weights are removed from memory.",
+   "related": [
+    "lora",
+    "transfer_learning"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "LoRA forward pass",
+   "latex": "y = xW + (x\\,\\alpha)\\,\\beta = x\\,(W + \\alpha\\beta)",
+   "source_text": "frozen = ops.matmul(inputs, self.kernel); update = ops.matmul(ops.matmul(inputs, self.alpha), self.beta); return frozen + update",
+   "variables": [
+    {
+     "symbol": "x",
+     "meaning": "input, shape (…, input_dim)"
+    },
+    {
+     "symbol": "W",
+     "meaning": "frozen kernel, (input_dim, output_dim)"
+    },
+    {
+     "symbol": "\\alpha",
+     "meaning": "trainable down-projection, (input_dim, rank)"
+    },
+    {
+     "symbol": "\\beta",
+     "meaning": "trainable up-projection, (rank, output_dim)"
+    },
+    {
+     "symbol": "y",
+     "meaning": "output, (…, output_dim)"
+    }
+   ],
+   "operations": "Two matrix products plus a sum; by associativity it equals using the adapted kernel W + αβ.",
+   "purpose": "Learn a weight update without training W.",
+   "interpretation": "The output is the pretrained projection plus a correction confined to an r-dimensional subspace.",
+   "intuition": "A main road plus a narrow side lane that can nudge the result.",
+   "numerical_example": "With $d_{in}=d_{out}=2$, $r=1$, $W=I$, $\\alpha=[1,0]^T$, $\\beta=[0, 0.5]$: $\\alpha\\beta = \\begin{bmatrix}0 & 0.5\\\\0 & 0\\end{bmatrix}$, so $x=[2,3]$ gives $xW=[2,3]$, $(x\\alpha)\\beta = 2\\cdot[0,0.5]=[0,1]$, and $y=[2,4]$.",
+   "source": "book",
+   "book_ref": "p.515"
+  },
+  {
+   "id": "m2",
+   "title": "Parameter count: full kernel versus low-rank update",
+   "latex": "\\underbrace{d_{in}\\,d_{out}}_{\\text{full}} = 2048^2 = 4{,}194{,}304 \\qquad \\underbrace{r\\,(d_{in}+d_{out})}_{\\text{LoRA}} = 8\\cdot(2048+2048) = 32{,}768",
+   "source_text": "If our kernel is shape 2048 × 2048, that is 4,194,304 frozen parameters. But if we keep the rank low, say, 8, we will have only 32,768 parameters",
+   "variables": [
+    {
+     "symbol": "d_{in}, d_{out}",
+     "meaning": "kernel input and output dimensions"
+    },
+    {
+     "symbol": "r",
+     "meaning": "LoRA rank"
+    }
+   ],
+   "operations": "Count matrix entries.",
+   "purpose": "Quantify the savings.",
+   "interpretation": "Ratio 4,194,304 / 32,768 = 128; it grows as d/(2r) for square kernels.",
+   "intuition": "Two thin strips instead of a full square.",
+   "numerical_example": "Rank 16 doubles LoRA to 65,536 (64× smaller); rank 1 gives 4,096 (1,024× smaller).",
+   "source": "book",
+   "book_ref": "p.515"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "A simple linear projection layer",
+   "original_code": "class Linear(keras.Layer):\n    def __init__(self, input_dim, output_dim):\n        super().__init__()\n        self.kernel = self.add_weight(shape=(input_dim, output_dim))\n\n    def call(self, inputs):\n        return ops.matmul(inputs, self.kernel)",
+   "language": "python",
+   "what_it_does": "Defines a bias-free Dense-like layer with a single trainable kernel.",
+   "line_explanations": [
+    {
+     "lines": "1-4",
+     "explanation": "Subclass `keras.Layer`; create a `(input_dim, output_dim)` weight (trainable by default)."
+    },
+    {
+     "lines": "6-7",
+     "explanation": "Forward pass: matrix-multiply inputs by the kernel."
+    }
+   ],
+   "inputs_outputs": "Input (…, input_dim) → output (…, output_dim).",
+   "algorithm": "y = x W.",
+   "theory_link": "The building block inside attention projections and Dense layers.",
+   "parameters": [
+    {
+     "name": "input_dim, output_dim",
+     "role": "Kernel shape."
+    }
+   ],
+   "pitfalls": [
+    "Defining weights in `__init__` requires known dimensions; Keras layers often defer to `build()`."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "LoraLinear: frozen kernel plus low-rank update",
+   "original_code": "class LoraLinear(keras.Layer):\n    def __init__(self, input_dim, output_dim, rank):\n        super().__init__()\n        self.kernel = self.add_weight(\n            shape=(input_dim, output_dim), trainable=False\n        )\n        self.alpha = self.add_weight(shape=(input_dim, rank))\n        self.beta = self.add_weight(shape=(rank, output_dim))\n\n    def call(self, inputs):\n        frozen = ops.matmul(inputs, self.kernel)\n        update = ops.matmul(ops.matmul(inputs, self.alpha), self.beta)\n        return frozen + update",
+   "language": "python",
+   "what_it_does": "Freezes the kernel and adds trainable matrices alpha and beta whose product forms the update.",
+   "line_explanations": [
+    {
+     "lines": "4-6",
+     "explanation": "Kernel with `trainable=False`: no gradients or optimizer state for it."
+    },
+    {
+     "lines": "7",
+     "explanation": "`alpha`: (input_dim, rank), projects inputs down to `rank` dimensions."
+    },
+    {
+     "lines": "8",
+     "explanation": "`beta`: (rank, output_dim), projects back up."
+    },
+    {
+     "lines": "11",
+     "explanation": "Frozen path: the original projection."
+    },
+    {
+     "lines": "12",
+     "explanation": "Low-rank path: two thin matmuls, never forming the full (input_dim, output_dim) update."
+    },
+    {
+     "lines": "13",
+     "explanation": "Sum of both paths."
+    }
+   ],
+   "inputs_outputs": "Same interface as `Linear`; trainable weights are only alpha and beta.",
+   "algorithm": "y = xW + (xα)β.",
+   "theory_link": "Hu et al. (2021): weight updates during adaptation have low intrinsic rank.",
+   "parameters": [
+    {
+     "name": "rank",
+     "role": "Inner bottleneck size: controls trainable parameter count and expressive power."
+    }
+   ],
+   "pitfalls": [
+    "Simplified for exposition: both alpha and beta use the default initializer, so the update is non-zero at the start and would perturb the pretrained model. The paper initializes one factor to zero (and the other randomly) so training starts exactly from the pretrained function.",
+    "No scaling factor (the paper's α/r) is applied."
+   ],
+   "illustrative_code": "# Not in the book: zero-init one factor so the update starts at 0\nself.alpha = self.add_weight(shape=(input_dim, rank), initializer=\"he_uniform\")\nself.beta = self.add_weight(shape=(rank, output_dim), initializer=\"zeros\")"
+  },
+  {
+   "id": "c3",
+   "listing": "16.13",
+   "title": "Enabling LoRA training for a KerasHub model",
+   "original_code": "gemma_lm.backbone.enable_lora(rank=8)",
+   "language": "python",
+   "what_it_does": "Freezes the Gemma backbone and adds rank-8 LoRA adapters to its attention projections.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "`enable_lora` is a method of KerasHub backbones; `rank=8` sets the bottleneck size. The sidebar on p.516 writes out an equivalent per-layer loop."
+    }
+   ],
+   "inputs_outputs": "Modifies `gemma_lm` in place; trainable parameters drop to 1,304,576 (p.517).",
+   "algorithm": "Freeze all, then wrap target dense layers with LoRA.",
+   "theory_link": "Applies LoraLinear's idea to every decoder block's attention.",
+   "parameters": [
+    {
+     "name": "rank",
+     "role": "Same as in LoraLinear."
+    }
+   ],
+   "pitfalls": [
+    "Call it before `compile()`, so the optimizer only builds state for the LoRA variables."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why low rank can be enough",
+   "kind": "breakdown",
+   "source": "ai_explanation",
+   "body": "Pretraining must carve a representation of all of language into the weights, which needs full-rank matrices. Fine-tuning only shifts behaviour (format, tone, following instructions). Hu et al. measured that such task-specific updates concentrate in a few directions, so a rank-8 update captures most of what full fine-tuning would change. This matches the book's phrase that fine-tuning 'nudges' the learned representation (p.512)."
+  },
+  {
+   "title": "Memory payoff in numbers",
+   "kind": "numerical",
+   "source": "ai_explanation",
+   "body": "For one 2048×2048 kernel with Adam in float32: full training needs 4,194,304 × 16 B ≈ 67 MB (weights + gradient + two moments); LoRA needs 4,194,304 × 4 B ≈ 16.8 MB for the frozen kernel plus 32,768 × 16 B ≈ 0.5 MB for the adapter. Across Gemma, p.517 reports only 4.98 MB of trainable parameters."
+  },
+  {
+   "title": "Bottleneck analogy",
+   "kind": "analogy",
+   "source": "analogy",
+   "body": "Picture a full orchestra (the frozen kernel) and a conductor who can only send eight hand signals (the rank). Eight signals cannot rewrite the symphony, but they can change tempo, dynamics and emphasis, which is all you need to adapt a performance."
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "Trainable parameters for a 2048×2048 kernel versus LoRA rank",
+   "why": "Uses the page's example (2048×2048 kernel, rank 8 → 32,768) to show how the count scales with rank.",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": [
+      "full kernel",
+      "r=64",
+      "r=32",
+      "r=16",
+      "r=8",
+      "r=4",
+      "r=1"
+     ],
+     "datasets": [
+      {
+       "label": "parameters",
+       "data": [
+        4194304,
+        262144,
+        131072,
+        65536,
+        32768,
+        16384,
+        4096
+       ]
+      }
+     ]
+    },
+    "options": {
+     "scales": {
+      "y": {
+       "type": "logarithmic",
+       "title": {
+        "display": true,
+        "text": "parameters (log scale)"
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "LoraLinear data flow",
+   "why": "Shows the two paths of LoraLinear's call(): frozen kernel and alpha→beta bottleneck.",
+   "mermaid": "flowchart LR\n X[\"inputs (…, 2048)\"] --> K[\"kernel 2048x2048 (frozen)\"]\n X --> A[\"alpha 2048x8 (trainable)\"]\n A --> M[\"8 floats\"]\n M --> B[\"beta 8x2048 (trainable)\"]\n K --> S((\"+\"))\n B --> S\n S --> Y[\"outputs (…, 2048)\"]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "LoRA reduces the size of the model in memory.",
+   "correction": "The frozen weights stay; LoRA saves memory on gradients and optimizer state by making few parameters trainable."
+  },
+  {
+   "claim": "A rank-8 update can represent any change to the kernel.",
+   "correction": "It can only represent updates of rank ≤ 8; the book notes it is less expressive but sufficient for fine-tuning."
+  },
+  {
+   "claim": "LoRA needs a new model architecture.",
+   "correction": "It wraps existing projections; in KerasHub one call, `enable_lora(rank=8)`."
+  },
+  {
+   "claim": "The original paper adapts query and key.",
+   "correction": "The book says so, but Hu et al. recommend query and value projections (see review flag)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 514,
+    "note": "Memory problem of full fine-tuning; freezing saves memory; attention weights matter most."
+   },
+   {
+    "page": 512,
+    "note": "Fine-tuning only nudges an already-learned representation."
+   }
+  ],
+  "later": [
+   {
+    "page": 516,
+    "note": "Figure 16.4 and the sidebar on customizing LoRA per layer."
+   },
+   {
+    "page": 517,
+    "note": "Trainable params 1,304,576 and listing 16.14 training."
+   },
+   {
+    "page": 518,
+    "note": "Testing the LoRA-tuned model."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 509,
+    "note": "Gemma as a KerasHub CausalLM with a backbone."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 514,
+    "note": "Per-parameter memory cost of Adam."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 516,
+    "note": "Per-layer enable_lora on key_dense and query_dense."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 516,
+    "note": "Figure 16.4, pretrained weights versus alpha/beta decomposition."
+   }
+  ]
+ },
+ "takeaways": [
+  "LoRA freezes the pretrained kernel and learns an additive update alpha @ beta through a small inner rank.",
+  "Forward pass: inputs @ kernel + (inputs @ alpha) @ beta.",
+  "2048×2048 kernel: 4,194,304 frozen parameters vs 32,768 trainable at rank 8 (128× fewer).",
+  "Low rank limits expressive power, but fine-tuning needs much less than pretraining.",
+  "KerasHub enables LoRA on a backbone with `enable_lora(rank=8)` (listing 16.13).",
+  "The book says query and key projections; the LoRA paper recommends query and value."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "math",
+   "question": "How many trainable parameters does a rank-4 LoRA adapter add to a 1024×4096 kernel?",
+   "options": [],
+   "answer": "4 × (1024 + 4096) = 20,480.",
+   "explanation": "alpha is 1024×4 = 4,096 and beta is 4×4096 = 16,384, summing to 20,480, versus 4,194,304 in the full kernel.",
+   "page_refs": [
+    515
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "In `LoraLinear`, which weights receive gradient updates?",
+   "options": [
+    "kernel only",
+    "alpha and beta only",
+    "kernel, alpha and beta",
+    "none; LoRA is training-free"
+   ],
+   "answer": "alpha and beta only",
+   "explanation": "The kernel is created with `trainable=False`; alpha and beta are trainable by default. LoRA is a training method, so 'none' is wrong.",
+   "page_refs": [
+    515
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why is a low-rank update acceptable during fine-tuning even though it is less expressive?",
+   "options": [],
+   "answer": "Fine-tuning only needs to nudge an already-learned representation; it does not need the expressive power required to learn language during pretraining.",
+   "explanation": "The page says you no longer need the expressive power you needed during pretraining.",
+   "page_refs": [
+    515,
+    512
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "short",
+   "question": "At rank 8, how many numbers carry the entire update at the 'narrow middle point'?",
+   "options": [],
+   "answer": "Eight floats per input vector.",
+   "explanation": "inputs @ alpha produces a rank-dimensional vector; the page says the update must be represented as eight floats.",
+   "page_refs": [
+    515
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "What does `gemma_lm.backbone.enable_lora(rank=8)` do?",
+   "options": [
+    "Quantizes the backbone to 8 bits",
+    "Freezes the backbone and adds rank-8 trainable adapters to attention projections",
+    "Prunes 8 attention heads",
+    "Reduces the sequence length to 8 tokens"
+   ],
+   "answer": "Freezes the backbone and adds rank-8 trainable adapters to attention projections",
+   "explanation": "Listing 16.13 enables LoRA training; p.516 shows the equivalent explicit freezing plus `enable_lora` on attention dense layers. The other options are unrelated techniques.",
+   "page_refs": [
+    515,
+    516
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "math",
+   "question": "Show that `(x @ alpha) @ beta` equals `x @ (alpha @ beta)` and give the shape of `alpha @ beta` for the page's example.",
+   "options": [],
+   "answer": "Matrix multiplication is associative; alpha @ beta has shape (2048, 2048) but rank at most 8.",
+   "explanation": "So LoRA is equivalent to training an additive rank-8 update to the kernel, computed cheaply without forming the full matrix.",
+   "page_refs": [
+    515
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you write a LoraLinear whose update is exactly zero at initialization?",
+   "options": [],
+   "answer": "Yes: initialize beta (or alpha) to zeros, as the LoRA paper does.",
+   "explanation": "Self-check beyond the book: the book's sketch omits initializers.",
+   "page_refs": [
+    515
+   ]
+  }
+ ]
+}

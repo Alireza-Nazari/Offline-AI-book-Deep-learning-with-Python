@@ -1,0 +1,421 @@
+{
+ "page_id": "page_456",
+ "pdf_page": 456,
+ "printed_page": "432",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:48:32Z",
+  "confidence": "high",
+  "review_flags": [
+   "Listing 15.10 ends with `dataset.shuffle(2048).cache()`. Because `cache()` comes after `shuffle()`, tf.data caches the order produced in the first epoch and replays it in every later epoch, so the shuffle effectively happens only once (TensorFlow's guidance is `cache()` then `shuffle()`). The shuffle also operates on whole batches (it comes after `batch()`), so batch composition never changes. This does not break the example but is worth a reviewer's look; the notes mention it as a pitfall rather than a book error."
+  ],
+  "extraction_quality": "Good. Element e03 is the end of a sentence begun on p.455 (\"`sample_weights` here will be used to tell Keras ...\"). Element e11 is the first line of a paragraph that continues on p.457. Code in e06 and e08 matches the page image."
+ },
+ "overview": {
+  "title": "Building the tf.data pipeline for translation (Listing 15.10) and starting seq2seq RNNs",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.2 Sequence-to-sequence learning",
+  "subsection": "15.2.2 Sequence-to-sequence learning with RNNs",
+  "main_topic": "Turning English/Spanish sentence pairs into batched (features, labels, sample_weights) tuples for a sequence-to-sequence model, and introducing RNN-based seq2seq learning",
+  "central_idea": "Each training example gives the model the full tokenized English sentence plus the Spanish sentence minus its last token, and asks it to predict the Spanish sentence shifted one step ahead; a boolean `labels != 0` mask is used as sample weights so padding positions are ignored by the loss and metrics.",
+  "importance": "This is the data contract that every translation model in the rest of chapter 15 relies on: the RNN encoder-decoder (pp.457-460) and the Transformer (p.472) both consume exactly these `{\"english\", \"spanish\"}` dictionaries, 20-token labels and masks. Understanding the off-by-one shift and the padding mask is essential to understanding teacher forcing and why the accuracy numbers on p.459 mean what they mean.",
+  "learning_objectives": [
+   "Explain why the Spanish tokenizer produces 21 tokens while features and labels have 20",
+   "Describe how `spa[:, :-1]` and `spa[:, 1:]` implement the off-by-one (next-token) label setup",
+   "Explain what `sample_weights = labels != 0` does and why padding must be excluded from the loss and metrics",
+   "Read `make_dataset` step by step: zip/unzip pairs, `from_tensor_slices`, `batch`, `map`, `shuffle`, `cache`",
+   "Interpret the shapes `(64, 20)` printed for inputs, targets and sample weights",
+   "State the naive way to use an RNN for sequence-to-sequence mapping that the new subsection starts to describe"
+  ],
+  "prerequisites": [
+   "The English-Spanish pair data and the `[start]`/`[end]` markers from p.454",
+   "The `TextVectorization` tokenizers of Listing 15.9 (p.455): vocabulary size 15,000, English length 20, Spanish length 21",
+   "The off-by-one language-model labels of the Shakespeare model (p.447)",
+   "Basic `tf.data` usage (batching, mapping) and sparse categorical crossentropy"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes the description of the translation data pipeline that began on p.455. The pipeline returns a tuple `(inputs, target, sample_weights)`. The **sample weights** tell Keras which label positions count when computing the loss and metrics. Translations differ in length, so many label sequences end in padding zeros, and the authors \"only care about predictions for non-zero labels that represent actual translated text.\"\n\nThis is the same **off-by-one** label setup as the Shakespeare generation model, with one addition: a fixed encoder input (the English sentence), which the model will handle separately.\n\n**Listing 15.10** does the work:\n- `format_dataset(eng, spa)` tokenizes a batch of English strings (to length 20) and Spanish strings (to length 21, see p.455). The features are a dict, `{\"english\": eng, \"spanish\": spa[:, :-1]}`. The labels are `spa[:, 1:]`, and the sample weights are the boolean mask `labels != 0`.\n- `make_dataset(pairs)` unzips the list of `(english, spanish)` pairs into two lists, builds a `tf.data.Dataset` from them, batches by `batch_size = 64`, maps `format_dataset` over the batches with 4 parallel calls, then shuffles (buffer 2048) and caches.\n- `train_ds` and `val_ds` are built from `train_pairs` and `val_pairs`.\n\nPulling one batch shows four tensors that are all `(64, 20)`: the English tokens, the shifted Spanish decoder input, the Spanish targets, and the sample-weight mask.\n\nWith the data ready, **section 15.2.2** starts on RNNs for sequence-to-sequence learning. Before building the twin encoder/decoder from figure 15.1 (p.453), the authors look at a simpler option first: the \"easiest, naive way\" to turn one sequence into another with an RNN. That sentence continues on p.457, where the idea turns out to be a model that predicts one output token at every input time step, and where its flaw is explained.",
+ "paragraphs": [
+  {
+   "ref": "p456_e03",
+   "excerpt": "be used to tell Keras which labels to use when calculating our",
+   "what_it_says": "This ends a sentence from p.455: the third element of each dataset tuple, `sample_weights`, tells Keras which labels to use when computing loss and metrics. Output translations vary in length, some label sequences are padded with zeros, and only predictions for non-zero labels (real translated text) matter.",
+   "what_it_means": "Every Spanish sentence is padded or truncated to a fixed length, so a short sentence like \"[start] hola [end]\" is followed by many `0` tokens. Without a mask, the model would be graded on predicting padding after `[end]`. That task is trivially easy, so it would inflate accuracy and dilute the gradient signal. Giving each position a weight of 1 (real token) or 0 (padding) makes the loss and the accuracy average only over real tokens.",
+   "why_it_matters": "This is why the accuracy reported on p.459 (about 65%) measures real next-word predictions and is not padded out with free wins. It is also why `compile()` on p.459 uses `weighted_metrics=[\"accuracy\"]` rather than plain `metrics`: only weighted metrics take the sample weights into account.",
+   "technical_idea": "Per-position sample weights in Keras multiply each element's loss value before reduction. With a `(batch, time)` weight tensor, the token-level crossentropy values are weighted element by element.",
+   "terminology": [
+    {"term": "sample weights", "meaning": "Per-sample (here per-token) multipliers on the loss/metric contribution; 0 removes a position, 1 keeps it."},
+    {"term": "padding", "meaning": "Zeros appended by `TextVectorization` so every sequence in a batch has the same length; index 0 is reserved for padding."}
+   ],
+   "connections": [
+    "p.455: the tuple `(inputs, target, sample_weights)` and the `\"english\"`/`\"spanish\"` keys were introduced there",
+    "p.459: `weighted_metrics=[\"accuracy\"]` consumes these weights during training"
+   ]
+  },
+  {
+   "ref": "p456_e04",
+   "excerpt": "This matches the “off by one” label set up in the generation model",
+   "what_it_says": "The label setup matches the \"off by one\" arrangement of the earlier text-generation model, plus fixed encoder inputs that the model will handle separately.",
+   "what_it_means": "The decoder side is a conditional language model. At position t it sees Spanish tokens up to t and must output token t+1. The difference from the Shakespeare model is the extra conditioning input: the full English sentence, which stays fixed and is not shifted, because the model never predicts it.",
+   "why_it_matters": "This framing (decoder = language model, encoder = conditioning) recurs for both the RNN model (p.457) and the Transformer model (p.472). Training this way, with the true previous tokens fed as decoder input, is often called teacher forcing.",
+   "technical_idea": "Training maximizes $\\log p(y_{t+1}\\mid y_{\\le t}, x)$ for every target position simultaneously, with $x$ the English sentence.",
+   "terminology": [
+    {"term": "off-by-one labels", "meaning": "Targets equal to the input sequence shifted one step to the left, so each position predicts the next token."},
+    {"term": "encoder inputs", "meaning": "The source sequence (English) that conditions the decoder; it is given whole and never predicted."}
+   ],
+   "connections": [
+    "p.447: the Shakespeare model split each chunk into features and labels offset by one character",
+    "p.453: figure 15.1 describes the general encoder/decoder template this data feeds"
+   ]
+  },
+  {
+   "ref": "p456_e07",
+   "excerpt": "Here’s what our dataset outputs look like:",
+   "what_it_says": "This short lead-in introduces the interactive check of one batch from `train_ds`, and the line after the snippet (\"The data is now ready—time to build some models.\") closes the data-preparation part.",
+   "what_it_means": "Printing the shapes of one batch is a sanity check: every tensor should be `(batch_size, sequence_length) = (64, 20)`.",
+   "why_it_matters": "Checking shapes before building a model catches off-by-one mistakes, such as forgetting to make the Spanish tokenizer one token longer.",
+   "terminology": [],
+   "connections": [
+    "p.455: `sequence_length = 20`, Spanish `output_sequence_length=sequence_length + 1`"
+   ]
+  },
+  {
+   "ref": "p456_e11",
+   "excerpt": "Before we try the twin encoder/decoder setup we previously mentioned, let’s think",
+   "what_it_says": "Subsection 15.2.2 opens. Before trying the twin encoder/decoder setup, the authors want to think through simpler options, starting with \"the easiest, naive way to use RNNs to turn one sequence\" into another. The sentence finishes on p.457.",
+   "what_it_means": "The plan is to motivate the encoder/decoder design by first showing a simpler model and where it fails. On p.457 the naive model turns out to be a single `LSTM(return_sequences=True)` that emits an output token at each input time step.",
+   "why_it_matters": "The naive model's flaw is that it must emit target token N having read only source tokens 0...N. That is the reason a separate encoder must read the whole source sentence before decoding starts, and that idea survives into the Transformer.",
+   "terminology": [
+    {"term": "twin encoder/decoder setup", "meaning": "Two networks, one reading the source and one generating the target, as in figure 15.1."}
+   ],
+   "connections": [
+    "p.453: figure 15.1, the general seq2seq template",
+    "p.457: the naive per-timestep RNN and why it cannot translate \"I will bring the bag to you\""
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "sample_weights_masking",
+   "name": "Sample weights as a padding mask",
+   "definition": "A per-token weight tensor, here `labels != 0`, that multiplies each position's loss and metric contribution, so padded positions contribute nothing.",
+   "intuition": "It works like grading an exam where only the questions actually asked are marked, and the blank lines after the last question are ignored.",
+   "technical": "`labels != 0` yields a boolean `(64, 20)` tensor that Keras casts to float. The loss for each token is multiplied by its weight before reduction. Weighted metrics such as accuracy compute $\\sum w_i c_i / \\sum w_i$, where $c_i$ is 1 for a correct prediction.",
+   "significance": "Without it, a large share of every label sequence would be padding, and the model would score easy points by predicting 0 after `[end]`.",
+   "example": "Labels `[12, 87, 3, 0, 0]` give weights `[1, 1, 1, 0, 0]`. Only the first three predictions are scored.",
+   "misconception": "That `mask_zero=True` in an Embedding layer alone takes care of padding in the loss. Keras can propagate masks into the loss, but this pipeline masks the loss explicitly through sample weights, and accuracy respects them only when it is listed under `weighted_metrics`.",
+   "related": ["cross_entropy", "padding", "tokenization"],
+   "source": "book"
+  },
+  {
+   "id": "teacher_forcing",
+   "name": "Off-by-one decoder inputs (teacher forcing)",
+   "definition": "During training, the decoder receives the ground-truth target sequence shifted right (`spa[:, :-1]`) and must predict the sequence shifted left (`spa[:, 1:]`).",
+   "intuition": "At every position the model is told the correct previous words and asked only for the next one, so all positions can be trained in parallel from a single sequence.",
+   "technical": "With a 21-token Spanish sequence $s_0\\dots s_{20}$, the decoder input is $s_0\\dots s_{19}$ and the target is $s_1\\dots s_{20}$. Position $t$ learns $p(s_{t+1}\\mid s_{\\le t}, x)$.",
+   "significance": "This setup makes training efficient. It also explains why next-token accuracy overstates real translation quality, because at inference time the previous tokens are the model's own possibly wrong guesses (p.459).",
+   "example": "`[start] tú lo sabes [end]` becomes input `[start] tú lo sabes` and target `tú lo sabes [end]`.",
+   "misconception": "That the model sees the token it has to predict. The shift guarantees that position t's input is token t and its target is token t+1. Only a future-peeking layer, such as the Bidirectional decoder warned against on p.458, would leak the answer.",
+   "related": ["language_model", "sequence_to_sequence"],
+   "source": "inference"
+  },
+  {
+   "id": "tf_data_pipeline",
+   "name": "tf.data input pipeline",
+   "definition": "A `tf.data.Dataset` chain (`from_tensor_slices` → `batch` → `map` → `shuffle` → `cache`) that produces model-ready batches.",
+   "intuition": "It is an assembly line: raw string pairs go in, and batches of integer tensors with labels and masks come out.",
+   "technical": "Batching before mapping lets the `TextVectorization` layers tokenize 64 strings at once. `num_parallel_calls=4` runs the map on four threads, and `cache()` keeps the processed batches in memory after the first pass.",
+   "significance": "The tokenization runs once, inside the input pipeline rather than inside the model, which keeps the training loop fast.",
+   "example": "`next(iter(train_ds))` yields `(inputs_dict, targets, sample_weights)`.",
+   "misconception": "That `.shuffle(2048).cache()` reshuffles every epoch. Because the cache comes after the shuffle, the first epoch's order is replayed.",
+   "related": ["tokenization", "text_vectorization"],
+   "source": "book"
+  },
+  {
+   "id": "sequence_to_sequence",
+   "name": "Sequence-to-sequence learning",
+   "definition": "Mapping a source sequence to a target sequence of possibly different length, such as an English sentence to a Spanish one.",
+   "intuition": "It amounts to reading one sentence and writing another.",
+   "technical": "The model is usually an encoder that represents the source and a decoder that generates the target autoregressively, conditioned on that representation.",
+   "significance": "This is the problem framing for the rest of section 15.2 and for the Transformer in 15.3.",
+   "example": "English \"You know that.\" maps to Spanish \"tú lo sabes\".",
+   "misconception": "That a single RNN reading the source can emit the target in lockstep. Word order differs between languages, as p.457 shows.",
+   "related": ["rnn", "language_model", "transformer"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Off-by-one slicing of the Spanish sequence",
+   "latex": "\\begin{aligned} \\text{decoder input}_t &= s_t, \\quad t = 0,\\dots,19 \\\\ \\text{label}_t &= s_{t+1}, \\quad t = 0,\\dots,19 \\end{aligned}",
+   "source_text": "features = {\"english\": eng, \"spanish\": spa[:, :-1]}; labels = spa[:, 1:]",
+   "variables": [
+    {"symbol": "s_t", "meaning": "The t-th integer token of the 21-token tokenized Spanish sentence (s_0 is usually the `[start]` token)"},
+    {"symbol": "t", "meaning": "Position index in the 20-step decoder sequence"}
+   ],
+   "operations": "`[:, :-1]` drops the last column and `[:, 1:]` drops the first. Both act on the time axis of a (batch, 21) tensor and produce (batch, 20).",
+   "purpose": "Aligns each decoder input position with the token that follows it, so one forward pass trains 20 next-token predictions at once.",
+   "interpretation": "Position t's label is position t+1's input.",
+   "intuition": "Slide the sentence one slot to the left to get the answers.",
+   "numerical_example": "Tokenized `[start] tú lo sabes [end]` padded to 21 tokens might be `[2, 45, 17, 803, 3, 0, …, 0]`. Then `spa[:, :-1]` is `[2, 45, 17, 803, 3, 0, …]` (20 values) and `spa[:, 1:]` is `[45, 17, 803, 3, 0, …]` (20 values). (Token ids are illustrative.)",
+   "source": "book",
+   "book_ref": "p.456"
+  },
+  {
+   "id": "m2",
+   "title": "Masked (sample-weighted) token loss and accuracy",
+   "latex": "\\text{acc} = \\frac{\\sum_{b,t} w_{b,t}\\,[\\hat y_{b,t} = y_{b,t}]}{\\sum_{b,t} w_{b,t}}, \\qquad w_{b,t} = [\\,y_{b,t} \\neq 0\\,], \\qquad \\mathcal{L} \\propto \\sum_{b,t} w_{b,t}\\,\\bigl(-\\log p_{b,t}(y_{b,t})\\bigr)",
+   "source_text": "sample_weights = labels != 0",
+   "variables": [
+    {"symbol": "y_{b,t}", "meaning": "True label token at batch row b, position t"},
+    {"symbol": "\\hat y_{b,t}", "meaning": "Predicted token (argmax of the softmax output)"},
+    {"symbol": "w_{b,t}", "meaning": "Sample weight: 1 for a real token, 0 for padding"},
+    {"symbol": "p_{b,t}(y)", "meaning": "Model probability assigned to token y at that position"}
+   ],
+   "operations": "Element-wise comparison with 0 builds the mask. Each per-token loss or correctness indicator is multiplied by the mask and then summed.",
+   "purpose": "Only real tokens affect training and the reported accuracy.",
+   "interpretation": "Weighted accuracy is the fraction of real (non-padding) target tokens predicted correctly. This is the \"65% accuracy\" reported on p.459.",
+   "intuition": "Padding positions are invisible to the grader.",
+   "numerical_example": "Labels `[45, 17, 803, 3, 0, 0]`, predictions `[45, 9, 803, 3, 0, 0]`. Unweighted accuracy is 5/6 ≈ 83%. Weighted accuracy is 3/4 = 75%, because the two padding positions are ignored.",
+   "source": "ai_explanation",
+   "book_ref": "p.456"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "15.10",
+   "title": "Tokenizing and preparing the translation data",
+   "original_code": "batch_size = 64\n\ndef format_dataset(eng, spa):\n    eng = english_tokenizer(eng)\n    spa = spanish_tokenizer(spa)\n    features = {\"english\": eng, \"spanish\": spa[:, :-1]}\n    labels = spa[:, 1:]\n    sample_weights = labels != 0\n    return features, labels, sample_weights\n\ndef make_dataset(pairs):\n    eng_texts, spa_texts = zip(*pairs)\n    eng_texts = list(eng_texts)\n    spa_texts = list(spa_texts)\n    dataset = tf.data.Dataset.from_tensor_slices((eng_texts, spa_texts))\n    dataset = dataset.batch(batch_size)\n    dataset = dataset.map(format_dataset, num_parallel_calls=4)\n    return dataset.shuffle(2048).cache()\n\ntrain_ds = make_dataset(train_pairs)\nval_ds = make_dataset(val_pairs)",
+   "language": "python",
+   "what_it_does": "Builds training and validation `tf.data` pipelines that turn raw English/Spanish string pairs into batches of `({\"english\": (64,20), \"spanish\": (64,20)}, labels (64,20), sample_weights (64,20))`.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Batch size of 64 sentence pairs."},
+    {"lines": "3-5", "explanation": "`format_dataset` receives a batch of strings. It applies the adapted `TextVectorization` layers from Listing 15.9 (p.455): English becomes `(batch, 20)` ints and Spanish becomes `(batch, 21)` ints."},
+    {"lines": "6", "explanation": "Features dict keyed by the names the model's `Input` layers will use (`name=\"english\"` and `name=\"spanish\"` on p.458). The Spanish decoder input drops the last token."},
+    {"lines": "7", "explanation": "Labels drop the first token: the Spanish sequence one step ahead."},
+    {"lines": "8", "explanation": "Boolean mask, True wherever the label is a real token (not padding index 0)."},
+    {"lines": "9", "explanation": "Returns the 3-tuple form that `fit()` interprets as (x, y, sample_weight)."},
+    {"lines": "11-14", "explanation": "`zip(*pairs)` transposes a list of (eng, spa) tuples into two tuples, which are then converted to lists."},
+    {"lines": "15", "explanation": "Creates a dataset whose elements are (english_string, spanish_string) scalar pairs."},
+    {"lines": "16", "explanation": "Groups 64 pairs per element, so the map below tokenizes whole batches at once (vectorized, faster)."},
+    {"lines": "17", "explanation": "Applies `format_dataset` with up to 4 batches processed in parallel."},
+    {"lines": "18", "explanation": "Shuffles with a 2,048-element buffer (the elements here are batches), then caches the results in memory so tokenization is not repeated each epoch."},
+    {"lines": "20-21", "explanation": "Builds the two pipelines from the splits created on p.454."}
+   ],
+   "inputs_outputs": "Input: lists of `(english, spanish)` string pairs, Spanish wrapped in `[start] ... [end]`. Output: a dataset of `(dict, labels, sample_weights)` batches, all `(64, 20)`. The final batch may be smaller.",
+   "algorithm": "Transpose pairs → slice into dataset → batch → tokenize and shift → mask → shuffle → cache.",
+   "theory_link": "Implements the conditional language-model objective $p(s_{t+1}\\mid s_{\\le t}, x)$ with teacher forcing, and masks padding from the objective.",
+   "parameters": [
+    {"name": "batch_size", "role": "Pairs per training step (64)."},
+    {"name": "num_parallel_calls", "role": "How many map calls run concurrently (4). `tf.data.AUTOTUNE` is a common alternative."},
+    {"name": "shuffle buffer (2048)", "role": "Number of batches held in the shuffle buffer."}
+   ],
+   "pitfalls": [
+    "The Spanish tokenizer must output `sequence_length + 1` tokens (p.455); otherwise the shifted features and labels would have length 19.",
+    "`shuffle` is applied after `batch`, so it reorders batches; the same 64 sentences always travel together.",
+    "`cache()` placed after `shuffle()` stores the first epoch's order, so later epochs see the same batch order. Use `.cache().shuffle(...)` to reshuffle every epoch.",
+    "The dictionary keys must match the `name=` of the model's `Input` layers, or Keras cannot route the features.",
+    "If accuracy is passed via `metrics=` instead of `weighted_metrics=`, the reported accuracy includes padding positions."
+   ],
+   "illustrative_code": "# AI-written variant (not from the book): shuffle examples, re-shuffle every epoch\ndef make_dataset_v2(pairs):\n    eng_texts, spa_texts = map(list, zip(*pairs))\n    ds = tf.data.Dataset.from_tensor_slices((eng_texts, spa_texts))\n    ds = ds.cache().shuffle(len(eng_texts))      # cache raw pairs, then shuffle each epoch\n    ds = ds.batch(batch_size).map(format_dataset, num_parallel_calls=tf.data.AUTOTUNE)\n    return ds.prefetch(tf.data.AUTOTUNE)"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Inspecting one batch of the translation dataset",
+   "original_code": ">>> inputs, targets, sample_weights = next(iter(train_ds))\n>>> print(inputs[\"english\"].shape)\n(64, 20)\n>>> print(inputs[\"spanish\"].shape)\n(64, 20)\n>>> print(targets.shape)\n(64, 20)\n>>> print(sample_weights.shape)\n(64, 20)",
+   "language": "python",
+   "what_it_does": "Takes the first batch from `train_ds` and prints the shape of each component.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "`iter(...)` creates an iterator over the dataset; `next` pulls one element, which is unpacked into the three parts."},
+    {"lines": "2-3", "explanation": "English token ids: 64 sentences × 20 tokens."},
+    {"lines": "4-5", "explanation": "Spanish decoder inputs: 21 tokens minus the last, so 20."},
+    {"lines": "6-7", "explanation": "Targets: 21 tokens minus the first, so 20."},
+    {"lines": "8-9", "explanation": "Mask with the same shape as the targets, one weight per label token."}
+   ],
+   "inputs_outputs": "Input: `train_ds`. Output: four printed shapes, all `(64, 20)`.",
+   "algorithm": "A shape sanity check.",
+   "theory_link": "Confirms the per-token alignment between decoder inputs, targets and weights that the masked loss requires.",
+   "parameters": [],
+   "pitfalls": [
+    "The English and Spanish lengths happen to both be 20 here, but nothing requires the source and target lengths to be equal. A seq2seq model can handle different lengths, because the models on p.458 use `shape=(None,)`."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Walking one sentence pair through format_dataset",
+   "kind": "step_by_step",
+   "body": "Take the pair (\"You know that.\", \"[start] Tú lo sabes. [end]\").\n\n1. **English tokenizer** (default standardization: lowercase and strip punctuation) gives roughly `[you, know, that]`. These become 3 ids followed by 17 zeros: shape `(20,)`.\n2. **Spanish tokenizer** (custom standardization keeps `[` and `]` and strips `¿`, p.455) gives `[[start], tú, lo, sabes, [end]]`. These become 5 ids followed by 16 zeros: shape `(21,)`.\n3. `spa[:, :-1]` gives `[[start], tú, lo, sabes, [end], 0, …]` (20 values). This is what the decoder reads.\n4. `spa[:, 1:]` gives `[tú, lo, sabes, [end], 0, …]` (20 values). This is what it must predict.\n5. `labels != 0` gives `[1, 1, 1, 1, 0, …, 0]`. Exactly 4 positions count toward the loss.\n\nNote (not in the book): the decoder input still contains `[end]` at position 4. Its label there is padding with weight 0, so nothing is learned about what follows `[end]`.",
+  "source": "ai_explanation"
+  },
+  {
+   "title": "Why mask padding at all?",
+   "kind": "numerical",
+   "body": "Suppose the average Spanish sentence has 7 real label tokens out of 20. Without a mask, 13 of 20 positions (65%) would be padding. A model that learns only to output `0` after `[end]` would already score about 65% accuracy without translating anything. Coincidentally, that is the same number the real, masked model reaches on p.459. The mask makes the metric honest, and it also stops the gradient from being dominated by trivial padding predictions. (These figures are illustrative, not from the book.)",
+  "source": "ai_explanation"
+  },
+  {
+   "title": "Batch-then-map versus map-then-batch",
+   "kind": "alternative",
+   "body": "The book batches first and then maps `format_dataset`, so each tokenizer call handles 64 strings in one vectorized operation, which is typically much faster than 64 separate calls. The alternative (map per example, then batch) is more flexible, for example for per-example augmentation, but slower for string ops. Beyond the book: adding `.prefetch(tf.data.AUTOTUNE)` at the end overlaps data preparation with training.",
+  "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Shape flow of one translation batch",
+   "why": "Listing 15.10 turns 64 Spanish strings into a (64, 21) token tensor and slices it into (64, 20) decoder inputs and (64, 20) labels; the printed shapes on this page are all (64, 20).",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "spanish strings", "shape": [64]},
+     {"op": "spanish_tokenizer", "shape": [64, 21]},
+     {"op": "spa[:, :-1] (decoder in)", "shape": [64, 20]},
+     {"op": "spa[:, 1:] (labels)", "shape": [64, 20]},
+     {"op": "labels != 0 (weights)", "shape": [64, 20]}
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "The make_dataset pipeline",
+   "why": "Shows the order of operations in Listing 15.10 and what format_dataset returns.",
+   "mermaid": "flowchart LR\n  P[\"pairs: list of (eng, spa)\"] --> Z[\"zip(*pairs) -> eng_texts, spa_texts\"]\n  Z --> D[\"from_tensor_slices\"]\n  D --> B[\"batch(64)\"]\n  B --> M[\"map(format_dataset)\"]\n  M --> S[\"shuffle(2048)\"]\n  S --> C[\"cache()\"]\n  M -.-> F[\"features: english (64,20), spanish = spa[:, :-1] (64,20)\"]\n  M -.-> L[\"labels = spa[:, 1:] (64,20)\"]\n  M -.-> W[\"sample_weights = labels != 0\"]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The labels are the English sentence.",
+   "correction": "The labels are the Spanish sentence shifted one step ahead (`spa[:, 1:]`). English is only an input, the fixed encoder input, and is never predicted."
+  },
+  {
+   "claim": "The decoder input and the labels are the same tensor.",
+   "correction": "They come from the same 21-token sequence but are offset by one position: the input drops the last token and the labels drop the first."
+  },
+  {
+   "claim": "Sample weights here weight whole sentences.",
+   "correction": "They have shape `(64, 20)` and weight individual tokens, which is what is needed to ignore padding inside each sentence."
+  },
+  {
+   "claim": "Calling `shuffle` before `cache` reshuffles the data every epoch.",
+   "correction": "Once cached, the dataset replays the cached elements in their stored order. Reshuffling every epoch requires shuffling after the cache."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 455, "note": "Listing 15.9 defines `vocab_size = 15000`, `sequence_length = 20`, and the two tokenizers (Spanish length 21, custom standardization that keeps `[`/`]`)."},
+   {"page": 454, "note": "The English-Spanish pairs, `[start]`/`[end]` wrapping and the train/val/test split."},
+   {"page": 453, "note": "Figure 15.1: the general encoder/decoder template that this data is formatted for."},
+   {"page": 447, "note": "The Shakespeare language model's off-by-one feature/label split that this setup mirrors."}
+  ],
+  "later": [
+   {"page": 457, "note": "The naive per-timestep RNN and the encoder-decoder idea (figure 15.2)."},
+   {"page": 458, "note": "The encoder and decoder `Input` layers are named `\"english\"` and `\"spanish\"` to match the feature dict."},
+   {"page": 459, "note": "Training with `weighted_metrics=[\"accuracy\"]` uses these sample weights; the authors discuss the limits of next-token accuracy."},
+   {"page": 472, "note": "The Transformer translation model reuses the same datasets."}
+  ],
+  "prerequisites": [
+   {"page": 455, "note": "Tokenizer configuration and vocabulary learning."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 455, "note": "Listing 15.9, which builds the tokenizers called inside `format_dataset`."},
+   {"page": 460, "note": "Listing 15.13 reuses the same tokenizers at inference time."}
+  ],
+  "related_figures": [
+   {"page": 453, "note": "Figure 15.1, the sequence-to-sequence learning template."}
+  ]
+ },
+ "takeaways": [
+  "Each example is `({\"english\": eng, \"spanish\": spa[:, :-1]}, spa[:, 1:], spa[:, 1:] != 0)`.",
+  "The Spanish tokenizer outputs 21 tokens so that the shifted input and label are both 20 tokens long.",
+  "Sample weights `labels != 0` remove padding from the loss and from weighted metrics.",
+  "Batching before mapping lets tokenization run vectorized over 64 strings; shuffling and caching come last.",
+  "All four tensors in a batch have shape `(64, 20)`.",
+  "Section 15.2.2 starts from the naive single-RNN approach before introducing the encoder-decoder."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why does the Spanish `TextVectorization` layer output `sequence_length + 1` tokens?",
+   "options": [
+    "To leave room for the `[UNK]` token",
+    "So that after dropping one token for the decoder input and one for the labels, both have length `sequence_length`",
+    "Because Spanish sentences are on average longer than English ones",
+    "Because the Bidirectional encoder doubles the sequence length"
+   ],
+   "answer": "So that after dropping one token for the decoder input and one for the labels, both have length `sequence_length`",
+   "explanation": "`spa[:, :-1]` and `spa[:, 1:]` each remove one position from a 21-token tensor, giving 20 tokens each, which matches the printed shapes `(64, 20)`. `[UNK]` takes a vocabulary slot, not a sequence slot. Sentence-length statistics have nothing to do with it. The encoder (p.458) returns a single vector and does not change sequence length.",
+   "page_refs": [455, 456]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "What does `sample_weights = labels != 0` compute, and what would go wrong without it?",
+   "options": [],
+   "answer": "A boolean (64, 20) mask that is True for real target tokens and False for padding. Without it, the loss and accuracy would include many trivially predictable padding positions, inflating accuracy and wasting gradient signal.",
+   "explanation": "The page says translations vary in length and some label sequences are padded with zeros, and that only predictions for non-zero labels matter.",
+   "page_refs": [456]
+  },
+  {
+   "id": "q3",
+   "type": "math",
+   "question": "Labels for one sentence are `[45, 17, 803, 3, 0, 0, 0, 0]` and the model predicts `[45, 17, 9, 3, 0, 0, 0, 0]`. Compute the unweighted and the sample-weighted accuracy.",
+   "options": [],
+   "answer": "Unweighted: 7/8 = 87.5%. Weighted: 3/4 = 75%.",
+   "explanation": "The weights are `[1,1,1,1,0,0,0,0]`. Among the 4 real tokens, 3 are correct (token 803 was mispredicted as 9). Unweighted accuracy also counts the 4 padding positions, which are all correct.",
+   "page_refs": [456]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "The English tokens are not shifted, but the Spanish tokens are. Why the asymmetry?",
+   "options": [],
+   "answer": "English is the fixed conditioning input (encoder input) that the model never predicts, so the whole sentence is given. Spanish is generated token by token, so it is set up as a language model: the inputs are the previous tokens and the labels are the next tokens.",
+   "explanation": "The page describes this as the off-by-one setup of the generation model 'with the addition of the fixed encoder inputs, which will be handled separately'.",
+   "page_refs": [456, 453]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "In `make_dataset`, what is the main benefit of calling `batch()` before `map(format_dataset)`?",
+   "options": [
+    "It makes the labels shorter",
+    "The tokenizers process 64 strings per call, which is vectorized and faster",
+    "It is required for `cache()` to work",
+    "It guarantees each epoch sees a new shuffle"
+   ],
+   "answer": "The tokenizers process 64 strings per call, which is vectorized and faster",
+   "explanation": "Batching first means `format_dataset` receives a batch of strings, so `TextVectorization` runs on 64 strings at once. Label length is fixed by the tokenizer. `cache()` works in any position. Per-epoch reshuffling depends on where `cache()` sits, not on batching.",
+   "page_refs": [456]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Why does the naive approach introduced at the end of the page (one RNN emitting a target token at each source time step) look problematic even before reading p.457?",
+   "options": [],
+   "answer": "When it emits target token N it has read only source tokens 0...N, so it cannot use later source words. Languages with different word order need information from the end of the source to produce the start of the target.",
+   "explanation": "This anticipates the argument on p.457 (\"Te traeré la bolsa\" starts with the translation of \"you\", the last English word). That is why an encoder first reads the whole source.",
+   "page_refs": [456, 457]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Without looking, write down the three components returned by `format_dataset` and their shapes for one batch.",
+   "options": [],
+   "answer": "features = {\"english\": (64, 20), \"spanish\": (64, 20)}; labels = (64, 20); sample_weights = (64, 20) boolean.",
+   "explanation": "Compare with the interactive output on the page. If you wrote 21 anywhere, revisit the off-by-one slicing.",
+   "page_refs": [456]
+  }
+ ]
+}

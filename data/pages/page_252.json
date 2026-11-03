@@ -1,0 +1,549 @@
+{
+ "page_id": "page_252",
+ "pdf_page": 252,
+ "printed_page": "228",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:30:08Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction; all three code blocks match the page image. The first block is the tail of the PyTorch train_step() that begins on p.251, and the last block (the JAX CustomModel) is cut off mid-call and continues on p.253. No callouts are printed on this page."
+ },
+ "overview": {
+  "title": "PyTorch metrics in train_step(), then the JAX version begins",
+  "chapter": "7 A deep dive on Keras",
+  "section": "7.4 Writing your own training and evaluation loops",
+  "subsection": "7.4.5 Handling metrics in a custom train_step()",
+  "main_topic": "Finishing the PyTorch train_step() that uses the compiled loss and metrics, running it with fit(), and starting the JAX variant with a compute_loss_and_updates() method that calls self.compute_loss().",
+  "central_idea": "Once a model is compiled, a custom train_step() can reuse the compiled loss (via self.compute_loss) and the compiled metrics (via self.metrics). In PyTorch, as in TensorFlow, this means looping over self.metrics, updating the loss tracker with the loss and every other metric with (targets, predictions), and returning a dict of results. JAX needs the same idea expressed statelessly, starting with a compute_loss_and_updates() method.",
+  "importance": "This is the pattern that lets you customize the training algorithm while keeping everything compile() and fit() give you for free: progress bars, logs, callbacks, and metrics configured by the user. The page also marks the transition to the JAX backend, where state must be threaded explicitly, the most demanding version of the pattern.",
+  "learning_objectives": [
+   "Explain each step at the end of the PyTorch train_step(): applying gradients under torch.no_grad(), updating metrics, and returning logs.",
+   "Distinguish how the loss-tracking metric and the other metrics are updated (update_state(loss) versus update_state(targets, predictions)).",
+   "Explain why the same get_custom_model() function works unchanged for each backend's CustomModel.",
+   "Describe the signature of the JAX compute_loss_and_updates() method and why it takes variables as explicit arguments.",
+   "Explain what self.stateless_call() does and why JAX needs it."
+  ],
+  "prerequisites": [
+   "Overriding train_step() and calling fit() (pp.246-249)",
+   "self.compute_loss and self.metrics after compile() (p.250)",
+   "Low-level metric usage: update_state(), result() (p.245)",
+   "PyTorch autograd: loss.backward() and .grad (chapter 3)",
+   "JAX statelessness, jax.value_and_grad, stateless_call (pp.243-245, 249)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the last lines of the **PyTorch** version of a `train_step()` that handles compiled metrics (the first half, with `self.compute_loss(...)`, `loss.backward()` and gradient collection, is on p.251). After the gradients are gathered, the optimizer is applied inside `with torch.no_grad():` so the weight update itself is not tracked by autograd. Then the code loops over `self.metrics`: the metric named `\"loss\"` (the loss tracker that Keras adds automatically, p.250) is updated with the scalar `loss`, every other metric with `(targets, predictions)`. Finally it returns `{m.name: m.result() for m in self.metrics}`, the dict that `fit()` shows in the progress bar and passes to callbacks. As the authors said on p.251, this is *exactly the same code change* as in TensorFlow.\n\n\"Let's see how it runs\": the page then repeats `get_custom_model()`, a small Functional model (784 inputs, `Dense(512, relu)`, `Dropout(0.5)`, `Dense(10, softmax)`) wrapped in `CustomModel` and compiled with `Adam`, `SparseCategoricalCrossentropy` and `SparseCategoricalAccuracy`, and trains it with `model.fit(train_images, train_labels, epochs=3)`. Because the custom `train_step()` now reads loss and metrics from `compile()`, the progress bar will show both `loss` and `sparse_categorical_accuracy`.\n\nThe last part starts **train_step() metrics handling with JAX**. The first step is to use `compute_loss()` inside the `compute_loss_and_updates()` method so it \"hits\" the loss passed to `compile()`. The method takes the trainable and non-trainable variables as explicit arguments (plus `inputs`, `targets` and a `training` flag) and runs the model with `self.stateless_call(...)`, which returns predictions and updated non-trainable variables without mutating the model. The listing is cut off here and continues on p.253, where the method also returns the predictions as auxiliary output so the metrics can use them.",
+ "paragraphs": [
+  {
+   "ref": "p252_e03",
+   "excerpt": "with torch.no_grad(): self.optimizer.apply(gradients, trainable_weights)",
+   "what_it_says": "The tail of the PyTorch train_step(): apply the gradients without autograd tracking, update every compiled metric (the loss tracker with the loss, the others with targets and predictions), and return a dict of metric names to current values.",
+   "what_it_means": "This block is the metric-aware ending that replaces the earlier version which returned only `{\"loss\": ...}`. It shows how one loop serves all metrics: Keras puts a loss-tracking `Mean` metric named `\"loss\"` into `self.metrics`, so the code special-cases that name.",
+   "why_it_matters": "Returning results from `self.metrics` lets `fit()` report exactly the metrics the user passed to `compile()`, and lets callbacks such as EarlyStopping or ModelCheckpoint monitor them. Keras also resets these metrics at the start of each epoch, so the values are running averages over the epoch.",
+   "technical_idea": "`torch.no_grad()` disables gradient recording so the in-place weight update does not become part of a computation graph. Metric updates are stateful in PyTorch and TensorFlow: `update_state()` changes the metric's internal variables in place.",
+   "terminology": [
+    {
+     "term": "torch.no_grad()",
+     "meaning": "PyTorch context manager that turns off autograd tracking for the operations inside it."
+    },
+    {
+     "term": "update_state()",
+     "meaning": "Metric method that accumulates new observations into the metric's internal state variables."
+    },
+    {
+     "term": "result()",
+     "meaning": "Metric method that computes the current metric value from its accumulated state."
+    }
+   ],
+   "connections": [
+    "p.251: the first half of this PyTorch train_step(), with self.compute_loss() and loss.backward()",
+    "p.250: self.metrics includes a metric that tracks the loss",
+    "p.245: low-level usage of metrics with update_state() and result()"
+   ]
+  },
+  {
+   "ref": "p252_e05",
+   "excerpt": "def get_custom_model(): inputs = keras.Input(shape=(28 * 28,))",
+   "what_it_says": "A factory function builds a Functional-style CustomModel for flattened MNIST digits, compiles it with Adam, sparse categorical crossentropy and sparse categorical accuracy, and trains it for three epochs.",
+   "what_it_means": "The model-building code is the same as for the TensorFlow version on p.251; only the CustomModel class changed. Note that a subclass of keras.Model can still be instantiated Functional-style as `CustomModel(inputs, outputs)`.",
+   "why_it_matters": "This demonstrates the key promise of overriding train_step(): you keep the high-level `compile()`/`fit()` workflow and still control the training logic. Because the custom step now uses the compiled loss and metrics, changing them only requires changing the `compile()` call.",
+   "terminology": [
+    {
+     "term": "SparseCategoricalCrossentropy",
+     "meaning": "Crossentropy loss for integer class labels (not one-hot)."
+    },
+    {
+     "term": "SparseCategoricalAccuracy",
+     "meaning": "Accuracy metric comparing integer labels with the argmax of predicted probabilities."
+    }
+   ],
+   "connections": [
+    "p.247: the pattern does not prevent building models with the Functional API",
+    "p.251: the same get_custom_model() used with the TensorFlow CustomModel"
+   ]
+  },
+  {
+   "ref": "p252_e07",
+   "excerpt": "Finally, here's what it looks like with JAX. To start with, you",
+   "what_it_says": "The JAX variant begins by calling compute_loss() inside the compute_loss_and_updates() method so that the loss configured in compile() is used.",
+   "what_it_means": "In JAX the gradient is obtained by transforming a pure function with `jax.value_and_grad`, so the loss computation has to live in a function whose inputs are the variables. `compute_loss_and_updates()` is that function; replacing a hard-coded loss with `self.compute_loss(...)` makes it honor `compile()`.",
+   "why_it_matters": "It is the JAX counterpart of the single line `loss = self.compute_loss(y=targets, y_pred=predictions)` in the TensorFlow and PyTorch versions; everything else in the JAX version follows from statelessness.",
+   "terminology": [
+    {
+     "term": "compute_loss()",
+     "meaning": "Model method available after compile() that combines the compiled loss with any regularization losses added by layers (p.250)."
+    }
+   ],
+   "connections": [
+    "p.249: the earlier compute_loss_and_updates() method used for customizing fit() with JAX",
+    "p.250: definition of self.compute_loss"
+   ]
+  },
+  {
+   "ref": "p252_e08",
+   "excerpt": "import keras from keras import layers class CustomModel(keras.Model): def compute_loss_and_updates(",
+   "what_it_says": "The beginning of the JAX CustomModel: a compute_loss_and_updates() method taking self, trainable_variables, non_trainable_variables, inputs, targets and training=False, which calls self.stateless_call(trainable_variables, non_trainable_variables, ...). The listing continues on p.253.",
+   "what_it_means": "All state the forward pass depends on is passed in explicitly. `stateless_call()` runs the model with these given variable values and returns the predictions plus the *new* non-trainable variables (for example, updated BatchNormalization statistics) instead of writing them into the model.",
+   "why_it_matters": "This explicit threading of state is what makes the function pure and therefore differentiable and jit-compilable by JAX.",
+   "technical_idea": "Pure function: output depends only on inputs, no side effects. JAX transformations (grad, jit) require this.",
+   "terminology": [
+    {
+     "term": "stateless_call()",
+     "meaning": "Keras model method that runs a forward pass with explicitly supplied variable values and returns outputs plus updated non-trainable variables."
+    },
+    {
+     "term": "non-trainable variables",
+     "meaning": "Model state that changes during training but is not updated by gradients, e.g. BatchNormalization moving statistics."
+    }
+   ],
+   "connections": [
+    "p.253: continuation of this listing and the stateless metric loop",
+    "p.243: the JAX custom training step that introduced stateless_call()"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "custom_train_step",
+   "name": "Custom train_step() with compiled loss and metrics",
+   "definition": "Overriding keras.Model.train_step() so that fit() runs your training logic, while reading the loss from self.compute_loss and the metrics from self.metrics.",
+   "intuition": "You replace the engine of fit() but keep the dashboard: progress bar, logs and callbacks still work because you return metric results in the expected dict.",
+   "technical": "After compile(), self.metrics contains a loss tracker named \"loss\" plus the compiled metrics. train_step() must update them and return {name: result()}.",
+   "significance": "Lets you implement custom algorithms (e.g. GAN steps, special gradient handling) without losing Keras conveniences.",
+   "example": "The PyTorch train_step() on this page and the TensorFlow one on p.251.",
+   "misconception": "That you must write your own metric bookkeeping from scratch; Keras supplies and resets the metrics, you only update them.",
+   "related": [
+    "keras_model",
+    "loss_function",
+    "gradient_tape"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "keras_metric_state",
+   "name": "Metric state (update_state / result)",
+   "definition": "Keras metrics keep internal variables (e.g. total and count) that accumulate over batches; result() turns them into a value.",
+   "intuition": "A metric is a running tally, not a one-shot function.",
+   "technical": "In TensorFlow and PyTorch the state is mutated in place by update_state(); in JAX the stateless_update_state() and stateless_result() variants take and return the variables explicitly (p.253).",
+   "significance": "Explains why the loss tracker gets update_state(loss) (a Mean over batch losses) whereas accuracy gets update_state(targets, predictions).",
+   "example": "A Mean tracker after batches with loss 0.5 and 0.3 reports 0.4.",
+   "misconception": "That the reported epoch loss is the last batch's loss; with the tracker it is the mean over the epoch's batches so far.",
+   "related": [
+    "custom_train_step"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "stateless_call",
+   "name": "stateless_call()",
+   "definition": "A Keras method that runs the model's forward pass with variable values given as arguments and returns outputs and updated non-trainable variables.",
+   "intuition": "Instead of the model holding its weights, you hand it the weights for this one call.",
+   "technical": "Required for JAX, whose transformations (jax.grad, jax.jit) need pure functions; the gradient is taken with respect to the trainable_variables argument.",
+   "significance": "The foundation of every JAX training step in Keras.",
+   "example": "predictions, non_trainable_variables = self.stateless_call(trainable_variables, non_trainable_variables, inputs, training=training)",
+   "misconception": "That stateless_call() updates the model's weights; it does not, the caller must keep the returned variables.",
+   "related": [
+    "autodiff",
+    "keras_model"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "torch_no_grad",
+   "name": "torch.no_grad()",
+   "definition": "PyTorch context manager disabling gradient tracking for the enclosed operations.",
+   "intuition": "Tells autograd: what happens here is bookkeeping, not part of the model's math.",
+   "technical": "Weight updates modify leaf tensors in place; doing that with tracking on would raise errors or build useless graphs.",
+   "significance": "Standard idiom around optimizer updates in manual PyTorch loops.",
+   "example": "with torch.no_grad(): self.optimizer.apply(gradients, trainable_weights)",
+   "misconception": "That no_grad() deletes the computed gradients; it only stops recording new operations.",
+   "related": [
+    "autodiff",
+    "optimizer"
+   ],
+   "source": "ai_explanation"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "End of the PyTorch train_step() with metric handling",
+   "original_code": "        with torch.no_grad():\n            self.optimizer.apply(gradients, trainable_weights)\n        for metric in self.metrics:\n            if metric.name == \"loss\":\n                metric.update_state(loss)\n            else:\n                metric.update_state(targets, predictions)\n        return {m.name: m.result() for m in self.metrics}",
+   "language": "python",
+   "what_it_does": "Applies the gradients, updates all compiled metrics and returns their current values. The first lines of the method (forward pass, self.compute_loss, loss.backward(), collecting v.value.grad) are on p.251.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "Applies the gradients to the trainable weights with the compiled optimizer, outside autograd tracking."
+    },
+    {
+     "lines": "3",
+     "explanation": "Iterates over self.metrics: the loss tracker plus the metrics passed to compile()."
+    },
+    {
+     "lines": "4-5",
+     "explanation": "The loss tracker (named \"loss\") is a mean metric updated with the scalar loss of this batch."
+    },
+    {
+     "lines": "6-7",
+     "explanation": "Every other metric (here SparseCategoricalAccuracy) is updated with true targets and predictions."
+    },
+    {
+     "lines": "8",
+     "explanation": "Returns a dict mapping metric names to their running values; fit() uses it for logs and callbacks."
+    }
+   ],
+   "inputs_outputs": "Uses gradients, trainable_weights, loss, targets and predictions defined earlier in the method; returns e.g. {\"loss\": ..., \"sparse_categorical_accuracy\": ...}.",
+   "algorithm": "Optimizer update, then metric accumulation, then log reporting.",
+   "theory_link": "Gradient descent step (chapter 2) and metric bookkeeping (p.245).",
+   "parameters": [
+    {
+     "name": "self.metrics",
+     "role": "Metrics created by compile(), including the loss tracker."
+    },
+    {
+     "name": "metric.name",
+     "role": "Used to recognize the loss tracker."
+    }
+   ],
+   "pitfalls": [
+    "Forgetting the special case for \"loss\": calling update_state(targets, predictions) on the loss tracker would treat the targets as values to average.",
+    "Returning only {\"loss\": loss} hides the compiled metrics from the progress bar and callbacks."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Building, compiling and training the custom model",
+   "original_code": "def get_custom_model():\n    inputs = keras.Input(shape=(28 * 28,))\n    features = layers.Dense(512, activation=\"relu\")(inputs)\n    features = layers.Dropout(0.5)(features)\n    outputs = layers.Dense(10, activation=\"softmax\")(features)\n    model = CustomModel(inputs, outputs)\n    model.compile(\n        optimizer=keras.optimizers.Adam(),\n        loss=keras.losses.SparseCategoricalCrossentropy(),\n        metrics=[keras.metrics.SparseCategoricalAccuracy()],\n    )\n    return model\n\nmodel = get_custom_model()\nmodel.fit(train_images, train_labels, epochs=3)",
+   "language": "python",
+   "what_it_does": "Creates a 784-512-10 classifier with dropout as a CustomModel, compiles it, and trains it for 3 epochs with fit(), which calls the custom train_step() on each batch.",
+   "line_explanations": [
+    {
+     "lines": "2",
+     "explanation": "Input of 784 features: flattened 28x28 MNIST images."
+    },
+    {
+     "lines": "3-5",
+     "explanation": "Hidden Dense layer of 512 ReLU units, dropout of rate 0.5, and a 10-way softmax output."
+    },
+    {
+     "lines": "6",
+     "explanation": "Functional-style instantiation of the subclassed CustomModel."
+    },
+    {
+     "lines": "7-11",
+     "explanation": "compile() sets the optimizer, the loss used by self.compute_loss and the metrics placed in self.metrics."
+    },
+    {
+     "lines": "14-15",
+     "explanation": "Builds the model and trains it; train_images and train_labels are the MNIST arrays prepared earlier in the chapter."
+    }
+   ],
+   "inputs_outputs": "Inputs: train_images (N, 784) floats and integer train_labels. Output: a trained model and a History object; the progress bar shows loss and sparse_categorical_accuracy.",
+   "algorithm": "Mini-batch training via fit() delegating each step to the overridden train_step().",
+   "theory_link": "Same MNIST classifier family as chapter 2; Functional API from section 7.2.2.",
+   "parameters": [
+    {
+     "name": "Dense(512)",
+     "role": "Hidden layer: 784*512+512 = 401,920 parameters."
+    },
+    {
+     "name": "Dropout(0.5)",
+     "role": "Randomly zeros half the features during training only."
+    },
+    {
+     "name": "Dense(10)",
+     "role": "Output layer: 512*10+10 = 5,130 parameters."
+    },
+    {
+     "name": "epochs=3",
+     "role": "Number of passes through the training data."
+    }
+   ],
+   "pitfalls": [
+    "Dropout is only active because train_step() calls self(inputs, training=True) (p.251)."
+   ]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "JAX CustomModel: start of compute_loss_and_updates()",
+   "original_code": "import keras\nfrom keras import layers\n\nclass CustomModel(keras.Model):\n    def compute_loss_and_updates(\n        self,\n        trainable_variables,\n        non_trainable_variables,\n        inputs,\n        targets,\n        training=False,\n    ):\n        predictions, non_trainable_variables = self.stateless_call(\n            trainable_variables,\n            non_trainable_variables,",
+   "language": "python",
+   "what_it_does": "Begins a pure loss function for the JAX backend. Only the first part is on this page; the rest of the stateless_call() arguments, the self.compute_loss() call and the return statement are on p.253.",
+   "line_explanations": [
+    {
+     "lines": "4",
+     "explanation": "Subclasses keras.Model so fit() will use the custom logic."
+    },
+    {
+     "lines": "5-12",
+     "explanation": "All state is explicit: trainable and non-trainable variables are arguments, so JAX can differentiate with respect to trainable_variables."
+    },
+    {
+     "lines": "13-15",
+     "explanation": "Runs the forward pass statelessly with the given variables; returns predictions and updated non-trainable variables."
+    }
+   ],
+   "inputs_outputs": "Inputs: variable lists, a batch of inputs and targets, a training flag. Output (on p.253): loss and the auxiliary tuple (predictions, non_trainable_variables).",
+   "algorithm": "Pure-function forward pass plus loss, suitable for jax.value_and_grad(..., has_aux=True).",
+   "theory_link": "Automatic differentiation of pure functions (chapter 3) and the JAX training step on pp.243-245.",
+   "parameters": [
+    {
+     "name": "training",
+     "role": "Switches training-only behavior such as dropout."
+    }
+   ],
+   "pitfalls": [
+    "Discarding the returned non_trainable_variables would silently freeze state like BatchNormalization statistics."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why the loss tracker is special",
+   "kind": "breakdown",
+   "body": "Beyond the book: the metric named `\"loss\"` behaves like `keras.metrics.Mean`. Its `update_state(value)` adds `value` to a running total and increments a count; `result()` returns total/count. Accuracy-type metrics instead need `(y_true, y_pred)` pairs to count correct predictions. One loop over `self.metrics` with a name check therefore serves both kinds. Because `fit()` resets metric states at the start of each epoch, the progress bar shows the epoch-to-date average, which is smoother than per-batch values.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Same model, three backends",
+   "kind": "alternative",
+   "body": "Across pp.250-254 the call site `get_custom_model()` / `fit()` never changes; only `CustomModel.train_step()` does. TensorFlow uses `GradientTape`, PyTorch uses `loss.backward()` and `.grad`, and both mutate metric state in place. JAX (starting here) must pass variables in and out explicitly, including the metric variables, which is why the JAX version is longer (pp.253-254).",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Flow of the metric-aware train_step() called by fit()",
+   "why": "Shows the steps of the PyTorch train_step() whose end is on this page, and where self.compute_loss and self.metrics come from.",
+   "mermaid": "flowchart TD\n  C[\"compile: optimizer, loss, metrics\"] --> CL[\"self.compute_loss\"]\n  C --> M[\"self.metrics: loss tracker + accuracy\"]\n  F[\"fit: next batch\"] --> P[\"predictions = self(inputs, training=True)\"]\n  P --> L[\"loss = self.compute_loss(y, y_pred)\"]\n  CL -.-> L\n  L --> B[\"loss.backward, collect grads\"]\n  B --> O[\"torch.no_grad: optimizer.apply\"]\n  O --> U{for metric in self.metrics}\n  M -.-> U\n  U -->|name == loss| U1[\"update_state(loss)\"]\n  U -->|other| U2[\"update_state(targets, predictions)\"]\n  U1 --> R[\"return name: result dict\"]\n  U2 --> R\n  R --> F"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "The model built by get_custom_model()",
+   "why": "The page trains a 784 -> Dense(512, relu) -> Dropout(0.5) -> Dense(10, softmax) model; click layers to see shapes and parameter counts.",
+   "widget": "nn_architecture",
+   "params": {
+    "layers": [
+     {
+      "name": "inputs",
+      "type": "input",
+      "shape": "(None, 784)"
+     },
+     {
+      "name": "dense",
+      "type": "dense",
+      "units": 512,
+      "activation": "relu"
+     },
+     {
+      "name": "dropout",
+      "type": "dropout",
+      "units": 512
+     },
+     {
+      "name": "outputs",
+      "type": "output",
+      "units": 10,
+      "activation": "softmax"
+     }
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "A custom train_step() means giving up the loss and metrics configured in compile().",
+   "correction": "After compile() you can use self.compute_loss and self.metrics inside train_step(), so the compiled configuration is still honored (p.250)."
+  },
+  {
+   "claim": "The PyTorch version needs a different metric-handling approach from TensorFlow.",
+   "correction": "The authors point out it is exactly the same code change (p.251); only gradient computation differs."
+  },
+  {
+   "claim": "self.stateless_call() updates the model's non-trainable variables.",
+   "correction": "It returns the new values; the caller must thread them through and return them in the state."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 251,
+    "note": "First half of the PyTorch train_step() and the TensorFlow version with the same metric loop."
+   },
+   {
+    "page": 250,
+    "note": "Introduces self.compute_loss and self.metrics."
+   },
+   {
+    "page": 249,
+    "note": "The JAX compute_loss_and_updates()/train_step() pattern for customizing fit()."
+   },
+   {
+    "page": 245,
+    "note": "Low-level usage of metrics."
+   }
+  ],
+  "later": [
+   {
+    "page": 253,
+    "note": "Rest of the JAX compute_loss_and_updates() and the stateless metric loop."
+   },
+   {
+    "page": 254,
+    "note": "End of the JAX train_step() and the chapter summary."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 240,
+    "note": "Writing custom training step functions."
+   },
+   {
+    "page": 247,
+    "note": "Overriding train_step() to customize fit()."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 251,
+    "note": "TensorFlow CustomModel and the identical get_custom_model()."
+   },
+   {
+    "page": 243,
+    "note": "JAX training step using stateless_call()."
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "The metric-aware train_step() ends by updating each metric in self.metrics and returning {m.name: m.result()}.",
+  "The loss tracker is updated with the loss; other metrics with (targets, predictions).",
+  "In PyTorch the optimizer step is done inside torch.no_grad().",
+  "get_custom_model() and fit() stay identical across backends; only train_step() changes.",
+  "The JAX version starts by calling self.compute_loss() inside a pure compute_loss_and_updates() that uses self.stateless_call()."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In the metric loop, how is the metric named \"loss\" updated?",
+   "options": [
+    "metric.update_state(targets, predictions)",
+    "metric.update_state(loss)",
+    "metric.reset_state()",
+    "metric.result(loss)"
+   ],
+   "answer": "metric.update_state(loss)",
+   "explanation": "The loss tracker averages loss values, so it receives the scalar loss. update_state(targets, predictions) is for the other metrics; reset_state() clears state (fit() does that per epoch); result() takes no data and just reads the value.",
+   "page_refs": [
+    252
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "What does train_step() return and who uses it?",
+   "options": [],
+   "answer": "A dict mapping each metric's name to its current result(); fit() uses it for the progress bar, the logs and callbacks.",
+   "explanation": "The last line on the first code block is return {m.name: m.result() for m in self.metrics}; p.247 notes train_step() returns a dict of metric names to values.",
+   "page_refs": [
+    252,
+    247
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why is optimizer.apply() wrapped in torch.no_grad() in the PyTorch version?",
+   "options": [],
+   "answer": "So that the in-place weight update is not recorded by autograd as part of a computation graph.",
+   "explanation": "Gradients were already computed by loss.backward(); the update is bookkeeping and must not be tracked. (Explanation beyond the book's text.)",
+   "page_refs": [
+    252
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "Why does the JAX compute_loss_and_updates() take trainable_variables and non_trainable_variables as arguments?",
+   "options": [
+    "Because JAX cannot store Python lists",
+    "Because JAX transformations need a pure function of the variables to differentiate",
+    "Because Keras models have no variables under JAX",
+    "To make the code shorter"
+   ],
+   "answer": "Because JAX transformations need a pure function of the variables to differentiate",
+   "explanation": "JAX is stateless: jax.value_and_grad differentiates a function with respect to its arguments. Keras models do have variables under JAX, JAX handles lists fine, and the explicit style makes code longer, not shorter.",
+   "page_refs": [
+    252,
+    253
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "How many parameters do the two Dense layers in get_custom_model() have?",
+   "options": [],
+   "answer": "784*512+512 = 401,920 and 512*10+10 = 5,130, total 407,050.",
+   "explanation": "A Dense layer has inputs*units weights plus units biases; Dropout has none.",
+   "page_refs": [
+    252
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "If you changed metrics=[...] in compile() to add a top-3 accuracy metric, would you need to change train_step()?",
+   "options": [],
+   "answer": "No. The loop over self.metrics updates and reports whatever metrics were compiled.",
+   "explanation": "That generality is the point of using self.metrics rather than hard-coding metrics (p.250).",
+   "page_refs": [
+    250,
+    252
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you write, from memory, the metric loop for the TensorFlow/PyTorch train_step() and explain each branch?",
+   "options": [],
+   "answer": "for metric in self.metrics: update_state(loss) if metric.name == \"loss\" else update_state(targets, predictions); return {m.name: m.result() for m in self.metrics}.",
+   "explanation": "If you can, you understand how custom steps integrate with compile()/fit().",
+   "page_refs": [
+    252
+   ]
+  }
+ ]
+}

@@ -1,0 +1,383 @@
+{
+ "page_id": "page_246",
+ "pdf_page": 246,
+ "printed_page": "222",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:29:50Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction: two unnumbered code blocks, body text, the 7.4.4 subsection heading and the first bullet. Callout annotations for the second code block were recovered and matched against the page image. The extractor merged two printed paragraphs of 7.4.4 into element p246_e10."
+ },
+ "overview": {
+  "title": "Stateless metrics in JAX, and a middle ground: custom train_step() inside fit()",
+  "chapter": "7 A deep dive on Keras",
+  "section": "7.4 Writing your own training and evaluation loops",
+  "subsection": "7.4.4 Using fit() with a custom training loop",
+  "main_topic": "Finishing low-level metric usage (Mean, reset_state, and the stateless metrics API for JAX), then introducing the idea of overriding Model.train_step() so that fit() runs a custom learning algorithm.",
+  "central_idea": "Keras metrics are small stateful objects (update_state / result / reset_state); under JAX you use their stateless twins, which take and return the metric's variables explicitly. Rather than rewriting the whole training loop, you can override train_step() and keep everything else fit() provides.",
+  "importance": "This page connects two levels of the Keras 'spectrum of workflows': fully custom loops (which need low-level metric handling, including JAX's stateless style) and the hybrid approach of a custom train_step() that still benefits from callbacks, compilation and distribution support in fit(). The hybrid approach is what most practitioners actually use when they need a non-standard algorithm.",
+  "learning_objectives": [
+   "Use keras.metrics.Mean to track the running average of a scalar such as the loss.",
+   "Know when to call metric.reset_state() (start of each epoch and of evaluation).",
+   "Explain why update_state() cannot be used inside a JAX stateless function, and use stateless_update_state(), stateless_result() and stateless_reset_state() instead.",
+   "Relate the stateless metrics API to model.stateless_call() and optimizer.stateless_apply().",
+   "Describe what fit() gives you that a from-scratch loop loses (callbacks, performance optimizations, distributed training).",
+   "State the idea behind overriding train_step(): fit() calls it once per batch, so replacing it swaps in your own learning algorithm."
+  ],
+  "prerequisites": [
+   "The Keras metrics API: update_state(y_true, y_pred) and result() (p.245, p.231).",
+   "The JAX training step with model.stateless_call() and optimizer.stateless_apply() (p.242-245).",
+   "The structure of a training loop: forward pass, gradients, weight update (p.239).",
+   "Subclassing keras.Model (p.226)."
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens by completing section **7.4.3, Low-level usage of metrics**. A short code block shows `keras.metrics.Mean`, which keeps a running average of whatever scalars you feed it: updating it with the values 0, 1, 2, 3, 4 and calling `result()` prints `Mean of values: 2.00`. The authors remind you to call `metric.reset_state()` whenever you want to start over, which typically happens at the start of each training epoch and at the start of evaluation.\n\nThey then turn to JAX. Because JAX functions that are traced and compiled must be **stateless**, methods that mutate an object in place, such as `update_state()` or reset, cannot be used inside them. Keras therefore offers a **stateless metrics API**, analogous to `model.stateless_call()` and `optimizer.stateless_apply()` from the JAX training step: you take the metric's state variables out (`metric.variables`), pass them to `metric.stateless_update_state(metric_variables, targets, predictions)` which **returns** updated variables, compute the value with `metric.stateless_result(metric_variables)`, and get fresh zeroed variables with `metric.stateless_reset_state()`. The example uses `SparseCategoricalAccuracy` with three perfectly predicted samples, so the printed result is 1.00.\n\nSection **7.4.4, Using fit() with a custom training loop**, then begins. Writing the loop entirely by hand gives maximal flexibility but costs a lot of code and loses features of `fit()` such as callbacks, performance optimizations and built-in distributed training. The middle ground is to **override the `train_step()` method of `Model`**: `fit()` calls this method for every batch, so your own learning algorithm runs under the hood while you keep calling `fit()` as usual. The page ends with the first step of the recipe, creating a class that subclasses `keras.Model`; the recipe continues on p.247.",
+ "paragraphs": [
+  {
+   "ref": "p246_e03",
+   "excerpt": "values = ops.array([0, 1, 2, 3, 4])",
+   "what_it_says": "A code example (continuing from the sentence on p.245 about tracking the average of a scalar value) feeds five values into a keras.metrics.Mean tracker one at a time and prints the result.",
+   "what_it_means": "Mean is a metric whose state is a running total and a count. Each update_state(value) adds the value to the total and increments the count; result() returns total / count. With values 0 to 4 the result is 10 / 5 = 2.00.",
+   "why_it_matters": "In a custom loop the per-batch losses must be averaged over the epoch to report something comparable to what fit() prints. Mean is the tool for that, and it is exactly what Keras uses internally for the 'loss' entry of the progress bar.",
+   "technical_idea": "A streaming (online) average: no list of past values is stored, only two scalar state variables, so memory is constant regardless of how many batches you process.",
+   "terminology": [
+    {"term": "keras.metrics.Mean", "meaning": "A metric that computes the (optionally weighted) mean of all values passed to update_state() since the last reset."},
+    {"term": "ops.array", "meaning": "keras.ops function that creates a backend tensor from a Python list, independent of which backend is active."}
+   ],
+   "connections": ["p.245: the text introducing this block says you may need to track the average of a scalar value such as the model's loss.", "p.231: custom metrics are built on the same update_state/result/reset_state API."]
+  },
+  {
+   "ref": "p246_e04",
+   "excerpt": "Remember to use metric.reset_state() when you want to reset the current",
+   "what_it_says": "Call metric.reset_state() to clear accumulated results, at the start of a training epoch or at the start of evaluation.",
+   "what_it_means": "Metrics accumulate across calls until reset. If you forget to reset, the epoch-2 accuracy you print is really an average over epochs 1 and 2, and validation numbers would be contaminated by training batches.",
+   "why_it_matters": "This is the single most common bug in hand-written loops: metrics that never reset look smoother and lag behind the model's real performance. fit() resets metrics for you; in a custom loop it is your job.",
+   "terminology": [
+    {"term": "reset_state()", "meaning": "Sets a metric's state variables (e.g. total and count) back to their initial values, typically zeros."}
+   ],
+   "connections": ["p.250: section 7.4.5 handles metrics inside a custom train_step(), where Keras takes care of resetting them."]
+  },
+  {
+   "ref": "p246_e05",
+   "excerpt": "Now, if you’re using JAX, state-modifying methods like update_state() or reset()",
+   "what_it_says": "Under JAX, state-modifying methods cannot be used inside a stateless function. Keras provides a stateless metrics API similar to model.stateless_call() and optimizer.stateless_apply().",
+   "what_it_means": "A JAX function that will be traced by jax.jit or differentiated by jax.grad must be a pure function: outputs depend only on inputs, and no hidden objects get modified. A metric's update_state() mutates the metric's internal variables, which is a side effect, so inside such a function you must instead pass the metric's variables in as arguments and receive the new values as outputs.",
+   "why_it_matters": "It completes the stateless toolkit for JAX: the model (stateless_call), the optimizer (stateless_apply) and now metrics all follow the same convention, so an entire training step can be one pure function that is compiled once.",
+   "technical_idea": "Functional state threading: state_new = f(state_old, inputs). The caller is responsible for storing the returned state and feeding it into the next call.",
+   "terminology": [
+    {"term": "stateless function", "meaning": "A function with no side effects whose outputs are fully determined by its arguments; required for JAX transformations such as jit and grad."},
+    {"term": "stateless metrics API", "meaning": "The methods stateless_update_state, stateless_result and stateless_reset_state on Keras metrics."}
+   ],
+   "connections": ["p.242: JAX's statelessness and model.stateless_call() were introduced for the JAX training step.", "p.244: optimizer.stateless_apply() was used to update weights statelessly."]
+  },
+  {
+   "ref": "p246_e06",
+   "excerpt": "metric = keras.metrics.SparseCategoricalAccuracy()",
+   "what_it_says": "Code example of the stateless metrics API with SparseCategoricalAccuracy: get metric.variables, update them with stateless_update_state, compute the value with stateless_result, and get blank variables with stateless_reset_state.",
+   "what_it_means": "The metric object here is only a container of logic; its live state is the list metric_variables that you hold yourself. Each call returns a new list that replaces the old one. The three predictions are one-hot rows whose argmax equals the targets 0, 1, 2, so all three are correct and the printed result is 1.00.",
+   "why_it_matters": "This is the exact pattern you would embed inside a jitted JAX train step: metric variables become part of the state tuple passed in and returned out, alongside trainable, non-trainable and optimizer variables.",
+   "terminology": [
+    {"term": "SparseCategoricalAccuracy", "meaning": "Accuracy for integer targets: compares argmax(prediction) to the integer label."},
+    {"term": "metric.variables", "meaning": "The list of state variables of a metric (for accuracy: a running total of correct predictions and a count)."}
+   ],
+   "connections": ["p.245: the stateful version of the same metrics API (update_state, result)."]
+  },
+  {
+   "ref": "p246_e09",
+   "excerpt": "In the previous sections, we were writing our own training logic entirely",
+   "what_it_says": "Writing training logic from scratch gives the most flexibility but requires a lot of code and loses fit() conveniences such as callbacks, performance optimizations and built-in distributed training.",
+   "what_it_means": "The from-scratch loops of 7.4.2 are a trade: total control in exchange for reimplementing epochs, batching, logging, callbacks, compilation and multi-device logic yourself.",
+   "why_it_matters": "It motivates the hybrid workflow. Most custom algorithms only change what happens on one batch, not the surrounding machinery, so throwing all of fit() away is usually wasteful.",
+   "terminology": [
+    {"term": "callbacks", "meaning": "Objects called by fit() at points such as epoch end, used for checkpointing, early stopping, TensorBoard logging (p.232)."},
+    {"term": "distributed training", "meaning": "Training a model across several devices or machines; fit() supports it out of the box with the backend's distribution APIs."}
+   ],
+   "connections": ["p.240: the custom training step functions written from scratch for each backend.", "p.232: callbacks, one of the features lost in a from-scratch loop."]
+  },
+  {
+   "ref": "p246_e10",
+   "excerpt": "What if you need a custom training algorithm, but you still want",
+   "what_it_says": "There is a middle ground between fit() and a fully custom loop: provide a custom training step function and let the framework do the rest.",
+   "what_it_means": "The division of labor is: you define the per-batch computation; Keras still handles iterating over data, epochs, the progress bar, callbacks, validation and compilation.",
+   "why_it_matters": "It is another instance of the book's principle of progressive disclosure of complexity: you only take on as much complexity as your problem needs.",
+   "connections": ["p.230: progressive disclosure of complexity applied to training workflows."]
+  },
+  {
+   "ref": "p246_e10",
+   "excerpt": "You can do this by overriding the train_step() method of the Model",
+   "what_it_says": "Override Model.train_step(), the function fit() calls for every batch of data; then call fit() as usual and it runs your own learning algorithm.",
+   "what_it_means": "fit() is essentially a loop of the form 'for each batch: logs = self.train_step(batch)'. Because train_step() is a method, subclassing Model and redefining it changes the per-batch behavior without touching the loop.",
+   "why_it_matters": "This is the standard way to implement things like GANs, custom gradient manipulations or multi-loss training while keeping all of fit()'s ecosystem. The following pages implement it for TensorFlow, PyTorch and JAX.",
+   "technical_idea": "Template-method design pattern: the framework fixes the skeleton of the algorithm (fit) and exposes a hook (train_step) that subclasses override.",
+   "terminology": [
+    {"term": "train_step()", "meaning": "The Model method that fit() calls on each batch; it computes the loss, gradients and weight updates and returns a dict of logs."}
+   ],
+   "connections": ["p.247: the remaining steps of the recipe and Listing 7.21, the TensorFlow version.", "p.249: the JAX version of a custom train_step()."]
+  },
+  {
+   "ref": "p246_e11",
+   "excerpt": "Create a new class that subclasses keras.Model.",
+   "what_it_says": "First step of the recipe: create a new class that subclasses keras.Model.",
+   "what_it_means": "You need your own Model subclass in order to override one of its methods. As p.247 points out, this does not force you to build the network itself by subclassing; the layers can still come from the Functional API.",
+   "why_it_matters": "It sets up the structure of Listings 7.21 onward.",
+   "connections": ["p.247: the next bullets (override train_step(), return a dict of metric values)."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "mean_metric",
+   "name": "Mean metric (running average)",
+   "definition": "keras.metrics.Mean accumulates values and returns their average since the last reset.",
+   "intuition": "Like keeping a running tally of points scored and games played, then dividing at any moment to get points per game.",
+   "technical": "State consists of two scalar variables, total and count. update_state(v, sample_weight=None) adds v (times its weight) to total and the weight to count; result() returns total / count.",
+   "significance": "Used to average per-batch losses over an epoch in custom loops, and by Keras itself to report the loss.",
+   "example": "Values 0,1,2,3,4 give total = 10, count = 5, result = 2.00 (the code on this page).",
+   "misconception": "That result() returns the last value passed in. It returns the average over everything since the last reset_state().",
+   "related": ["keras_metric", "reset_state"],
+   "source": "book"
+  },
+  {
+   "id": "keras_metric",
+   "name": "Keras metric API",
+   "definition": "Metrics are stateful objects with update_state(), result() and reset_state() methods.",
+   "intuition": "An accumulator you feed batch by batch, then read out.",
+   "technical": "Each metric owns non-trainable state variables; update_state modifies them, result computes the metric from them, reset_state zeros them.",
+   "significance": "Separates the accumulation of statistics over many batches from the computation of the final number, so metrics work with streaming data.",
+   "example": "SparseCategoricalAccuracy keeps counts of correct and total predictions.",
+   "misconception": "That metrics are just functions applied to one batch. They are stateful and aggregate across batches.",
+   "related": ["mean_metric", "stateless_metrics"],
+   "source": "book"
+  },
+  {
+   "id": "stateless_metrics",
+   "name": "Stateless metrics API (JAX)",
+   "definition": "Methods stateless_update_state(variables, y_true, y_pred), stateless_result(variables) and stateless_reset_state() that take and return metric variables explicitly instead of mutating the metric.",
+   "intuition": "Instead of the metric keeping its own notebook, you keep the notebook and hand it to the metric each time; it hands back an updated copy.",
+   "technical": "Pure functions of the form new_vars = f(old_vars, inputs). This makes them safe inside jax.jit-compiled or differentiated functions, which cannot have side effects.",
+   "significance": "Completes the set of stateless APIs (model.stateless_call, optimizer.stateless_apply) needed to write an entire JAX training step as one pure function.",
+   "example": "metric_variables = metric.stateless_update_state(metric_variables, targets, predictions)",
+   "misconception": "That calling stateless_update_state changes metric.result(). It does not; the metric object's own variables are untouched unless you assign the returned values back.",
+   "related": ["keras_metric", "stateless_call", "jax"],
+   "source": "book"
+  },
+  {
+   "id": "stateless_call",
+   "name": "Stateless forward pass",
+   "definition": "model.stateless_call(trainable_variables, non_trainable_variables, inputs, training=...) runs the model with explicitly provided weights and returns outputs plus updated non-trainable variables.",
+   "intuition": "Running the model as a pure function of its weights.",
+   "technical": "Needed in JAX so that jax.grad can differentiate the loss with respect to the weights passed as arguments.",
+   "significance": "The model-side counterpart of the stateless metrics shown on this page.",
+   "example": "Used in the JAX training step on p.242-244.",
+   "misconception": "That it is a JAX-only feature; it is a Keras API usable with any backend, but it is necessary mostly for JAX.",
+   "related": ["stateless_metrics"],
+   "source": "book"
+  },
+  {
+   "id": "custom_train_step",
+   "name": "Overriding train_step()",
+   "definition": "Subclassing keras.Model and redefining train_step(), the method fit() calls for every batch, to implement a custom learning algorithm while still using fit().",
+   "intuition": "Keep the car, swap the engine: fit() remains the vehicle (epochs, callbacks, logging), you replace what happens in each step.",
+   "technical": "train_step(data) receives one batch, performs forward pass, loss, gradient computation and update, and returns a dict mapping metric names to values; fit() aggregates these into its logs.",
+   "significance": "Lets you implement GANs, custom losses, gradient clipping schemes, etc., while keeping callbacks, performance optimizations and distribution support.",
+   "example": "Listing 7.21 (p.247) implements a TensorFlow train_step.",
+   "misconception": "That you must also write the layers via subclassing. The p.247 notes say the pattern works with Sequential, Functional and subclassed models.",
+   "related": ["keras_model", "functional_api", "gradient_tape"],
+   "source": "book"
+  },
+  {
+   "id": "jax",
+   "name": "JAX statelessness",
+   "definition": "JAX transformations (jit, grad) require pure functions with no side effects.",
+   "intuition": "A function that behaves like a mathematical formula: same inputs, same outputs, nothing else changes.",
+   "technical": "During tracing, JAX records operations on abstract values; mutating Python objects during tracing would only happen once and would not be reflected in the compiled program.",
+   "significance": "Explains why every stateful Keras object needs a stateless alternative under JAX.",
+   "example": "update_state() inside a jitted function would not correctly update across calls.",
+   "misconception": "That statelessness is a limitation without benefit; the book notes it makes JAX highly performant and scalable (p.242).",
+   "related": ["stateless_metrics", "stateless_call"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Running mean computed by keras.metrics.Mean",
+   "latex": "\\text{result} = \\frac{\\sum_{i=1}^{n} v_i}{n} = \\frac{0+1+2+3+4}{5} = 2.00",
+   "source_text": "Not printed as a formula; implied by the Mean example (mean_tracker.update_state(value) for values 0..4, then result()).",
+   "variables": [
+    {"symbol": "v_i", "meaning": "The i-th value passed to update_state()"},
+    {"symbol": "n", "meaning": "Number of values seen since the last reset_state()"}
+   ],
+   "operations": "Accumulate a sum and a count, divide when result() is called.",
+   "purpose": "Makes explicit what the printed output of the code block will be.",
+   "interpretation": "The tracker reports the average of everything since the last reset.",
+   "intuition": "Two running numbers are enough to know the mean at any time.",
+   "numerical_example": "After the first three updates (0, 1, 2) result() would be 3/3 = 1.00; after all five it is 10/5 = 2.00.",
+   "source": "ai_explanation",
+   "book_ref": "p.246"
+  },
+  {
+   "id": "m2",
+   "title": "Sparse categorical accuracy for the example",
+   "latex": "\\text{acc} = \\frac{1}{N}\\sum_{i=1}^{N} \\mathbb{1}\\left[\\arg\\max_k \\hat{y}_{i,k} = y_i\\right] = \\frac{3}{3} = 1.00",
+   "source_text": "Not printed as a formula; implied by the SparseCategoricalAccuracy example with targets [0, 1, 2] and one-hot predictions.",
+   "variables": [
+    {"symbol": "N", "meaning": "Number of samples (3)"},
+    {"symbol": "y_i", "meaning": "Integer target for sample i (0, 1, 2)"},
+    {"symbol": "\\hat{y}_{i,k}", "meaning": "Predicted score of class k for sample i"},
+    {"symbol": "\\mathbb{1}[\\cdot]", "meaning": "Indicator: 1 if the condition holds, else 0"}
+   ],
+   "operations": "argmax over classes, comparison with label, average.",
+   "purpose": "Predicts the value printed by print(f\"result: {current_result:.2f}\").",
+   "interpretation": "Every prediction row's largest entry is at the target index, so accuracy is perfect.",
+   "intuition": "Count how many guesses were right and divide by the number of guesses.",
+   "numerical_example": "If predictions had been [[1,0,0],[1,0,0],[0,0,1]], only samples 0 and 2 would be correct: 2/3 = 0.67.",
+   "source": "ai_explanation",
+   "book_ref": "p.246"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Tracking a running average with keras.metrics.Mean",
+   "original_code": "values = ops.array([0, 1, 2, 3, 4])\nmean_tracker = keras.metrics.Mean()\nfor value in values:\n    mean_tracker.update_state(value)\nprint(f\"Mean of values: {mean_tracker.result():.2f}\")",
+   "language": "python",
+   "what_it_does": "Creates a Mean metric, feeds it five scalars one at a time, and prints their average, 2.00. This block completes the explanation that began on p.245.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Creates a backend tensor holding 0, 1, 2, 3, 4 with keras.ops."},
+    {"lines": "2", "explanation": "Instantiates the Mean metric; its total and count start at zero."},
+    {"lines": "3-4", "explanation": "Iterates over the tensor and calls update_state() for each scalar, accumulating total and count."},
+    {"lines": "5", "explanation": "result() returns total / count; the f-string formats it with two decimals, printing 'Mean of values: 2.00'."}
+   ],
+   "inputs_outputs": "Input: five scalars. Output: printed line 'Mean of values: 2.00'.",
+   "algorithm": "Streaming mean: total += v; count += 1; result = total / count.",
+   "theory_link": "In a custom training loop you would call update_state(loss) once per batch to obtain the epoch-average loss.",
+   "parameters": [
+    {"name": "value", "role": "The scalar to add to the running average (update_state also accepts an optional sample_weight)."}
+   ],
+   "pitfalls": [
+    "Forgetting reset_state() between epochs makes the mean span several epochs.",
+    "result() returns a tensor; formatting with :.2f works because it is a scalar tensor convertible to float."
+   ],
+   "illustrative_code": "# AI-written sketch: averaging loss over an epoch in a custom loop\nloss_tracker = keras.metrics.Mean()\nfor epoch in range(num_epochs):\n    loss_tracker.reset_state()\n    for x, y in dataset:\n        loss = train_step(x, y)      # your own step function\n        loss_tracker.update_state(loss)\n    print(epoch, float(loss_tracker.result()))"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "The stateless metrics API (for JAX)",
+   "original_code": "metric = keras.metrics.SparseCategoricalAccuracy()\ntargets = ops.array([0, 1, 2])\npredictions = ops.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])\nmetric_variables = metric.variables\nmetric_variables = metric.stateless_update_state(\n    metric_variables, targets, predictions\n)\ncurrent_result = metric.stateless_result(metric_variables)\nprint(f\"result: {current_result:.2f}\")\nmetric_variables = metric.stateless_reset_state()",
+   "language": "python",
+   "what_it_does": "Computes sparse categorical accuracy without mutating the metric: the state variables are pulled out, updated functionally, read out, and finally replaced by blank values.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Creates the metric object, which defines the logic and initial state."},
+    {"lines": "2-3", "explanation": "Integer targets 0, 1, 2 and one-hot prediction rows whose argmax matches each target."},
+    {"lines": "4", "explanation": "Callout: 'Gets the metric's state variables.' metric_variables now holds the metric's state (for accuracy, a total and a count)."},
+    {"lines": "5-7", "explanation": "Callout: 'Gets updated values for the metric's state.' Returns new variable values after accounting for this batch; the metric object itself is not changed."},
+    {"lines": "8", "explanation": "Callout: 'Computes the metric value corresponding to the current state.' Here 3 correct out of 3."},
+    {"lines": "9", "explanation": "Prints 'result: 1.00'."},
+    {"lines": "10", "explanation": "Callout: 'Gets blank variable values for the metric.' Equivalent of reset_state(), but returning fresh values instead of mutating."}
+   ],
+   "inputs_outputs": "Input: targets (3,) and predictions (3, 3). Output: printed 'result: 1.00' and a reset list of metric variables.",
+   "algorithm": "State threading: vars0 = metric.variables; vars1 = update(vars0, y, y_hat); value = result(vars1); vars_reset = reset().",
+   "theory_link": "Mirrors model.stateless_call() and optimizer.stateless_apply() (p.242-244); all three let a JAX train step be a pure function.",
+   "parameters": [
+    {"name": "metric_variables", "role": "The explicit state of the metric that you carry between calls."},
+    {"name": "targets", "role": "Integer class labels (y_true)."},
+    {"name": "predictions", "role": "Per-class scores (y_pred); argmax is compared to targets."}
+   ],
+   "pitfalls": [
+    "Discarding the return value of stateless_update_state means the update is lost.",
+    "metric.result() on the original object still reflects its own (unchanged) variables, not metric_variables.",
+    "Inside a jitted step, metric variables must be passed in and returned out like the model and optimizer variables."
+   ],
+   "illustrative_code": "# AI-written sketch: metric variables threaded through a jitted JAX step\n@jax.jit\ndef train_step(state, x, y):\n    trainable, non_trainable, opt_vars, metric_vars = state\n    # ... compute loss, grads, apply optimizer statelessly ...\n    metric_vars = metric.stateless_update_state(metric_vars, y, y_pred)\n    return (trainable, non_trainable, opt_vars, metric_vars)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why a mutating method breaks under jax.jit",
+   "kind": "step_by_step",
+   "body": "Beyond the book: `jax.jit` runs your Python function **once** with abstract placeholder values to record a computation graph, then compiles that graph. Any Python-level side effect (like a metric adding to its internal variable) happens only during this single tracing pass. Later calls execute the compiled graph, which contains only what was returned as outputs. So a metric updated in place inside a jitted function would either raise an error (Keras guards against it) or silently stop accumulating. Returning the new state as an output puts the update inside the compiled graph, where it belongs.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Stateful vs stateless calls side by side",
+   "kind": "breakdown",
+   "body": "| Stateful (TF/PyTorch-friendly) | Stateless (JAX) |\n|---|---|\n| `model(x)` | `model.stateless_call(tv, ntv, x)` |\n| `optimizer.apply(grads)` | `optimizer.stateless_apply(opt_vars, grads, tv)` |\n| `metric.update_state(y, y_pred)` | `metric.stateless_update_state(mv, y, y_pred)` |\n| `metric.result()` | `metric.stateless_result(mv)` |\n| `metric.reset_state()` | `metric.stateless_reset_state()` |\n\nThe first three rows of the stateless column come from the book (p.242-246); the table layout is an editorial summary.",
+   "source": "inference"
+  },
+  {
+   "title": "The spectrum of training workflows",
+   "kind": "analogy",
+   "body": "Think of `fit()` as a fully staffed restaurant kitchen. A from-scratch loop is building your own kitchen: total freedom, but you have to install the stove, the plumbing and the dishwasher (callbacks, compilation, distribution). Overriding `train_step()` is renting the kitchen and bringing your own recipe: the staff still handles the service, you decide what gets cooked on each order.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Threading metric state through the stateless API",
+   "why": "The second code block on this page is entirely about passing metric variables in and getting new ones out; the flow makes the data dependencies visible.",
+   "mermaid": "flowchart LR\n  M[metric.variables] --> U[stateless_update_state<br/>vars, targets, predictions]\n  U --> V1[updated metric_variables]\n  V1 --> R[stateless_result]\n  R --> P[\"result: 1.00\"]\n  Z[stateless_reset_state] --> V0[blank metric_variables]"
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "Where train_step() sits inside fit()",
+   "why": "Section 7.4.4 explains that fit() calls train_step() for every batch; overriding it swaps the per-batch algorithm while fit() keeps the outer machinery.",
+   "mermaid": "flowchart TD\n  F[\"fit()\"] --> E[for each epoch]\n  E --> B[for each batch]\n  B --> T[\"train_step(data)  <- you override this\"]\n  T --> L[logs dict]\n  L --> C[callbacks, progress bar]\n  C --> B\n  E --> VAL[validation / evaluation]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "A Keras metric's result() gives the value for the most recent batch.", "correction": "It gives the aggregate since the last reset_state(), e.g. the average over all batches so far."},
+  {"claim": "stateless_update_state() updates the metric object.", "correction": "It returns new variable values and leaves the metric object's own variables untouched; you must keep the returned values."},
+  {"claim": "To customize training you must abandon fit() and write the loop yourself.", "correction": "You can override train_step() and keep calling fit(), retaining callbacks, performance optimizations and distributed training."},
+  {"claim": "Overriding train_step() requires building the model by subclassing.", "correction": "You subclass keras.Model to override the method, but the p.247 notes say the pattern works with Sequential, Functional and subclassed models."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 245, "note": "Start of 7.4.3: update_state()/result() and the sentence introducing keras.metrics.Mean."},
+   {"page": 242, "note": "JAX statelessness and model.stateless_call()."},
+   {"page": 239, "note": "The three steps of a training loop that fit() performs under the hood."},
+   {"page": 231, "note": "Writing your own metrics with the same stateful API."},
+   {"page": 230, "note": "Progressive disclosure of complexity applied to training workflows."}
+  ],
+  "later": [
+   {"page": 247, "note": "Remaining recipe bullets and Listing 7.21, custom train_step() with TensorFlow."},
+   {"page": 249, "note": "Customizing fit() with JAX, using compute_loss_and_updates()."},
+   {"page": 250, "note": "7.4.5 Handling metrics in a custom train_step()."},
+   {"page": 254, "note": "Chapter summary: you can fully control what fit() does by overriding train_step()."}
+  ],
+  "prerequisites": [
+   {"page": 226, "note": "Subclassing the Model class."},
+   {"page": 240, "note": "Writing custom training step functions."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 244, "note": "The JAX training step that uses optimizer.stateless_apply()."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "keras.metrics.Mean computes a running average; use it to average losses across batches.",
+  "Call reset_state() at the start of each epoch and of evaluation; metrics otherwise keep accumulating.",
+  "Under JAX, use stateless_update_state(), stateless_result() and stateless_reset_state(), which take and return metric variables explicitly.",
+  "The stateless metrics API parallels model.stateless_call() and optimizer.stateless_apply().",
+  "Fully custom loops cost you callbacks, performance optimizations and built-in distributed training.",
+  "Overriding Model.train_step(), which fit() calls per batch, lets fit() run your own algorithm."
+ ],
+ "questions": [
+  {"id": "q1", "type": "short", "question": "What does the first code block on the page print, and why?", "options": [], "answer": "Mean of values: 2.00, because Mean accumulates the sum 0+1+2+3+4 = 10 over 5 values and result() returns 10/5.", "explanation": "Mean keeps a running total and a count; result() divides them.", "page_refs": [246]},
+  {"id": "q2", "type": "mcq", "question": "When should you call metric.reset_state() in a custom training loop, according to the page?", "options": ["After every batch", "At the start of a training epoch or at the start of evaluation", "Only once, before training begins", "Never; Keras resets metrics automatically in custom loops"], "answer": "At the start of a training epoch or at the start of evaluation", "explanation": "The book names these two moments. Resetting after every batch would make the metric reflect only one batch; resetting once would mix epochs; in a from-scratch loop Keras does not reset for you.", "page_refs": [246]},
+  {"id": "q3", "type": "conceptual", "question": "Why can't update_state() be used inside a JAX stateless function, and what replaces it?", "options": [], "answer": "update_state() modifies the metric's variables in place, which is a side effect forbidden in the pure functions JAX traces and compiles. stateless_update_state(variables, y_true, y_pred) instead takes the current variables as an argument and returns updated ones.", "explanation": "This mirrors model.stateless_call() and optimizer.stateless_apply(): state is passed explicitly in and out.", "page_refs": [246, 242]},
+  {"id": "q4", "type": "math", "question": "In the SparseCategoricalAccuracy example, what would the result be if the second prediction row were [1, 0, 0] instead of [0, 1, 0]?", "options": [], "answer": "0.67 (2 correct out of 3).", "explanation": "Argmax of [1,0,0] is 0 but the target is 1, so that sample is wrong; samples 0 and 2 remain correct, giving 2/3.", "page_refs": [246]},
+  {"id": "q5", "type": "mcq", "question": "Which method of keras.Model does fit() call for every batch of data?", "options": ["call()", "compile()", "train_step()", "stateless_call()"], "answer": "train_step()", "explanation": "The page says train_step() is called by fit() for every batch. call() is the forward pass used inside a step; compile() configures training once; stateless_call() is the JAX-friendly forward pass.", "page_refs": [246]},
+  {"id": "q6", "type": "short", "question": "Name three features of fit() that the page says you lose when writing the training loop entirely from scratch.", "options": [], "answer": "Callbacks, performance optimizations, and built-in support for distributed training.", "explanation": "Listed explicitly at the start of 7.4.4.", "page_refs": [246]},
+  {"id": "q7", "type": "self", "question": "Could you write, from memory, the four stateless metric calls in the order they are used on this page and explain what each returns?", "options": [], "answer": "metric.variables (current state), stateless_update_state(vars, targets, predictions) (new state), stateless_result(vars) (metric value), stateless_reset_state() (blank state).", "explanation": "If you can, you are ready to add metrics to a jitted JAX train step.", "page_refs": [246]}
+ ]
+}

@@ -1,0 +1,352 @@
+{
+  "page_id": "page_415",
+  "pdf_page": 415,
+  "printed_page": "391",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:48:30Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean. Element p415_e03 merges two printed paragraphs (\"This analogy between compression...\" and \"The idea with byte-pair encoding...\"); each gets its own note. Code blocks match the image; the footnote marker '1' is attached to 'encoding' in the extracted text."
+  },
+  "overview": {
+    "title": "Byte-pair encoding: initializing the word counts",
+    "chapter": "14 Text classification",
+    "section": "14.2 Preparing text data",
+    "subsection": "14.2.2 Subword tokenization",
+    "main_topic": "Byte-pair encoding as a tokenizer, and Listing 14.5, which builds the starting state (character-split word counts)",
+    "central_idea": "Byte-pair encoding, a 1990s lossless compression algorithm, works as a tokenizer: start from a vocabulary of characters and repeatedly merge common adjacent pairs into longer symbols. The first step is to count every word in the corpus and store each one as its characters separated by spaces.",
+    "importance": "This page starts the BPE implementation that runs through p.418 and that the book reuses for RoBERTa (p.480) and the SentencePiece-based mini-GPT (p.495). The data structure built here, a dict from space-separated symbol strings to frequencies, is what Listings 14.6 and 14.7 operate on.",
+    "learning_objectives": [
+      "Explain why byte-pair encoding, originally a compression algorithm, fits the tokenization-as-compression view",
+      "Describe the core BPE idea: start from characters, repeatedly merge frequent adjacent pairs",
+      "Trace count_and_split_words on the toy dataset and reproduce its output dict",
+      "Explain why words are stored as space-joined characters and why counting by word (not by line) is efficient"
+    ],
+    "prerequisites": [
+      "Tokenization as compression (p.414)",
+      "The word-splitting regex r\"[\\w]+|[.,!?;]\" from WordTokenizer (p.412)",
+      "collections.Counter and re.findall"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "Building on the compression framing of p.414, the authors introduce **byte-pair encoding (BPE)**. It is a lossless compression algorithm from the 1990s (Philip Gage, 1994, footnote 1) that turned out to be one of the most effective tricks in the last decade of NLP when reused for tokenization. The book notes that ChatGPT and many other models still use it.\n\nThe core idea: **start with a basic vocabulary of characters and progressively \"merge\" common pairings into longer and longer character sequences.** The authors use a toy corpus of three lines: \"the quick brown fox\", \"the slow brown fox\" and \"the quick brown foxhound\".\n\nLike the `WordTokenizer`, BPE starts by **counting words**. Each word is stored as its characters **joined by spaces**, so that the next step can treat adjacent pairs of symbols easily. **Listing 14.5**, `count_and_split_words`, lowercases each line, splits it into words and punctuation with the same regex as `WordTokenizer`, splits each word into characters with `re.findall(r\".\", word)`, joins them with `\" \"` and increments a `Counter`. It returns a plain `dict`.\n\nOn the toy data the result is:\n\n```\n{\"t h e\": 3, \"q u i c k\": 2, \"b r o w n\": 3,\n \"f o x\": 2, \"s l o w\": 1, \"f o x h o u n d\": 1}\n```\n\nEach key is a word written as a sequence of current *symbols* (at this point single characters), and each value is how often that word occurs. Merges will never cross word boundaries, because each word is a separate key. Counting by word means a pair inside \"brown\" is counted with weight 3 in a single step. The merge loop itself follows on p.416.",
+  "paragraphs": [
+    {
+      "ref": "p415_e03",
+      "excerpt": "This analogy between compression and tokenization was not always obvious, but it turns",
+      "what_it_says": "The compression-tokenization analogy turns out to be powerful. One of the most practically effective tricks of the last decade of NLP was reusing a 1990s lossless compression algorithm, byte-pair encoding, for tokenization. It is still used by ChatGPT and many other models, and the section will build a BPE tokenizer.",
+      "what_it_means": "BPE was designed to shrink data by replacing frequent byte pairs with new symbols. Applied to text, the same procedure discovers frequent character sequences (common words, stems, suffixes) and makes them single tokens. That gives short sequences while keeping a bounded vocabulary, which is exactly what p.414 asked for.",
+      "why_it_matters": "This links the abstract goal of p.414 to a concrete, widely used algorithm. Understanding BPE helps you understand the tokenizers of most modern LLMs.",
+      "technical_idea": "Beyond the book: BPE was adapted for neural machine translation by Sennrich, Haddow and Birch (2016), and GPT-2 introduced byte-level BPE. Gage's original version replaced the most frequent pair of bytes with an unused byte value and stored a replacement table for decompression.",
+      "terminology": [
+        {"term": "byte-pair encoding (BPE)", "meaning": "An algorithm that repeatedly replaces the most frequent adjacent pair of symbols with a new merged symbol."},
+        {"term": "lossless compression", "meaning": "Compression from which the original data can be recovered exactly."}
+      ],
+      "connections": [
+        "p.414: the search for an ideal tokenizer framed as compression",
+        "p.495: SentencePiece uses the same BPE technique for the mini-GPT"
+      ]
+    },
+    {
+      "ref": "p415_e03",
+      "excerpt": "The idea with byte-pair encoding is to start with a basic vocabulary of characters",
+      "what_it_says": "BPE starts with a basic vocabulary of characters and progressively merges common pairings into longer sequences of characters. The toy input is introduced next.",
+      "what_it_means": "The vocabulary grows bottom-up. It starts with characters, so full coverage is guaranteed like the CharTokenizer, and adds merged symbols, so frequent strings become single tokens like the WordTokenizer. You stop when the vocabulary reaches the desired size.",
+      "why_it_matters": "This is the whole algorithm in one sentence. Everything in Listings 14.5-14.7 implements it.",
+      "terminology": [
+        {"term": "merge", "meaning": "Replacing two adjacent symbols, e.g. \"o\" \"w\", with one new symbol \"ow\"."}
+      ],
+      "connections": [
+        "p.416: count_pairs and merge_pair perform the merges",
+        "p.417: compute_sub_word_vocabulary runs merges until the vocabulary reaches vocab_size"
+      ]
+    },
+    {
+      "ref": "p415_e05",
+      "excerpt": "Like the WordTokenizer, we will start by computing word counts for all the words",
+      "what_it_says": "As with the WordTokenizer, the first step is computing word counts. While building the counts dictionary, every word is split into characters joined by spaces, which makes pairs of characters easier to consider in the next step.",
+      "what_it_means": "The space-separated form is a simple data structure: a word's current segmentation is just a string, `word.split()` gives its symbols, and a merge becomes a regex substitution of \"a b\" with \"ab\". Storing counts per distinct word means the pair statistics can be weighted by frequency without re-scanning the corpus.",
+      "why_it_matters": "All later BPE code relies on this representation. The space is a symbol separator, not a character of the word, which works because the regex never puts whitespace inside a word.",
+      "technical_idea": "Beyond the book: real implementations often add an end-of-word marker (e.g. \"</w>\") or a leading-space marker (GPT-2's \"Ġ\") so that a subword at the end of a word is distinguished from the same characters mid-word. This toy version does not, and word boundaries are lost when tokens are concatenated.",
+      "terminology": [
+        {"term": "symbol", "meaning": "A current unit in a word's segmentation; initially single characters, later merged strings."}
+      ],
+      "connections": [
+        "p.412: WordTokenizer uses the same regex r\"[\\w]+|[.,!?;]\"",
+        "p.413: compute_word_vocabulary also starts with a Counter of words"
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "byte_pair_encoding",
+      "name": "Byte-pair encoding (BPE)",
+      "definition": "A subword tokenization algorithm that starts from single characters and repeatedly merges the most frequent adjacent symbol pair into a new symbol, adding it to the vocabulary.",
+      "intuition": "Let the corpus decide which letter combinations are common enough to become their own tokens.",
+      "technical": "State: dict of word -> frequency, where each word is a space-separated list of symbols. Loop: count all adjacent pairs weighted by word frequency, take the most frequent, replace it everywhere, record the merge rule.",
+      "significance": "Gives short sequences with a bounded vocabulary and no out-of-vocabulary words, since characters remain in the vocabulary. Used by ChatGPT and many other models, according to the book.",
+      "example": "In the toy data, the first merge will be (\"o\", \"w\"), which occurs 4 times (brown ×3, slow ×1); see p.416.",
+      "misconception": "Despite the name, the book's version works on characters, not raw bytes. Byte-level BPE (as in GPT-2) is a variant.",
+      "related": ["subword_tokenization", "tokenization_as_compression", "tokenization"],
+      "source": "book"
+    },
+    {
+      "id": "subword_tokenization",
+      "name": "Subword tokenization",
+      "definition": "Tokenization with units between characters and words, learned from data.",
+      "intuition": "Common words are whole tokens; rare words are built from pieces.",
+      "technical": "BPE is the algorithm the book uses to learn the subword vocabulary.",
+      "significance": "Bridges the gap between word and character tokenization (p.414).",
+      "example": "\"foxhound\" will later appear as \"fox h o u n d\" after a few merges (p.416).",
+      "misconception": "Subwords are not hand-designed morphemes; they come from frequency statistics.",
+      "related": ["byte_pair_encoding", "tokenization"],
+      "source": "book"
+    },
+    {
+      "id": "tokenization_as_compression",
+      "name": "Tokenization as compression",
+      "definition": "Viewing a tokenizer as a code that should represent text with few tokens from a small vocabulary.",
+      "intuition": "The tokenizer is like a codebook for text.",
+      "technical": "BPE literally comes from data compression: each merge replaces a frequent pair with one symbol, shortening the encoded text.",
+      "significance": "Explains why a compression algorithm works as a tokenizer.",
+      "example": "Merging \"o w\" in \"b r o w n\" (×3) and \"s l o w\" (×1) removes 4 symbols from the encoded corpus.",
+      "misconception": "The goal is not minimal bytes on disk but short, informative token sequences for a model.",
+      "related": ["byte_pair_encoding", "subword_tokenization"],
+      "source": "book"
+    },
+    {
+      "id": "split_word_counts",
+      "name": "Character-split word counts",
+      "definition": "The BPE starting state: a mapping from each distinct word, written as space-separated characters, to its frequency in the corpus.",
+      "intuition": "A frequency-weighted list of words spelled out letter by letter.",
+      "technical": "Built by count_and_split_words (Listing 14.5) with Counter; keys like \"b r o w n\".",
+      "significance": "Lets pair statistics be computed once per distinct word, weighted by frequency.",
+      "example": "{\"t h e\": 3, \"q u i c k\": 2, \"b r o w n\": 3, \"f o x\": 2, \"s l o w\": 1, \"f o x h o u n d\": 1}",
+      "misconception": "The spaces are separators between symbols, not characters of the word.",
+      "related": ["byte_pair_encoding"],
+      "source": "book"
+    }
+  ],
+  "math": [],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Toy corpus for byte-pair encoding",
+      "original_code": "data = [\n    \"the quick brown fox\",\n    \"the slow brown fox\",\n    \"the quick brown foxhound\",\n]",
+      "language": "python",
+      "what_it_does": "Defines three short lines that share many words, so the merge statistics are easy to follow by hand.",
+      "line_explanations": [
+        {"lines": "1-5", "explanation": "'the' and 'brown' occur 3 times, 'quick' and 'fox' twice, 'slow' and 'foxhound' once. 'foxhound' contains 'fox', which shows how a subword shared between words gets merged."}
+      ],
+      "inputs_outputs": "No input; output is a list of 3 strings.",
+      "algorithm": "N/A (data).",
+      "theory_link": "A small corpus where the frequency differences show up clearly in the merges.",
+      "parameters": [],
+      "pitfalls": [],
+      "illustrative_code": ""
+    },
+    {
+      "id": "c2",
+      "listing": "14.5",
+      "title": "Initializing state for the byte-pair encoding algorithm",
+      "original_code": "def count_and_split_words(data):\n    counts = collections.Counter()\n    for line in data:\n        line = line.lower()\n        for word in re.findall(r\"[\\w]+|[.,!?;]\", line):\n            chars = re.findall(r\".\", word)\n            split_word = \" \".join(chars)\n            counts[split_word] += 1\n    return dict(counts)\ncounts = count_and_split_words(data)",
+      "language": "python",
+      "what_it_does": "Counts every word in the corpus, storing each word as its characters separated by single spaces.",
+      "line_explanations": [
+        {"lines": "2", "explanation": "A Counter acts as a dict with default value 0."},
+        {"lines": "3-4", "explanation": "Lowercase each line: the same standardization as the other tokenizers."},
+        {"lines": "5", "explanation": "Split the line into words and single punctuation marks with the WordTokenizer regex; other characters (spaces, hyphens, quotes) are dropped."},
+        {"lines": "6-7", "explanation": "Split the word into characters (r\".\" matches any character except newline) and join them with spaces: \"brown\" becomes \"b r o w n\"."},
+        {"lines": "8", "explanation": "Increment the count for this split word."},
+        {"lines": "9", "explanation": "Return an ordinary dict; insertion order (first occurrence) is preserved, which later decides ties in max()."},
+        {"lines": "10", "explanation": "Run it on the toy data."}
+      ],
+      "inputs_outputs": "Input: an iterable of strings. Output: dict {space-separated word: count}.",
+      "algorithm": "One pass over the corpus: tokenize to words, re-encode each as a character sequence, accumulate frequencies.",
+      "theory_link": "This is the initial character vocabulary state of BPE; each later merge rewrites these keys.",
+      "parameters": [
+        {"name": "data", "role": "The training corpus, a list of lines (the toy data here, Moby Dick on p.418)."}
+      ],
+      "pitfalls": [
+        "Characters outside \\w and .,!?; never reach the vocabulary (e.g. '-' and quotes).",
+        "There is no end-of-word marker, so the segmentation can't distinguish a word-final subword from a word-internal one."
+      ],
+      "illustrative_code": "# AI-written: derive the initial character vocabulary from counts\nchars = collections.Counter()\nfor word, freq in counts.items():\n    for c in word.split():\n        chars[c] += freq\nprint(chars.most_common())  # [('o', 9), ...]"
+    },
+    {
+      "id": "c3",
+      "listing": null,
+      "title": "Output of count_and_split_words on the toy data",
+      "original_code": ">>> counts\n{\"t h e\": 3,\n \"q u i c k\": 2,\n \"b r o w n\": 3,\n \"f o x\": 2,\n \"s l o w\": 1,\n \"f o x h o u n d\": 1}",
+      "language": "python",
+      "what_it_does": "Shows the initial BPE state: six distinct words with their frequencies, spelled out character by character.",
+      "line_explanations": [
+        {"lines": "2-7", "explanation": "Keys appear in order of first occurrence. Counts match the corpus: the ×3, quick ×2, brown ×3, fox ×2, slow ×1, foxhound ×1 (14 words in all)."}
+      ],
+      "inputs_outputs": "Displayed dict.",
+      "algorithm": "N/A (inspection).",
+      "theory_link": "From these counts the most frequent adjacent pair is (\"o\",\"w\") with weight 3+1 = 4, the first merge on p.416.",
+      "parameters": [],
+      "pitfalls": [
+        "The book prints the dict with double quotes; the real Python REPL would print single quotes."
+      ],
+      "illustrative_code": ""
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Counting pairs by hand on this state",
+      "kind": "step_by_step",
+      "body": "Each adjacent pair inside a word is weighted by that word's frequency:\n\n- \"t h e\" ×3 gives (t,h)=3, (h,e)=3\n- \"q u i c k\" ×2 gives (q,u),(u,i),(i,c),(c,k) = 2 each\n- \"b r o w n\" ×3 gives (b,r),(r,o),(o,w),(w,n) = 3 each\n- \"f o x\" ×2 gives (f,o),(o,x) = 2 each\n- \"s l o w\" ×1 gives (s,l),(l,o),(o,w) = 1 each\n- \"f o x h o u n d\" ×1 gives (f,o),(o,x),(x,h),(h,o),(o,u),(u,n),(n,d) = 1 each\n\nTotals: (o,w)=4; (t,h),(h,e),(b,r),(r,o),(w,n),(f,o),(o,x)=3; and so on. So the first merge is \"ow\", as the book states on p.416.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Compression origin",
+      "kind": "analogy",
+      "body": "Gage's algorithm worked like a shorthand writer. Each time a two-letter combination is very common, you invent one new squiggle for it and note the substitution in a legend. Do this repeatedly and the text shrinks, and the legend lets you expand it back. For tokenization, the legend (the merge rules) becomes the tokenizer and the squiggles become vocabulary entries.",
+      "source": "analogy"
+    },
+    {
+      "title": "Why count words instead of scanning raw text",
+      "kind": "breakdown",
+      "body": "Moby Dick has hundreds of thousands of word occurrences but only about 17,000 distinct words (p.414). Storing each distinct word once with a count means each round of pair counting loops over ~17k keys, not the whole book. It also keeps merges from crossing word boundaries, because the space between words is never part of a key.",
+      "source": "inference"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "The byte-pair encoding procedure",
+      "why": "The page describes BPE as: start from a character vocabulary, then repeatedly merge common pairs. Listing 14.5 is the first box.",
+      "mermaid": "flowchart TD\n A[\"Corpus lines\"] --> B[\"count_and_split_words<br/>(Listing 14.5)<br/>{'b r o w n': 3, ...}\"]\n B --> C[\"Count adjacent symbol pairs<br/>weighted by word frequency\"]\n C --> D[\"Merge most frequent pair<br/>e.g. 'o w' -> 'ow'\"]\n D --> E{\"Vocabulary large enough?\"}\n E -- no --> C\n E -- yes --> F[\"Vocabulary + ranked merge rules\"]"
+    },
+    {
+      "id": "v2",
+      "type": "chart",
+      "title": "Word frequencies in the toy corpus",
+      "why": "The values of the counts dict printed on the page; they weight every pair count in the next step.",
+      "chart": {
+        "type": "bar",
+        "data": {
+          "labels": ["the", "quick", "brown", "fox", "slow", "foxhound"],
+          "datasets": [{"label": "count", "data": [3, 2, 3, 2, 1, 1]}]
+        },
+        "options": {"scales": {"y": {"beginAtZero": true, "ticks": {"stepSize": 1}}}}
+      }
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "BPE was invented for NLP.",
+      "correction": "The book describes it as a 1990s lossless compression algorithm (Gage, 1994) that was later repurposed for tokenization."
+    },
+    {
+      "claim": "The spaces in \"b r o w n\" are characters of the word.",
+      "correction": "They are separators added so symbols and adjacent pairs are easy to identify; the regex split never puts whitespace inside a word."
+    },
+    {
+      "claim": "BPE merges can join the end of one word with the start of the next.",
+      "correction": "Each distinct word is a separate key in counts, so pairs are only counted, and merges only happen, inside words."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 414, "note": "Subword tokenization motivated as compression"},
+      {"page": 412, "note": "WordTokenizer's split regex, reused here"},
+      {"page": 413, "note": "compute_word_vocabulary also counts words with a Counter"}
+    ],
+    "later": [
+      {"page": 416, "note": "count_pairs / merge_pair and ten steps of merging on this toy data (Listing 14.6)"},
+      {"page": 417, "note": "compute_sub_word_vocabulary and the SubWordTokenizer (Listing 14.7)"},
+      {"page": 418, "note": "BPE tokenizer trained on Moby Dick: 16 tokens for the test line, no [UNK]"},
+      {"page": 480, "note": "RoBERTa's tokenizer is almost the same as this SubWordTokenizer"},
+      {"page": 495, "note": "SentencePiece: same BPE technique, implemented in C++"}
+    ],
+    "prerequisites": [
+      {"page": 414, "note": "Trade-off between vocabulary size and sequence length"}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 416, "note": "Listing 14.6 consumes the counts dict built here"},
+      {"page": 417, "note": "Listing 14.7 calls count_and_split_words"}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "Byte-pair encoding is a 1990s lossless compression algorithm reused for tokenization; the book says ChatGPT and many other models still use it.",
+    "BPE starts from a character vocabulary and repeatedly merges common adjacent pairs into longer symbols.",
+    "Listing 14.5 builds the starting state: a dict mapping each word, written as space-separated characters, to its corpus frequency.",
+    "On the toy corpus this gives {'t h e': 3, 'q u i c k': 2, 'b r o w n': 3, 'f o x': 2, 's l o w': 1, 'f o x h o u n d': 1}.",
+    "Counting per distinct word weights pair statistics by frequency and stops merges from crossing word boundaries."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "What is the starting vocabulary in byte-pair encoding, as described on this page?",
+      "options": ["The 2,000 most frequent words", "A basic vocabulary of characters", "All possible byte pairs", "An empty vocabulary plus [UNK]"],
+      "answer": "A basic vocabulary of characters",
+      "explanation": "The page says BPE 'start[s] with a basic vocabulary of characters and progressively merge[s] common pairings'. Word vocabularies are the WordTokenizer approach. BPE doesn't enumerate all byte pairs up front, and it doesn't start empty.",
+      "page_refs": [415]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "Why does count_and_split_words join the characters of each word with spaces?",
+      "options": [],
+      "answer": "To make pairs of adjacent symbols easy to find in the next step: word.split() gives the symbols, and a merge becomes a substitution of \"a b\" with \"ab\".",
+      "explanation": "The page states the spaces 'make it easier to consider pairs of characters in our next step'. Listing 14.6 on p.416 relies on this.",
+      "page_refs": [415, 416]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "What would count_and_split_words return if the corpus contained the line \"The fox-hound!\"?",
+      "options": [],
+      "answer": "Entries \"t h e\", \"f o x\", \"h o u n d\" and \"!\" each incremented by 1; the hyphen is dropped by the regex.",
+      "explanation": "The line is lowercased, and r\"[\\w]+|[.,!?;]\" yields 'the', 'fox', 'hound', '!'. '-' matches neither alternative. A single-character token like '!' stays as \"!\" with no spaces.",
+      "page_refs": [415]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "Using the counts printed on this page, which adjacent pair has the highest total frequency?",
+      "options": ["(\"t\", \"h\")", "(\"o\", \"w\")", "(\"f\", \"o\")", "(\"b\", \"r\")"],
+      "answer": "(\"o\", \"w\")",
+      "explanation": "(o,w) appears in \"b r o w n\" (×3) and \"s l o w\" (×1) = 4. (t,h), (f,o) and (b,r) each total 3. This matches the first merge on p.416.",
+      "page_refs": [415, 416]
+    },
+    {
+      "id": "q5",
+      "type": "short",
+      "question": "Where did byte-pair encoding come from originally, according to the page?",
+      "options": [],
+      "answer": "It is a 1990s algorithm for lossless data compression (Philip Gage, 'A New Algorithm for Data Compression', The C Users Journal, 1994).",
+      "explanation": "Stated in the first paragraph and footnote 1.",
+      "page_refs": [415]
+    },
+    {
+      "id": "q6",
+      "type": "conceptual",
+      "question": "Why is storing counts per distinct word more efficient than processing the raw corpus for every merge?",
+      "options": [],
+      "answer": "Each round of pair counting only needs to visit each distinct word once and multiply by its frequency, instead of rescanning every occurrence in the text.",
+      "explanation": "For Moby Dick that means about 17k keys (p.414) instead of hundreds of thousands of word occurrences.",
+      "page_refs": [414, 415]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you write down from memory the counts dict for the toy corpus and explain each value?",
+      "options": [],
+      "answer": "{\"t h e\": 3, \"q u i c k\": 2, \"b r o w n\": 3, \"f o x\": 2, \"s l o w\": 1, \"f o x h o u n d\": 1}",
+      "explanation": "Count each word across the three lines: 'the' and 'brown' appear in every line; 'quick' and 'fox' in two; 'slow' and 'foxhound' in one.",
+      "page_refs": [415]
+    }
+  ]
+}

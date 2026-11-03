@@ -1,0 +1,615 @@
+{
+ "page_id": "page_474",
+ "pdf_page": 474,
+ "printed_page": "450",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:48:49Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. The page opens with the second half of the transformer.summary() table that begins on p.473 (rows embedding_6 to dense_11 and the parameter totals), followed by the compile/fit snippet and two body paragraphs. All printed numbers check out arithmetically against the architecture of listing 15.16 (p.473)."
+ },
+ "overview": {
+  "title": "Training the first Transformer translator, and why it is not yet a sequence model",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "15.3.4 Sequence-to-sequence learning with a Transformer",
+  "main_topic": "The end of the Transformer model summary, training the English-to-Spanish Transformer, its disappointing 58% next-token accuracy, and the diagnosis: attention is order-blind",
+  "central_idea": "The encoder-decoder Transformer of listing 15.16 trains to only about 58% next-word accuracy, 7 points below the GRU model, because nothing in it encodes word order: dense layers act per token and attention treats the tokens as a set.",
+  "importance": "This page is the hinge of section 15.3. It turns a seemingly finished model into a puzzle whose answer, positional embeddings (15.3.5, p.475), is an essential part of every Transformer used later in the book.",
+  "learning_objectives": [
+   "Read the remaining rows of the Transformer model summary and verify the parameter counts of the Embedding and output Dense layers",
+   "Explain how the Transformer translator mirrors the structure of the GRU translator from section 15.2.2",
+   "Interpret the compile/fit call, including why weighted_metrics is used for accuracy",
+   "Explain why a Transformer without positional information is a set model rather than a sequence model",
+   "Predict the consequence of shuffling source words for a model without positional information"
+  ],
+  "prerequisites": [
+   "The TransformerEncoder and TransformerDecoder blocks (p.468-472)",
+   "Dot-product attention (p.463-467)",
+   "The GRU sequence-to-sequence model and its 65% accuracy (p.456-460)",
+   "Listing 15.16 and the first half of the summary (p.473)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page begins with the **bottom half of the `transformer.summary()` output** started on p.473. The target-side branch appears: `embedding_6` embeds the `spanish` input into `(None, None, 256)` vectors with **3,840,000** parameters (a 15,000-word vocabulary times 256 dimensions), `transformer_decoder_1` (**1,578,752** parameters) consumes the encoder output, the source padding mask `not_equal_5` and the target embeddings, a `Dropout` layer adds no parameters, and the final `Dense` softmax layer projects every position to a **15,000-way** distribution over the Spanish vocabulary (**3,855,000** parameters). The whole model has **14,428,824** trainable parameters (55.04 MB in float32).\n\nThe authors note that the model has *almost exactly the same structure* as the GRU translator of section 15.2.2, with **attention replacing recurrence** as the mechanism that passes information across the sequence. It is compiled with Adam, sparse categorical crossentropy and `weighted_metrics=[\"accuracy\"]`, then trained for 15 epochs.\n\nThe result is disappointing: about **58% next-word accuracy**, which is **7 percentage points worse** than the RNN model (65%, p.459). The authors ask the reader to spot the problem before revealing it: the Transformer just built **is not a sequence model at all**. Its dense layers process each token independently, and its attention layer looks at tokens **as a set**. Reordering the tokens yields identical pairwise attention scores and the same context-aware representations, so shuffling every English source sentence would leave accuracy unchanged. Attention is a *set-processing mechanism*, blind to whether an element sits at the beginning, middle or end. The page ends on two open questions: why call the Transformer a sequence model, and how can it translate if it ignores word order? The answer, injecting position into the embeddings, follows on p.475.",
+ "paragraphs": [
+  {
+   "ref": "p474_e04",
+   "excerpt": "Our model has almost exactly the same structure as the GRU translation",
+   "what_it_says": "The Transformer translator shares the overall structure of the earlier GRU translator; attention now replaces the recurrent layers as the way information moves across the sequence. The authors then train it.",
+   "what_it_means": "Both models embed source and target tokens, encode the source, condition a target-side decoder on that encoding, apply dropout and finish with a softmax over the Spanish vocabulary. Only the inner sequence-mixing machinery changed: GRU layers became TransformerEncoder/TransformerDecoder blocks. That makes the comparison a controlled experiment.",
+   "why_it_matters": "Because everything except the mixing mechanism is held fixed, the accuracy gap reported next can be attributed to the Transformer blocks themselves, which is what makes the puzzle that follows meaningful.",
+   "terminology": [
+    {
+     "term": "Recurrent layer",
+     "meaning": "A layer such as GRU that processes a sequence step by step, carrying a state from one timestep to the next."
+    }
+   ],
+   "connections": [
+    "p.456: the GRU-based sequence-to-sequence model this one mirrors",
+    "p.472: the authors announce replacing the GRU layers with TransformerEncoder and TransformerDecoder"
+   ]
+  },
+  {
+   "ref": "p474_e06",
+   "excerpt": "After training, we get to about 58% accuracy: on average, the model",
+   "what_it_says": "Training reaches about 58% accuracy, meaning the next Spanish word is predicted correctly 58% of the time. That is 7 percentage points worse than the RNN model. Either the Transformer is overhyped or something is missing from the implementation, and the reader is invited to find it.",
+   "what_it_means": "The figure is teacher-forced next-token accuracy: at each position the model sees the correct previous Spanish tokens and must predict the next one. The GRU model reached 65% on the same metric (p.459), so the Transformer is clearly behind.",
+   "why_it_matters": "It is a deliberate pedagogical setback. A powerful architecture losing to a simple RNN signals that a key ingredient is missing, and identifying that ingredient (word order) is the lesson.",
+   "terminology": [
+    {
+     "term": "Next-token accuracy",
+     "meaning": "The fraction of target positions where the argmax of the predicted distribution equals the true next token; a crude proxy for translation quality, as noted on p.459."
+    },
+    {
+     "term": "Percentage point",
+     "meaning": "An absolute difference between percentages: 65% - 58% = 7 points."
+    }
+   ],
+   "connections": [
+    "p.459: the GRU model reaches 65% accuracy, and the authors warn that next-token accuracy is a crude metric (BLEU is the standard alternative)"
+   ]
+  },
+  {
+   "ref": "p474_e07",
+   "excerpt": "This section is ostensibly about sequence models. In the previous chapter,",
+   "what_it_says": "The Transformer just built is not a sequence model: dense layers process tokens independently and attention looks at tokens as a set. Reordering tokens gives identical pairwise attention scores and the same context-aware representations; shuffling every English source sentence would not change accuracy. Attention is a set-processing mechanism, blind to position. So why call the Transformer a sequence model, and how can it translate without word order?",
+   "what_it_means": "An attention score between two tokens depends only on their two vectors (query and key), not on where they sit. If the inputs are permuted, the outputs are permuted in exactly the same way and nothing else changes: the layer is permutation-equivariant. A bag of English words with the same members therefore produces the same encoding regardless of order, so \"the dog bit the man\" and \"the man bit the dog\" become indistinguishable on the source side.",
+   "why_it_matters": "Word order carries meaning (chapter 14 showed this with bag-of-words versus sequence models). A translator that cannot see source word order loses that information, which explains the gap to the GRU, whose step-by-step computation is inherently order aware. The fix, adding positional information to the embeddings, is the subject of 15.3.5.",
+   "technical_idea": "For a permutation matrix $P$, self-attention satisfies $\\mathrm{Attn}(PX) = P\\,\\mathrm{Attn}(X)$, and a pointwise dense layer satisfies $f(PX) = P f(X)$. Cross-attention from a target query to a permuted source is invariant: the weighted sum over source positions is the same whatever their order. Note (not in the book): on the target side, the causal mask does leak some ordering information, because each position sees a different number of predecessors; the book's argument concerns the source sentence, where shuffling is truly invisible.",
+   "terminology": [
+    {
+     "term": "Set-processing mechanism",
+     "meaning": "An operation whose result does not depend on the order of its input elements (or whose outputs simply follow the input order)."
+    },
+    {
+     "term": "Context-aware representation",
+     "meaning": "A token vector updated by attention to reflect the other tokens in the sequence."
+    },
+    {
+     "term": "Pairwise attention score",
+     "meaning": "The dot product between a query vector and a key vector for one pair of tokens, before softmax."
+    }
+   ],
+   "connections": [
+    "p.463: dot-product attention, whose scores depend only on pairs of vectors",
+    "p.475: positional embeddings inject word order into the embedded sequence",
+    "p.627: the conclusions chapter restates that a Transformer looks at a set of vectors and needs positional encoding for ordered sequences"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "permutation_invariance_of_attention",
+   "name": "Order blindness of attention",
+   "definition": "Attention computes interactions between pairs of tokens from their vectors alone, so it is insensitive to the order of the tokens: permuting the inputs permutes the outputs identically and leaves the scores unchanged.",
+   "intuition": "Attention is like a meeting where everyone can talk to everyone; the seating order does not change who says what to whom.",
+   "technical": "Self-attention is permutation-equivariant: $\\mathrm{softmax}((PX W_Q)(PX W_K)^\\top/\\sqrt{d}) (PX W_V) = P\\,\\mathrm{Attn}(X)$, since $P^\\top P = I$ and row-wise softmax commutes with permuting rows and columns. Pooling or cross-attention over the result is permutation-invariant.",
+   "significance": "Explains the 58% accuracy on this page and motivates positional embeddings.",
+   "example": "Shuffling every English source sentence would leave the Transformer of listing 15.16 with the same accuracy (the book's own thought experiment).",
+   "misconception": "That attention 'reads' a sentence left to right. Without positional information it sees an unordered collection of word vectors.",
+   "related": [
+    "attention",
+    "self_attention",
+    "positional_encoding",
+    "transformer"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "transformer",
+   "name": "Transformer (encoder-decoder)",
+   "definition": "A sequence-to-sequence architecture that uses attention, rather than recurrence, as the only mechanism to pass information across a sequence.",
+   "intuition": "Instead of reading the sentence word by word and carrying a memory, every word looks directly at every other word it is allowed to see.",
+   "technical": "Here: Embedding(15000, 256) -> TransformerEncoder(256, 2048, 8 heads) on the English side; Embedding(15000, 256) -> TransformerDecoder with causal self-attention and cross-attention to the encoder output on the Spanish side; Dropout(0.5); Dense(15000, softmax).",
+   "significance": "The architecture behind modern language models; this page shows that it is incomplete without positional information.",
+   "example": "14,428,824 parameters, trained for 15 epochs, about 58% next-token accuracy without positional embeddings.",
+   "misconception": "That swapping GRUs for Transformer blocks automatically improves accuracy; the missing order information makes it worse here.",
+   "related": [
+    "attention",
+    "self_attention",
+    "positional_encoding",
+    "rnn"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "positional_encoding",
+   "name": "Positional information (forthcoming fix)",
+   "definition": "Information about each token's position added to its embedding so that order-blind layers can use word order.",
+   "intuition": "Stamping each word with its seat number before the meeting begins.",
+   "technical": "Previewed by the page's closing question and developed on p.475, where a learned position vector is added to each word vector.",
+   "significance": "Turns the set model on this page into a genuine sequence model.",
+   "example": "See p.475-477 for the PositionalEmbedding layer.",
+   "misconception": "That the Transformer is inherently a sequence model; it becomes one only once positional information is injected.",
+   "related": [
+    "embedding",
+    "transformer",
+    "permutation_invariance_of_attention"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "embedding",
+   "name": "Token embedding",
+   "definition": "A trainable lookup table mapping each integer token ID to a dense vector.",
+   "intuition": "A dictionary where every word's entry is a learned list of 256 numbers.",
+   "technical": "Weight matrix of shape (15000, 256), hence 3,840,000 parameters per embedding layer in the summary; one for English, one for Spanish.",
+   "significance": "Embeddings are the largest single parameter block of this model together with the output Dense layer.",
+   "example": "embedding_6 maps the `spanish` input of shape (None, None) to (None, None, 256).",
+   "misconception": "That an embedding knows a token's position; it depends only on the token ID.",
+   "related": [
+    "positional_encoding",
+    "dense_layer"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Parameter counts of the embedding and output layers",
+   "latex": "\\begin{aligned} N_{\\text{emb}} &= V \\cdot d = 15000 \\cdot 256 = 3{,}840{,}000 \\\\ N_{\\text{dense}} &= d \\cdot V + V = 256 \\cdot 15000 + 15000 = 3{,}855{,}000 \\end{aligned}",
+   "source_text": "embedding_6 (Embedding) ... 3,840,000; dense_11 (Dense) (None, None, 15000) 3,855,000",
+   "variables": [
+    {
+     "symbol": "V",
+     "meaning": "Vocabulary size, 15,000 tokens (vocab_size in listing 15.16)"
+    },
+    {
+     "symbol": "d",
+     "meaning": "Hidden/embedding dimension, 256 (hidden_dim)"
+    },
+    {
+     "symbol": "N_{\\text{emb}}",
+     "meaning": "Parameters of one Embedding layer"
+    },
+    {
+     "symbol": "N_{\\text{dense}}",
+     "meaning": "Parameters of the output Dense layer (weights plus biases)"
+    }
+   ],
+   "operations": "Multiplication of table dimensions; the Dense layer adds one bias per output unit.",
+   "purpose": "Verifies the summary's numbers and shows where the model's parameters live.",
+   "interpretation": "Embeddings and the output projection are driven entirely by vocabulary size; doubling the vocabulary would roughly double them.",
+   "intuition": "Every vocabulary word needs its own 256-number input vector and its own 256-number output weight row.",
+   "numerical_example": "Total: $2 \\times 3{,}840{,}000 + 1{,}315{,}072 + 1{,}578{,}752 + 3{,}855{,}000 = 14{,}428{,}824$, matching the printed total. In float32 that is $14{,}428{,}824 \\times 4 = 57{,}715{,}296$ bytes $\\approx 55.04$ MiB.",
+   "source": "ai_explanation",
+   "book_ref": "p.474"
+  },
+  {
+   "id": "m2",
+   "title": "Why attention ignores order: permutation equivariance",
+   "latex": "\\operatorname{Attn}(PX) = \\operatorname{softmax}\\!\\left(\\frac{(PXW_Q)(PXW_K)^{\\top}}{\\sqrt{d_k}}\\right) PXW_V = P\\,\\operatorname{Attn}(X)",
+   "source_text": "You could change the order of the tokens in a sequence, and you'd get identical pairwise attention scores and the same context-aware representations.",
+   "variables": [
+    {
+     "symbol": "X",
+     "meaning": "Matrix of token vectors, one row per token (sequence length x d)"
+    },
+    {
+     "symbol": "P",
+     "meaning": "A permutation matrix that reorders the rows (tokens)"
+    },
+    {
+     "symbol": "W_Q, W_K, W_V",
+     "meaning": "Query, key and value projection matrices"
+    },
+    {
+     "symbol": "d_k",
+     "meaning": "Dimension of the key vectors (32 per head here: 256 / 8)"
+    }
+   ],
+   "operations": "The score matrix becomes $P S P^\\top$: the same scores, rows and columns reordered. Row-wise softmax commutes with this reordering, and multiplying by $PXW_V$ cancels $P^\\top$ because $P^\\top P = I$.",
+   "purpose": "Formalizes the book's verbal claim that attention is a set-processing mechanism.",
+   "interpretation": "Each token ends up with exactly the same output vector it would have had in any other ordering; only the order of the output rows changes.",
+   "intuition": "Attention sees who is present, not where they stand.",
+   "numerical_example": "For tokens [a, b, c], the score between a and c is $q_a \\cdot k_c$ whether the sentence is \"a b c\" or \"c a b\".",
+   "source": "ai_explanation",
+   "book_ref": "p.474"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Second half of transformer.summary()",
+   "original_code": "├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ embedding_6           │ (None, None, 256) │   3,840,000 │ spanish[0][0]      │\n│ (Embedding)           │                   │             │                    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ transformer_decoder_1 │ (None, None, 256) │   1,578,752 │ transformer_encod… │\n│ (TransformerDecoder)  │                   │             │ not_equal_5[0][0], │\n│                       │                   │             │ embedding_6[0][0]  │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ dropout_9 (Dropout)   │ (None, None, 256) │           0 │ transformer_decod… │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ dense_11 (Dense)      │ (None, None,      │   3,855,000 │ dropout_9[0][0]    │\n│                       │ 15000)            │             │                    │\n└───────────────────────┴───────────────────┴─────────────┴────────────────────┘\n Total params: 14,428,824 (55.04 MB)\n Trainable params: 14,428,824 (55.04 MB)\n Non-trainable params: 0 (0.00 B)",
+   "language": "text",
+   "what_it_does": "Output of `transformer.summary()`, continued from p.473 (where the header row and the english, embedding_5, not_equal_4, spanish, transformer_encoder_1 and not_equal_5 rows appear). It lists the target-side layers and the model totals.",
+   "line_explanations": [
+    {
+     "lines": "2-3",
+     "explanation": "embedding_6 embeds the Spanish token IDs into 256-d vectors: 15,000 x 256 = 3,840,000 weights."
+    },
+    {
+     "lines": "5-7",
+     "explanation": "transformer_decoder_1 takes three inputs: the encoder output (name truncated), the source padding mask not_equal_5 (from `source != 0`) and the target embeddings. 1,578,752 parameters: two attention layers, a feedforward block and three layer norms."
+    },
+    {
+     "lines": "9",
+     "explanation": "dropout_9 applies Dropout(0.5); it has no weights."
+    },
+    {
+     "lines": "11-12",
+     "explanation": "dense_11 is the softmax output over 15,000 Spanish tokens at every position: 256 x 15,000 + 15,000 = 3,855,000 parameters."
+    },
+    {
+     "lines": "14-16",
+     "explanation": "14,428,824 parameters in total, all trainable; 55.04 MB is the float32 size (4 bytes each, in MiB)."
+    }
+   ],
+   "inputs_outputs": "Printed text only; the model maps ([english IDs], [spanish IDs]) of shape (batch, length) to (batch, length, 15000) probabilities.",
+   "algorithm": "Keras walks the functional graph and reports each layer's output shape, weight count and incoming connections.",
+   "theory_link": "Shows concretely that the decoder is conditioned on the encoder output and the source mask, the encoder-decoder pattern of section 15.2.",
+   "parameters": [
+    {
+     "name": "vocab_size = 15000",
+     "role": "Sets the embedding rows and the output Dense width"
+    },
+    {
+     "name": "hidden_dim = 256",
+     "role": "Width of every token vector between layers"
+    }
+   ],
+   "pitfalls": [
+    "Long names are truncated with an ellipsis (transformer_encod…, transformer_decod…); the full names are transformer_encoder_1 and transformer_decoder_1.",
+    "Layer name suffixes (embedding_6, dense_11) depend on how many layers were created earlier in the session and will differ on your machine."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Compiling and training the Transformer translator",
+   "original_code": "transformer.compile(\n    optimizer=\"adam\",\n    loss=\"sparse_categorical_crossentropy\",\n    weighted_metrics=[\"accuracy\"],\n)\ntransformer.fit(train_ds, epochs=15, validation_data=val_ds)",
+   "language": "python",
+   "what_it_does": "Configures the Transformer with the Adam optimizer, sparse categorical crossentropy loss and a weighted accuracy metric, then trains it for 15 epochs on the English-Spanish training set while monitoring the validation set.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "Adam with default settings, the same choice as for the GRU model."
+    },
+    {
+     "lines": "3",
+     "explanation": "Targets are integer token IDs, so the sparse variant of categorical crossentropy is used against the 15,000-way softmax."
+    },
+    {
+     "lines": "4",
+     "explanation": "`weighted_metrics` makes accuracy respect sample weights; with Keras masking, padded target positions get zero weight so they do not inflate accuracy."
+    },
+    {
+     "lines": "6",
+     "explanation": "Train for 15 epochs; `val_ds` gives the validation accuracy (about 58%) quoted below the code."
+    }
+   ],
+   "inputs_outputs": "train_ds and val_ds yield ((english_ids, spanish_ids_shifted), spanish_target_ids) batches prepared in section 15.2.1; fit returns a History object.",
+   "algorithm": "Mini-batch gradient descent with Adam on the per-token crossentropy of teacher-forced next-word prediction.",
+   "theory_link": "Same training setup as the GRU model (p.459), which makes the 58% versus 65% comparison fair.",
+   "parameters": [
+    {
+     "name": "optimizer=\"adam\"",
+     "role": "Adaptive optimizer with default learning rate"
+    },
+    {
+     "name": "loss=\"sparse_categorical_crossentropy\"",
+     "role": "Crossentropy with integer labels"
+    },
+    {
+     "name": "weighted_metrics=[\"accuracy\"]",
+     "role": "Accuracy computed with sample/mask weights so padding is ignored"
+    },
+    {
+     "name": "epochs=15",
+     "role": "Number of passes over the training data"
+    }
+   ],
+   "pitfalls": [
+    "Using `metrics=[\"accuracy\"]` instead of `weighted_metrics` may count padding positions and give a misleading accuracy.",
+    "The 58% is teacher-forced accuracy, not a measure of free-running translation quality (p.459)."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Where do the 14.4 million parameters go?",
+   "kind": "breakdown",
+   "body": "Using the numbers from both halves of the summary (p.473-474):\n\n| Layer | Params | Share |\n|---|---|---|\n| English embedding | 3,840,000 | 26.6% |\n| Spanish embedding | 3,840,000 | 26.6% |\n| TransformerEncoder | 1,315,072 | 9.1% |\n| TransformerDecoder | 1,578,752 | 10.9% |\n| Output Dense | 3,855,000 | 26.7% |\n\nBeyond the book: the encoder is one MultiHeadAttention (4 projections of $256\\times256+256 = 65{,}792$, total 263,168) + feedforward ($256\\cdot2048+2048 + 2048\\cdot256+256 = 1{,}050{,}880$) + two LayerNorms (1,024). The decoder adds a second attention layer (cross-attention) and a third LayerNorm: $2\\cdot263{,}168 + 1{,}050{,}880 + 1{,}536 = 1{,}578{,}752$. Only about 20% of the weights do the sequence mixing.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "A thought experiment: shuffled sentences",
+   "kind": "step_by_step",
+   "body": "Take the source \"the cat sat on the mat\" and the shuffle \"mat the on sat cat the\".\n\n1. Embedding: each word maps to the same vector in both cases, only the row order differs.\n2. Encoder self-attention: every pair (cat, mat) produces the same score $q_{cat}\\cdot k_{mat}$, so every token's output vector is identical; rows are just reordered.\n3. Feedforward and LayerNorm act per token: still identical vectors.\n4. Decoder cross-attention: each Spanish query takes a softmax-weighted sum over all source keys; a sum does not depend on the order of its terms.\n\nResult: the decoder receives exactly the same information, so predictions and accuracy are unchanged, which is what the book claims. The GRU, by contrast, would produce a different final state for the shuffled sentence.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "A dinner party versus a relay race",
+   "kind": "analogy",
+   "body": "An RNN is a relay race: the baton (state) is passed from runner to runner, so the order of runners shapes the outcome. Attention is a dinner party where everyone can talk to everyone; the seating chart does not change any conversation. To make the seating matter, you must hand each guest a name card with their seat number, which is what positional embeddings do (p.475).",
+   "source": "analogy"
+  },
+  {
+   "title": "Is the decoder completely order-blind?",
+   "kind": "alternative",
+   "body": "Note (not in the book): the causal mask restricts target position $i$ to attend to positions $\\le i$, so different positions see different numbers of tokens. Research (e.g. on 'NoPE' decoders) shows causal models can partly infer position from this. The book's claim is strictly true for the English source, which is processed by bidirectional (unmasked) attention: shuffling it is invisible to the model.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Data flow of the Transformer translator (listing 15.16 and its summary)",
+   "why": "The summary on p.473-474 lists layers and their 'Connected to' inputs; this graph shows the same wiring, with the parameter counts printed on this page.",
+   "mermaid": "flowchart LR\n  E[\"english input<br/>(None, None)\"] --> EE[\"embedding_5<br/>3,840,000\"]\n  E --> M1[\"not_equal_4<br/>source mask\"]\n  E --> M2[\"not_equal_5<br/>source mask\"]\n  EE --> ENC[\"transformer_encoder_1<br/>1,315,072\"]\n  M1 --> ENC\n  S[\"spanish input<br/>(None, None)\"] --> SE[\"embedding_6<br/>3,840,000\"]\n  ENC --> DEC[\"transformer_decoder_1<br/>1,578,752\"]\n  M2 --> DEC\n  SE --> DEC\n  DEC --> D[\"dropout_9<br/>0\"]\n  D --> O[\"dense_11 softmax<br/>(None, None, 15000)<br/>3,855,000\"]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Attention scores depend on pairs, not positions",
+   "why": "The page argues that attention treats tokens as a set. Click a query token and note its scores against each other token; reordering the sentence would give the same pairwise scores, just in a different order.",
+   "widget": "attention",
+   "params": {
+    "tokens": [
+     "the",
+     "cat",
+     "sat",
+     "on",
+     "the",
+     "mat"
+    ],
+    "dim": 4,
+    "seed": 1
+   }
+  },
+  {
+   "id": "v3",
+   "type": "chart",
+   "title": "Next-token validation accuracy: GRU versus order-blind Transformer",
+   "why": "The page compares the Transformer's 58% with the RNN model's accuracy, 7 points higher (65% on p.459).",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": [
+      "GRU seq2seq (p.459)",
+      "Transformer, no positions (p.474)"
+     ],
+     "datasets": [
+      {
+       "label": "Approx. next-token accuracy (%)",
+       "data": [
+        65,
+        58
+       ]
+      }
+     ]
+    },
+    "options": {
+     "scales": {
+      "y": {
+       "min": 0,
+       "max": 100,
+       "title": {
+        "display": true,
+        "text": "accuracy (%)"
+       }
+      }
+     },
+     "plugins": {
+      "legend": {
+       "display": false
+      }
+     }
+    }
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The Transformer is inherently a sequence model because it processes sequences.",
+   "correction": "Without positional information it is a set model: dense layers act per token and attention is order-blind. The book says the Transformer built so far 'wasn't a sequence model at all'."
+  },
+  {
+   "claim": "The 58% result proves attention is worse than recurrence for translation.",
+   "correction": "The authors suggest the implementation is missing something; adding positional embeddings (p.475-478) makes the Transformer subjectively better than the GRU model (p.478)."
+  },
+  {
+   "claim": "Most of the Transformer's parameters are in its attention layers.",
+   "correction": "Here about 80% are in the two embeddings and the output projection; the encoder and decoder blocks hold about 2.9 million of 14.4 million."
+  },
+  {
+   "claim": "58% accuracy means 58% of translated sentences are correct.",
+   "correction": "It is per-token, teacher-forced next-word accuracy; it says little about whole-sentence translation quality (p.459)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 473,
+    "note": "Listing 15.16 and the first half of the model summary"
+   },
+   {
+    "page": 459,
+    "note": "The GRU translator reaches 65% accuracy, the baseline beaten by 7 points here"
+   },
+   {
+    "page": 463,
+    "note": "Dot-product attention, the set-processing mechanism discussed here"
+   },
+   {
+    "page": 470,
+    "note": "The TransformerDecoder block with causal self-attention and cross-attention"
+   }
+  ],
+  "later": [
+   {
+    "page": 475,
+    "note": "15.3.5 answers the page's question by injecting positional embeddings"
+   },
+   {
+    "page": 478,
+    "note": "With positional embeddings the Transformer performs better than the GRU translator"
+   },
+   {
+    "page": 489,
+    "note": "Chapter summary: attention is the only mechanism passing information across the sequence"
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 456,
+    "note": "Sequence-to-sequence learning with RNNs, the structure this model mirrors"
+   },
+   {
+    "page": 468,
+    "note": "The TransformerEncoder block"
+   }
+  ],
+  "related_math": [
+   {
+    "page": 463,
+    "note": "Attention scores as dot products between query and key vectors"
+   }
+  ],
+  "related_code": [
+   {
+    "page": 459,
+    "note": "The identical compile/fit call used for the GRU model"
+   },
+   {
+    "page": 473,
+    "note": "Listing 15.16 building the model trained here"
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 472,
+    "note": "Figure 15.8, computations in the encoder and decoder blocks"
+   }
+  ]
+ },
+ "takeaways": [
+  "The Transformer translator has 14,428,824 parameters, most of them in the two 3.84M-parameter embeddings and the 3.855M-parameter output layer.",
+  "Its structure mirrors the GRU translator, with attention replacing recurrence as the way information crosses the sequence.",
+  "Trained the same way, it reaches only about 58% next-token accuracy, 7 points below the GRU model's 65%.",
+  "The cause: dense layers process tokens independently and attention treats tokens as a set, so the model is blind to word order.",
+  "Shuffling the English source sentences would not change its accuracy at all.",
+  "The fix, previewed here and built on p.475, is to inject position information directly into the embeddings."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why does the Transformer of listing 15.16 score lower than the GRU translator?",
+   "options": [
+    "It has too few parameters compared to the GRU model",
+    "It has no access to word order, because dense layers and attention treat tokens as a set",
+    "Sparse categorical crossentropy is unsuitable for attention models",
+    "The causal mask prevents the decoder from seeing the source sentence"
+   ],
+   "answer": "It has no access to word order, because dense layers and attention treat tokens as a set",
+   "explanation": "The page diagnoses the problem as order blindness. Parameter count is not raised as the issue; the loss is the same as for the GRU; and the causal mask applies only to target self-attention, while cross-attention sees the whole source.",
+   "page_refs": [
+    474
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Verify the parameter count of dense_11 from the summary, given hidden_dim = 256 and vocab_size = 15000.",
+   "options": [],
+   "answer": "256 x 15,000 weights + 15,000 biases = 3,840,000 + 15,000 = 3,855,000.",
+   "explanation": "A Dense layer has input_dim x units weights plus one bias per unit; this matches the printed 3,855,000.",
+   "page_refs": [
+    474,
+    473
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "If you randomly shuffled the words of every English source sentence (train and validation), what would happen to this model's accuracy, and what would happen to the GRU model's?",
+   "options": [],
+   "answer": "The Transformer's accuracy would stay the same, because it cannot perceive source word order; the GRU's would likely drop, since its step-by-step computation depends on order.",
+   "explanation": "The book states that the Transformer 'wouldn't notice' rearranged source words. The GRU's final state depends on the order in which tokens are processed, so shuffling destroys information it relies on.",
+   "page_refs": [
+    474
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "short",
+   "question": "What does the 58% accuracy figure measure exactly?",
+   "options": [],
+   "answer": "The fraction of target positions where the model correctly predicts the next Spanish word, given the correct previous words (teacher forcing).",
+   "explanation": "The page defines it as predicting the next word correctly 58% of the time; p.459 explains that this assumes correct previous tokens and is only a crude proxy for translation quality.",
+   "page_refs": [
+    474,
+    459
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Which inputs feed transformer_decoder_1 according to the summary?",
+   "options": [
+    "Only embedding_6",
+    "The encoder output, the source mask not_equal_5 and embedding_6",
+    "embedding_5 and embedding_6",
+    "dropout_9 and the encoder output"
+   ],
+   "answer": "The encoder output, the source mask not_equal_5 and embedding_6",
+   "explanation": "The 'Connected to' column lists transformer_encod…, not_equal_5[0][0] and embedding_6[0][0]. embedding_5 feeds the encoder, not the decoder, and dropout_9 comes after the decoder.",
+   "page_refs": [
+    474
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Why does the book call attention a 'set-processing mechanism'?",
+   "options": [],
+   "answer": "Because attention scores depend only on the pairs of token vectors involved, not on their positions, so the result is the same for any ordering of the tokens (outputs are just reordered).",
+   "explanation": "The page says attention focuses on relationships between pairs of elements and is blind to whether they occur at the beginning, middle or end of the sequence.",
+   "page_refs": [
+    474,
+    463
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Before reading p.475, sketch how you would give an attention model access to word order. What problems might arise if you simply appended the integer position to each embedding?",
+   "options": [],
+   "answer": "Open answer; a good answer proposes adding a position-dependent vector to each token embedding, and notes that raw integer positions can be large and disrupt the scale of embedding values.",
+   "explanation": "The next page discusses exactly this: concatenating raw positions is problematic because large integers disrupt the value range, and it proposes learned positional embeddings added to word embeddings.",
+   "page_refs": [
+    474,
+    475
+   ]
+  }
+ ]
+}

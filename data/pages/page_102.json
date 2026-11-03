@@ -1,0 +1,415 @@
+{
+ "page_id": "page_102",
+ "pdf_page": 102,
+ "printed_page": "78",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:20:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. All five code snippets and the single callout ('.grad will sum all gradient values from each time backward() is called.') match the page image. The first sentence continues from p.101. None of the snippets on this page carries a listing number."
+ },
+ "overview": {
+  "title": "Gradient accumulation, resetting .grad, and the PyTorch linear classifier's variables, model and loss",
+  "chapter": "3 Introduction to TensorFlow, PyTorch, JAX, and Keras",
+  "section": "3.4 Introduction to PyTorch",
+  "subsection": "3.4.2 An end-to-end example: A linear classifier in pure PyTorch",
+  "main_topic": "How PyTorch's .grad accumulates across backward() calls, how to reset it, and the first three pieces (variables, forward pass, MSE loss) of the pure-PyTorch linear classifier",
+  "central_idea": "In PyTorch, each call to backward() adds the newly computed gradient into a tensor's .grad attribute rather than overwriting it, so gradients must be reset (by setting .grad to None). With that in hand, the linear classifier from the TensorFlow section can be rewritten almost line for line: W and b become tensors created with requires_grad=True, and tf.matmul, tf.square and tf.reduce_mean become torch.matmul, torch.square and torch.mean.",
+  "importance": "Gradient accumulation is the single most common source of silent bugs in hand-written PyTorch training loops; this page shows the behaviour concretely (the gradient doubles from 6 to 12) right before the training step on p.103 relies on resetting it. It also shows that the model and loss code is essentially framework-independent: the only real difference between the TensorFlow and PyTorch versions is how gradients are obtained.",
+  "learning_objectives": [
+   "Explain why input_var.grad equals 12 rather than 6 after a second backward() call",
+   "Reset a tensor's accumulated gradient by assigning None to .grad",
+   "Create trainable PyTorch tensors with requires_grad=True and explain why the flag is needed",
+   "Map the TensorFlow linear-classifier code (tf.matmul, tf.square, tf.reduce_mean) to its PyTorch equivalents",
+   "Trace the shapes of W, b, the predictions and the loss for the 2-D, two-class dataset"
+  ],
+  "prerequisites": [
+   "Listing 3.26 on p.101: computing a gradient with backward() and reading it from .grad",
+   "The pure-TensorFlow linear classifier on pp.93-97 (data, variables, model, loss, training step)",
+   "Gradient descent and mean squared error from chapter 2"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens by finishing the gradient-accumulation example begun on p.101. There, `input_var = torch.tensor(3.0, requires_grad=True)` was squared and `result.backward()` put the derivative $2x = 6$ into `input_var.grad`. Running the same two lines again does **not** overwrite that value: `.grad` is now the *sum* of the new gradient and the previously computed one, so it reads `tensor(12.)` — the value has doubled. The callout states the rule: `.grad` will sum all gradient values from each time `backward()` is called. To reset gradients you simply set `input_var.grad = None`.\n\nSection **3.4.2** then rewrites the linear classifier from section 3.3.2 (pp.93-97) in pure PyTorch. The authors stress that it stays very similar to the TensorFlow version — the only major difference is how the gradients are computed.\n\n1. **Model variables.** `input_dim = 2`, `output_dim = 1`; `W = torch.rand(input_dim, output_dim, requires_grad=True)` (random values, shape `(2, 1)`) and `b = torch.zeros(output_dim, requires_grad=True)` (zeros, shape `(1,)`). The reader is told not to forget `requires_grad=True`, because without it PyTorch would not track the operations needed to compute gradients with respect to `W` and `b`. Compare p.95, where TensorFlow wrapped the same initial values in `tf.Variable`.\n2. **Model.** `model(inputs, W, b)` returns `torch.matmul(inputs, W) + b` — an affine transformation; the only change is `tf.matmul` → `torch.matmul`.\n3. **Loss.** `mean_squared_error(targets, predictions)` squares the per-sample differences with `torch.square` and averages them with `torch.mean` (instead of `tf.square` and `tf.reduce_mean`).\n\nThe page ends with \"Now for the training step. Here's how it works:\" — the training-step listing and its numbered explanation (including the use of `.grad`, `torch.no_grad()` and resetting `.grad` to `None`) are on p.103.",
+ "paragraphs": [
+  {
+   "ref": "p102_e03",
+   "excerpt": "in the following code, input_var.grad is not the gradient of square(input_var)",
+   "what_it_says": "Continuing from p.101: after a second forward pass and backward() call, `input_var.grad` is not just the gradient of `square(input_var)` with respect to `input_var`; it is that gradient plus the one computed before, so its value has doubled.",
+   "what_it_means": "PyTorch treats `.grad` as an accumulator. Each `backward()` computes $\\partial\\,\\text{result}/\\partial\\,\\text{input\\_var} = 2\\cdot 3 = 6$ afresh and *adds* it to whatever is already stored. First call: None → 6. Second call: 6 + 6 = 12. The gradient of the function itself has not changed — only the stored sum has.",
+   "why_it_matters": "In a training loop, every step calls `backward()` on a new loss. If gradients are not cleared, step k would update the weights with the sum of all gradients from steps 1..k, which is wrong and typically makes training diverge. The training step on p.103 explicitly resets the gradients for this reason.",
+   "technical_idea": "Beyond the book: accumulation is a design choice, not a bug. It lets you sum gradients from several micro-batches before one optimizer update (gradient accumulation to emulate a larger batch), and it is how contributions from multiple paths in a graph are combined.",
+   "terminology": [
+    {"term": "Gradient accumulation", "meaning": "Adding each newly computed gradient into the existing `.grad` buffer instead of replacing it."},
+    {"term": ".grad", "meaning": "Attribute of a tensor with requires_grad=True that stores the gradient computed by backward()."}
+   ],
+   "connections": ["p.101: Listing 3.26 first computes input_var.grad = tensor(6.) for input_var = 3.0.", "p.103: step 4 of the training step resets .grad to avoid accumulation across calls."]
+  },
+  {
+   "ref": "p102_e05",
+   "excerpt": "To reset gradients, you can just set .grad to None",
+   "what_it_says": "Resetting gradients is done by assigning `None` to `.grad`.",
+   "what_it_means": "After `input_var.grad = None`, the next `backward()` starts from an empty buffer, so it would again produce `tensor(6.)` for the square example.",
+   "why_it_matters": "This is the manual reset used in the pure-PyTorch training step (p.103); later the same thing is done for all parameters at once with `model.zero_grad()` (p.105).",
+   "technical_idea": "Beyond the book: setting to None (rather than filling with zeros via `grad.zero_()`) frees the memory and lets the next backward() simply write the gradient; recent PyTorch versions make `zero_grad(set_to_none=True)` the default for the same reason.",
+   "terminology": [],
+   "connections": ["p.105: model.zero_grad() replaces per-tensor resets once parameters live in a Module.", "p.241: the same tensor.grad = None reset is recalled for Keras with the PyTorch backend."]
+  },
+  {
+   "ref": "p102_e10",
+   "excerpt": "You now know enough to rewrite our linear classifier in PyTorch.",
+   "what_it_says": "With tensors, operations and backward()/.grad covered, the reader can rewrite the linear classifier in PyTorch. It will be very similar to the TensorFlow one; the only major difference is the gradient computation. (The page also has the transition line \"Now let's put this into practice!\" just before the subsection heading.)",
+   "what_it_means": "The data (two Gaussian blobs, `inputs` of shape (2000, 2) and `targets` of shape (2000, 1), built on pp.93-94), the affine model and the MSE loss are reused unchanged in spirit. What differs is that TensorFlow records operations inside a `tf.GradientTape` and asks the tape for gradients, whereas PyTorch records them implicitly and you call `loss.backward()` and read `.grad`.",
+   "why_it_matters": "Seeing the same algorithm in several frameworks separates the *algorithm* (gradient descent on an affine model with MSE) from the *API*. That is the point of chapter 3: the concepts transfer; only the gradient mechanics change.",
+   "terminology": [
+    {"term": "Linear classifier", "meaning": "An affine transformation `prediction = matmul(input, W) + b` trained to minimize the squared difference with the targets (p.95); thresholding the prediction at 0.5 gives the class."}
+   ],
+   "connections": ["p.93: the TensorFlow end-to-end example and the synthetic data.", "p.112: the same classifier again in JAX, with stateless functions and value_and_grad()."]
+  },
+  {
+   "ref": "p102_e11",
+   "excerpt": "Let's start by creating our model variables. Don't forget to pass requires_grad=True",
+   "what_it_says": "The first step is to create the model variables, passing `requires_grad=True` so gradients can be computed with respect to them.",
+   "what_it_means": "PyTorch has no separate variable type in this example (the `Parameter` class from p.100 is not used here); a plain tensor becomes trainable as far as autograd is concerned when created with `requires_grad=True`. `W` is drawn uniformly from [0, 1) with `torch.rand` and has shape (2, 1); `b` is a zero vector of shape (1,). These mirror the TensorFlow initialization on p.95 (`tf.random.uniform` and `tf.zeros`).",
+   "why_it_matters": "If the flag is forgotten, `loss.backward()` would either raise an error (nothing in the graph requires grad) or leave `W.grad` as None, and the training step would have nothing to update with.",
+   "technical_idea": "Beyond the book: tensors created directly by the user with requires_grad=True are 'leaf' tensors; backward() only populates .grad on leaves by default, which is exactly what parameters are.",
+   "terminology": [
+    {"term": "requires_grad", "meaning": "Flag telling PyTorch to record operations involving this tensor so that gradients with respect to it can be computed."},
+    {"term": "torch.rand", "meaning": "Creates a tensor of the given shape with values drawn uniformly from [0, 1)."}
+   ],
+   "connections": ["p.95: Listing 3.17 creates the same W and b as tf.Variable objects.", "p.100: random tensors and the Parameter class in PyTorch."]
+  },
+  {
+   "ref": "p102_e13",
+   "excerpt": "This is our model—no difference so far. We just went from tf.matmul",
+   "what_it_says": "The model function is unchanged apart from replacing `tf.matmul` with `torch.matmul`.",
+   "what_it_means": "`model(inputs, W, b)` computes $\\hat{Y} = XW + b$: a (2000, 2) batch times a (2, 1) weight matrix gives (2000, 1), and the (1,) bias is broadcast over all rows. W and b are passed as arguments, just like in the TensorFlow version.",
+   "why_it_matters": "It shows that the forward pass is plain tensor math; nothing about it is specific to gradient computation. The recording of the graph for backward() happens automatically because W and b require gradients.",
+   "terminology": [
+    {"term": "Forward pass", "meaning": "Computing the model's predictions from the inputs and current parameters."}
+   ],
+   "connections": ["p.95: Listing 3.18, the TensorFlow forward pass.", "p.101: torch.matmul introduced among PyTorch math operations."]
+  },
+  {
+   "ref": "p102_e15",
+   "excerpt": "This is our loss function. We just switch from tf.square to",
+   "what_it_says": "The loss function changes only by swapping `tf.square` → `torch.square` and `tf.reduce_mean` → `torch.mean`.",
+   "what_it_means": "The mean squared error averages the squared difference between targets and predictions over every element of the (2000, 1) tensor, returning a scalar — which is what `backward()` needs as a starting point.",
+   "why_it_matters": "A scalar loss is required for `loss.backward()` without arguments. The renaming (reduce_mean vs mean) is a small example of the API divergences between frameworks that the chapter keeps pointing out.",
+   "terminology": [
+    {"term": "Mean squared error (MSE)", "meaning": "Average of squared differences between targets and predictions."},
+    {"term": "Per-sample losses", "meaning": "The squared error of each individual sample before averaging."}
+   ],
+   "connections": ["p.95: Listing 3.19, the TensorFlow MSE loss.", "p.123: picking a loss function in Keras."]
+  },
+  {
+   "ref": "p102_e17",
+   "excerpt": "Now for the training step. Here's how it works:",
+   "what_it_says": "Transition to the training step, whose code and four-point explanation are on p.103.",
+   "what_it_means": "The next piece combines everything: forward pass, loss, `loss.backward()`, an update of W and b inside `torch.no_grad()`, and resetting `.grad` to None — the reset just shown on this page.",
+   "why_it_matters": "The gradient-accumulation lesson at the top of the page is about to become essential: without the reset, every call to the training step would add to the previous gradients.",
+   "terminology": [],
+   "connections": ["p.103: the training-step explanation (backward, .grad, no_grad, reset).", "p.96: the TensorFlow training step with GradientTape for comparison."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "gradient_accumulation",
+   "name": "Gradient accumulation in .grad",
+   "definition": "In PyTorch, each call to backward() adds the computed gradient to the existing value of a tensor's .grad attribute instead of replacing it.",
+   "intuition": ".grad is a running total. Ask for the gradient twice without clearing it and you get twice the answer.",
+   "technical": "For input_var = 3.0 and result = input_var², one backward() gives .grad = 6; a second forward+backward gives 6 + 6 = 12. Resetting with `.grad = None` restores a clean slate.",
+   "significance": "Training loops must clear gradients every step (p.103, and model.zero_grad() on p.105), otherwise updates use the sum of all past gradients.",
+   "example": "On this page: `input_var.grad` goes from tensor(6.) (p.101) to tensor(12.).",
+   "misconception": "That a second backward() 'recomputes' and overwrites the gradient. It recomputes and adds.",
+   "related": ["autodiff", "requires_grad", "backpropagation"],
+   "source": "book"
+  },
+  {
+   "id": "requires_grad",
+   "name": "requires_grad",
+   "definition": "A flag on a PyTorch tensor indicating that operations on it should be recorded so that gradients with respect to it can be computed by backward().",
+   "intuition": "It marks the tensors you want to 'ask questions about' when you differentiate the loss — here, the trainable W and b.",
+   "technical": "W = torch.rand(2, 1, requires_grad=True) and b = torch.zeros(1, requires_grad=True). After loss.backward(), W.grad and b.grad hold ∂loss/∂W and ∂loss/∂b with the same shapes as W and b.",
+   "significance": "It plays the role that tf.Variable plus the GradientTape's automatic watching of trainable variables play in TensorFlow.",
+   "example": "Without requires_grad=True on W, W.grad stays None after loss.backward().",
+   "misconception": "That the flag is needed on inputs and targets as well; it is only needed on tensors you want gradients for.",
+   "related": ["autodiff", "gradient_tape", "gradient_accumulation"],
+   "source": "book"
+  },
+  {
+   "id": "linear_classifier",
+   "name": "Linear classifier",
+   "definition": "An affine model prediction = matmul(inputs, W) + b trained with mean squared error to separate two classes; predictions above 0.5 are class 1.",
+   "intuition": "It learns a straight line in the 2-D plane that splits the two point clouds.",
+   "technical": "With inputs of shape (2000, 2), W of shape (2, 1) and b of shape (1,), predictions have shape (2000, 1). The decision boundary is the line where W[0]x + W[1]y + b = 0.5 (p.97).",
+   "significance": "It is the smallest complete gradient-descent model, used in chapter 3 to compare TensorFlow, PyTorch and JAX line by line.",
+   "example": "The PyTorch version on this page uses torch.matmul, torch.square and torch.mean.",
+   "misconception": "That being trained with MSE makes it a regression model only; here regression targets of 0 and 1 are thresholded to obtain a classifier.",
+   "related": ["affine_transform", "mse", "gradient_descent"],
+   "source": "book"
+  },
+  {
+   "id": "mse",
+   "name": "Mean squared error",
+   "definition": "The average of the squared differences between targets and predictions.",
+   "intuition": "Large mistakes are penalized much more than small ones because the error is squared.",
+   "technical": "Implemented as torch.mean(torch.square(targets - predictions)); returns a scalar tensor suitable for backward().",
+   "significance": "It is the loss minimized by the linear classifier in all three framework versions.",
+   "example": "Targets [0, 1], predictions [0.2, 0.7]: (0.04 + 0.09)/2 = 0.065.",
+   "misconception": "That the argument order matters for the value; (t − p)² = (p − t)², which is why the TensorFlow training step on p.96 can pass (predictions, targets).",
+   "related": ["loss_function", "linear_classifier"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Accumulated gradient after two backward() calls",
+   "latex": "\\texttt{input\\_var.grad} = \\left.\\frac{d}{dx}x^2\\right|_{x=3} + \\left.\\frac{d}{dx}x^2\\right|_{x=3} = 6 + 6 = 12",
+   "source_text": ">>> result = torch.square(input_var) / >>> result.backward() / >>> input_var.grad / tensor(12.)",
+   "variables": [
+    {"symbol": "x", "meaning": "input_var, the scalar tensor 3.0 created with requires_grad=True on p.101"}
+   ],
+   "operations": "Each backward() computes the derivative 2x and adds it to the stored .grad.",
+   "purpose": "Shows numerically that .grad accumulates.",
+   "interpretation": "12 is not the derivative of anything on the page; it is the sum of two identical derivatives.",
+   "intuition": "Two deposits of 6 into the same account.",
+   "numerical_example": "After a third forward+backward without reset: 18. After `input_var.grad = None` and one more backward(): 6 again.",
+   "source": "inference",
+   "book_ref": "p.101"
+  },
+  {
+   "id": "m2",
+   "title": "Forward pass of the linear model",
+   "latex": "\\hat{Y} = XW + b,\\qquad X\\in\\mathbb{R}^{N\\times 2},\\; W\\in\\mathbb{R}^{2\\times 1},\\; b\\in\\mathbb{R}^{1},\\; \\hat{Y}\\in\\mathbb{R}^{N\\times 1}",
+   "source_text": "return torch.matmul(inputs, W) + b",
+   "variables": [
+    {"symbol": "X", "meaning": "inputs: a batch of N two-dimensional points (N = 2000 for the full dataset)"},
+    {"symbol": "W", "meaning": "weight matrix of shape (input_dim, output_dim) = (2, 1), initialized with torch.rand"},
+    {"symbol": "b", "meaning": "bias vector of shape (output_dim,) = (1,), initialized with zeros and broadcast over the N rows"},
+    {"symbol": "\\hat{Y}", "meaning": "predictions, one scalar per sample"}
+   ],
+   "operations": "Matrix product followed by a broadcast addition of the bias.",
+   "purpose": "Defines the affine model whose parameters W and b are learned.",
+   "interpretation": "Each prediction is w₁x₁ + w₂x₂ + b, a linear function of the point's coordinates.",
+   "intuition": "A tilted plane over the 2-D input space; the line where it crosses 0.5 separates the classes.",
+   "numerical_example": "With W = [[0.3], [0.6]], b = [0] and a point x = (1, 2): 0.3·1 + 0.6·2 + 0 = 1.5.",
+   "source": "book",
+   "book_ref": "p.95"
+  },
+  {
+   "id": "m3",
+   "title": "Mean squared error loss",
+   "latex": "\\mathcal{L}(W,b) = \\frac{1}{N}\\sum_{i=1}^{N}\\left(y_i - \\hat{y}_i\\right)^2",
+   "source_text": "per_sample_losses = torch.square(targets - predictions); return torch.mean(per_sample_losses)",
+   "variables": [
+    {"symbol": "y_i", "meaning": "target of sample i (0 or 1)"},
+    {"symbol": "\\hat{y}_i", "meaning": "prediction of sample i from the model"},
+    {"symbol": "N", "meaning": "number of elements averaged (number of samples, since output_dim = 1)"}
+   ],
+   "operations": "Elementwise subtraction and square (torch.square), then the mean over all elements (torch.mean).",
+   "purpose": "Scalar objective whose gradients with respect to W and b drive learning.",
+   "interpretation": "Average squared distance between predictions and 0/1 labels.",
+   "intuition": "Each sample pulls the prediction toward its label with a force proportional to the error.",
+   "numerical_example": "targets (0, 1, 1), predictions (0.1, 0.8, 0.4): squares 0.01, 0.04, 0.36; mean = 0.41/3 ≈ 0.137.",
+   "source": "book",
+   "book_ref": "p.95"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "A second backward() call accumulates the gradient",
+   "original_code": ">>> result = torch.square(input_var)\n>>> result.backward()\n>>> input_var.grad\ntensor(12.)",
+   "language": "python",
+   "what_it_does": "Repeats the forward pass and backward() of Listing 3.26 (p.101) on input_var = 3.0 and shows that .grad now holds 12, the sum of the old and new gradients.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "New forward pass: builds a fresh one-time graph recording the square operation."},
+    {"lines": "2", "explanation": "Backpropagates through that graph; the derivative 2·3 = 6 is added to input_var.grad (which already held 6)."},
+    {"lines": "3-4", "explanation": "Callout: .grad sums all gradient values from each time backward() is called, so it prints tensor(12.)."}
+   ],
+   "inputs_outputs": "Input: input_var = tensor(3., requires_grad=True) with .grad already equal to 6. Output: input_var.grad = tensor(12.).",
+   "algorithm": "Reverse-mode autodiff with in-place accumulation into leaf gradients.",
+   "theory_link": "Chain rule; the accumulation is a property of PyTorch's .grad buffers, not of the mathematics.",
+   "parameters": [],
+   "pitfalls": [
+    "The forward pass must be rerun: the graph from the first call is freed after backward(), so calling result.backward() twice on the same result would raise an error (beyond the book).",
+    "Reading .grad in a loop without resetting gives ever-growing numbers."
+   ],
+   "illustrative_code": "# AI-written: accumulation and reset side by side\nimport torch\nx = torch.tensor(3.0, requires_grad=True)\nfor i in range(3):\n    torch.square(x).backward()\n    print(x.grad)        # tensor(6.), tensor(12.), tensor(18.)\nx.grad = None\ntorch.square(x).backward()\nprint(x.grad)            # tensor(6.)"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Resetting a gradient",
+   "original_code": ">>> input_var.grad = None",
+   "language": "python",
+   "what_it_does": "Clears the accumulated gradient so the next backward() starts from scratch.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Assigning None discards the stored gradient tensor."}
+   ],
+   "inputs_outputs": "input_var.grad goes from tensor(12.) to None.",
+   "algorithm": "Buffer reset.",
+   "theory_link": "Each training step should use only the gradient of the current loss.",
+   "parameters": [],
+   "pitfalls": ["Must be done for every trainable tensor (W and b on p.103); model.zero_grad() (p.105) does it for all parameters of a Module."]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Creating the model variables",
+   "original_code": "input_dim = 2\noutput_dim = 1\n\nW = torch.rand(input_dim, output_dim, requires_grad=True)\nb = torch.zeros(output_dim, requires_grad=True)",
+   "language": "python",
+   "what_it_does": "Creates a random (2, 1) weight matrix and a zero (1,) bias vector, both tracked by autograd.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Inputs are 2-D points; the model outputs one score per point."},
+    {"lines": "4", "explanation": "W: values uniform in [0, 1), shape (2, 1). requires_grad=True so W.grad will be populated by backward(). Note the shape is passed as separate positional ints here."},
+    {"lines": "5", "explanation": "b: zeros of shape (1,), also requiring gradients."}
+   ],
+   "inputs_outputs": "Outputs: W (2, 1), b (1,).",
+   "algorithm": "Parameter initialization.",
+   "theory_link": "Same initialization as the TensorFlow version (Listing 3.17, p.95): random W, zero b.",
+   "parameters": [
+    {"name": "input_dim", "role": "Number of input features (2 coordinates)."},
+    {"name": "output_dim", "role": "Number of outputs per sample (1 score)."},
+    {"name": "requires_grad", "role": "Enables gradient tracking for the parameter."}
+   ],
+   "pitfalls": [
+    "Forgetting requires_grad=True leaves W.grad and b.grad as None.",
+    "Beyond the book: the data must be float32 tensors (torch.tensor or torch.from_numpy on the float32 arrays from p.94) to be multiplied with these float32 parameters."
+   ]
+  },
+  {
+   "id": "c4",
+   "listing": null,
+   "title": "The forward pass",
+   "original_code": "def model(inputs, W, b):\n    return torch.matmul(inputs, W) + b",
+   "language": "python",
+   "what_it_does": "Computes predictions as an affine transformation of the inputs.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "W and b are passed explicitly, as in the TensorFlow version."},
+    {"lines": "2", "explanation": "(N, 2) @ (2, 1) → (N, 1); adding b of shape (1,) broadcasts over the batch."}
+   ],
+   "inputs_outputs": "inputs (N, 2) → predictions (N, 1).",
+   "algorithm": "Matrix multiply plus bias.",
+   "theory_link": "Affine transform / dense layer without activation (chapter 2).",
+   "parameters": [],
+   "pitfalls": ["torch.matmul needs both operands to be torch tensors of the same dtype; NumPy float64 arrays must be converted (beyond the book)."]
+  },
+  {
+   "id": "c5",
+   "listing": null,
+   "title": "The mean squared error loss",
+   "original_code": "def mean_squared_error(targets, predictions):\n    per_sample_losses = torch.square(targets - predictions)\n    return torch.mean(per_sample_losses)",
+   "language": "python",
+   "what_it_does": "Returns the scalar mean of the squared prediction errors.",
+   "line_explanations": [
+    {"lines": "2", "explanation": "Elementwise difference and square: shape (N, 1)."},
+    {"lines": "3", "explanation": "torch.mean (TensorFlow: tf.reduce_mean) averages all elements into a scalar."}
+   ],
+   "inputs_outputs": "targets (N, 1), predictions (N, 1) → scalar loss.",
+   "algorithm": "Mean of squared residuals.",
+   "theory_link": "MSE loss for regression to 0/1 targets.",
+   "parameters": [],
+   "pitfalls": ["If targets had shape (N,) while predictions are (N, 1), broadcasting would produce an (N, N) matrix of differences and a wrong loss (beyond the book); the book's targets are (2000, 1), so this does not happen."]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "TensorFlow vs PyTorch: the side-by-side map so far",
+   "kind": "breakdown",
+   "body": "| Piece | TensorFlow (pp.95-96) | PyTorch (this page) |\n|---|---|---|\n| Weight | `tf.Variable(tf.random.uniform(shape=(2, 1)))` | `torch.rand(2, 1, requires_grad=True)` |\n| Bias | `tf.Variable(tf.zeros(shape=(1,)))` | `torch.zeros(1, requires_grad=True)` |\n| Model | `tf.matmul(inputs, W) + b` | `torch.matmul(inputs, W) + b` |\n| Loss | `tf.reduce_mean(tf.square(...))` | `torch.mean(torch.square(...))` |\n| Gradients | `tape.gradient(loss, [W, b])` | `loss.backward()`, then `W.grad`, `b.grad` (p.103) |\n\nThe first four rows are renamings; the last row is the 'only major difference' the authors mention.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why does PyTorch accumulate instead of overwrite?",
+   "kind": "alternative",
+   "body": "Beyond the book: accumulation makes two things easy. (1) **Micro-batching**: if a batch does not fit in memory, you can run `backward()` on several small batches and update once, getting the gradient of the combined loss. (2) **Shared parameters**: when a tensor is used in several places, contributions from each path must be summed anyway. The price is that ordinary training loops must clear gradients every step — which is why the book's training step (p.103) resets `.grad` and why it later calls forgetting `model.zero_grad()` 'a major bug' (p.105).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Bank-account analogy for .grad",
+   "kind": "analogy",
+   "body": "Think of `.grad` as an account and each `backward()` as a deposit. The first deposit is 6, the second another 6, so the balance is 12. `grad = None` closes the account; the next deposit opens a new one with exactly the new amount.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Shapes through the PyTorch linear classifier",
+   "why": "The page creates W with shape (input_dim, output_dim) = (2, 1) and b with shape (1,); the model multiplies the (2000, 2) inputs by W and the loss reduces the (2000, 1) predictions to a scalar.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "inputs", "shape": [2000, 2]},
+     {"op": "matmul W (2,1)", "shape": [2000, 1]},
+     {"op": "+ b (1,)", "shape": [2000, 1]},
+     {"op": "square(targets - preds)", "shape": [2000, 1]},
+     {"op": "mean", "shape": []}
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "How .grad evolves in the page's example",
+   "why": "Illustrates the accumulation (6 → 12) and the reset to None shown in the first two snippets.",
+   "mermaid": "flowchart LR\n A[\"grad = None\"] -->|square + backward| B[\"grad = 6\"]\n B -->|square + backward| C[\"grad = 6 + 6 = 12\"]\n C -->|grad = None| D[\"grad = None\"]\n D -->|square + backward| E[\"grad = 6\"]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "input_var.grad = 12 means the derivative of x² at x = 3 is 12.", "correction": "The derivative is 6; 12 is the sum of two identical gradients because .grad accumulates across backward() calls."},
+  {"claim": "PyTorch tensors are always tracked for gradients.", "correction": "Only tensors created with requires_grad=True (or derived from them) are tracked; the book explicitly warns not to forget the flag on W and b."},
+  {"claim": "Porting the model to PyTorch requires restructuring it.", "correction": "The model and loss are word-for-word translations (tf.matmul → torch.matmul, tf.reduce_mean → torch.mean); the only major difference is gradient computation."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 101, "note": "Listing 3.26 computes input_var.grad = tensor(6.) and introduces accumulation."},
+   {"page": 95, "note": "Listings 3.17-3.19: the TensorFlow variables, model and MSE loss translated here."},
+   {"page": 93, "note": "Start of the TensorFlow linear-classifier example and the synthetic dataset."},
+   {"page": 100, "note": "Random tensors and the Parameter class in PyTorch."}
+  ],
+  "later": [
+   {"page": 103, "note": "The PyTorch training step: loss.backward(), .grad, torch.no_grad(), resetting .grad; then torch.nn.Module."},
+   {"page": 105, "note": "model.zero_grad() replaces manual resets; forgetting it is called a major, common bug."},
+   {"page": 112, "note": "The same linear classifier in JAX with stateless functions and value_and_grad()."},
+   {"page": 241, "note": "Writing a PyTorch training step for a Keras model reuses backward()/.grad/zero_grad."}
+  ],
+  "prerequisites": [
+   {"page": 101, "note": "backward() and the .grad attribute."},
+   {"page": 95, "note": "The definition of the linear classifier as an affine transform trained with squared error."}
+  ],
+  "related_math": [
+   {"page": 95, "note": "prediction = matmul(input, W) + b and the MSE loss."}
+  ],
+  "related_code": [
+   {"page": 95, "note": "TensorFlow Listings 3.17-3.19."},
+   {"page": 96, "note": "TensorFlow training step (Listing 3.20) to compare with p.103."},
+   {"page": 112, "note": "JAX model and MSE functions."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "Each backward() call adds into .grad; a second identical call doubles the stored gradient (6 → 12).",
+  "Reset gradients with tensor.grad = None before computing new ones.",
+  "Trainable PyTorch tensors need requires_grad=True; W = torch.rand(2, 1, ...) and b = torch.zeros(1, ...).",
+  "The PyTorch model and loss are direct translations of the TensorFlow ones: torch.matmul, torch.square, torch.mean.",
+  "The only major difference between the TensorFlow and PyTorch versions is how gradients are computed (p.103)."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "input_var = torch.tensor(3.0, requires_grad=True). You run `torch.square(input_var).backward()` three times without resetting. What is input_var.grad?", "options": ["tensor(6.)", "tensor(9.)", "tensor(18.)", "tensor(216.)"], "answer": "tensor(18.)", "explanation": "Each call adds 2·3 = 6, so 6 + 6 + 6 = 18. tensor(6.) would be correct only with a reset; 9 is x² itself, not a gradient; 216 = 6³ would imply multiplication rather than summation.", "page_refs": [101, 102]},
+  {"id": "q2", "type": "short", "question": "How do you reset a tensor's accumulated gradient in the book's pure-PyTorch code?", "options": [], "answer": "Assign None to its .grad attribute, e.g. input_var.grad = None.", "explanation": "The page states: 'To reset gradients, you can just set .grad to None'. The training step on p.103 does this for W and b.", "page_refs": [102, 103]},
+  {"id": "q3", "type": "conceptual", "question": "According to the authors, what is the only major difference between the TensorFlow and PyTorch versions of the linear classifier, and why do the variables need requires_grad=True?", "options": [], "answer": "How the gradients are computed. requires_grad=True makes PyTorch track operations on W and b so that backward() can populate W.grad and b.grad.", "explanation": "TensorFlow asks a GradientTape for gradients; PyTorch uses loss.backward() and .grad. Without the flag, there is nothing to compute gradients with respect to.", "page_refs": [102]},
+  {"id": "q4", "type": "math", "question": "With inputs of shape (2000, 2), what are the shapes of W, b, model(inputs, W, b) and mean_squared_error(targets, predictions)?", "options": [], "answer": "W: (2, 1); b: (1,); predictions: (2000, 1); loss: scalar ().", "explanation": "W = torch.rand(input_dim, output_dim) with input_dim = 2, output_dim = 1; b = torch.zeros(output_dim). (2000, 2)@(2, 1) = (2000, 1), the bias broadcasts, and torch.mean reduces to a scalar.", "page_refs": [102, 94]},
+  {"id": "q5", "type": "mcq", "question": "Which PyTorch function replaces tf.reduce_mean in the loss function on this page?", "options": ["torch.reduce_mean", "torch.mean", "torch.sum", "torch.average"], "answer": "torch.mean", "explanation": "The book says 'from tf.reduce_mean to torch.mean'. torch.reduce_mean and torch.average do not exist in PyTorch; torch.sum would give the sum, not the mean, scaling the loss by N.", "page_refs": [102]},
+  {"id": "q6", "type": "math", "question": "Compute the MSE for targets (0, 1) and predictions (0.4, 0.6) as the page's mean_squared_error would.", "options": [], "answer": "((0 − 0.4)² + (1 − 0.6)²)/2 = (0.16 + 0.16)/2 = 0.16", "explanation": "torch.square gives per-sample losses 0.16 and 0.16; torch.mean averages them.", "page_refs": [102]},
+  {"id": "q7", "type": "self", "question": "Can you explain, without looking, why a training loop that never resets .grad would behave badly?", "options": [], "answer": "Each step's update would use the sum of all gradients computed so far rather than the current gradient, so steps grow and point in stale directions, typically causing divergence.", "explanation": "This follows from the accumulation rule shown on this page and is why step 4 on p.103 resets .grad and p.105 warns about forgetting model.zero_grad().", "page_refs": [102, 103, 105]}
+ ]
+}

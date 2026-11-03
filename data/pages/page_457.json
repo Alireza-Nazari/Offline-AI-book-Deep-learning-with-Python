@@ -1,0 +1,412 @@
+{
+ "page_id": "page_457",
+ "pdf_page": 457,
+ "printed_page": "433",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:58:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. e03 continues the sentence begun on p.456; e08 continues onto p.458 (\"...this is a good idea, as we want a rich representation...\"). Figure 15.2 labels were extracted and match the image."
+ },
+ "overview": {
+  "title": "Why a single RNN can't translate, and the RNN encoder-decoder (figure 15.2)",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.2 Sequence-to-sequence learning",
+  "subsection": "15.2.2 Sequence-to-sequence learning with RNNs",
+  "main_topic": "The naive per-timestep RNN translator, its causal limitation, and the standard encoder-decoder RNN in which the encoder's final state initializes the decoder",
+  "central_idea": "A single RNN that emits one target token per source time step can only use source tokens 0...N when producing target token N, which fails when word order differs between languages. The fix is to let an encoder RNN read the whole source sentence first and pass its final state to a decoder RNN, which then works as a language model conditioned on that state.",
+  "importance": "This page gives the core motivation for the encoder-decoder design that every later model in the chapter uses, Transformer included. It also identifies the information bottleneck: the whole source sentence has to pass through one state vector. That bottleneck is listed as a fundamental limitation on p.461, and attention was invented to relieve it.",
+  "learning_objectives": [
+   "Read the naive Embedding → LSTM(return_sequences=True) → Dense(softmax) model and explain what it predicts",
+   "Explain why a causal, step-by-step RNN cannot output target token N before seeing later source tokens",
+   "Use the 'I will bring the bag to you' / 'Te traeré la bolsa' example to explain reordering between languages",
+   "Describe the encoder-decoder RNN of figure 15.2: what the encoder outputs, how it seeds the decoder, and what the decoder predicts",
+   "Explain why the encoder may look at the whole source sequence (and even run bidirectionally) without 'cheating'"
+  ],
+  "prerequisites": [
+   "RNN, LSTM and GRU layers and `return_sequences` (chapter 13)",
+   "The language-model setup and the Shakespeare generator with a zero initial state (pp.446-451)",
+   "The translation dataset format from p.456"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page first shows the **naive** way to use an RNN for sequence-to-sequence mapping: keep the RNN output at every time step and predict an output token from each one. In Keras this is an `Input(shape=(sequence_length,))` of int tokens, an `Embedding(vocab_size, 128)`, an `LSTM(32, return_sequences=True)` and a `Dense(vocab_size, activation=\"softmax\")` applied at each step.\n\nThe authors call out a **critical issue**. Because RNNs process the sequence step by step, the model sees only source tokens `0...N` when predicting target token `N`. Take \"I will bring the bag to you.\" The Spanish is \"Te traeré la bolsa,\" and its first word, \"Te\", corresponds to \"you\", the *last* word of the English. There is no way to emit the first word of the translation without having seen the end of the source.\n\nA human translator reads the whole source sentence first, which matters most for languages with very different word order. Standard **sequence-to-sequence models** do the same (figure 15.2):\n- An **encoder RNN** turns the entire source sequence into a single representation, either its last output or its final internal state vectors.\n- That representation becomes the **initial state of a decoder RNN** used in the language-model setup, replacing the zero initial state of the Shakespeare generator.\n- The decoder learns to predict the next Spanish word given the current one. *All* information about the English sentence reaches it through that initial state.\n\nFigure 15.2 shows the English input \"how, is, the, weather, today\" going into the encoder. The decoder receives \"[start], qué, tiempo, hace, hoy\" and outputs \"qué, tiempo, hace, hoy, [end]\".\n\nThe implementation will use **GRU** layers. The authors start with the encoder and note that, since no tokens are predicted on the encoder side, passing information from the end of the source back to its beginning is not cheating. In fact it is desirable. The argument continues on p.458, which uses a `Bidirectional` layer.",
+ "paragraphs": [
+  {
+   "ref": "p457_e03",
+   "excerpt": "into another is to keep the output of the RNN at each time",
+   "what_it_says": "This completes the sentence from p.456: the easiest, naive way to turn one sequence into another with an RNN is to keep the RNN output at each time step and predict an output token from it. A five-line Keras model follows.",
+   "what_it_means": "This is the same architecture you would use for per-token tagging, such as part-of-speech labeling. Input and output sequences are aligned one to one, and the output at step t depends only on inputs 0...t.",
+   "why_it_matters": "It is the obvious first attempt. Seeing exactly why it fails motivates the encoder-decoder split.",
+   "technical_idea": "`return_sequences=True` makes the LSTM output a `(batch, time, 32)` tensor. A `Dense` layer applied to a 3-D tensor acts independently at each time step, producing `(batch, time, vocab_size)` probabilities.",
+   "terminology": [
+    {"term": "return_sequences=True", "meaning": "Makes an RNN layer return its output at every timestep instead of only the last one."}
+   ],
+   "connections": [
+    "p.456: the sentence starts at the end of that page",
+    "p.396: chapter 13 covers RNN layers and stacking with return_sequences"
+   ]
+  },
+  {
+   "ref": "p457_e05",
+   "excerpt": "However, there is a critical issue with this approach. Due to the",
+   "what_it_says": "Because an RNN works step by step, the naive model only sees source tokens 0...N when predicting target token N. In \"I will bring the bag to you\" → \"Te traeré la bolsa\", the first Spanish word \"Te\" corresponds to \"you\", the last English word, so the first output word cannot be produced without seeing the last input word.",
+   "what_it_means": "Translation needs non-local alignment: the target position that depends on a source word can come long before that word in the source. A left-to-right RNN with aligned outputs has a hard causal limit that more training cannot fix, because the information simply has not arrived yet at step 0.",
+   "why_it_matters": "This is a structural argument, not an empirical one. The architecture cannot represent the right mapping whatever its capacity. It also explains why source and target lengths must be decoupled: \"Te traeré la bolsa\" has 4 words against the source's 7.",
+   "technical_idea": "The naive model's output at t is $f(x_0,\\dots,x_t)$. Producing $y_0$ = 'Te' requires access to $x_6$ = 'you', which is unavailable at $t=0$.",
+   "terminology": [
+    {"term": "word alignment", "meaning": "The correspondence between source and target words; it can cross and reorder."},
+    {"term": "causal processing", "meaning": "Each output depends only on the current and past inputs, never future ones."}
+   ],
+   "connections": [
+    "p.461: the RNN seq2seq approach still has fundamental limits even after this fix"
+   ]
+  },
+  {
+   "ref": "p457_e06",
+   "excerpt": "If you’re a human translator, you’d start by reading the entire source",
+   "what_it_says": "A human translator reads the whole source sentence first, which is especially important for languages with very different word orders, and standard seq2seq models do the same. In the proper setup (figure 15.2), an encoder RNN turns the whole source into a single representation, either its last output or its final internal state vectors. That representation is the initial state of a decoder RNN in the language-model setup, replacing the zero initial state used in the Shakespeare generator. The decoder learns to predict the next Spanish word given the current word, and all information about the English comes from that initial state.",
+   "what_it_means": "The decoder is the Shakespeare-style language model with one change: its starting memory is not blank but a summary of the English sentence. Conditioning on the source is reduced to setting $h_0$. Each decoder step sees its current input token plus the recurrent state, which carries both the English summary and the Spanish prefix generated so far.",
+   "why_it_matters": "This decouples reading from writing. Source and target can have different lengths and different word orders, because the decoder starts writing only after the encoder has read everything. The cost is a bottleneck: the full meaning of the sentence must fit in one fixed-size vector (1,024 dimensions in the model on p.458). Page 461 names this as the first fundamental limitation.",
+   "technical_idea": "Encoder: $c = \\mathrm{RNN}_{enc}(x_{0:T})$. Decoder: $h_0 = c$, $h_t = \\mathrm{RNN}_{dec}(h_{t-1}, \\mathrm{emb}(y_t))$, $p(y_{t+1}\\mid\\cdot) = \\mathrm{softmax}(W h_t + b)$.",
+   "terminology": [
+    {"term": "encoder", "meaning": "The network that reads the source sequence and produces its representation."},
+    {"term": "decoder", "meaning": "The network that generates the target sequence token by token, conditioned on the encoder's representation."},
+    {"term": "initial state", "meaning": "The value of the RNN's hidden state before the first timestep, zeros by default."},
+    {"term": "final internal state", "meaning": "The RNN's hidden state after the last timestep (for an LSTM, both h and c)."}
+   ],
+   "connections": [
+    "p.450: the Shakespeare generator started from a zero initial state",
+    "p.453: figure 15.1 gives the general encoder/decoder template",
+    "p.458: Listings 15.11-15.12 implement exactly this with GRUs"
+   ]
+  },
+  {
+   "ref": "p457_e07",
+   "excerpt": "Figure 15.2 A sequence-to-sequence RNN: an RNN encoder is used to produce",
+   "what_it_says": "Figure 15.2: an encoder RNN reads \"how, is, the, weather, today\". Its final output vector or final internal state goes into the decoder RNN as its initial state. The decoder reads \"[start], qué, tiempo, hace, hoy\" and its sequence output is \"qué, tiempo, hace, hoy, [end]\".",
+   "what_it_means": "The figure shows the off-by-one relation from p.456: the decoder's input row equals its output row shifted right by one, with `[start]` prepended and `[end]` appended. The only arrow from encoder to decoder is the single state vector.",
+   "why_it_matters": "This picture should be compared with attention-based models later, where the decoder can look at every encoder output rather than only the final one.",
+   "terminology": [],
+   "connections": [
+    "p.456: `spa[:, :-1]` gives the decoder inputs and `spa[:, 1:]` gives its targets"
+   ]
+  },
+  {
+   "ref": "p457_e08",
+   "excerpt": "Let’s implement this in Keras, with GRU-based encoders and decoders. We can",
+   "what_it_says": "The implementation uses GRU encoders and decoders, starting with the encoder. Since no tokens in the encoder sequence are predicted, there is no worry about 'cheating' by passing information from the end of the sequence to the beginning, and in fact this is a good idea (the sentence continues on p.458).",
+   "what_it_means": "'Cheating' would be a problem on the decoder side, where seeing future target tokens would leak the labels. The encoder has no labels, so it can read in both directions. On p.458 this becomes a `Bidirectional` GRU, which gives every position context from both sides.",
+   "why_it_matters": "It sets up the encoder/decoder asymmetry used throughout the chapter. Encoders may be bidirectional (later, unmasked self-attention), while decoders must be causal. The Transformer decoder enforces this with a causal mask.",
+   "terminology": [
+    {"term": "GRU", "meaning": "Gated Recurrent Unit, a cheaper relative of the LSTM with two gates and no separate cell state."},
+    {"term": "cheating", "meaning": "Letting a prediction depend on the token it is supposed to predict, or on later target tokens."}
+   ],
+   "connections": [
+    "p.458: the encoder with `layers.Bidirectional(GRU(hidden_dim), merge_mode=\"sum\")`",
+    "p.628: chapter 20 review of SimpleRNN, GRU and LSTM"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "encoder_decoder",
+   "name": "Encoder-decoder (seq2seq) RNN",
+   "definition": "Two RNNs: the encoder reads the whole source sequence into a state vector, and the decoder starts from that state and generates the target as a language model.",
+   "intuition": "Read the whole sentence, keep its gist in mind, then write the translation word by word.",
+   "technical": "$h_0^{dec} = \\text{enc}(x_{0:T})$. The decoder is trained with shifted targets (teacher forcing) and run autoregressively at inference.",
+   "significance": "It lets source and target lengths and word orders differ, and it was the dominant translation architecture in the mid-2010s (p.461).",
+   "example": "Figure 15.2: \"how is the weather today\" becomes a state vector, which the decoder turns into \"qué tiempo hace hoy [end]\".",
+   "misconception": "That the decoder sees each English word directly. In this RNN version it sees only the single initial state; attention later removes that restriction.",
+   "related": ["rnn", "gru", "language_model", "sequence_to_sequence", "attention"],
+   "source": "book"
+  },
+  {
+   "id": "information_bottleneck_seq2seq",
+   "name": "Fixed-size state bottleneck",
+   "definition": "In an RNN encoder-decoder, all information about the source must pass through one fixed-size vector.",
+   "intuition": "It is like summarizing a paragraph in one fixed-length note before translating it: long or complex inputs get compressed lossily.",
+   "technical": "The capacity of $c \\in \\mathbb{R}^{d}$ ($d = 1024$ on p.458) does not grow with the sentence length.",
+   "significance": "This is the first fundamental limitation listed on p.461, and the reason attention was added to RNN translators.",
+   "example": "A 5-word sentence and a 50-word sentence are both squeezed into 1,024 numbers.",
+   "misconception": "That a bigger state vector fully solves the problem. It helps, but the RNN also tends to forget early tokens over long sequences (p.461).",
+   "related": ["encoder_decoder", "attention"],
+   "source": "inference"
+  },
+  {
+   "id": "causal_vs_bidirectional",
+   "name": "Causal decoder versus bidirectional encoder",
+   "definition": "The decoder must not see future target tokens, while the encoder may freely use the whole source.",
+   "intuition": "The answer sheet (target) must stay hidden, but the question (source) can be read as many times as you like.",
+   "technical": "Encoder: any function of $x_{0:T}$. Decoder output at t: a function of $y_{0:t}$ and the encoder output only.",
+   "significance": "This rule shapes every model in the chapter: a Bidirectional encoder on p.458, and a causal attention mask in the Transformer decoder later.",
+   "example": "On p.458 the authors warn that a Bidirectional decoder 'would break training by making the loss function trivially easy'.",
+   "misconception": "That 'cheating' concerns the encoder. It only concerns positions whose tokens are being predicted.",
+   "related": ["rnn", "bidirectional_rnn", "teacher_forcing"],
+   "source": "book"
+  },
+  {
+   "id": "rnn",
+   "name": "Recurrent neural network",
+   "definition": "A layer that processes a sequence one step at a time, maintaining a state vector.",
+   "intuition": "It reads left to right while keeping a running memory.",
+   "technical": "$h_t = f(h_{t-1}, x_t)$. The output at step t depends only on $x_{0:t}$ and $h_0$.",
+   "significance": "This step-by-step nature is exactly what makes the naive translator fail.",
+   "example": "`layers.LSTM(32, return_sequences=True)` produces one output per step.",
+   "misconception": "That an RNN 'sees the whole sentence' at every step. It sees only the past.",
+   "related": ["lstm", "gru"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "The naive RNN translator is causal",
+   "latex": "\\hat y_N = g\\bigl(h_N\\bigr), \\qquad h_N = f\\bigl(h_{N-1}, \\operatorname{emb}(x_N)\\bigr) \\;\\Rightarrow\\; \\hat y_N \\text{ depends only on } x_0, \\dots, x_N",
+   "source_text": "the model will only look at tokens 0...N in the source sequence to predict token N in the target sequence",
+   "variables": [
+    {"symbol": "x_N", "meaning": "Source token at position N"},
+    {"symbol": "h_N", "meaning": "LSTM output/state at step N"},
+    {"symbol": "\\hat y_N", "meaning": "Predicted target token at position N"},
+    {"symbol": "f, g", "meaning": "The LSTM update and the Dense+softmax output layer"}
+   ],
+   "operations": "A recurrence over time, then a per-step classifier.",
+   "purpose": "Formalizes the 'critical issue' with the naive approach.",
+   "interpretation": "Target position 0 depends only on source position 0.",
+   "intuition": "You can't translate 'you' before you've read it.",
+   "numerical_example": "\"I(0) will(1) bring(2) the(3) bag(4) to(5) you(6)\": predicting 'Te' at target position 0 needs x_6, but the model has seen only x_0 = 'I'.",
+   "source": "ai_explanation",
+   "book_ref": "p.457"
+  },
+  {
+   "id": "m2",
+   "title": "Encoder-decoder conditioning through the initial state",
+   "latex": "\\begin{aligned} c &= \\operatorname{Encoder}(x_0,\\dots,x_T) \\\\ s_0 &= c \\\\ s_t &= \\operatorname{GRU}\\bigl(s_{t-1}, \\operatorname{emb}(y_t)\\bigr) \\\\ p(y_{t+1}\\mid y_{\\le t}, x) &= \\operatorname{softmax}(W s_t + b) \\end{aligned}",
+   "source_text": "We can use this representation as the initial state of a decoder RNN in the language model setup instead of an initial state of zeros",
+   "variables": [
+    {"symbol": "c", "meaning": "The encoder's single representation of the source: its final output or final internal state"},
+    {"symbol": "s_t", "meaning": "Decoder state after reading target token y_t"},
+    {"symbol": "y_t", "meaning": "Target (Spanish) token at position t; y_0 = [start]"},
+    {"symbol": "W, b", "meaning": "Weights of the Dense softmax layer over the Spanish vocabulary"}
+   ],
+   "operations": "Encode once, then run a decoder recurrence seeded with c and a softmax readout at each step.",
+   "purpose": "Shows that all information about x enters the decoder through s_0.",
+   "interpretation": "The decoder is a language model whose starting memory is the meaning of the English sentence.",
+   "intuition": "The Shakespeare generator started with an empty memory; this one starts already knowing what to say.",
+   "numerical_example": "On p.458, c has 1,024 dimensions (Bidirectional GRU outputs summed) and the softmax runs over 15,000 Spanish tokens.",
+   "source": "ai_explanation",
+   "book_ref": "p.457"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "The naive per-timestep RNN 'translator'",
+   "original_code": "inputs = keras.Input(shape=(sequence_length,), dtype=\"int32\")\nx = layers.Embedding(input_dim=vocab_size, output_dim=128)(inputs)\nx = layers.LSTM(32, return_sequences=True)(x)\noutputs = layers.Dense(vocab_size, activation=\"softmax\")(x)\nmodel = keras.Model(inputs, outputs)",
+   "language": "python",
+   "what_it_does": "Defines a model that maps a sequence of source token ids to a probability distribution over target tokens at every timestep, in lockstep with the input.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Integer token input of fixed length `sequence_length` (20, p.455)."},
+    {"lines": "2", "explanation": "Embeds each of `vocab_size` = 15,000 token ids into a 128-dimensional vector, giving `(batch, 20, 128)`."},
+    {"lines": "3", "explanation": "A 32-unit LSTM returns its output at each step, giving `(batch, 20, 32)`. Each output depends only on tokens up to that step."},
+    {"lines": "4", "explanation": "A Dense softmax applied per timestep gives `(batch, 20, vocab_size)`, a target-token distribution for each source position."},
+    {"lines": "5", "explanation": "Wraps the graph as a functional Keras model."}
+   ],
+   "inputs_outputs": "Input `(batch, sequence_length)` int32. Output `(batch, sequence_length, vocab_size)` probabilities.",
+   "algorithm": "Embedding → causal recurrence → per-step classifier.",
+   "theory_link": "A sequence labeling model. It assumes the output at step t can be determined from inputs 0...t, which translation violates.",
+   "parameters": [
+    {"name": "output_dim=128", "role": "Embedding size."},
+    {"name": "LSTM(32)", "role": "Hidden size, deliberately small for the illustration."},
+    {"name": "return_sequences=True", "role": "Emit one output per timestep."}
+   ],
+   "pitfalls": [
+    "The output length is tied to the input length, so a 7-word source must give a 7-token output.",
+    "Output at step t cannot depend on later source words, which fails whenever word order differs.",
+    "The authors present this only as a straw man; it is never trained in the book."
+   ],
+   "illustrative_code": "# AI-written: parameter count of the naive model (vocab_size=15000)\nemb  = 15000 * 128                      # 1,920,000\nlstm = 4 * (32 * (128 + 32) + 32)       # 20,608\ndense = 32 * 15000 + 15000              # 495,000\nprint(emb + lstm + dense)               # 2,435,608"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "The translator who must speak while listening",
+   "kind": "analogy",
+   "body": "The naive model is like a simultaneous interpreter who has to say one Spanish word the instant each English word arrives, and is never allowed to wait. For \"I will bring the bag to you\" they must commit to a first word after hearing only \"I\", but Spanish puts \"Te\" (to you) first. The encoder-decoder model is like an interpreter who listens to the whole sentence, forms a mental summary, and then speaks. The catch is that the summary must fit in a fixed-size memory.",
+   "source": "analogy"
+  },
+  {
+   "title": "Why the decoder still sees the 'current word'",
+   "kind": "breakdown",
+   "body": "The book says the decoder 'learns to predict the next word of the Spanish translation given the current word of the translation'. Strictly, a recurrent decoder at step t receives the current word as input, but its state $s_{t-1}$ also summarizes all previous Spanish words and the English sentence (via $s_0$). So the prediction is conditioned on the whole Spanish prefix plus the English summary, not on the current word alone. Note (not in the book): this is the same as the Shakespeare model's dependence on all past characters.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Last output versus final internal state",
+   "kind": "alternative",
+   "body": "The book allows either the encoder's last output or its final internal state vectors as the source representation. For a GRU the two coincide: the output is the hidden state. For an LSTM the final state is a pair (h, c), and both can be passed to an LSTM decoder via `initial_state=[h, c]` (beyond the book: obtained with `return_state=True`). The GRU choice on p.458 avoids that bookkeeping.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Figure 15.2 redrawn: RNN encoder-decoder",
+   "why": "Reproduces the data flow of figure 15.2, with the example tokens printed on the page.",
+   "mermaid": "flowchart LR\n  subgraph Enc[Encoder RNN]\n    E1[how] --> E2[is] --> E3[the] --> E4[weather] --> E5[today]\n  end\n  E5 -->|final output / final state = initial state| D1\n  subgraph Dec[Decoder RNN]\n    D1[\"[start]\"] --> D2[qué] --> D3[tiempo] --> D4[hace] --> D5[hoy]\n  end\n  D1 -.predicts.-> O1[qué]\n  D2 -.-> O2[tiempo]\n  D3 -.-> O3[hace]\n  D4 -.-> O4[hoy]\n  D5 -.-> O5[\"[end]\"]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "The naive model: Embedding → LSTM(32) → Dense(vocab)",
+   "why": "The page's naive translator. Note the per-timestep output shape that ties output length to input length.",
+   "widget": "nn_architecture",
+   "params": {
+    "layers": [
+     {"name": "inputs", "type": "input", "shape": "(None, 20)"},
+     {"name": "embedding", "type": "embedding", "units": 128, "shape": "(None, 20, 128)"},
+     {"name": "lstm", "type": "rnn", "units": 32, "shape": "(None, 20, 32)"},
+     {"name": "dense", "type": "output", "units": 15000, "activation": "softmax", "shape": "(None, 20, 15000)"}
+    ]
+   }
+  },
+  {
+   "id": "v3",
+   "type": "widget",
+   "title": "Unrolled GRU, as used for encoder and decoder",
+   "why": "The page announces GRU-based encoders and decoders; step through the recurrence to see how state carries information forward (and why the naive model can't look ahead).",
+   "widget": "rnn_unroll",
+   "params": {"timesteps": 5, "cell": "gru"}
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "With enough capacity, the naive per-timestep RNN could learn to translate.",
+   "correction": "No. The limitation is causal: at target position 0 the model has seen only source token 0, so no capacity can provide information that has not been read yet."
+  },
+  {
+   "claim": "In the encoder-decoder RNN, the decoder reads the English tokens.",
+   "correction": "The decoder reads only Spanish tokens. All information about the English sentence arrives through its initial state."
+  },
+  {
+   "claim": "Letting the encoder see the end of the source is 'cheating'.",
+   "correction": "The encoder predicts nothing, so it has no labels to leak. Using the whole source is desirable, which is why p.458 makes it bidirectional."
+  },
+  {
+   "claim": "Source and target must have the same length in seq2seq.",
+   "correction": "They are decoupled: the encoder compresses any-length input to one vector, and the decoder generates until `[end]`."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 456, "note": "The dataset format: decoder input `spa[:, :-1]` and labels `spa[:, 1:]`, as drawn in figure 15.2."},
+   {"page": 453, "note": "Figure 15.1, the general seq2seq template (encoder plus language-model decoder)."},
+   {"page": 450, "note": "The Shakespeare generator, which starts from a zero initial state."},
+   {"page": 396, "note": "Chapter 13's advanced RNN techniques, including bidirectional layers."}
+  ],
+  "later": [
+   {"page": 458, "note": "Listings 15.11-15.12: Bidirectional GRU encoder and GRU decoder with `initial_state=encoder_output`."},
+   {"page": 461, "note": "The fundamental limits of RNN seq2seq: the state bottleneck and forgetting over long sequences."},
+   {"page": 468, "note": "Attention was first used to augment exactly this kind of RNN translation model."},
+   {"page": 488, "note": "Chapter summary: encoders compute a source representation and decoders predict the next token from it."}
+  ],
+  "prerequisites": [
+   {"page": 628, "note": "Review of RNNs, GRU versus LSTM, and return_sequences."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 458, "note": "The actual encoder-decoder implementation."}
+  ],
+  "related_figures": [
+   {"page": 453, "note": "Figure 15.1, sequence-to-sequence learning."}
+  ]
+ },
+ "takeaways": [
+  "A naive RNN that emits one target token per source step only sees source tokens 0...N when producing target token N.",
+  "Reordering between languages (\"Te\" ↔ \"you\") makes that fatal.",
+  "Seq2seq RNNs encode the entire source first, then decode.",
+  "The encoder's final output or state becomes the decoder's initial state, replacing zeros.",
+  "The decoder is a language model over Spanish; English information enters only via the initial state.",
+  "The encoder may use future source context (no cheating); the decoder may not."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why can't the naive `LSTM(return_sequences=True)` model correctly produce \"Te\" as the first word of \"Te traeré la bolsa\"?",
+   "options": [
+    "The LSTM has too few units (32)",
+    "At the first output step the model has only seen the first English word, but \"Te\" corresponds to the last English word, \"you\"",
+    "The Dense layer cannot output Spanish tokens",
+    "The Embedding dimension of 128 is too small to represent pronouns"
+   ],
+   "answer": "At the first output step the model has only seen the first English word, but \"Te\" corresponds to the last English word, \"you\"",
+   "explanation": "The page's argument is about step-by-step causality, not capacity. Unit count and embedding size affect capacity but cannot supply unseen information. The Dense layer outputs a distribution over the target vocabulary and can output any token.",
+   "page_refs": [457]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "In figure 15.2, what exactly flows from the encoder RNN to the decoder RNN?",
+   "options": [],
+   "answer": "A single representation of the whole source: the encoder's final output vector or its final internal state, used as the decoder's initial state.",
+   "explanation": "The figure labels the connection 'Final output vector, or final internal state' and marks it as 'Initial state' on the decoder.",
+   "page_refs": [457]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "How does the decoder of figure 15.2 differ from the Shakespeare generator of section 15.1?",
+   "options": [],
+   "answer": "Both are next-token language models. The Shakespeare generator starts from an initial state of zeros, while the seq2seq decoder starts from the encoder's representation of the English sentence, so its predictions are conditioned on the source.",
+   "explanation": "The page states this directly: 'instead of an initial state of zeros, which we used in our Shakespeare generator'.",
+   "page_refs": [457, 450]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why is it fine for the encoder to pass information from the end of the source to its beginning, but not fine for the decoder to do the same with the target?",
+   "options": [],
+   "answer": "The encoder makes no predictions, so there is nothing to leak. The decoder predicts each next target token, so seeing future target tokens would reveal the answers and make the loss trivial.",
+   "explanation": "The page explains the encoder side; p.458 makes the decoder side explicit with its warning about a Bidirectional decoder.",
+   "page_refs": [457, 458]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "In figure 15.2, what is the decoder's input sequence when its output is \"qué, tiempo, hace, hoy, [end]\"?",
+   "options": [
+    "how, is, the, weather, today",
+    "[start], qué, tiempo, hace, hoy",
+    "qué, tiempo, hace, hoy, [end]",
+    "[start], how, is, the, weather"
+   ],
+   "answer": "[start], qué, tiempo, hace, hoy",
+   "explanation": "The decoder input is its output shifted right with `[start]` in front, the off-by-one setup from p.456. The English tokens go into the encoder, not the decoder. Feeding the output itself would leak the answer.",
+   "page_refs": [457, 456]
+  },
+  {
+   "id": "q6",
+   "type": "math",
+   "question": "Compute the number of trainable parameters of the naive model on this page with vocab_size = 15,000 (Embedding 128, LSTM 32, Dense softmax).",
+   "options": [],
+   "answer": "Embedding 15,000×128 = 1,920,000; LSTM 4×(32×(128+32)+32) = 20,608; Dense 32×15,000+15,000 = 495,000. Total 2,435,608.",
+   "explanation": "An LSTM has 4 gates, each with input weights (128×32), recurrent weights (32×32) and a bias (32). A Dense layer has in×out weights plus out biases. (The book does not print this summary; it is a worked exercise.)",
+   "page_refs": [457, 455]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Explain, in two sentences, the 'single representation' weakness of the encoder-decoder RNN and predict what problem it causes for long sentences.",
+   "options": [],
+   "answer": "Everything about the source must be packed into one fixed-size state vector, whatever the sentence length. Long or complex sentences lose information, which p.461 names as a fundamental limitation.",
+   "explanation": "Check your answer against the first bullet on p.461.",
+   "page_refs": [457, 461]
+  }
+ ]
+}

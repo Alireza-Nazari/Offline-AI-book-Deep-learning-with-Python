@@ -1,0 +1,277 @@
+{
+ "page_id": "page_298",
+ "pdf_page": 298,
+ "printed_page": "274",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:02:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. Three code elements: the end of Listing 9.2 (begun on p.297), Listing 9.3 in full, and the start of an unnumbered example (residual_block function) that continues on p.299. Callouts recovered from the annotation list and matched to lines using the page image. One callout has the book's typo 'filers' for 'filters'."
+ },
+ "overview": {
+  "title": "Residual projections in code (Listings 9.2-9.3) and a residual_block function",
+  "chapter": "9 ConvNet architecture patterns",
+  "section": "9.2 Residual connections",
+  "subsection": "",
+  "main_topic": "Keras code for residual connections around blocks that change the number of filters (end of Listing 9.2) or downsample with max pooling (Listing 9.3), and the beginning of a small ConvNet built from a reusable residual_block utility function.",
+  "central_idea": "When a block changes the channel count, project the residual with Conv2D(filters, 1); when it also max-pools by 2, use Conv2D(filters, 1, strides=2). Use padding='same' inside the block. Packaging this logic in a residual_block(x, filters, pooling) function lets you build a whole ConvNet from repeated residual blocks.",
+  "importance": "Turns the shape-matching rules of p.297 into working code, and the residual_block helper embodies the MHR idea of reuse (p.294) together with residual connections; the same structure scales up into the mini Xception model (p.305).",
+  "learning_objectives": [
+    "Read Listing 9.2 and explain why the residual needs a Conv2D(64, 1) projection.",
+    "Read Listing 9.3 and explain why the projection uses strides=2.",
+    "Trace tensor shapes through both listings.",
+    "Explain the role of padding='same' in both the convolution and the max pooling layer.",
+    "Understand the structure and arguments of the residual_block utility function."
+  ],
+  "prerequisites": [
+    "Residual connections and shape matching (p.297)",
+    "Keras functional API",
+    "Conv2D, MaxPooling2D, Rescaling layers (chapter 8)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**End of Listing 9.2 (target block changing the number of filters).** After `inputs = keras.Input(shape=(32, 32, 3))` (p.297): a `Conv2D(32, 3, activation=\"relu\")` produces `x`, which is set aside as `residual`. The block is a single `Conv2D(64, 3, activation=\"relu\", padding=\"same\")`: it increases the filters from 32 to 64 and uses same padding to avoid downsampling. Because the residual only had 32 filters, `layers.Conv2D(64, 1)(residual)` projects it to the correct shape, and `layers.add([x, residual])` merges them.\n\n**Listing 9.3 (target block including a max pooling layer).** Same start, but the block is `Conv2D(64, 3, ..., padding=\"same\")` followed by `MaxPooling2D(2, padding=\"same\")`. Both layers use same padding so that the only downsampling is the 2x pooling. The residual projection is `Conv2D(64, 1, strides=2)`: `strides=2` matches the downsampling of the pooling layer. Then the block output and residual have the same shape and are added.\n\n**A simple residual ConvNet.** To make it concrete, the book builds a ConvNet from blocks of two convolution layers and an optional max pooling layer, each wrapped in a residual connection. It starts with `inputs = keras.Input(shape=(32, 32, 3))` and `Rescaling(1.0 / 255)`, then defines a utility function `residual_block(x, filters, pooling=False)`: save the residual, apply two `Conv2D(filters, 3, activation=\"relu\", padding=\"same\")` layers, and, if `pooling`, apply `MaxPooling2D(2, padding=\"same\")` and project the residual with a strided `Conv2D(filters, 1, strides=2)`. The `elif` branch, the add, the three block calls and the classifier head are on p.299.",
+ "paragraphs": [
+  {
+   "ref": "p298_e06",
+   "excerpt": "To make these ideas more concrete, here’s an example of a simple ConvNet structured",
+   "what_it_says": "Introduces an example ConvNet structured into a series of blocks, each made of two convolution layers and one optional max pooling layer, with a residual connection around each block.",
+   "what_it_means": "Instead of writing the residual logic inline for each block, the code defines it once in a function and calls it several times with different filter counts: modularity and reuse in code, mirroring the Xception block structure of Figure 9.2.",
+   "why_it_matters": "This is the template for building deep residual ConvNets in Keras, and it shows how the MHR principle (p.294) translates into a few lines of Python.",
+   "technical_idea": "Beyond the book: the function returns a tensor, so blocks compose like layers: x = residual_block(x, 32, pooling=True) and so on. This is a common idiom for functional-API models.",
+   "terminology": [
+    {"term": "Utility function", "meaning": "A Python function that adds a group of layers to the graph; here residual_block."},
+    {"term": "Optional max pooling", "meaning": "The pooling flag decides whether a block downsamples."}
+   ],
+   "connections": ["p.294: models built from repeated blocks.", "p.299: the rest of the function and the model summary.", "p.305: the mini Xception model uses the same structure with separable convolutions and batch normalization."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "residual_connection",
+   "name": "Residual connection",
+   "definition": "Adding a block's input (possibly projected) back to its output.",
+   "intuition": "A shortcut that preserves the input's information.",
+   "technical": "layers.add([x, residual]) after projecting residual with a 1x1 Conv2D when filters change, with strides=2 when the block max-pools by 2.",
+   "significance": "Enables training deeper networks (p.297).",
+   "example": "Listing 9.3: residual = layers.Conv2D(64, 1, strides=2)(residual).",
+   "misconception": "The projection is only needed when shapes differ; otherwise the identity shortcut is used.",
+   "related": ["pointwise_convolution", "conv_block", "functional_api"],
+   "source": "book"
+  },
+  {
+   "id": "pointwise_convolution",
+   "name": "1 x 1 convolution projection",
+   "definition": "Conv2D with kernel size 1, used to change the residual's channel count, and with strides to change its spatial size.",
+   "intuition": "Re-encode each pixel's channels into the new number of channels; skip every other pixel when strided.",
+   "technical": "Conv2D(64, 1) maps 32 to 64 channels (32*64 + 64 = 2,112 parameters); strides=2 halves height and width.",
+   "significance": "Makes residual addition possible across shape-changing blocks.",
+   "example": "Listing 9.2 and Listing 9.3.",
+   "misconception": "A strided 1x1 conv does not average the skipped pixels; it simply samples every second position.",
+   "related": ["residual_connection"],
+   "source": "book"
+  },
+  {
+   "id": "conv_block",
+   "name": "Reusable convolutional block",
+   "definition": "A group of layers defined once, here as residual_block, and applied several times.",
+   "intuition": "One template, several instances.",
+   "technical": "Two Conv2D(filters, 3, relu, same) + optional MaxPooling2D(2, same) + residual projection + add.",
+   "significance": "Implements the modularity and reuse of the MHR formula.",
+   "example": "residual_block(x, filters=32, pooling=True) on p.299.",
+   "misconception": "Reusing the block definition does not share weights between blocks; each call creates new layers.",
+   "related": ["modularity_hierarchy_reuse", "residual_connection"],
+   "source": "book"
+  },
+  {
+   "id": "same_padding",
+   "name": "padding='same'",
+   "definition": "Padding mode that keeps height and width unchanged for stride-1 convolutions (and gives ceil(n/2) for 2x2 pooling).",
+   "intuition": "Add a border of zeros so the window can be centred on edge pixels.",
+   "technical": "Without it, a 3x3 conv shrinks each spatial dimension by 2 and pooling on odd sizes drops the last row/column.",
+   "significance": "Lets the residual projection match the block output with just a channel change and a stride.",
+   "example": "Conv2D(64, 3, activation='relu', padding='same') keeps 30 x 30.",
+   "misconception": "It does not prevent downsampling by strides or pooling; it only avoids downsampling due to padding.",
+   "related": ["residual_connection"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Shape bookkeeping for Listing 9.3",
+   "latex": "\\begin{aligned} &(30,30,32) \\xrightarrow{\\text{Conv2D}(64,3,\\text{same})} (30,30,64) \\xrightarrow{\\text{MaxPool}(2,\\text{same})} (15,15,64) \\\\ &(30,30,32) \\xrightarrow{\\text{Conv2D}(64,1,\\text{strides}=2)} (15,15,64) \\end{aligned}",
+   "source_text": "Not printed as a formula; derived from Listing 9.3 (callout: 'We use strides=2 in the residual projection to match the downsampling created by the max pooling layer').",
+   "variables": [
+    {"symbol": "(H, W, C)", "meaning": "Height, width and channels of a tensor (batch axis omitted)."}
+   ],
+   "operations": "Top row: the block path. Bottom row: the residual projection. Both end at the same shape, so they can be added.",
+   "purpose": "Shows why strides=2 and 64 filters are the right projection settings.",
+   "interpretation": "Channels are matched by the filter count; spatial size is matched by the stride.",
+   "intuition": "Both paths must arrive at the same 'address' before they can be summed.",
+   "numerical_example": "Input 32 x 32 x 3 -> Conv2D(32, 3) valid: 30 x 30 x 32. With strided 1x1 conv: output size $\\lfloor (30-1)/2 \\rfloor + 1 = 15$.",
+   "source": "ai_explanation",
+   "book_ref": "p.298"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "9.2",
+   "title": "The target block changing the number of output filters (continued from p.297)",
+   "original_code": "x = layers.Conv2D(32, 3, activation=\"relu\")(inputs)\nresidual = x\nx = layers.Conv2D(64, 3, activation=\"relu\", padding=\"same\")(x)\nresidual = layers.Conv2D(64, 1)(residual)\nx = layers.add([x, residual])",
+   "language": "python",
+   "what_it_does": "Builds a residual connection around a convolution that increases the filters from 32 to 64, projecting the residual with a 1x1 Conv2D so the shapes match. (Imports and inputs = keras.Input(shape=(32, 32, 3)) are on p.297.)",
+   "line_explanations": [
+    {"lines": "1", "explanation": "First convolution: 32 filters, 3x3, valid padding, giving (None, 30, 30, 32)."},
+    {"lines": "2", "explanation": "Sets aside the residual (book callout)."},
+    {"lines": "3", "explanation": "The layer around which the residual connection is created: it increases the number of output filters from 32 to 64; padding='same' avoids downsampling due to padding. Output (None, 30, 30, 64)."},
+    {"lines": "4", "explanation": "The residual only had 32 filters, so a 1 x 1 Conv2D projects it to the correct shape, (None, 30, 30, 64)."},
+    {"lines": "5", "explanation": "Now the block output and the residual have the same shape and can be added."}
+   ],
+   "inputs_outputs": "Input: (None, 32, 32, 3). Output x: (None, 30, 30, 64).",
+   "algorithm": "Save residual -> transform -> project residual -> add.",
+   "theory_link": "Implements the 'linear projection of the residual' rule from p.297.",
+   "parameters": [
+    {"name": "Conv2D(64, 1)", "role": "1x1 projection from 32 to 64 channels, no activation."},
+    {"name": "padding=\"same\"", "role": "Keeps 30 x 30 so only the channel count differs."}
+   ],
+   "pitfalls": ["Omitting the projection raises a shape-mismatch error in layers.add (32 vs 64 channels).", "Dropping padding='same' would make the block output 28 x 28, which a 1x1 conv without strides cannot match."],
+   "illustrative_code": "# AI-written check (not from the book)\nimport keras\nfrom keras import layers\ninputs = keras.Input(shape=(32, 32, 3))\nx = layers.Conv2D(32, 3, activation=\"relu\")(inputs)\nresidual = x\nx = layers.Conv2D(64, 3, activation=\"relu\", padding=\"same\")(x)\nresidual = layers.Conv2D(64, 1)(residual)\nprint(x.shape, residual.shape)  # (None, 30, 30, 64) (None, 30, 30, 64)"
+  },
+  {
+   "id": "c2",
+   "listing": "9.3",
+   "title": "The target block including a max pooling layer",
+   "original_code": "inputs = keras.Input(shape=(32, 32, 3))\nx = layers.Conv2D(32, 3, activation=\"relu\")(inputs)\nresidual = x\nx = layers.Conv2D(64, 3, activation=\"relu\", padding=\"same\")(x)\nx = layers.MaxPooling2D(2, padding=\"same\")(x)\nresidual = layers.Conv2D(64, 1, strides=2)(residual)\nx = layers.add([x, residual])",
+   "language": "python",
+   "what_it_does": "Residual connection around a two-layer block (conv + 2x2 max pooling) that changes both the channel count and the spatial size; the residual is projected with a strided 1x1 convolution.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Input (None, 32, 32, 3) and a first Conv2D(32, 3): (None, 30, 30, 32)."},
+    {"lines": "3", "explanation": "Sets aside the residual."},
+    {"lines": "4-5", "explanation": "The block of two layers around which the residual connection is created: Conv2D(64, same) gives (None, 30, 30, 64), MaxPooling2D(2, same) gives (None, 15, 15, 64). padding='same' in both layers avoids downsampling due to padding."},
+    {"lines": "6", "explanation": "strides=2 in the residual projection matches the downsampling created by the max pooling layer: (None, 15, 15, 64)."},
+    {"lines": "7", "explanation": "Now the block output and the residual have the same shape and can be added."}
+   ],
+   "inputs_outputs": "Input: (None, 32, 32, 3). Output x: (None, 15, 15, 64).",
+   "algorithm": "Save residual -> conv + pool -> strided 1x1 projection of residual -> add.",
+   "theory_link": "Implements 'use strides in the residual projection to match any downsampling caused by a max pooling layer' (p.297). Same pattern as the 'Conv 1x1, stride=2x2' shortcuts in Figure 9.2.",
+   "parameters": [
+    {"name": "MaxPooling2D(2, padding=\"same\")", "role": "Halves height and width (ceil for odd sizes)."},
+    {"name": "Conv2D(64, 1, strides=2)", "role": "Projects 32 -> 64 channels and halves height and width."}
+   ],
+   "pitfalls": ["Forgetting strides=2 leaves the residual at 30 x 30 vs 15 x 15.", "With an odd spatial size and pooling without same padding, the shapes would differ by one (e.g. floor vs ceil)."],
+   "illustrative_code": ""
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "A simple ConvNet with residual blocks (beginning; continues on p.299)",
+   "original_code": "inputs = keras.Input(shape=(32, 32, 3))\nx = layers.Rescaling(1.0 / 255)(inputs)\n\ndef residual_block(x, filters, pooling=False):\n    residual = x\n    x = layers.Conv2D(filters, 3, activation=\"relu\", padding=\"same\")(x)\n    x = layers.Conv2D(filters, 3, activation=\"relu\", padding=\"same\")(x)\n    if pooling:\n        x = layers.MaxPooling2D(2, padding=\"same\")(x)\n        residual = layers.Conv2D(filters, 1, strides=2)(residual)",
+   "language": "python",
+   "what_it_does": "Defines the model input with pixel rescaling and the first part of a utility function that applies a convolutional block with a residual connection and optional max pooling. The elif branch (projection without pooling when channels change), the add, the return, the three block calls and the classifier are on p.299.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "32 x 32 RGB input; Rescaling(1.0 / 255) maps pixel values from [0, 255] to [0, 1]."},
+    {"lines": "4", "explanation": "Utility function to apply a convolutional block with a residual connection, with an option to add max pooling."},
+    {"lines": "5", "explanation": "Save the block input as the residual."},
+    {"lines": "6-7", "explanation": "Two 3x3 convolutions with `filters` channels, ReLU, same padding (no spatial change)."},
+    {"lines": "8-10", "explanation": "If we use max pooling, we add a strided convolution to project the residual to the expected shape: pooling halves the size, Conv2D(filters, 1, strides=2) matches it."}
+   ],
+   "inputs_outputs": "residual_block takes a tensor x and returns (after the code on p.299) a tensor with `filters` channels, halved in size if pooling=True.",
+   "algorithm": "Block = two same-padded convs (+ optional pool), residual projected as needed, then added.",
+   "theory_link": "Combines the patterns of Listings 9.2 and 9.3 into one reusable function: modularity and reuse (p.294) plus residual connections (p.297).",
+   "parameters": [
+    {"name": "filters", "role": "Number of filters of both convolutions and of the projection."},
+    {"name": "pooling", "role": "Whether the block ends with 2x2 max pooling (and a strided projection)."}
+   ],
+   "pitfalls": ["The function is incomplete on this page; it needs the elif/add/return lines on p.299 to work.", "Each call creates new layers; the blocks do not share weights."],
+   "illustrative_code": ""
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why same padding matters for residual matching",
+   "kind": "numerical",
+   "body": "Beyond the book: take Listing 9.3 without same padding. Conv2D(64, 3) valid would give 28 x 28; MaxPooling2D(2) valid gives 14 x 14. A strided 1x1 projection of the 30 x 30 residual gives 15 x 15, so the add fails (14 vs 15). With same padding the block gives 30 -> 30 -> 15, matching the projection's 15. That is exactly the book's reason: 'to avoid downsampling due to padding.'",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Identity vs. projection shortcuts",
+   "kind": "breakdown",
+   "body": "Three cases appear across pp.297-299:\n\n| block changes | shortcut |\n|---|---|\n| nothing | identity: `residual = x` |\n| channels only | `Conv2D(filters, 1)` (Listing 9.2; `elif` branch on p.299) |\n| channels and size (pooling) | `Conv2D(filters, 1, strides=2)` (Listing 9.3; `if pooling` branch) |\n\nThe identity shortcut is free and purest; projections add a few parameters and are used only when needed.",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Shapes in Listing 9.3: block path vs. residual path",
+   "why": "Listing 9.3 uses strides=2 in the residual projection to match the max pooling; follow both paths to the add.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "input", "shape": [null, 32, 32, 3]},
+     {"op": "Conv2D 32 (residual)", "shape": [null, 30, 30, 32]},
+     {"op": "Conv2D 64 same", "shape": [null, 30, 30, 64]},
+     {"op": "MaxPool 2 same", "shape": [null, 15, 15, 64]},
+     {"op": "1x1 s2 proj residual", "shape": [null, 15, 15, 64]},
+     {"op": "add", "shape": [null, 15, 15, 64]}
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "The residual_block function",
+   "why": "Diagram of the utility function begun on this page (branch logic completed on p.299).",
+   "mermaid": "flowchart TB\n  X[x] --> C1[Conv2D filters, 3x3, relu, same]\n  C1 --> C2[Conv2D filters, 3x3, relu, same]\n  C2 --> Q{pooling?}\n  Q -- yes --> MP[MaxPooling2D 2, same]\n  Q -- no --> ADD((add))\n  MP --> ADD\n  X --> R{residual path}\n  R -- pooling --> P1[Conv2D filters, 1, strides=2]\n  R -- channels changed --> P2[Conv2D filters, 1]\n  R -- same shape --> ID[identity]\n  P1 --> ADD\n  P2 --> ADD\n  ID --> ADD\n  ADD --> OUT[output]"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "In Listing 9.3 the max pooling is applied to the residual as well.", "correction": "The residual is downsampled by the strided 1x1 convolution, not by pooling."},
+  {"claim": "residual_block always projects the residual.", "correction": "It projects only when pooling is used or (p.299) when the number of channels changes; otherwise the shortcut is the identity."},
+  {"claim": "Calling residual_block twice with the same filters reuses the same weights.", "correction": "Each call creates new Conv2D layers with their own weights; only the code is reused."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 297, "note": "Shape-matching rules and the first lines of Listing 9.2."},
+   {"page": 295, "note": "Xception's Conv 1x1 stride 2 shortcuts, the same pattern as Listing 9.3."},
+   {"page": 294, "note": "Models built from repeated blocks."}
+  ],
+  "later": [
+   {"page": 299, "note": "Rest of residual_block, three block calls with 32, 64, 128 filters, and the model summary."},
+   {"page": 300, "note": "Batch normalization."},
+   {"page": 305, "note": "Mini Xception-like model extending this block structure."}
+  ],
+  "prerequisites": [
+   {"page": 297, "note": "Residual connections and 1x1 projections."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 299, "note": "Continuation of the residual ConvNet."},
+   {"page": 305, "note": "Mini Xception model code."}
+  ],
+  "related_figures": [
+   {"page": 297, "note": "Figure 9.3, a residual connection around a processing block."}
+  ]
+ },
+ "takeaways": [
+  "Channel change only: project the residual with Conv2D(filters, 1).",
+  "Channel change plus 2x2 max pooling: project with Conv2D(filters, 1, strides=2).",
+  "Use padding='same' in the block's convolution and pooling layers so only intentional downsampling occurs.",
+  "A residual_block(x, filters, pooling) function packages the pattern for reuse across a ConvNet."
+ ],
+ "questions": [
+  {"id": "q1", "type": "short", "question": "In Listing 9.2, why is residual = layers.Conv2D(64, 1)(residual) needed?", "options": [], "answer": "The residual has 32 channels but the block output has 64; the 1x1 conv projects the residual to 64 channels so they can be added.", "explanation": "From the callout: 'The residual only had 32 filters, so we use a 1 x 1 Conv2D to project it to the correct shape.'", "page_refs": [298]},
+  {"id": "q2", "type": "mcq", "question": "Why does Listing 9.3 use strides=2 in the residual projection?", "options": ["To add nonlinearity", "To match the downsampling created by the max pooling layer", "To reduce the number of parameters", "To avoid padding"], "answer": "To match the downsampling created by the max pooling layer", "explanation": "The callout says so explicitly. The projection has no activation, its parameter count does not depend on strides, and padding is handled by padding='same' in the block.", "page_refs": [298]},
+  {"id": "q3", "type": "math", "question": "Give the output shapes of the block path and the residual path in Listing 9.3 just before layers.add.", "options": [], "answer": "Both are (None, 15, 15, 64).", "explanation": "Input 32x32x3 -> Conv2D(32,3) valid: 30x30x32 (residual). Block: Conv2D(64, same) 30x30x64 -> MaxPool(2, same) 15x15x64. Residual: Conv2D(64,1,strides=2) -> 15x15x64.", "page_refs": [298]},
+  {"id": "q4", "type": "conceptual", "question": "Why do both the Conv2D and the MaxPooling2D layers in Listing 9.3 use padding='same'?", "options": [], "answer": "To avoid downsampling due to padding, so the only change in spatial size is the intentional factor of 2 from pooling, which the strided projection can match exactly.", "explanation": "Stated in the callout above Listing 9.3; without same padding the sizes would not line up.", "page_refs": [298]},
+  {"id": "q5", "type": "mcq", "question": "What does the pooling argument of residual_block control?", "options": ["Whether the block uses ReLU", "Whether the block ends with 2x2 max pooling and a strided residual projection", "Whether a residual connection is used at all", "The number of filters"], "answer": "Whether the block ends with 2x2 max pooling and a strided residual projection", "explanation": "Inside `if pooling:` the code adds MaxPooling2D(2, padding='same') and Conv2D(filters, 1, strides=2) on the residual. ReLU is always used, the residual is always added, and filters is a separate argument.", "page_refs": [298]},
+  {"id": "q6", "type": "short", "question": "What does Rescaling(1.0 / 255) do at the start of the example model?", "options": [], "answer": "It scales pixel values from the 0-255 range to 0-1 before the convolutions.", "explanation": "Same preprocessing as the chapter 8 ConvNets.", "page_refs": [298]},
+  {"id": "q7", "type": "self", "question": "Without running it, predict what error would occur if you deleted the residual projection line from Listing 9.3, and why.", "options": [], "answer": "layers.add would raise a shape mismatch: (None, 15, 15, 64) vs (None, 30, 30, 32).", "explanation": "Tests that you can do shape bookkeeping for residual connections.", "page_refs": [298]}
+ ]
+}

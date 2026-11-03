@@ -1,0 +1,446 @@
+{
+ "page_id": "page_052",
+ "pdf_page": 52,
+ "printed_page": "28",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-fable-5-1",
+  "generated_at": "2026-11-03T04:08:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction. Figure 2.4 (stacked image cubes labelled Color channels, Height, Width, Samples) is fully readable. The video-data paragraph is split by the figure into elements p052_e05 and p052_e07; both are covered. The two code snippets match the page."
+ },
+ "overview": {
+  "title": "Video tensors and the Dense layer as a tensor function",
+  "chapter": "2 The mathematical building blocks of neural networks",
+  "section": "2.3 The gears of neural networks: Tensor operations",
+  "subsection": "",
+  "main_topic": "Finishing the data-tensor catalogue (channels-first image shapes, rank-5 video tensors and their memory cost) and opening section 2.3: every transformation a network learns is a composition of a few tensor operations, exemplified by `output = relu(matmul(input, W) + b)` for a Dense layer.",
+  "central_idea": "Data can be as large as a rank-5 video tensor, yet what a network does to it reduces to a handful of tensor operations; a `Dense(512, activation=\"relu\")` layer is just the function `relu(matmul(input, W) + b)` with its own matrix `W` and vector `b`.",
+  "importance": "This page is the hinge of the chapter: it closes the \"what is the data\" half and opens the \"what do layers do to it\" half. The Dense-layer formula introduced here is unpacked over the next ten pages (tensor product, addition with broadcasting, relu) and later interpreted geometrically (p.59-62) and differentiated (p.63 onward).",
+  "learning_objectives": [
+   "Convert the image-batch examples between channels-last and channels-first layouts.",
+   "Build the rank-5 shape of a batch of video clips and compute its element count and memory footprint in float32.",
+   "State the claim that all learned transformations reduce to a handful of tensor operations, and the analogy with binary logic gates.",
+   "Read `keras.layers.Dense(512, activation=\"relu\")` as the function `output = relu(matmul(input, W) + b)` and identify `W` and `b` as the layer's attributes."
+  ],
+  "prerequisites": [
+   "Image tensor conventions (p.51)",
+   "Rank and shape, element counting (p.47)",
+   "The first MNIST model built from Dense layers (p.43)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Channels-first examples.** In the channels-first convention, the two image batches of p.51 become `(128, 1, 256, 256)` and `(128, 3, 256, 256)`. Keras supports both formats.\n\n**Video data.** Video is one of the few real-world data types that needs rank-5 tensors. A video is a sequence of frames and each frame is a color image. A frame is a rank-3 tensor `(height, width, color_depth)`, a sequence of frames is rank 4 `(frames, height, width, color_depth)`, and a batch of videos is rank 5 `(samples, frames, height, width, color_depth)`. Figure 2.4, placed alongside, draws the rank-4 image tensor with axes Color channels, Height, Width and Samples. Worked example: a 60-second 144 × 256 YouTube clip sampled at 4 frames per second has 240 frames; a batch of four such clips is `(4, 240, 144, 256, 3)`, a total of 106,168,320 values. In `float32` (32 bits per value) that is 425 MB. Real videos are far lighter because they are not stored as `float32` and are heavily compressed (e.g. MPEG).\n\n**2.3 The gears of neural networks: Tensor operations.** Just as any computer program reduces to a small set of binary operations on binary inputs (`AND`, `OR`, `NOR`, …), every transformation learned by a deep neural network reduces to a handful of *tensor operations* (or *tensor functions*) on numeric tensors, such as adding or multiplying tensors. The first example stacked `Dense` layers; a Keras layer instance looks like `keras.layers.Dense(512, activation=\"relu\")`. Such a layer is a function from a matrix to a new matrix, a new representation of the input. Specifically, with `W` a matrix and `b` a vector that are both attributes of the layer:\n\n```\noutput = relu(matmul(input, W) + b)\n```\n\nThe next page unpacks this into three tensor operations (a tensor product `matmul`, an addition, and `relu(x) = max(x, 0)`) and notes that the book will express linear algebra as NumPy snippets rather than mathematical notation.",
+ "paragraphs": [
+  {
+   "ref": "p052_e03",
+   "excerpt": "With the channels-first convention, the previous examples would become (128, 1,",
+   "what_it_says": "In channels-first layout the p.51 examples become `(128, 1, 256, 256)` (grayscale) and `(128, 3, 256, 256)` (color). The Keras API supports both formats.",
+   "what_it_means": "The channel axis (size 1 or 3) moves from the last position to just after the batch axis; the other sizes are unchanged. Because Keras runs on top of JAX, TensorFlow and PyTorch, it has to accept either layout (a `data_format` option in its convolution layers, not discussed here).",
+   "why_it_matters": "Knowing both layouts lets you recognize a tensor's convention at a glance from where the small axis (1 or 3) sits.",
+   "technical_idea": "Beyond the book: converting between the layouts is an axis permutation (transpose), e.g. channels-last → channels-first is axes `(0, 3, 1, 2)`.",
+   "terminology": [
+    {"term": "channels-first", "meaning": "`(samples, color_depth, height, width)`, PyTorch's default."}
+   ],
+   "connections": ["p.51: definitions of channels-last and channels-first and the original `(128, 256, 256, 1)` / `(128, 256, 256, 3)` examples.", "p.257: image data formats in the convnet chapter."]
+  },
+  {
+   "ref": "p052_e05",
+   "excerpt": "Video data is one of the few types of real-world data for which you’ll",
+   "what_it_says": "Video is one of the few real-world data types needing rank-5 tensors. A video is a sequence of frames, each a color image; a frame is a rank-3 `(height, width, color_depth)` tensor.",
+   "what_it_means": "The by-now familiar nesting: image (rank 3) inside a sequence (rank 4) inside a batch (rank 5). The authors emphasise \"one of the few\" because, as p.47 said, you will generally manipulate ranks 0 to 4.",
+   "why_it_matters": "Sets the upper end of the rank scale you will meet in practice, and motivates the memory calculation that follows.",
+   "technical_idea": "Rank 5 = samples + frames + height + width + channels; `frames` plays the role that `timesteps` played for sequences (axis 1).",
+   "terminology": [
+    {"term": "frame", "meaning": "One image of a video; a rank-3 `(height, width, color_depth)` tensor."}
+   ],
+   "connections": ["p.47: \"you may go up to 5 if you process video data\".", "p.50: the rank-5 video template."]
+  },
+  {
+   "ref": "p052_e06",
+   "excerpt": "Figure 2.4 A rank-4 image data tensor",
+   "what_it_says": "The figure shows a stack of image cubes. Each cube has Height (vertical) and Width (horizontal) and is itself a stack of three layers labelled Color channels; the cubes are stacked in depth along Samples.",
+   "what_it_means": "It is the picture of `(samples, height, width, channels)` from p.50-51: a 2D grid of pixels, with a short channels axis per pixel, repeated once per sample. The figure belongs to the image-data discussion of p.51 but is printed here.",
+   "why_it_matters": "Pairs with figure 2.3 (sequence tensor, p.51) to give a visual vocabulary for rank-3 and rank-4 data; a video tensor is simply this picture repeated along one more axis (frames).",
+   "technical_idea": "Reading the labels in shape order: Samples (axis 0), Height, Width, Color channels (axis 3): channels-last.",
+   "terminology": [],
+   "connections": ["p.51: figure 2.3 for rank-3 timeseries tensors; image-data paragraph the figure illustrates."]
+  },
+  {
+   "ref": "p052_e07",
+   "excerpt": "color_depth), a sequence of frames can be stored in a rank-4 tensor (frames,",
+   "what_it_says": "A sequence of frames is a rank-4 tensor `(frames, height, width, color_depth)`, so a batch of videos is a rank-5 tensor `(samples, frames, height, width, color_depth)`.",
+   "what_it_means": "Each added level of structure adds an axis in front. Note the naming: inside one video the frame axis comes first; in the batch it becomes axis 1, exactly like the time axis of sequence data.",
+   "why_it_matters": "Gives the shape template that a `Conv3D` layer or a per-frame image model would consume.",
+   "technical_idea": "A single video `(frames, height, width, color_depth)` has the same rank as a *batch* of images `(samples, height, width, color_depth)`: rank alone does not tell you what the axes mean; the convention does.",
+   "terminology": [],
+   "connections": ["p.51: the time axis is axis 1 by convention; `frames` occupies the same position here."]
+  },
+  {
+   "ref": "p052_e08",
+   "excerpt": "For instance, a 60-second, 144 × 256 YouTube video clip sampled at 4 frames",
+   "what_it_says": "A 60-second 144 × 256 clip at 4 fps has 240 frames. Four such clips form `(4, 240, 144, 256, 3)`: 106,168,320 values. As `float32` (32 bits each) that is 425 MB. Real videos are much lighter because they are not stored in `float32` and are compressed by large factors (e.g. MPEG).",
+   "what_it_means": "The element count is the product of the shape: 4 × 240 × 144 × 256 × 3 = 106,168,320. At 4 bytes per value that is 424,673,280 bytes ≈ 425 MB (decimal megabytes). Only four short, low-resolution clips already approach half a gigabyte once decoded to float tensors, which is why video models work on small batches, few frames, and reduced resolution.",
+   "why_it_matters": "First time the book connects shape to memory. The dtype matters as much as the shape: `uint8` pixels would take a quarter of the space; compressed video on disk takes far less again. This cost drives many practical design choices in later chapters (resizing images, batch sizes).",
+   "technical_idea": "Memory = (product of shape) × (bytes per element). `float32` = 4 bytes, `float16` = 2, `uint8` = 1. Beyond the book: 424,673,280 bytes is 405 MiB if you count in binary mebibytes; the book uses decimal MB.",
+   "terminology": [
+    {"term": "frames per second (fps)", "meaning": "Sampling rate of the video in time; 4 fps × 60 s = 240 frames."},
+    {"term": "MPEG", "meaning": "A family of lossy video compression formats; mentioned as the reason real video files are far smaller than their decoded float tensors."}
+   ],
+   "connections": ["p.47: `dtype` as one of the three key attributes of a tensor.", "p.43: MNIST pixels converted from `uint8` to `float32` before training."]
+  },
+  {
+   "ref": "p052_e11",
+   "excerpt": "Just like any computer program can be ultimately reduced to a small set",
+   "what_it_says": "As any program reduces to a few binary operations on bits (`AND`, `OR`, `NOR`, …), every transformation learned by a deep network reduces to a handful of *tensor operations* (tensor functions) on numeric tensors: adding tensors, multiplying tensors, and so on.",
+   "what_it_means": "This is the thesis of section 2.3. However elaborate a model looks, it is a composition of a small vocabulary of primitives. Learn the primitives and you can read any architecture.",
+   "why_it_matters": "It reframes a neural network from a mysterious black box into a chain of simple, inspectable operations, which is also what makes automatic differentiation (section 2.4) possible: differentiate each primitive, chain the results.",
+   "technical_idea": "Beyond the book: the analogy is apt in a stronger sense. Logic gates are *functionally complete* for boolean functions; a sufficiently wide chain of affine maps and relu is a universal approximator for continuous functions, so a small set of tensor primitives suffices in principle as well.",
+   "terminology": [
+    {"term": "tensor operation / tensor function", "meaning": "A function that takes one or more tensors and returns a tensor, e.g. addition, product, relu."}
+   ],
+   "connections": ["p.82: chapter summary: \"Deep learning models consist of chains of simple tensor operations, parameterized by weights\"."]
+  },
+  {
+   "ref": "p052_e12",
+   "excerpt": "In our initial example, we were building our model by stacking Dense layers",
+   "what_it_says": "The initial example stacked `Dense` layers. A Keras layer instance looks like `keras.layers.Dense(512, activation=\"relu\")`.",
+   "what_it_means": "This is the first hidden layer of the MNIST model from p.43: 512 output units with the relu activation. The page is about to tell you what this object computes.",
+   "why_it_matters": "Grounds the abstract claim about tensor operations in the one concrete model the reader has already trained.",
+   "technical_idea": "`512` is the number of output units (columns of `W`); `activation=\"relu\"` selects the nonlinearity applied after the affine part.",
+   "terminology": [
+    {"term": "Dense layer", "meaning": "A fully connected layer: every output unit depends on every input feature through the weight matrix `W`."}
+   ],
+   "connections": ["p.43: the model `Sequential([Dense(512, activation=\"relu\"), Dense(10, activation=\"softmax\")])`."]
+  },
+  {
+   "ref": "p052_e14",
+   "excerpt": "This layer can be interpreted as a function, which takes as input a matrix",
+   "what_it_says": "The layer is a function from a matrix to another matrix, a new *representation* of the input. Specifically, with `W` a matrix and `b` a vector that are attributes of the layer: `output = relu(matmul(input, W) + b)`.",
+   "what_it_means": "The input matrix is a batch of samples `(samples, input_features)`; `matmul` with `W` of shape `(input_features, 512)` produces `(samples, 512)`; the vector `b` of length 512 is added to every row; relu zeroes the negatives. The output is again a matrix, so another Dense layer can follow. `W` and `b` are the *weights*: they are stored in the layer and are what training adjusts.",
+   "why_it_matters": "This single line is the template for most of deep learning: an affine map (`matmul` + `b`) followed by a nonlinearity. Pages 53-58 explain each operation, p.59-62 interpret them geometrically, and p.63-75 show how `W` and `b` are learned.",
+   "technical_idea": "Three operations, evaluated inside out: tensor product, then addition (which needs broadcasting because `b` is a vector and the product is a matrix, p.54), then element-wise relu (p.53).",
+   "terminology": [
+    {"term": "representation", "meaning": "The transformed version of the data a layer outputs; the book's view of layers as learning useful representations (chapter 1)."},
+    {"term": "W, b", "meaning": "The layer's weight matrix and bias vector, attributes of the layer object."}
+   ],
+   "connections": ["p.53: the three operations unpacked; relu(x) = max(x, 0).", "p.54: broadcasting makes `+ b` work.", "p.56: the tensor product `matmul`.", "p.59: geometric interpretation of these operations.", "p.76: the first example revisited with this formula in mind."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "video_tensor",
+   "name": "Video data tensor",
+   "definition": "A rank-5 tensor `(samples, frames, height, width, color_depth)`: a batch of videos, each a sequence of color-image frames.",
+   "intuition": "A flip-book of photos is a video; a shelf of flip-books is a batch.",
+   "technical": "frame `(height, width, color_depth)` → video `(frames, height, width, color_depth)` → batch, rank 5. Element count is the product of the shape; memory = count × bytes per element.",
+   "significance": "The largest-rank data you will routinely see, and a reminder that decoded tensors are enormous: four short clips already cost 425 MB in float32.",
+   "example": "`(4, 240, 144, 256, 3)` = 106,168,320 values = 425 MB as float32.",
+   "misconception": "That a video file of a few MB becomes a tensor of a few MB. Decoding to float32 pixels expands it by orders of magnitude because compression is undone and each value takes 4 bytes.",
+   "related": ["data_tensor_shapes", "image_tensor", "tensor_dtype"],
+   "source": "book"
+  },
+  {
+   "id": "tensor_operation",
+   "name": "Tensor operation",
+   "definition": "A function applied to numeric tensors that returns a tensor (addition, product, relu, …); the book's claim is that all transformations learned by deep networks reduce to a handful of these.",
+   "intuition": "Like logic gates for programs: a tiny instruction set that composes into anything.",
+   "technical": "A layer is a tensor function parameterized by weight tensors; a model is a chain of such functions. Because each primitive is simple and differentiable, the chain can be trained by gradient descent (section 2.4).",
+   "significance": "Makes architectures readable and differentiable; the rest of section 2.3 catalogues the primitives (element-wise ops, broadcasting, tensor product, reshaping).",
+   "example": "`output = relu(matmul(input, W) + b)` uses exactly three: `matmul`, `+`, `relu`.",
+   "misconception": "That deep networks rely on exotic mathematics. The operations are elementary; depth and learned weights, not complicated primitives, give them power.",
+   "related": ["dense_layer", "relu", "matrix_product", "broadcasting"],
+   "source": "book"
+  },
+  {
+   "id": "dense_layer",
+   "name": "Dense layer as a function",
+   "definition": "A Keras `Dense` layer computes `output = relu(matmul(input, W) + b)` (with relu as the chosen activation), where `W` is a weight matrix and `b` a bias vector stored as attributes of the layer.",
+   "intuition": "Each of the 512 output units takes a weighted sum of all input features, adds its own offset, and reports it only if positive.",
+   "technical": "Input `(samples, n_in)`, `W` `(n_in, units)`, `b` `(units,)`, output `(samples, units)`. The matmul mixes features linearly, the bias shifts, relu introduces nonlinearity. For the first MNIST layer n_in = 784, units = 512, so W has 401,408 entries and b 512 (my count; the book gives the formula, not the numbers).",
+   "significance": "The prototypical layer; the formula generalizes (with different products) to convolutions, recurrent cells and attention.",
+   "example": "`keras.layers.Dense(512, activation=\"relu\")` on a `(128, 784)` batch returns a `(128, 512)` matrix.",
+   "misconception": "That `W` and `b` are inputs to the layer. They are attributes owned by the layer; only `input` is passed in. Training changes `W` and `b`, not the formula.",
+   "related": ["tensor_operation", "relu", "matrix_product", "broadcasting", "keras_layer"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "The Dense layer function",
+   "latex": "\\text{output} = \\operatorname{relu}(\\text{input} \\cdot W + b)",
+   "source_text": "output = relu(matmul(input, W) + b)",
+   "variables": [
+    {"symbol": "input", "meaning": "a matrix of shape (samples, n_in): one row per sample"},
+    {"symbol": "W", "meaning": "the layer's weight matrix, shape (n_in, units); an attribute of the layer"},
+    {"symbol": "b", "meaning": "the layer's bias vector, shape (units,); an attribute of the layer"},
+    {"symbol": "input · W", "meaning": "the tensor (matrix) product `matmul`, shape (samples, units)"},
+    {"symbol": "relu", "meaning": "element-wise max(x, 0), defined on p.53"},
+    {"symbol": "output", "meaning": "the new representation, a matrix of shape (samples, units)"}
+   ],
+   "operations": "Inside out: a tensor product `matmul(input, W)`, then an addition of the vector `b` to every row of the result (broadcasting, p.54), then the element-wise `relu`.",
+   "purpose": "Defines what a `Dense(units, activation=\"relu\")` layer computes; it is the building block the first MNIST model stacked twice.",
+   "interpretation": "An affine transformation of the input features (a learned linear mixing plus a shift), followed by a nonlinearity so that stacked layers do not collapse into a single linear map.",
+   "intuition": "Each output unit is a weighted vote over all input features, offset by a bias, and clipped at zero.",
+   "numerical_example": "Take a batch of 2 samples with 3 features and a layer with 2 units (small numbers for illustration; not from the book):\n\n$$\\text{input} = \\begin{pmatrix} 1 & 0 & 2 \\\\ 0 & 1 & 1 \\end{pmatrix},\\quad W = \\begin{pmatrix} 1 & -1 \\\\ 0 & 2 \\\\ 1 & 1 \\end{pmatrix},\\quad b = (0.5,\\; -3)$$\n\n`matmul(input, W)` = [[1·1+0·0+2·1, 1·(−1)+0·2+2·1], [0+0+1, 0+2+1]] = [[3, 1], [1, 3]]. Adding b to each row: [[3.5, −2], [1.5, 0]]. relu: [[3.5, 0], [1.5, 0]]. Output shape (2, 2) = (samples, units).",
+   "source": "book",
+   "book_ref": "p.52"
+  },
+  {
+   "id": "m2",
+   "title": "Element count and memory of the video batch",
+   "latex": "N = 4 \\times 240 \\times 144 \\times 256 \\times 3 = 106{,}168{,}320, \\qquad \\text{bytes} = N \\times 4 \\approx 425\\ \\text{MB}",
+   "source_text": "a tensor of shape (4, 240, 144, 256, 3). That’s a total of 106,168,320 values! If the dtype of the tensor was float32, then each value would be stored in 32 bits, so the tensor would represent 425 MB.",
+   "variables": [
+    {"symbol": "N", "meaning": "number of scalar values in the tensor, the product of its shape"},
+    {"symbol": "4", "meaning": "samples (video clips in the batch)"},
+    {"symbol": "240", "meaning": "frames per clip (60 s × 4 fps)"},
+    {"symbol": "144, 256", "meaning": "height and width in pixels"},
+    {"symbol": "3", "meaning": "color channels"},
+    {"symbol": "4 bytes", "meaning": "size of one float32 value (32 bits)"}
+   ],
+   "operations": "Multiply the axis lengths to count elements; multiply by bytes per element for memory.",
+   "purpose": "Shows how quickly realistic data tensors become large and why dtype and compression matter.",
+   "interpretation": "Four short low-resolution clips decoded to float32 occupy about 425 MB; the same clips on disk as MPEG are a tiny fraction of that.",
+   "intuition": "Every extra axis multiplies the size; five axes multiply fast.",
+   "numerical_example": "4 × 240 = 960; × 144 = 138,240; × 256 = 35,389,440; × 3 = 106,168,320 values. × 4 bytes = 424,673,280 bytes ≈ 425 MB (decimal). As `uint8` it would be 106 MB; as `float16`, 212 MB. (The uint8/float16 figures are mine.)",
+   "source": "book",
+   "book_ref": "p.52"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "A Keras Dense layer instance",
+   "original_code": "keras.layers.Dense(512, activation=\"relu\")",
+   "language": "python",
+   "what_it_does": "Creates a fully connected layer with 512 output units and the relu activation, the first layer of the MNIST model on p.43.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "`512` is the number of units (the width of the output matrix and the number of columns of `W`); `activation=\"relu\"` chooses the nonlinearity applied after `matmul(input, W) + b`. `W` and `b` are created when the layer first sees its input shape."}
+   ],
+   "inputs_outputs": "Called on a matrix `(samples, n_in)`, it returns a matrix `(samples, 512)`.",
+   "algorithm": "Instantiation only; the computation is the formula in the next snippet.",
+   "theory_link": "A layer is a tensor function with its own weight tensors `W` and `b`.",
+   "parameters": [
+    {"name": "512", "role": "units: number of output features"},
+    {"name": "activation=\"relu\"", "role": "element-wise nonlinearity applied to the affine output"}
+   ],
+   "pitfalls": [
+    "Omitting `activation` gives a purely linear layer; stacking several of those is equivalent to a single linear layer (discussed on p.62)."
+   ],
+   "illustrative_code": null
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "What the Dense layer computes",
+   "original_code": "output = relu(matmul(input, W) + b)",
+   "language": "python",
+   "what_it_does": "Pseudocode for the layer's forward computation: tensor product with `W`, add `b`, apply relu.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Evaluated inside out: `matmul(input, W)` mixes the input features linearly into 512 new ones per sample; `+ b` adds the bias vector to every row (broadcasting); `relu` replaces negatives by 0. `W` is a matrix and `b` a vector, both attributes of the layer, not arguments."}
+   ],
+   "inputs_outputs": "Input `(samples, n_in)`; `W` `(n_in, 512)`; `b` `(512,)`; output `(samples, 512)`.",
+   "algorithm": "Three tensor operations: tensor product, element-wise addition with broadcasting, element-wise relu (each detailed on p.53-58).",
+   "theory_link": "An affine transformation followed by a nonlinearity; the geometric reading is given on p.59-62.",
+   "parameters": [
+    {"name": "W", "role": "weight matrix, learned"},
+    {"name": "b", "role": "bias vector, learned"}
+   ],
+   "pitfalls": [
+    "The order of `matmul(input, W)` matters: with `input` as `(samples, n_in)` the weights must be `(n_in, units)`; `matmul(W, input)` would fail or mean something else."
+   ],
+   "illustrative_code": "import numpy as np\n\ndef relu(x):\n    return np.maximum(x, 0.)\n\nrng = np.random.default_rng(0)\nx = rng.random((128, 784)).astype(\"float32\")   # a batch of 128 flattened MNIST images\nW = rng.standard_normal((784, 512)).astype(\"float32\") * 0.05\nb = np.zeros((512,), dtype=\"float32\")\n\noutput = relu(np.matmul(x, W) + b)\nprint(output.shape)         # (128, 512)\nprint((output >= 0).all())  # True: relu never outputs negatives"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why a 425 MB tensor comes from a tiny video file",
+   "kind": "numerical",
+   "body": "The book's clip is 60 s at 144 × 256, 4 fps. Where do the bytes go?\n\n- Decoded pixels per frame: 144 × 256 × 3 = 110,592 values.\n- Per clip: × 240 frames = 26,542,080 values.\n- Per batch of 4: 106,168,320 values (the number on the page).\n- As float32: × 4 bytes = 424,673,280 bytes ≈ 425 MB.\n\nTwo things inflate the tensor relative to the file on disk. First, dtype: pixels are naturally `uint8` (1 byte), so float32 quadruples the size. Second, compression: an MPEG-style codec stores only differences between neighbouring frames and discards imperceptible detail, routinely shrinking data by 50–100×. A few megabytes of MP4 therefore become hundreds of megabytes of float tensor once decoded. This is why video pipelines decode lazily, batch by batch, rather than loading a dataset into memory. (The decomposition and compression ratios are added here; the book gives only the final figures.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Reading the Dense formula one operation at a time",
+   "kind": "step_by_step",
+   "body": "Take the first MNIST layer, `Dense(512, activation=\"relu\")`, fed a batch of 128 flattened images.\n\n1. **`input`** has shape `(128, 784)`: 128 samples, 784 pixel features.\n2. **`matmul(input, W)`** with `W` of shape `(784, 512)` gives `(128, 512)`. Each of the 512 columns of `W` is a set of 784 weights, one per pixel; each output entry is a weighted sum of all pixels of one image.\n3. **`+ b`** adds the 512-vector `b` to every one of the 128 rows (broadcasting, p.54). Shape stays `(128, 512)`.\n4. **`relu(...)`** replaces each negative entry by 0, independently of all other entries (element-wise, p.53).\n5. **`output`** is `(128, 512)`: a new 512-feature representation of each image, ready for the next layer `Dense(10, activation=\"softmax\")`.\n\nThe parameter count of this layer is 784 × 512 + 512 = 401,920 (the arithmetic is mine; the book introduces the formula only).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Logic gates and tensor operations",
+   "kind": "analogy",
+   "body": "The authors compare tensor operations to the binary gates (`AND`, `OR`, `NOR`) that every program bottoms out in. Push the analogy one step: a CPU does not care whether it is running a spreadsheet or a game; it only executes gate-level instructions, and the *program* (the arrangement of instructions) is what differs. Likewise a deep learning framework only executes tensor products, additions and element-wise functions; the *model* is the arrangement of those operations, and the *weights* `W` and `b` are the data that arrangement operates with. Section 2.3 is the instruction-set manual; section 2.4 explains how the weights get written.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "From one frame to the (4, 240, 144, 256, 3) batch",
+   "why": "Traces the page's video example: a 144 × 256 color frame, 240 frames per 60-second clip at 4 fps, a batch of four clips, and shows the 106,168,320-element count.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "one frame (height, width, color_depth)", "shape": [144, 256, 3]},
+     {"op": "one clip, 240 frames", "shape": [240, 144, 256, 3]},
+     {"op": "batch of 4 clips", "shape": [4, 240, 144, 256, 3]}
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Dense(512, relu) inside the first MNIST model",
+   "why": "The page's `keras.layers.Dense(512, activation=\"relu\")` is the first layer of the p.43 model; click it to see the `(None, 512)` output shape and the size of `W` and `b` (784 × 512 + 512 parameters) behind `relu(matmul(input, W) + b)`.",
+   "widget": "nn_architecture",
+   "params": {
+    "layers": [
+     {"name": "input", "type": "input", "shape": "(None, 784)"},
+     {"name": "Dense", "type": "dense", "units": 512, "activation": "relu"},
+     {"name": "Dense", "type": "output", "units": 10, "activation": "softmax"}
+    ]
+   }
+  },
+  {
+   "id": "v3",
+   "type": "widget",
+   "title": "matmul(input, W): the product inside the Dense formula",
+   "why": "The first of the three operations in `output = relu(matmul(input, W) + b)`; here a (2, 3) input batch times a (3, 2) weight matrix produces the (2, 2) matrix used in the numerical example above.",
+   "widget": "matrix_product",
+   "params": {"A": [[1, 0, 2], [0, 1, 1]], "B": [[1, -1], [0, 2], [1, 1]]}
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Video tensors are rank 4 because a video is just a set of images.",
+   "correction": "A single video is rank 4 `(frames, height, width, color_depth)`; a *batch* of videos adds the samples axis and is rank 5."
+  },
+  {
+   "claim": "A 425 MB tensor means the video files take 425 MB on disk.",
+   "correction": "425 MB is the decoded float32 tensor. Real videos are stored compressed (e.g. MPEG) and not as float32, so the files are far smaller."
+  },
+  {
+   "claim": "`W` and `b` are passed to the Dense layer when you call it.",
+   "correction": "They are attributes of the layer object; the layer is called with `input` only. Training updates `W` and `b`."
+  },
+  {
+   "claim": "Neural networks require advanced mathematics beyond ordinary tensor arithmetic.",
+   "correction": "The page's point is the opposite: all learned transformations reduce to a handful of tensor operations such as addition and multiplication (plus simple element-wise functions)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 51, "note": "Channels-last / channels-first definitions and the original image-batch examples converted here."},
+   {"page": 50, "note": "The rank-5 video template among the four data categories."},
+   {"page": 47, "note": "dtype as a key attribute; \"you may go up to 5 if you process video data\"."},
+   {"page": 43, "note": "The first model: `Dense(512, activation=\"relu\")` followed by `Dense(10, activation=\"softmax\")`."}
+  ],
+  "later": [
+   {"page": 53, "note": "The three operations in the Dense formula unpacked; relu(x) = max(x, 0); element-wise operations and the no-math-notation note."},
+   {"page": 54, "note": "Broadcasting: how a vector `b` is added to a matrix."},
+   {"page": 56, "note": "The tensor product `matmul`."},
+   {"page": 59, "note": "Geometric interpretation of tensor operations."},
+   {"page": 62, "note": "Why the relu nonlinearity is needed between stacked layers."},
+   {"page": 76, "note": "Looking back at the first example with the Dense formula."},
+   {"page": 117, "note": "Which layers process which data formats (Dense, LSTM/Conv1D, Conv2D)."},
+   {"page": 257, "note": "Image data formats in deep learning frameworks."}
+  ],
+  "prerequisites": [
+   {"page": 47, "note": "Rank, shape, dtype."},
+   {"page": 51, "note": "Image tensor layouts."}
+  ],
+  "related_math": [
+   {"page": 53, "note": "relu(x) = max(x, 0)."}
+  ],
+  "related_code": [
+   {"page": 43, "note": "Listing 2.2, the network architecture with the same Dense layer."},
+   {"page": 53, "note": "Naive Python implementations of element-wise relu and addition."}
+  ],
+  "related_figures": [
+   {"page": 52, "note": "Figure 2.4, a rank-4 image data tensor."},
+   {"page": 51, "note": "Figure 2.3, a rank-3 timeseries data tensor."}
+  ]
+ },
+ "takeaways": [
+  "Channels-first versions of the image batches are `(128, 1, 256, 256)` and `(128, 3, 256, 256)`; Keras supports both layouts.",
+  "Video is rank 5: frame `(height, width, color_depth)` → clip `(frames, …)` → batch `(samples, frames, height, width, color_depth)`.",
+  "Four 60-second 144 × 256 clips at 4 fps form `(4, 240, 144, 256, 3)`: 106,168,320 values, 425 MB in float32; real videos are smaller because of dtype and compression.",
+  "All transformations learned by deep networks reduce to a handful of tensor operations, as programs reduce to logic gates.",
+  "A `Dense(512, activation=\"relu\")` layer computes `output = relu(matmul(input, W) + b)`, with `W` (matrix) and `b` (vector) stored as attributes of the layer."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "math",
+   "question": "Verify the book's count: how many values are in a tensor of shape `(4, 240, 144, 256, 3)`, and how many bytes does it occupy as float32?",
+   "options": [],
+   "answer": "4 × 240 × 144 × 256 × 3 = 106,168,320 values; × 4 bytes = 424,673,280 bytes, about 425 MB.",
+   "explanation": "The element count is the product of all axis lengths, and float32 stores each value in 32 bits = 4 bytes, matching the 425 MB stated on the page.",
+   "page_refs": [52]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "In the channels-first convention, how is the batch of 128 color 256 × 256 images stored?",
+   "options": ["(128, 256, 256, 3)", "(3, 128, 256, 256)", "(128, 3, 256, 256)", "(128, 256, 3, 256)"],
+   "answer": "(128, 3, 256, 256)",
+   "explanation": "Channels-first puts color depth right after the batch axis. `(128, 256, 256, 3)` is channels-last; `(3, 128, 256, 256)` puts channels before samples, which no convention does; `(128, 256, 3, 256)` places channels between height and width.",
+   "page_refs": [52, 51]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "Why are real-world video files much lighter than the 425 MB tensor computed on the page?",
+   "options": [],
+   "answer": "Because they are not stored as float32 values and they are compressed by a large factor (for example with MPEG).",
+   "explanation": "The page gives both reasons: dtype (float32 uses 4 bytes per value, far more than needed for pixel data) and compression (codecs such as MPEG shrink the data substantially).",
+   "page_refs": [52]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "What analogy do the authors use to introduce tensor operations, and what claim does it support?",
+   "options": [],
+   "answer": "Just as any computer program reduces to a small set of binary operations on binary inputs (AND, OR, NOR, …), all transformations learned by deep neural networks reduce to a handful of tensor operations (adding, multiplying tensors, and so on) applied to numeric tensors.",
+   "explanation": "The analogy frames section 2.3: a deep network, however complex, is composed from a few simple primitives, which the section then catalogues.",
+   "page_refs": [52]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "In `output = relu(matmul(input, W) + b)`, what are `W` and `b`?",
+   "options": [
+    "Two extra input tensors supplied with each batch",
+    "A matrix and a vector that are attributes of the Dense layer",
+    "Hyperparameters chosen by the user, like the number of units",
+    "The output shape and the batch size"
+   ],
+   "answer": "A matrix and a vector that are attributes of the Dense layer",
+   "explanation": "The page says `W` is a matrix and `b` a vector, both attributes of the layer. They are not inputs (only `input` is passed in), not hyperparameters (they are learned, whereas 512 units is a hyperparameter), and not shapes.",
+   "page_refs": [52]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "If `input` has shape `(128, 784)` and the layer is `Dense(512, activation=\"relu\")`, what are the shapes of `W`, `b` and `output`?",
+   "options": [],
+   "answer": "`W`: `(784, 512)`; `b`: `(512,)`; `output`: `(128, 512)`.",
+   "explanation": "`matmul(input, W)` requires W's first axis to match the 784 input features and its second axis to be the 512 units; `b` has one entry per unit and is added to every row; the output keeps the 128 samples and has 512 features. (Shapes are derived from the formula; the page states the formula but not these specific numbers.)",
+   "page_refs": [52, 43]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you list the three tensor operations hidden in `relu(matmul(input, W) + b)`, in the order they are executed, and say which upcoming subsection explains each?",
+   "options": [],
+   "answer": "1. Tensor product `matmul(input, W)` (2.3.3, p.56); 2. addition of the vector `b` to the matrix, which relies on broadcasting (2.3.1 element-wise ops p.53 and 2.3.2 broadcasting p.54); 3. element-wise `relu` (2.3.1, p.53).",
+   "explanation": "The next page lists exactly these three operations; the chapter outline shows where each is treated. If you could not name them, re-read the last paragraph of this page and p.53.",
+   "page_refs": [52, 53]
+  }
+ ]
+}

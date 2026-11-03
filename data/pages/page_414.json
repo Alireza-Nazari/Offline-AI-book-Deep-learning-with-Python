@@ -1,0 +1,462 @@
+{
+  "page_id": "page_414",
+  "pdf_page": 414,
+  "printed_page": "390",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:45:06Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean extraction; two code blocks and five body elements match the page image. Element p414_e07 merges two printed paragraphs (\"As machine learning practitioners...\" and \"These issues have led...\"); each gets its own note."
+  },
+  "overview": {
+    "title": "Word-level tokenizer on Moby Dick, and the case for subwords",
+    "chapter": "14 Text classification",
+    "section": "14.2 Preparing text data",
+    "subsection": "14.2.2 Subword tokenization",
+    "main_topic": "Comparing character- and word-level tokenization on Moby Dick, then motivating subword tokenization as a compression problem",
+    "central_idea": "Character tokenizers have tiny vocabularies but produce very long sequences; word tokenizers produce short sequences but need huge vocabularies or lose information to \"[UNK]\". Subword tokenization tries to get both: short sequences from a small vocabulary, which the authors frame as finding an ideal compression of the input.",
+    "importance": "This page holds the numbers that justify the rest of section 14.2: 64 vocabulary terms and 63 tokens per line for characters against 2,000 terms and 13 tokens for words. That trade-off is why byte-pair encoding (next page) and, later, the subword tokenizers of RoBERTa and the mini-GPT exist.",
+    "learning_objectives": [
+      "Read and interpret the vocabulary and sequence-length statistics of the word-level tokenizer built from Moby Dick",
+      "Compare character- and word-level tokenizers on vocabulary size and on output sequence length",
+      "Explain why word-level vocabularies don't scale to trillion-word datasets, and what happens when the vocabulary is aggressively capped",
+      "State the two goals of subword tokenization (concise output, small vocabulary) and connect them to the idea of compression"
+    ],
+    "prerequisites": [
+      "The CharTokenizer and WordTokenizer classes (Listings 14.1 and 14.3, pp.411-412)",
+      "compute_char_vocabulary / compute_word_vocabulary (Listings 14.2 and 14.4, pp.412-413)",
+      "The standardize, split and index steps of tokenization (section 14.2)",
+      "Basic Python: dicts, list slicing, regular expressions"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page finishes the Moby Dick experiment begun on p.413. After the character-level tokenizer, the authors build a **word-level vocabulary** capped at 2,000 terms with `compute_word_vocabulary(moby_dick, max_size=2_000)` and wrap it in a `WordTokenizer`. The printed statistics show:\n\n- **Vocabulary length: 2000.** The cap is reached; the book has far more distinct words than that.\n- **Vocabulary start:** `\"[UNK]\"`, `\",\"`, `\"the\"`, `\".\"`, `\"of\"`. Index 0 is reserved for unknown tokens, and the rest are sorted by frequency, so punctuation and function words come first.\n- **Vocabulary end:** `\"tambourine\"`, `\"subtle\"`, `\"perseus\"`, `\"elevated\"`, `\"repose\"`. These are rare words that only just made the cut.\n- **Line length: 13** tokens for the opening sentence *\"Call me Ishmael. Some years ago--never mind how long precisely.\"* The character tokenizer needed 63 (p.413).\n\nThe authors then name the trade-off. Characters cover the whole book with **64** vocabulary terms but produce long sequences. Words fill a 2,000-term vocabulary at once (indexing every word would take about **17,000** terms) but produce much shorter outputs. At modern scale, with datasets of *trillions* of words, a full word vocabulary would have hundreds of millions of entries. Capping it hard sends much of the text to `\"[UNK]\"` and throws information away. Those problems are why **subword tokenization** became popular as a middle ground.\n\nSection **14.2.2** states the goal: keep the `WordTokenizer`'s concise output and the `CharTokenizer`'s ability to encode almost any input with a small vocabulary. The authors frame this as **compression**. Shorter token sequences compress the length of each example, and a smaller vocabulary reduces the bytes needed per token. A tokenizer that does both gives the model *short, information-rich sequences*. The next page (p.415) builds on this idea with byte-pair encoding, a 1990s compression algorithm.",
+  "paragraphs": [
+    {
+      "ref": "p414_e04",
+      "excerpt": "We can print out the same data for our word-level tokenizer:",
+      "what_it_says": "This line introduces the inspection code for the word-level tokenizer. It mirrors the statistics printed for the character-level tokenizer on p.413.",
+      "what_it_means": "The authors run the same experiment on both tokenizers (same text, same probes: vocabulary size, first and last entries, length of one tokenized sentence), so the numbers can be compared directly.",
+      "why_it_matters": "Because the test is identical, the differences in vocabulary and sequence length come from the split rule alone, not from changes in the setup.",
+      "technical_idea": "The two tokenizers differ only in their split regex: r\".\" for characters and r\"[\\w]+|[.,!?;]\" for words. Standardization (lowercasing) and indexing are the same.",
+      "terminology": [
+        {"term": "word-level tokenizer", "meaning": "A tokenizer whose tokens are whole words, plus a few punctuation marks here, each mapped to one integer ID."}
+      ],
+      "connections": [
+        "p.413: the matching character-level statistics (vocabulary 64, line length 63)",
+        "p.412: WordTokenizer class, Listing 14.3"
+      ]
+    },
+    {
+      "ref": "p414_e06",
+      "excerpt": "We can already see some of the strengths and weaknesses of both",
+      "what_it_says": "The character tokenizer covers the entire book with only 64 vocabulary terms but encodes inputs as very long sequences. The word tokenizer fills its 2,000-term vocabulary at once, and covering every word in Moby Dick would take about 17,000 terms, but its outputs are much shorter.",
+      "what_it_means": "The two tokenizers sit at opposite ends of a trade-off between vocabulary size and sequence length. Characters give a complete, tiny vocabulary with long sequences. Words give a large, incomplete vocabulary with short sequences. On the test sentence the ratio is 63 to 13, almost 5x.",
+      "why_it_matters": "Vocabulary size sets the size of the model's embedding/input layer. Sequence length sets how much computation each example costs and how far apart related tokens end up. Every tokenizer choice moves you along this trade-off.",
+      "technical_idea": "With a 2,000-word cap, the roughly 15,000 words outside the top 2,000 all become index 0 (\"[UNK]\"). The character tokenizer, capped at max_size=100, needs only 64 entries, so nothing in the book maps to \"[UNK]\".",
+      "terminology": [
+        {"term": "vocabulary", "meaning": "The dict mapping each known token string to an integer index; its size is the number of distinct IDs the model can see."},
+        {"term": "sequence length", "meaning": "The number of tokens (integers) a given input is turned into."}
+      ],
+      "connections": [
+        "p.413: char vocabulary length 64, line length 63",
+        "p.418: the subword tokenizer lands at 16 tokens for the same sentence with no \"[UNK]\""
+      ]
+    },
+    {
+      "ref": "p414_e07",
+      "excerpt": "As machine learning practitioners have scaled models up with more and more data",
+      "what_it_says": "As models and datasets have grown, the downsides of both approaches have become clear. The \"compression\" of word-level tokenization turns out to be very important because it lets longer texts fit into a model. But a word vocabulary for a trillion-word dataset would have hundreds of millions of terms, and capping it hard encodes much text as \"[UNK]\", throwing information away.",
+      "what_it_means": "Scale makes the choice harder. Word-level tokenization wins on length: more text fits in a fixed context. But natural language has a very long tail of rare words, names, typos, numbers and foreign words, so the number of distinct words keeps growing with the corpus. You either pay for an enormous vocabulary or accept that many words become indistinguishable.",
+      "why_it_matters": "This is the practical reason modern language models don't use plain word tokenization. A vocabulary of hundreds of millions of entries would make the embedding layer unworkably large (p.480 makes the same point about RoBERTa), and a small capped one wastes information on \"[UNK]\".",
+      "technical_idea": "Beyond the book: the growth of distinct word types with corpus size is often described by Heaps' law, V ≈ K·N^β with β roughly 0.4-0.6, so the vocabulary keeps growing however much text you see. Every \"[UNK]\" collapses many different words into one ID, which the model cannot tell apart.",
+      "terminology": [
+        {"term": "\"[UNK]\" token", "meaning": "The reserved index-0 token every out-of-vocabulary token is mapped to (unk_id in the tokenizer classes)."},
+        {"term": "compression (of tokenization)", "meaning": "How many characters of text are packed into each token; more characters per token means shorter sequences."}
+      ],
+      "connections": [
+        "p.480: RoBERTa uses a 50,000-term subword vocabulary because word-level coverage would blow up the Embedding layer",
+        "p.419: shorter inputs help models track long-range dependencies"
+      ]
+    },
+    {
+      "ref": "p414_e07",
+      "excerpt": "These issues have led to the rise in popularity of a third type of tokenization",
+      "what_it_says": "These problems led to the rise of a third kind of tokenization, subword tokenization, which tries to bridge the gap between the word- and character-level approaches.",
+      "what_it_means": "Subword tokenization is presented as a compromise. Its tokens are pieces of words, longer than characters and shorter than (or equal to) words, so frequent words stay whole and rare ones are spelled out from smaller pieces.",
+      "why_it_matters": "This sentence introduces the method the authors go on to build (p.415-418) and that RoBERTa and the mini-GPT rely on later (pp.480, 495).",
+      "terminology": [
+        {"term": "subword tokenization", "meaning": "Tokenization whose units are frequent character sequences, between single characters and whole words."}
+      ],
+      "connections": [
+        "p.415: byte-pair encoding introduced",
+        "p.495: SentencePiece used for the mini-GPT applies the same byte-pair technique"
+      ]
+    },
+    {
+      "ref": "p414_e09",
+      "excerpt": "Subword tokenization aims to combine the best of both character- and word-level",
+      "what_it_says": "Subword tokenization aims to combine the strengths of both: the WordTokenizer's concise output and the CharTokenizer's ability to encode a wide range of inputs with a small vocabulary.",
+      "what_it_means": "This gives two concrete design goals: (1) short sequences, like words, and (2) a small vocabulary that can still represent nearly any string, like characters, so \"[UNK]\" is rarely or never needed.",
+      "why_it_matters": "These two goals are the criteria by which the authors later judge their SubWordTokenizer (p.418): 16 tokens for the test line, close to the word tokenizer's 13, with no \"[UNK]\" anywhere in Moby Dick.",
+      "terminology": [
+        {"term": "concise output", "meaning": "Few tokens per input text."},
+        {"term": "coverage", "meaning": "The fraction of possible inputs that can be encoded without falling back to an unknown token."}
+      ],
+      "connections": [
+        "p.411: CharTokenizer (Listing 14.1)",
+        "p.412: WordTokenizer (Listing 14.3)",
+        "p.418: evaluation of the finished SubWordTokenizer"
+      ]
+    },
+    {
+      "ref": "p414_e10",
+      "excerpt": "We can think of the search for the ideal tokenizer as the hunt",
+      "what_it_says": "The search for an ideal tokenizer can be seen as the search for an ideal compression of the input data. Shorter token sequences compress the overall length of each example, and a small vocabulary reduces the bytes needed to represent each token. Achieving both gives the model short, information-rich sequences.",
+      "what_it_means": "A tokenized text costs (number of tokens) × (cost per token). The number of tokens falls as tokens get longer, and the cost per token falls as the vocabulary gets smaller, because each ID needs fewer bits. A good tokenizer keeps both small, so each token carries a lot of information.",
+      "why_it_matters": "The compression view is why a compression algorithm, byte-pair encoding, works so well as a tokenizer (p.415). It also explains why tokenizers are judged on average tokens per word or characters per token.",
+      "technical_idea": "Beyond the book: an index into a vocabulary of size V needs about log2(V) bits, so the total cost is roughly L·log2(V). For the test sentence: chars 63·log2(64) = 378 bits; words 13·log2(2000) ≈ 143 bits. In a neural network the cost of a large V shows up mainly as embedding and softmax parameters, not raw bits.",
+      "terminology": [
+        {"term": "compression", "meaning": "Representing the same information with fewer symbols or bits."},
+        {"term": "information-rich sequence", "meaning": "A sequence where each token carries a lot of meaning, so fewer tokens describe the same text."}
+      ],
+      "connections": [
+        "p.415: the compression analogy leads to byte-pair encoding (Gage, 1994)"
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "tokenization",
+      "name": "Tokenization",
+      "definition": "Turning text into a sequence of integer IDs through standardization, splitting into tokens, and indexing against a vocabulary.",
+      "intuition": "Choosing the 'alphabet' the model reads in: letters, whole words, or something in between.",
+      "technical": "In the book's tokenizers, __call__ runs standardize (lowercase), split (a regex) and index (vocabulary.get(t, unk_id)).",
+      "significance": "Fixes both the vocabulary size (model input layer size) and the sequence length (compute cost and context usage).",
+      "example": "The word tokenizer maps the opening line of Moby Dick to 13 IDs; the char tokenizer maps it to 63.",
+      "misconception": "Tokenization isn't a neutral preprocessing detail. It changes what the model can represent and how much text fits in its input.",
+      "related": ["character_tokenization", "word_tokenization", "subword_tokenization"],
+      "source": "book"
+    },
+    {
+      "id": "word_tokenization",
+      "name": "Word-level tokenization",
+      "definition": "Splitting text into words (and here, the punctuation marks . , ! ? ;) and giving each distinct word its own ID.",
+      "intuition": "Each token is a unit a human reader recognizes, so sequences are short and easy to interpret.",
+      "technical": "Split regex r\"[\\w]+|[.,!?;]\"; vocabulary = \"[UNK]\" plus the max_size-1 most frequent tokens.",
+      "significance": "Gives strong 'compression' (13 tokens for the test line) but needs a huge vocabulary for full coverage (about 17,000 for Moby Dick alone, hundreds of millions for web-scale data).",
+      "example": "With max_size=2,000 the least frequent kept words are 'tambourine', 'subtle', 'perseus', 'elevated', 'repose'; rarer words become \"[UNK]\".",
+      "misconception": "A bigger dataset doesn't fix the coverage problem. The number of distinct words keeps growing as you add text.",
+      "related": ["tokenization", "character_tokenization", "subword_tokenization", "vocabulary"],
+      "source": "book"
+    },
+    {
+      "id": "character_tokenization",
+      "name": "Character-level tokenization",
+      "definition": "Splitting text into individual characters, each with its own ID.",
+      "intuition": "A tiny alphabet that can spell anything, but spelling takes many symbols.",
+      "technical": "Split regex r\".\"; Moby Dick needs only 64 entries including \"[UNK]\".",
+      "significance": "Full coverage with a tiny vocabulary, but long sequences (63 tokens for a sentence the word tokenizer encodes in 13).",
+      "example": "'call' becomes 4 tokens: c, a, l, l.",
+      "misconception": "A small vocabulary doesn't make a model cheaper overall. The longer sequences increase computation and make long-range dependencies harder to learn.",
+      "related": ["tokenization", "word_tokenization", "subword_tokenization"],
+      "source": "book"
+    },
+    {
+      "id": "subword_tokenization",
+      "name": "Subword tokenization",
+      "definition": "Tokenization with units between characters and words: frequent words stay whole, rare words are split into frequent pieces.",
+      "intuition": "Common words get their own tokens; rare words are built from smaller pieces, so nothing becomes \"[UNK]\".",
+      "technical": "Learned from data, for example by byte-pair encoding, which starts from characters and repeatedly merges frequent adjacent pairs (p.415).",
+      "significance": "The dominant choice for modern language models (p.419): short sequences with a small vocabulary and no information lost to \"[UNK]\".",
+      "example": "From p.418: the SubWordTokenizer encodes the test line in 16 tokens (vs. 13 words, 63 chars) and handles every word in Moby Dick.",
+      "misconception": "Subword tokens aren't linguistically defined morphemes. They are frequency-driven pieces and may not match prefixes or suffixes.",
+      "related": ["tokenization", "byte_pair_encoding", "word_tokenization", "character_tokenization"],
+      "source": "book"
+    },
+    {
+      "id": "oov_unk_token",
+      "name": "Out-of-vocabulary token \"[UNK]\"",
+      "definition": "A reserved vocabulary entry (index 0 here) for every token not in the vocabulary.",
+      "intuition": "A single 'something else' bucket.",
+      "technical": "index() uses vocabulary.get(t, self.unk_id); compute_*_vocabulary puts \"[UNK]\" first, so it gets ID 0.",
+      "significance": "Lets a capped vocabulary handle any input, but every \"[UNK]\" loses the identity of the original word.",
+      "example": "With a 2,000-word cap, a rare word such as 'harpooneer' (illustrative, not checked against the actual vocabulary) might map to 0.",
+      "misconception": "Not every unseen character sequence becomes \"[UNK]\". The word tokenizer's regex silently drops characters it doesn't match, such as '--', before indexing.",
+      "related": ["word_tokenization", "vocabulary"],
+      "source": "book"
+    },
+    {
+      "id": "tokenization_as_compression",
+      "name": "Tokenization as compression",
+      "definition": "Viewing a tokenizer as a code that should represent text with few tokens, each drawn from a small vocabulary.",
+      "intuition": "Like packing a suitcase: fewer items (short sequences), each item cheap to label (small vocabulary).",
+      "technical": "Sequence length L shrinks as tokens get longer; the per-token cost grows with vocabulary size V (about log2 V bits, or V embedding rows). A good tokenizer keeps both low.",
+      "significance": "Explains why a lossless compression algorithm (BPE, p.415) works as a tokenizer.",
+      "example": "chars: L=63, V=64; words: L=13, V=2,000 (lossy because of \"[UNK]\"); subwords aim for small L with moderate V and no loss.",
+      "misconception": "The goal isn't the smallest possible byte count. It's sequences a model can learn from efficiently, with each token carrying useful information.",
+      "related": ["subword_tokenization", "byte_pair_encoding"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Rough size of a tokenized text (not in the book)",
+      "latex": "\\text{cost} \\approx L \\cdot \\log_2 V \\ \\text{bits}",
+      "source_text": "Not printed; formalizes the sentence \"Reducing token length compresses the overall length of our examples. A small vocabulary reduces the number of bytes we would need to represent each token.\"",
+      "variables": [
+        {"symbol": "L", "meaning": "number of tokens the input is split into (sequence length)"},
+        {"symbol": "V", "meaning": "vocabulary size (number of distinct token IDs)"},
+        {"symbol": "\\log_2 V", "meaning": "bits needed to write one token ID with a fixed-length binary code"}
+      ],
+      "operations": "Multiply the number of tokens by the bits per token.",
+      "purpose": "Shows the two levers the page names: token count and vocabulary size.",
+      "interpretation": "Character tokenization keeps log2 V small but makes L large; word tokenization does the reverse. Subword tokenization tries to keep the product small without lossy \"[UNK]\" mapping.",
+      "intuition": "Short messages written with a small alphabet are cheap to send.",
+      "numerical_example": "Test sentence: chars $63 \\cdot \\log_2 64 = 63 \\cdot 6 = 378$ bits; words $13 \\cdot \\log_2 2000 \\approx 13 \\cdot 10.97 \\approx 143$ bits. The word version is shorter but lossy for rare words.",
+      "source": "ai_explanation",
+      "book_ref": "p.414"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Building the 2,000-word vocabulary and WordTokenizer for Moby Dick",
+      "original_code": "vocabulary = compute_word_vocabulary(moby_dick, max_size=2_000)\nword_tokenizer = WordTokenizer(vocabulary)",
+      "language": "python",
+      "what_it_does": "Counts every lowercased word and punctuation token in Moby Dick, keeps \"[UNK]\" plus the 1,999 most frequent tokens, and builds a WordTokenizer around that vocabulary.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "compute_word_vocabulary (Listing 14.4, p.413) iterates over the book's lines, lowercases them, splits with r\"[\\w]+|[.,!?;]\", counts with collections.Counter, then returns a dict {token: index} with \"[UNK]\" at 0 and the most_common(max_size - 1) tokens after it. 2_000 is Python's underscore literal for 2000."},
+        {"lines": "2", "explanation": "Creates the WordTokenizer (Listing 14.3, p.412), which stores the vocabulary and looks up unk_id = vocabulary[\"[UNK]\"]."}
+      ],
+      "inputs_outputs": "Input: moby_dick, a list of text lines from p.413. Output: vocabulary (dict of 2,000 entries) and a callable word_tokenizer that maps a string to a list of ints.",
+      "algorithm": "Frequency-ranked vocabulary truncation: count, sort by frequency, keep the top max_size-1, reserve index 0 for unknowns.",
+      "theory_link": "The max_size cap is the 'aggressively restrict your word-level vocabulary' scenario in the following paragraph: about 15,000 of the book's roughly 17,000 distinct words are left out.",
+      "parameters": [
+        {"name": "max_size", "role": "Upper bound on vocabulary size including \"[UNK]\"; here 2,000."}
+      ],
+      "pitfalls": [
+        "The vocabulary comes from the same text it is tested on, so coverage on new text will be worse.",
+        "most_common breaks ties by first occurrence, so which rare words just make the cutoff is somewhat arbitrary."
+      ],
+      "illustrative_code": "# AI-written: measure how much of the book falls to [UNK]\nimport collections, re\ncounts = collections.Counter()\nfor line in moby_dick:\n    counts.update(re.findall(r\"[\\w]+|[.,!?;]\", line.lower()))\ntotal = sum(counts.values())\nkept = sum(c for t, c in counts.items() if t in vocabulary)\nprint(\"distinct tokens:\", len(counts))\nprint(\"fraction of tokens -> [UNK]:\", 1 - kept / total)"
+    },
+    {
+      "id": "c2",
+      "listing": null,
+      "title": "Inspecting the word-level vocabulary and tokenizing the opening line",
+      "original_code": ">>> print(\"Vocabulary length:\", len(vocabulary))\nVocabulary length: 2000\n>>> print(\"Vocabulary start:\", list(vocabulary.keys())[:5])\nVocabulary start: [\"[UNK]\", \",\", \"the\", \".\", \"of\"]\n>>> print(\"Vocabulary end:\", list(vocabulary.keys())[-5:])\nVocabulary end: [\"tambourine\", \"subtle\", \"perseus\", \"elevated\", \"repose\"]\n>>> print(\"Line length:\", len(word_tokenizer(\n...    \"Call me Ishmael. Some years ago--never mind how long precisely.\"\n... )))\nLine length: 13",
+      "language": "python",
+      "what_it_does": "Prints the vocabulary size, its five most frequent and five least frequent entries, and the number of tokens produced for Moby Dick's first sentence.",
+      "line_explanations": [
+        {"lines": "1-2", "explanation": "The vocabulary reached the 2,000 cap, so the book has more distinct words than that."},
+        {"lines": "3-4", "explanation": "Python dicts keep insertion order, so keys() lists tokens by rank. After \"[UNK]\" come the comma, 'the', the period and 'of', the most frequent tokens in the book."},
+        {"lines": "5-6", "explanation": "The last five entries are the least frequent words that still made the top 2,000."},
+        {"lines": "7-10", "explanation": "Tokenizes the opening sentence. Split result: call, me, ishmael, ., some, years, ago, never, mind, how, long, precisely, . = 13 tokens. The '--' is matched by neither alternative of the regex, so it is dropped, not mapped to \"[UNK]\"."}
+      ],
+      "inputs_outputs": "Input: the vocabulary and tokenizer from c1. Output: printed diagnostics; 13 token IDs for the test line (vs. 63 for the char tokenizer on p.413).",
+      "algorithm": "Simple inspection: len(), ordered dict-key slicing, and a single tokenizer call.",
+      "theory_link": "These numbers are the evidence for the strengths/weaknesses paragraph that follows: short output, but a vocabulary that is full and incomplete.",
+      "parameters": [],
+      "pitfalls": [
+        "Expecting '--' to appear as a token: the word-level split regex discards characters outside \\w and .,!?;",
+        "Assuming the 13 IDs are all known words: whether any become 0 (\"[UNK]\") depends on the vocabulary; 'ishmael' is likely frequent enough, but the page doesn't print the IDs."
+      ],
+      "illustrative_code": "# AI-written: see the actual tokens and IDs\ns = \"Call me Ishmael. Some years ago--never mind how long precisely.\"\ntoks = word_tokenizer.split(word_tokenizer.standardize(s))\nprint(toks)            # ['call', 'me', 'ishmael', '.', 'some', ...]\nprint(word_tokenizer(s))"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why the vocabulary end is a list of rare words",
+      "kind": "breakdown",
+      "body": "`compute_word_vocabulary` appends tokens in `Counter.most_common` order, so a token's index is its frequency rank. The first entries (`,`, `the`, `.`, `of`) appear thousands of times. The last ones (`tambourine`, `subtle`, `perseus`, ...) are at the frequency where the cut falls, probably words appearing only a handful of times. Every word ranked below #1,999 becomes `[UNK]`. This rank-frequency pattern (a few very common tokens, a long tail of rare ones, Zipf's law) is general; it isn't specific to Moby Dick. (Beyond the book.)",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Three tokenizers on one sentence",
+      "kind": "numerical",
+      "body": "| tokenizer | vocabulary size | tokens for the test line | needs `[UNK]`? |\n|---|---|---|---|\n| characters (p.413) | 64 | 63 | no (on this book) |\n| words (this page) | 2,000 (17,000 for full coverage) | 13 | yes, for rare words |\n| subwords (p.418) | small, learned by BPE | 16 | no |\n\nCharacters-per-token: 63/63 = 1 for characters, while words average about 63/13 ≈ 4.8 characters of the original sentence per token (counting spaces). Subwords land near the word figure without losing coverage.",
+      "source": "inference"
+    },
+    {
+      "title": "Spelling with an alphabet vs. a phrasebook",
+      "kind": "analogy",
+      "body": "A character tokenizer is like writing everything letter by letter: you can spell any word, but messages get long. A word tokenizer is like a phrasebook with 2,000 entries: very short to use, but anything missing becomes \"(something)\". Subword tokenization is a phrasebook for common words plus the alphabet for everything else.",
+      "source": "analogy"
+    },
+    {
+      "title": "Where vocabulary size costs you in a neural network",
+      "kind": "application",
+      "body": "In a model, the real cost of a large vocabulary is parameters, not bytes on disk. An `Embedding` layer with vocabulary $V$ and dimension $d$ has $V\\cdot d$ weights, and a language model's output softmax has another $d\\cdot V$. With $d = 512$, a 2,000-word vocabulary costs about 1M embedding weights; a 100M-term web-scale word vocabulary would cost 51 billion. This is the 'unworkably large' problem the authors mention, and it's why p.480 says a 50,000-term subword vocabulary lets RoBERTa handle any word. (Numbers are illustrative.)",
+      "source": "ai_explanation"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "widget",
+      "title": "The test sentence as word tokens",
+      "why": "The page tokenizes \"Call me Ishmael. Some years ago--never mind how long precisely.\" into 13 word tokens; step through tokens and IDs.",
+      "widget": "token_sequence",
+      "params": {"text": "Call me Ishmael. Some years ago--never mind how long precisely.", "mode": "word"}
+    },
+    {
+      "id": "v2",
+      "type": "widget",
+      "title": "The same sentence as character tokens",
+      "why": "For comparison with v1: the character tokenizer (p.413) turns the same line into 63 tokens.",
+      "widget": "token_sequence",
+      "params": {"text": "Call me Ishmael. Some years ago--never mind how long precisely.", "mode": "char"}
+    },
+    {
+      "id": "v3",
+      "type": "chart",
+      "title": "Vocabulary size vs. tokens per line",
+      "why": "Plots the two pairs of numbers the paragraph compares: 64 terms / 63 tokens for characters, 2,000 terms / 13 tokens for words.",
+      "chart": {
+        "type": "bar",
+        "data": {
+          "labels": ["Character tokenizer", "Word tokenizer"],
+          "datasets": [
+            {"label": "Vocabulary size", "data": [64, 2000], "yAxisID": "y"},
+            {"label": "Tokens for test line", "data": [63, 13], "yAxisID": "y1"}
+          ]
+        },
+        "options": {
+          "scales": {
+            "y": {"type": "logarithmic", "position": "left", "title": {"display": true, "text": "vocabulary size (log)"}},
+            "y1": {"type": "linear", "position": "right", "title": {"display": true, "text": "tokens"}, "grid": {"drawOnChartArea": false}}
+          }
+        }
+      }
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "A bigger word vocabulary will eventually cover all words.",
+      "correction": "The number of distinct words keeps growing with the corpus; for trillion-word datasets, the page says, the vocabulary would reach hundreds of millions of terms."
+    },
+    {
+      "claim": "Character tokenization is strictly better because it never needs \"[UNK]\".",
+      "correction": "It pays with very long sequences (63 vs. 13 tokens here). The authors stress that the compression offered by longer tokens is very important for feeding longer texts to a model."
+    },
+    {
+      "claim": "Capping the vocabulary is free: rare words don't matter.",
+      "correction": "Every capped word becomes \"[UNK]\", which the page calls throwing out valuable information. Rare words are often names and content words that matter for meaning."
+    },
+    {
+      "claim": "All characters not in the word vocabulary become \"[UNK]\".",
+      "correction": "With this split regex, characters such as '-' never become tokens at all; '--' in the test line is silently dropped before indexing."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 411, "note": "CharTokenizer, Listing 14.1, and the standardize/split/index design"},
+      {"page": 412, "note": "compute_char_vocabulary (Listing 14.2) and WordTokenizer (Listing 14.3)"},
+      {"page": 413, "note": "compute_word_vocabulary (Listing 14.4), loading Moby Dick, and the character-level statistics (64 terms, 63 tokens)"}
+    ],
+    "later": [
+      {"page": 415, "note": "Byte-pair encoding presented as a compression algorithm reused for tokenization"},
+      {"page": 418, "note": "SubWordTokenizer results: 16 tokens for the test line, no \"[UNK]\" on Moby Dick"},
+      {"page": 419, "note": "Why subword tokenization dominates modern language models; when character or word level still make sense"},
+      {"page": 480, "note": "RoBERTa's 50,000-term subword tokenizer, close to the one built in chapter 14"},
+      {"page": 495, "note": "SentencePiece BPE tokenizer with 32,000 terms for the mini-GPT"}
+    ],
+    "prerequisites": [
+      {"page": 409, "note": "Section 14.2 on preparing text data and the steps of tokenization"}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 413, "note": "Listing 14.4, which builds the vocabulary used here"},
+      {"page": 412, "note": "Listing 14.3, WordTokenizer"}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "The word-level vocabulary for Moby Dick reaches its 2,000-term cap; full coverage would need about 17,000 terms.",
+    "Frequency ordering puts \"[UNK]\" at 0, then ',', 'the', '.', 'of'; the tail holds rare words like 'tambourine' and 'repose'.",
+    "The test sentence costs 13 word tokens versus 63 character tokens, the 'compression' that word tokenization offers.",
+    "At web scale, word vocabularies become unworkably large, and capping them sends information to \"[UNK]\".",
+    "Subword tokenization aims for the WordTokenizer's concise output with the CharTokenizer's small, full-coverage vocabulary.",
+    "The authors frame tokenizer design as compression: short sequences and a small vocabulary give short, information-rich inputs."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "On Moby Dick, which pair of numbers describes the word-level tokenizer built on this page?",
+      "options": ["Vocabulary 64, line length 63", "Vocabulary 2,000, line length 13", "Vocabulary 17,000, line length 13", "Vocabulary 2,000, line length 16"],
+      "answer": "Vocabulary 2,000, line length 13",
+      "explanation": "The printout shows Vocabulary length: 2000 and Line length: 13. 64/63 are the character tokenizer's numbers (p.413). 17,000 is how many terms full coverage would take, not the capped vocabulary. 16 is the subword tokenizer's line length (p.418).",
+      "page_refs": [414, 413, 418]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "Why is \"[UNK]\" the first entry of the vocabulary, and why does ',' come right after it?",
+      "options": [],
+      "answer": "compute_word_vocabulary inserts \"[UNK]\" first (index 0) and then appends tokens in descending frequency order; the comma is the most frequent token in the book.",
+      "explanation": "Listing 14.4 starts with vocabulary = [\"[UNK]\"] and then loops over most_common(max_size - 1). Dicts preserve insertion order, so keys() reflects frequency rank.",
+      "page_refs": [413, 414]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "Explain the trade-off between vocabulary size and sequence length using the numbers on this page and p.413.",
+      "options": [],
+      "answer": "Characters: 64 terms give full coverage but 63 tokens for the test line. Words: 13 tokens, but the 2,000-term vocabulary is full and covers only part of the ~17,000 distinct words, so the rest become \"[UNK]\". Lowering one quantity raises the other.",
+      "explanation": "The page states that a character tokenizer 'needs only 64 vocabulary terms ... but will encode each input as a very long sequence', while a word tokenizer 'quickly fills a 2,000-term vocabulary' with 'much shorter' outputs.",
+      "page_refs": [414, 413]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "According to the authors, what happens if you aggressively restrict a word-level vocabulary on a huge dataset?",
+      "options": ["Sequences become much longer", "Much text is encoded as \"[UNK]\", throwing out valuable information", "The model can no longer handle punctuation", "Training becomes impossible because the embedding grows"],
+      "answer": "Much text is encoded as \"[UNK]\", throwing out valuable information",
+      "explanation": "The page says exactly this. Sequence length doesn't grow from capping (each word is still one token). Punctuation is handled by the regex. A growing embedding is the problem with *not* restricting the vocabulary.",
+      "page_refs": [414]
+    },
+    {
+      "id": "q5",
+      "type": "math",
+      "question": "Using cost ≈ L·log2(V) bits (an approximation added in these notes, not from the book), compare the character and word encodings of the test sentence.",
+      "options": [],
+      "answer": "Chars: 63 × log2(64) = 63 × 6 = 378 bits. Words: 13 × log2(2000) ≈ 13 × 10.97 ≈ 143 bits.",
+      "explanation": "The word encoding is about 2.6x more compact by this measure, but it is lossy for words outside the top 2,000. Subword tokenization aims to approach the word figure without losing information.",
+      "page_refs": [414]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "Why does the word tokenizer give 13 tokens for \"Call me Ishmael. Some years ago--never mind how long precisely.\"? What happens to the '--'?",
+      "options": [],
+      "answer": "The regex [\\w]+|[.,!?;] yields 11 words plus 2 periods = 13 tokens; '--' matches neither alternative, so it is silently dropped.",
+      "explanation": "Tokens: call, me, ishmael, ., some, years, ago, never, mind, how, long, precisely, . The hyphen isn't a word character and isn't in the punctuation class.",
+      "page_refs": [412, 414]
+    },
+    {
+      "id": "q7",
+      "type": "conceptual",
+      "question": "In what sense is choosing a tokenizer a compression problem, according to section 14.2.2?",
+      "options": [],
+      "answer": "Shorter token sequences compress each example's length, and a smaller vocabulary reduces the bytes needed per token; achieving both produces short, information-rich sequences for the model.",
+      "explanation": "This is the page's final paragraph. It sets up byte-pair encoding, a compression algorithm, on p.415.",
+      "page_refs": [414, 415]
+    },
+    {
+      "id": "q8",
+      "type": "self",
+      "question": "Can you state the two properties subword tokenization tries to combine, and which existing tokenizer supplies each?",
+      "options": [],
+      "answer": "Concise output (from WordTokenizer) and encoding a wide range of inputs with a small vocabulary (from CharTokenizer).",
+      "explanation": "Taken directly from the first paragraph of 14.2.2.",
+      "page_refs": [414]
+    }
+  ]
+}

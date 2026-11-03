@@ -1,0 +1,436 @@
+{
+ "page_id": "page_520",
+ "pdf_page": 520,
+ "printed_page": "496",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T11:40:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Historical claim: 'OpenAI originally described RLHF in a 2022 paper' (footnote 5, Ouyang et al., InstructGPT). Learning from human preference comparisons with a reward model predates this: Christiano et al. (2017, OpenAI/DeepMind) and Stiennon et al. (2020, OpenAI, summarization). The 2022 paper applied RLHF to general instruction following. Also, OpenAI's ChatGPT announcement describes fine-tuning a GPT-3.5-series model rather than GPT-3's initial pretrained parameters. Probably intended as a simplification, but worth a softer wording.",
+   "Heading printed as '4.1.1. Using a chatbot trained with RLHF' (in the page image too); the numbering looks like a typesetting artifact and the heading belongs under 16.4.1."
+  ],
+  "extraction_quality": "Good. Callout annotations for Listing 16.15 ('Takes an action', 'Receives a reward', 'Updates the model parameters. We do not update the reward model.') are in the bundle and match the image."
+ },
+ "overview": {
+  "title": "The simplest RLHF loop, and loading an instruction-tuned Gemma",
+  "chapter": "16 Text generation",
+  "section": "16.4 Going further with LLMs",
+  "subsection": "16.4.1 Reinforcement Learning with Human Feedback (RLHF)",
+  "main_topic": "Pseudocode for a minimal RLHF algorithm (generate, score, filter, fine-tune), its limitations and iterative nature, and loading the 4B instruction-tuned Gemma 3 checkpoint.",
+  "central_idea": "In RLHF for LLMs the action is generating a response and the reward is a regression model's score; the simplest algorithm keeps high-reward responses and fine-tunes on them, while practical algorithms use all responses. Companies release such preference-tuned 'instruct' models, like gemma3_instruct_4b.",
+  "importance": "Makes RLHF concrete in eight lines of pseudocode and moves from training our own chatbot to using a professionally tuned one.",
+  "learning_objectives": [
+   "Map 'action' and 'reward' to concrete LLM operations.",
+   "Read Listing 16.15 and explain each step.",
+   "Explain why practical RLHF does not discard bad responses.",
+   "Describe the iterative cycle of RLHF.",
+   "Load an instruction-tuned Gemma variant and explain the bfloat16 dtype choice."
+  ],
+  "prerequisites": [
+   "RLHF stages and reward model (p.519)",
+   "Supervised fine-tuning with fit() (p.517)",
+   "generate() (p.510)",
+   "Loading KerasHub presets (p.509)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page makes the RL vocabulary of p.519 concrete. For an LLM, the **action** is simply generating a response to a prompt with `generate()`, and the **reward** is applying a separate **regression model** (the reward model) to that output string.\n\n**Listing 16.15** gives the simplest possible RLHF algorithm in pseudocode: for each batch of prompts, generate responses (*takes an action*), score them with `reward_model.predict` (*receives a reward*), keep those with `score > cutoff`, and call `model.fit(good_responses)` (*updates the model parameters; the reward model is not updated*). In effect, the \"good\" outputs become new data for more supervised fine-tuning, as in section 16.3.\n\nThe authors note that in practice you usually **don't discard bad responses**: specialized gradient update algorithms use **all responses and rewards**, since a bad response is a good signal of what not to do. OpenAI described RLHF in a 2022 paper (footnote 5, Ouyang et al.) and used this setup to go from GPT-3's pretrained parameters to the first ChatGPT (see review flag on the history). The setup is also **iterative**: the improved model generates better responses, humans rank them, and a better reward model is trained.\n\nUnder the heading *Using a chatbot trained with RLHF* (printed with the odd number \"4.1.1.\"), the authors propose trying a model trained with such iterative preference tuning. Because chatbots are the \"killer app\" of large Transformers, companies that release pretrained models like Gemma also release **instruction-tuned** versions built for chat. **Listing 16.16** loads `\"gemma3_instruct_4b\"` with `CausalLM.from_preset` and `dtype=\"bfloat16\"`: a **4-billion-parameter** model, four times the size of the previous one and the largest used in the book. The dtype choice is explained on p.521.",
+ "paragraphs": [
+  {
+   "ref": "p520_e03",
+   "excerpt": "In our case, the action is simply generating a response to an input",
+   "what_it_says": "For LLMs, the action is generating a response with generate(), and the reward is a separate regression model applied to that output; a pseudocode example follows.",
+   "what_it_means": "The LLM is the RL 'policy': its outputs are actions. The reward model from p.519 plays the role of the environment's feedback.",
+   "why_it_matters": "Grounds abstract RL terms in operations the reader has already used.",
+   "terminology": [
+    {
+     "term": "regression model",
+     "meaning": "A model outputting a continuous value; here the reward model's single float."
+    },
+    {
+     "term": "policy (RL)",
+     "meaning": "The model choosing actions; here the LLM (term not used in the book)."
+    }
+   ],
+   "connections": [
+    "p.519: actions, rewards and the reward model defined.",
+    "p.510: generate()."
+   ]
+  },
+  {
+   "ref": "p520_e06",
+   "excerpt": "In this simple example, we filter our generated responses with a reward cutoff,",
+   "what_it_says": "The example filters generated responses by a reward cutoff and fine-tunes on the 'good' ones. In practice, bad responses are not discarded; specialized gradient algorithms use all responses and rewards, because bad responses show what not to do. OpenAI described RLHF in a 2022 paper and used it to go from GPT-3 to the first ChatGPT.",
+   "what_it_means": "Filtering then SFT is a form of rejection sampling / best-of-n fine-tuning. Real RLHF (e.g. PPO in InstructGPT) weights each response's log-likelihood gradient by its (baseline-adjusted) reward, so low-reward responses are pushed down rather than ignored.",
+   "why_it_matters": "Explains both the core idea and why production algorithms are more elaborate.",
+   "technical_idea": "Beyond the book: InstructGPT used PPO with a KL penalty to the SFT model to stop the policy from drifting into outputs that exploit the reward model.",
+   "terminology": [
+    {
+     "term": "reward cutoff",
+     "meaning": "Threshold above which a response is kept as training data."
+    }
+   ],
+   "connections": [
+    "p.517: model.fit as in supervised fine-tuning.",
+    "p.528: the same 'keep correct responses and fine-tune' recipe for reasoning, also described as RL."
+   ]
+  },
+  {
+   "ref": "p520_e07",
+   "excerpt": "An advantage of this setup is that it can be iterative. You can",
+   "what_it_says": "RLHF can be iterated: the improved model generates better responses, humans rank them, and a better reward model is trained.",
+   "what_it_means": "Data collection and training alternate, so the reward model keeps up with the distribution of outputs the improving model produces.",
+   "why_it_matters": "Iteration is how quality keeps improving beyond a single round; it also limits reward-model exploitation by refreshing its training data.",
+   "terminology": [
+    {
+     "term": "iterative preference tuning",
+     "meaning": "Repeated cycles of generation, human ranking, reward-model training and policy tuning."
+    }
+   ],
+   "connections": [
+    "p.521: the instruct model was produced by extensive tuning of this kind."
+   ]
+  },
+  {
+   "ref": "p520_e09",
+   "excerpt": "We can make this more concrete by trying a model trained with this",
+   "what_it_says": "Companies that release pretrained models like Gemma commonly also release instruction-tuned chat versions; the book loads a 4B-parameter one, four times the size of the previous model and the largest in the book.",
+   "what_it_means": "Rather than doing RLHF ourselves (which needs human raters), we use Google's preference-tuned checkpoint.",
+   "why_it_matters": "Shows the practical path most developers take: start from an instruct checkpoint.",
+   "technical_idea": "4B parameters in bfloat16 (2 bytes each) ≈ 8 GB of weights, which fits for inference on a 16 GB GPU; in float32 it would be ≈ 16 GB.",
+   "terminology": [
+    {
+     "term": "instruction-tuned (instruct) model",
+     "meaning": "A checkpoint further trained with SFT and preference tuning for chat."
+    }
+   ],
+   "connections": [
+    "p.509: base Gemma 3 1B loaded with dtype float32.",
+    "p.521: why bfloat16, and the instruct model's prompt template."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "rlhf",
+   "name": "Reinforcement Learning with Human Feedback (RLHF)",
+   "definition": "Training an LLM against a reward model learned from human preferences.",
+   "intuition": "Try, get scored, do more of what scores well.",
+   "technical": "Loop: generate → reward_model.predict → update the LLM (simplest: filter by cutoff and fit).",
+   "significance": "Took GPT-3 to ChatGPT per the book.",
+   "example": "Listing 16.15.",
+   "misconception": "That the reward model is trained during the loop; it is frozen while the LLM updates.",
+   "related": [
+    "reward_model",
+    "supervised_fine_tuning",
+    "reinforcement_learning"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "rejection_sampling_finetuning",
+   "name": "Filter-and-fine-tune (rejection sampling)",
+   "definition": "Generating candidates, keeping those above a reward threshold, and fine-tuning on them.",
+   "intuition": "Keep your best drafts and practice them.",
+   "technical": "Listing 16.15's `if score > cutoff: good_responses.append(response)` then `model.fit`.",
+   "significance": "Simplest RLHF variant; reused for reasoning training (p.528).",
+   "example": "Keep the 2 best of 8 sampled answers per prompt.",
+   "misconception": "That it uses all the signal; it wastes the information in bad responses.",
+   "related": [
+    "rlhf",
+    "supervised_fine_tuning"
+   ],
+   "source": "inference"
+  },
+  {
+   "id": "instruct_model",
+   "name": "Instruction-tuned checkpoint",
+   "definition": "A released model variant specialized for chat by SFT and preference tuning.",
+   "intuition": "The 'assistant' edition of a base model.",
+   "technical": "`keras_hub.models.CausalLM.from_preset(\"gemma3_instruct_4b\", dtype=\"bfloat16\")`.",
+   "significance": "Common practice for model releases; the starting point for most applications.",
+   "example": "gemma3_instruct_4b.",
+   "misconception": "That it can be prompted with any format; it has its own template (p.521).",
+   "related": [
+    "rlhf",
+    "instruction_fine_tuning"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "16.15",
+   "title": "Pseudocode for the simplest possible RLHF algorithm",
+   "original_code": "for prompts in dataset:\n    responses = model.generate(prompts)\n    rewards = reward_model.predict(responses)\n    good_responses = []\n    for response, score in zip(responses, rewards):\n        if score > cutoff:\n            good_responses.append(response)\n    model.fit(good_responses)",
+   "language": "python",
+   "what_it_does": "For each batch of prompts, generates responses, scores them with the frozen reward model, keeps those above a cutoff, and fine-tunes the LLM on them.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Iterate over batches of prompts."
+    },
+    {
+     "lines": "2",
+     "explanation": "Takes an action: the LLM generates responses."
+    },
+    {
+     "lines": "3",
+     "explanation": "Receives a reward: the reward model scores each response (in reality it should see prompt + response)."
+    },
+    {
+     "lines": "4-7",
+     "explanation": "Keep only responses scoring above `cutoff`."
+    },
+    {
+     "lines": "8",
+     "explanation": "Updates the model parameters with ordinary supervised fine-tuning; the reward model is not updated."
+    }
+   ],
+   "inputs_outputs": "Input: prompts, a policy model, a frozen reward model, a cutoff. Output: an updated policy model.",
+   "algorithm": "Generate → score → filter → SFT, repeated.",
+   "theory_link": "RL in the book's broad sense: the model learns from rewards on its own actions (p.519).",
+   "parameters": [
+    {
+     "name": "cutoff",
+     "role": "Reward threshold; higher is more selective but keeps less data."
+    }
+   ],
+   "pitfalls": [
+    "Pseudocode: `fit` would need the prompts paired with responses, not just responses.",
+    "Discards the signal in bad responses; real algorithms use all responses.",
+    "Optimizing hard against a fixed reward model can exploit its flaws (reward hacking); not discussed in the book."
+   ],
+   "illustrative_code": "# Not in the book: pairing prompts with kept responses for fit()\nkept = {\"prompts\": [], \"responses\": []}\nfor p, r, s in zip(prompts, responses, rewards):\n    if s > cutoff:\n        kept[\"prompts\"].append(p)\n        kept[\"responses\"].append(r)\nmodel.fit(tf.data.Dataset.from_tensor_slices(kept).batch(2))"
+  },
+  {
+   "id": "c2",
+   "listing": "16.16",
+   "title": "Loading an instruction-tuned Gemma variant",
+   "original_code": "gemma_lm = keras_hub.models.CausalLM.from_preset(\n    \"gemma3_instruct_4b\",\n    dtype=\"bfloat16\",\n)",
+   "language": "python",
+   "what_it_does": "Downloads and instantiates the 4B-parameter instruction-tuned Gemma 3 with bfloat16 weights.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Same high-level CausalLM task API as listing 16.11 (p.509)."
+    },
+    {
+     "lines": "2",
+     "explanation": "Preset name of the chat-tuned 4B checkpoint."
+    },
+    {
+     "lines": "3",
+     "explanation": "bfloat16: 2 bytes per parameter, halving memory compared with float32; explained on p.521."
+    }
+   ],
+   "inputs_outputs": "Output: a CausalLM with tokenizer and weights (~8 GB in bfloat16).",
+   "algorithm": "Preset loading.",
+   "theory_link": "Using a preference-tuned model instead of tuning our own.",
+   "parameters": [
+    {
+     "name": "dtype",
+     "role": "Numeric precision of weights; affects memory and numerical stability."
+    }
+   ],
+   "pitfalls": [
+    "Overwrites the earlier `gemma_lm`, the LoRA-tuned 1B model.",
+    "Requires accepting the Gemma terms on Kaggle (p.509).",
+    "Memory: the 1B and 4B models together may not fit; free the old one first."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "From filtering to policy gradients",
+   "kind": "alternative",
+   "source": "ai_explanation",
+   "body": "Filtering is equivalent to giving weight 1 to good responses and 0 to bad ones. Policy-gradient methods instead weight each response's log-likelihood gradient by its advantage (reward minus a baseline), so bad responses get negative weight and become less likely. PPO, used in InstructGPT, adds clipping and a KL penalty toward the SFT model. Later methods like DPO skip the explicit reward model and optimize directly on preference pairs. None of these specifics are in the book, which only says 'specialized gradient update algorithms'."
+  },
+  {
+   "title": "Memory of the 4B model",
+   "kind": "numerical",
+   "source": "ai_explanation",
+   "body": "4×10⁹ parameters × 2 bytes (bfloat16) ≈ 8 GB. The same model in float32 would need ≈ 16 GB, the entire Colab GPU, before activations. That explains the switch from `dtype=\"float32\"` (p.509) to `\"bfloat16\"`, which p.521 justifies: no training, so gradient stability does not matter."
+  },
+  {
+   "title": "Drafts and an editor",
+   "kind": "analogy",
+   "source": "analogy",
+   "body": "A writer produces several drafts, an editor (reward model) scores them, and the writer studies the best ones. Listing 16.15 is exactly that. A smarter writer would also study the rejected drafts to learn what to avoid, which is what practical RLHF algorithms do."
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Listing 16.15 as a loop",
+   "why": "Shows the generate → reward → filter → fit cycle and the outer iterative loop described on this page.",
+   "mermaid": "flowchart LR\n D[\"prompts\"] --> G[\"model.generate: action\"]\n G --> R[\"reward_model.predict: reward\"]\n R --> F{\"score > cutoff?\"}\n F -->|yes| K[\"good_responses\"]\n F -->|no| X[\"discarded (practical RLHF uses them too)\"]\n K --> T[\"model.fit: update policy; reward model frozen\"]\n T -->|next batch| G\n T -.->|iterate: new rankings, new reward model| R"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "RLHF updates the reward model during the policy update.",
+   "correction": "The listing's callout says the reward model is not updated; it is retrained only between iterations."
+  },
+  {
+   "claim": "Bad responses are useless.",
+   "correction": "The book notes a bad response gives a good signal on what not to do; practical algorithms use all of them."
+  },
+  {
+   "claim": "Listing 16.15 is how ChatGPT was trained.",
+   "correction": "It is the simplest possible version; real RLHF uses specialized gradient algorithms."
+  },
+  {
+   "claim": "The instruct model can be loaded in float32 like before without issue.",
+   "correction": "At 4B parameters float32 would need ~16 GB; the book uses bfloat16."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 519,
+    "note": "RLHF motivation, reward model, actions and rewards."
+   },
+   {
+    "page": 517,
+    "note": "Supervised fine-tuning with fit()."
+   },
+   {
+    "page": 509,
+    "note": "Listing 16.11 loading gemma3_1b in float32."
+   }
+  ],
+  "later": [
+   {
+    "page": 521,
+    "note": "bfloat16 explained; the instruct model's prompt template."
+   },
+   {
+    "page": 522,
+    "note": "The instruct model on the 542nd-president question."
+   },
+   {
+    "page": 528,
+    "note": "Generate, check, fine-tune loop for reasoning, also called RL."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 510,
+    "note": "generate()."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 509,
+    "note": "Listing 16.11, same from_preset API."
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "For LLMs, action = generating a response; reward = a separate regression model's score.",
+  "Simplest RLHF: generate, score, keep responses above a cutoff, fine-tune on them; the reward model stays fixed.",
+  "Practical RLHF uses all responses with specialized gradient algorithms, since bad responses carry signal.",
+  "RLHF is iterative: better model → new rankings → better reward model.",
+  "Model providers release instruction-tuned checkpoints; Listing 16.16 loads gemma3_instruct_4b in bfloat16 (4B params, largest in the book)."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In Listing 16.15, which model's parameters are updated?",
+   "options": [
+    "The reward model only",
+    "The LLM only",
+    "Both the LLM and the reward model",
+    "Neither; it only filters data"
+   ],
+   "answer": "The LLM only",
+   "explanation": "The callout says model.fit updates the model parameters and the reward model is not updated. Filtering is followed by fit, so 'neither' is wrong.",
+   "page_refs": [
+    520
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "What are the 'action' and the 'reward' in the RLHF setup described on the page?",
+   "options": [],
+   "answer": "Action: generating a response to a prompt with generate(). Reward: the score from applying a separate regression (reward) model to that output.",
+   "explanation": "Stated in the first paragraph.",
+   "page_refs": [
+    520
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why do practical RLHF algorithms not discard bad responses?",
+   "options": [],
+   "answer": "A bad response gives a useful signal about what not to do; specialized gradient algorithms use all responses and rewards to steer the parameters.",
+   "explanation": "Directly from the page.",
+   "page_refs": [
+    520
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "What makes RLHF iterative according to the page?",
+   "options": [
+    "The same reward model is reused forever",
+    "The improved model generates new responses, humans rank them, and a new reward model is trained",
+    "The cutoff is lowered each epoch",
+    "The dataset is shuffled each round"
+   ],
+   "answer": "The improved model generates new responses, humans rank them, and a new reward model is trained",
+   "explanation": "Stated in the paragraph on iteration. The other options are not described.",
+   "page_refs": [
+    520
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "math",
+   "question": "Roughly how much memory do the weights of a 4B-parameter model take in bfloat16 and in float32?",
+   "options": [],
+   "answer": "About 8 GB in bfloat16 (2 bytes/param) and about 16 GB in float32 (4 bytes/param).",
+   "explanation": "Parameter count × bytes per parameter; the dtype reasoning is on p.521.",
+   "page_refs": [
+    520,
+    521
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "Which paper does the book cite for RLHF, and what system did OpenAI build with it?",
+   "options": [],
+   "answer": "Ouyang et al., 'Training Language Models to Follow Instructions with Human Feedback' (2022); the first version of ChatGPT.",
+   "explanation": "Footnote 5 and the paragraph text. (See the review note: earlier preference-learning work exists.)",
+   "page_refs": [
+    520
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you identify what Listing 16.15's pseudocode leaves out compared to real RLHF?",
+   "options": [],
+   "answer": "Using all responses with gradient weights, pairing prompts with responses in fit, and safeguards like a KL penalty against reward hacking.",
+   "explanation": "Self-check; the first point is in the book, the others go beyond it.",
+   "page_refs": [
+    520
+   ]
+  }
+ ]
+}

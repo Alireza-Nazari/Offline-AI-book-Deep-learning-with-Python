@@ -1,0 +1,574 @@
+{
+ "pdf_page": 541,
+ "printed_page": "517",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:50:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "The prose says 'you only pass `x_train` to the model in `fit`', but Listing 17.5 passes `mnist_digits` (the concatenation of x_train and x_test, as the callout itself explains). The text and the code disagree about the variable name."
+  ],
+  "extraction_quality": "Good. e03 is the body of compute_loss() from Listing 17.4 (begun on p.540). The callouts are fragmented in the extraction and were reassembled from the page image. One callout says the loss is 'already part of the train_step()'; more precisely it is computed in the overridden compute_loss(), which the built-in train_step() calls."
+ },
+ "overview": {
+  "title": "The VAE loss (reconstruction + KL) and training on MNIST",
+  "chapter": "17 Image generation",
+  "section": "17.1 Deep learning for image generation",
+  "subsection": "17.1.3 Implementing a VAE with Keras",
+  "main_topic": "Body of compute_loss(): sampling, decoding, summed per-pixel binary crossentropy, closed-form KL divergence, metric updates; then compiling without a loss and fitting without targets",
+  "central_idea": "compute_loss() finishes the forward pass (sample z, decode) and returns reconstruction loss plus the mean KL divergence to a standard normal. Because the loss lives in the model, compile() takes no loss argument and fit() takes no targets.",
+  "importance": "This page turns the two abstract VAE losses of p.536 into concrete formulas and shows the complete training call. The trained decoder is then used for generation on the next page.",
+  "learning_objectives": [
+   "Explain every line of the compute_loss() body",
+   "Write the reconstruction loss and the KL term as formulas and say which axes they reduce over",
+   "Explain why compile() gets no loss and fit() gets no targets",
+   "Explain why the training and test sets are concatenated",
+   "Recognize the relative weighting of the reconstruction and KL terms in this implementation"
+  ],
+  "prerequisites": [
+   "compute_loss() override and the VAE class (p.540)",
+   "Sampler and decoder (p.538-539)",
+   "Binary crossentropy (chapter 4)",
+   "KL regularization concept (p.536)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page completes `compute_loss()` from **Listing 17.4**. Callouts mark that argument `x` is the model's input and that `y_pred` is the output of `call()`.\n\n1. `z_mean, z_log_var = y_pred` unpacks the encoder's outputs.\n2. `reconstruction = self.decoder(self.sampler(z_mean, z_log_var))` samples a latent point and decodes it (\"This is our reconstructed image\").\n3. **Reconstruction loss**: `keras.losses.binary_crossentropy(x, reconstruction)` gives a per-pixel crossentropy of shape (batch, 28, 28), averaged over the last (channel) axis. It is **summed over the spatial dimensions (axes 1 and 2)** and **averaged over the batch dimension**.\n4. **KL loss**: `-0.5 * (1 + z_log_var - ops.square(z_mean) - ops.exp(z_log_var))`, the closed-form KL divergence from $\\mathcal N(\\mu,\\sigma^2)$ to $\\mathcal N(0,1)$ for each latent dimension. It is added as `ops.mean(kl_loss)` (\"Adds the regularization term (Kullback-Leibler divergence)\").\n5. The two `Mean` trackers are updated and `total_loss` is returned.\n\nNext, **Listing 17.5** trains the model. Because `compute_loss()` handles the loss, `compile()` gets **no loss argument** (only `optimizer=keras.optimizers.Adam()`), and `fit()` gets **no targets**. The text says you only pass `x_train`, but the code passes `mnist_digits`: the authors **concatenate the MNIST training and test images** (70,000 in total) because a generative model does not need a held-out test set here. Images get a channel axis with `np.expand_dims(..., -1)` and are scaled to [0, 1] with `astype(\"float32\") / 255`. Training runs for **30 epochs with batch size 128**.\n\nOnce trained, the **decoder** network can turn arbitrary latent vectors into images. This is used on the next page to plot a grid of decoded points.",
+ "paragraphs": [
+  {
+   "ref": "p541_e04",
+   "excerpt": "Finally, you’re ready to instantiate and train the model on MNIST digits",
+   "what_it_says": "Since compute_loss() takes care of the loss, no external loss is given at compile time (loss=None), and therefore no target data is passed during training; only x_train is passed to fit.",
+   "what_it_means": "With loss=None, Keras's default compute_loss would have nothing to compute. The override replaces it, and fit receives y=None, which flows into compute_loss as y. Note that the listing actually passes `mnist_digits` (training plus test images), not `x_train`.",
+   "why_it_matters": "This is the general recipe for self-supervised models in Keras 3: put the loss logic in the model, compile with only an optimizer, fit on inputs alone.",
+   "terminology": [
+    {
+     "term": "loss=None",
+     "meaning": "The default compile argument when no loss is given; the model must provide its own loss."
+    }
+   ],
+   "connections": [
+    "p.540: why compute_loss() is overridden",
+    "p.536: the two losses being minimized"
+   ]
+  },
+  {
+   "ref": "p541_e07",
+   "excerpt": "Once the model is trained, you can use the decoder network to turn arbitrary",
+   "what_it_says": "After training, the decoder alone turns arbitrary latent vectors into images.",
+   "what_it_means": "Because the KL term pulled the codes toward a standard normal in 2-D, points in roughly [-2, 2] x [-2, 2] decode to plausible digits. You can feed a grid of points or random draws from N(0, I) to `vae.decoder`.",
+   "why_it_matters": "This is image *generation*: producing digits that were never in the dataset.",
+   "connections": [
+    "p.542: decoded grid of latent points (continuation of this section)",
+    "p.561: summary on latent-space manipulation with VAEs"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "kl_divergence",
+   "name": "Kullback-Leibler divergence (closed form for Gaussians)",
+   "definition": "The VAE regularization loss: how far each encoder Gaussian is from the standard normal prior.",
+   "intuition": "It penalizes means far from 0 and standard deviations far from 1 in either direction.",
+   "technical": "Per dimension: $-\\tfrac12(1+\\log\\sigma^2-\\mu^2-\\sigma^2)\\ge 0$, zero iff $\\mu=0,\\sigma=1$.",
+   "significance": "Keeps the latent space compact and continuous so that decoding random points works.",
+   "example": "$\\mu=1$, $\\log\\sigma^2=0$: KL = 0.5.",
+   "misconception": "Its minimum is not at sigma = 0: very narrow distributions are penalized as well.",
+   "related": [
+    "vae",
+    "regularization"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "cross_entropy",
+   "name": "Binary crossentropy as reconstruction loss",
+   "definition": "Per-pixel crossentropy between the target intensity in [0, 1] and the predicted intensity.",
+   "intuition": "Each pixel is treated as a probability of ink; the loss is low when the prediction matches.",
+   "technical": "$-[x\\log\\hat x+(1-x)\\log(1-\\hat x)]$, summed over 28x28 pixels, averaged over the batch.",
+   "significance": "Drives the decoder to reproduce the input.",
+   "example": "x = 1, prediction 0.9: 0.105; prediction 0.5: 0.693.",
+   "misconception": "Its minimum for non-binary targets is not 0 but the entropy of the target; it still is minimized at prediction = target.",
+   "related": [
+    "loss_function",
+    "sigmoid"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "compute_loss_override",
+   "name": "Overriding Model.compute_loss()",
+   "definition": "Supplying the scalar training loss from inside the model.",
+   "intuition": "The model grades itself.",
+   "technical": "Returns reconstruction_loss + mean(kl_loss); compile(loss=None); fit(x) with no y.",
+   "significance": "Backend-agnostic custom training.",
+   "example": "Listing 17.4/17.5.",
+   "misconception": "The callout says the loss is 'part of the train_step()'; strictly it is in compute_loss(), which train_step() calls.",
+   "related": [
+    "keras_model"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Reconstruction loss",
+   "latex": "\\mathcal L_{\\text{rec}} = \\frac{1}{N}\\sum_{n=1}^{N}\\sum_{i=1}^{28}\\sum_{j=1}^{28} -\\Big[x_{nij}\\log \\hat x_{nij} + (1-x_{nij})\\log(1-\\hat x_{nij})\\Big]",
+   "source_text": "reconstruction_loss = ops.mean(ops.sum(keras.losses.binary_crossentropy(x, reconstruction), axis=(1, 2)))",
+   "variables": [
+    {
+     "symbol": "N",
+     "meaning": "batch size (128)"
+    },
+    {
+     "symbol": "x_{nij}",
+     "meaning": "input pixel (row i, column j) of image n, in [0, 1]"
+    },
+    {
+     "symbol": "\\hat x_{nij}",
+     "meaning": "decoded pixel from the sigmoid output"
+    }
+   ],
+   "operations": "Per-pixel binary crossentropy (binary_crossentropy averages over the size-1 channel axis), sum over axes 1 and 2, mean over the batch.",
+   "purpose": "Make decoded samples match the inputs.",
+   "interpretation": "Summing over 784 pixels (instead of averaging) makes this term large, so it carries much more weight than the KL term.",
+   "intuition": "Total 'surprise' of the decoder about the real image, per image.",
+   "numerical_example": "If every pixel had loss 0.1, the per-image sum would be 784 * 0.1 = 78.4. A typical early-training value is in the hundreds; it drops as training proceeds.",
+   "source": "book",
+   "book_ref": "p.541"
+  },
+  {
+   "id": "m2",
+   "title": "KL divergence to a standard normal (per latent dimension)",
+   "latex": "D_{KL}\\big(\\mathcal N(\\mu,\\sigma^2)\\,\\|\\,\\mathcal N(0,1)\\big) = -\\tfrac12\\big(1 + \\log\\sigma^2 - \\mu^2 - \\sigma^2\\big),\\qquad \\sigma^2 = e^{\\log\\sigma^2}",
+   "source_text": "kl_loss = -0.5 * (1 + z_log_var - ops.square(z_mean) - ops.exp(z_log_var))",
+   "variables": [
+    {
+     "symbol": "\\mu",
+     "meaning": "z_mean for one latent dimension"
+    },
+    {
+     "symbol": "\\log\\sigma^2",
+     "meaning": "z_log_var for that dimension"
+    },
+    {
+     "symbol": "\\sigma^2",
+     "meaning": "ops.exp(z_log_var), the variance"
+    }
+   ],
+   "operations": "Elementwise over shape (batch, 2). The total loss uses ops.mean, which averages over both the batch and the latent dimensions.",
+   "purpose": "Regularize the encoder's distributions toward the prior N(0, 1).",
+   "interpretation": "It is zero only at $\\mu=0,\\sigma^2=1$. $\\mu^2/2$ penalizes off-center codes; $\\tfrac12(\\sigma^2-1-\\log\\sigma^2)$ penalizes variances that are too small or too large.",
+   "intuition": "A spring pulling each code's cloud back to a unit-sized cloud at the origin.",
+   "numerical_example": "$\\mu=0$: $\\log\\sigma^2=-2$ gives 0.568, $0$ gives 0, $2$ gives 2.195. Adding $\\mu=1$ adds 0.5. For $\\mu=(1,0)$, $\\log\\sigma^2=(0,0)$ the per-dimension values are (0.5, 0), and ops.mean gives 0.25 (the textbook sum over dimensions would give 0.5).",
+   "source": "book",
+   "book_ref": "p.541"
+  },
+  {
+   "id": "m3",
+   "title": "Total loss",
+   "latex": "\\mathcal L = \\mathcal L_{\\text{rec}} + \\frac{1}{N d}\\sum_{n=1}^{N}\\sum_{k=1}^{d} D_{KL}^{(n,k)}",
+   "source_text": "total_loss = reconstruction_loss + ops.mean(kl_loss)",
+   "variables": [
+    {
+     "symbol": "d",
+     "meaning": "latent_dim = 2"
+    },
+    {
+     "symbol": "D_{KL}^{(n,k)}",
+     "meaning": "KL for sample n, dimension k"
+    }
+   ],
+   "operations": "Sum of the batch-averaged reconstruction loss and the KL term averaged over batch and latent dimensions.",
+   "purpose": "The single scalar returned by compute_loss and minimized by Adam.",
+   "interpretation": "Beyond the book: the standard negative ELBO sums KL over latent dimensions; averaging divides it by d = 2, a slightly weaker regularization. With the reconstruction term summed over 784 pixels, reconstruction dominates.",
+   "intuition": "Fidelity plus a tidiness penalty.",
+   "source": "book",
+   "book_ref": "p.541"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "17.4",
+   "title": "compute_loss() body (Listing 17.4, continued)",
+   "original_code": "        original = x\n        z_mean, z_log_var = y_pred\n        reconstruction = self.decoder(self.sampler(z_mean, z_log_var))\n        reconstruction_loss = ops.mean(\n            ops.sum(\n                keras.losses.binary_crossentropy(x, reconstruction), axis=(1, 2)\n            )\n        )\n        kl_loss = -0.5 * (\n            1 + z_log_var - ops.square(z_mean) - ops.exp(z_log_var)\n        )\n        total_loss = reconstruction_loss + ops.mean(kl_loss)\n        self.reconstruction_loss_tracker.update_state(reconstruction_loss)\n        self.kl_loss_tracker.update_state(kl_loss)\n        return total_loss",
+   "language": "python",
+   "what_it_does": "Finishes the VAE forward pass and computes reconstruction plus KL loss, updates the trackers and returns the scalar loss.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "original = x: argument x is the model's input (callout). The variable is not used afterward."
+    },
+    {
+     "lines": "2",
+     "explanation": "Argument y_pred is the output of call() (callout): the encoder's [z_mean, z_log_var]."
+    },
+    {
+     "lines": "3",
+     "explanation": "Samples z with the Sampler and decodes it: 'This is our reconstructed image' (callout)."
+    },
+    {
+     "lines": "4-8",
+     "explanation": "Binary crossentropy per pixel, summed over the spatial dimensions (axes 1 and 2), then averaged over the batch dimension (callout)."
+    },
+    {
+     "lines": "9-11",
+     "explanation": "Closed-form KL divergence to N(0, 1), elementwise, shape (batch, latent_dim)."
+    },
+    {
+     "lines": "12",
+     "explanation": "Adds the regularization term (Kullback-Leibler divergence) (callout), averaged over all its elements."
+    },
+    {
+     "lines": "13-14",
+     "explanation": "Updates the state of the loss-tracking metrics (callout). kl_loss is passed unreduced; Mean averages all its elements."
+    },
+    {
+     "lines": "15",
+     "explanation": "Returns the scalar loss to minimize."
+    }
+   ],
+   "inputs_outputs": "x: (N, 28, 28, 1) in [0, 1]; y_pred: [(N, 2), (N, 2)]. Returns a scalar.",
+   "algorithm": "Sample -> decode -> BCE (sum pixels, mean batch) + mean KL.",
+   "theory_link": "Implements the reconstruction and regularization losses named on p.536.",
+   "parameters": [
+    {
+     "name": "axis=(1, 2)",
+     "role": "Sum over height and width."
+    },
+    {
+     "name": "-0.5",
+     "role": "Constant from the closed-form Gaussian KL."
+    }
+   ],
+   "pitfalls": [
+    "`original` is assigned but never used.",
+    "ops.mean(kl_loss) averages over latent dimensions too, so the KL weight is 1/latent_dim of the standard ELBO's.",
+    "binary_crossentropy reduces the last axis; because the channel axis has size 1, the output shape is (N, 28, 28), which is why axes (1, 2) are summed.",
+    "sample_weight is ignored by this override."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "17.5",
+   "title": "Training the VAE",
+   "original_code": "import numpy as np\n(x_train, _), (x_test, _) = keras.datasets.mnist.load_data()\nmnist_digits = np.concatenate([x_train, x_test], axis=0)\nmnist_digits = np.expand_dims(mnist_digits, -1).astype(\"float32\") / 255\nvae = VAE(encoder, decoder)\nvae.compile(optimizer=keras.optimizers.Adam())\nvae.fit(mnist_digits, epochs=30, batch_size=128)",
+   "language": "python",
+   "what_it_does": "Loads MNIST, merges train and test images, normalizes them, builds the VAE and trains it for 30 epochs without a loss argument or targets.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Imports NumPy."
+    },
+    {
+     "lines": "2",
+     "explanation": "Loads MNIST; labels are discarded with _ because the model is self-supervised."
+    },
+    {
+     "lines": "3",
+     "explanation": "We train on all MNIST digits, so we concatenate the training and test samples (callout): 70,000 images."
+    },
+    {
+     "lines": "4",
+     "explanation": "Adds a channel axis, giving (70000, 28, 28, 1), and scales pixels to [0, 1] as float32."
+    },
+    {
+     "lines": "5",
+     "explanation": "Instantiates the VAE with the encoder and decoder from Listings 17.1 and 17.3."
+    },
+    {
+     "lines": "6",
+     "explanation": "We don't pass a loss argument in compile(), since the loss is already handled by the model (callout; computed in compute_loss())."
+    },
+    {
+     "lines": "7",
+     "explanation": "We don't pass targets in fit(), since train_step() doesn't expect any (callout). 30 epochs, batch size 128."
+    }
+   ],
+   "inputs_outputs": "Input: 70,000 MNIST images. Output: trained encoder/decoder weights and a History object with loss, reconstruction_loss and kl_loss.",
+   "algorithm": "Adam optimization of the VAE loss over mini-batches.",
+   "theory_link": "Self-supervised training: the inputs are the only data.",
+   "parameters": [
+    {
+     "name": "epochs=30",
+     "role": "Number of passes over the 70,000 images."
+    },
+    {
+     "name": "batch_size=128",
+     "role": "Images per gradient step (about 547 steps per epoch)."
+    },
+    {
+     "name": "Adam()",
+     "role": "Optimizer with default learning rate 0.001."
+    }
+   ],
+   "pitfalls": [
+    "Forgetting / 255 would make binary crossentropy targets invalid (outside [0, 1]).",
+    "Forgetting expand_dims would give (N, 28, 28), which does not match the encoder's Input shape (28, 28, 1).",
+    "Merging the test set is fine for this generative demo but would be wrong if you wanted an unbiased evaluation."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Deriving the KL formula",
+   "kind": "step_by_step",
+   "source": "ai_explanation",
+   "body": "For $q=\\mathcal N(\\mu,\\sigma^2)$ and $p=\\mathcal N(0,1)$: $D_{KL}(q\\|p)=\\mathbb E_q[\\log q-\\log p]$. Here $\\log q(z)=-\\tfrac12\\log(2\\pi\\sigma^2)-\\frac{(z-\\mu)^2}{2\\sigma^2}$ and $\\log p(z)=-\\tfrac12\\log 2\\pi-\\tfrac{z^2}{2}$. Taking expectations, with $\\mathbb E[(z-\\mu)^2]=\\sigma^2$ and $\\mathbb E[z^2]=\\mu^2+\\sigma^2$, gives $-\\tfrac12\\log\\sigma^2-\\tfrac12+\\tfrac12(\\mu^2+\\sigma^2)=-\\tfrac12(1+\\log\\sigma^2-\\mu^2-\\sigma^2)$, exactly the code."
+  },
+  {
+   "title": "Balance between the two terms",
+   "kind": "numerical",
+   "source": "ai_explanation",
+   "body": "The reconstruction term is a sum over 784 pixels per image (typically tens to hundreds of nats), while the KL term is averaged over 2 dimensions (typically a few nats). The model therefore favors reconstruction quality, but the KL term still keeps codes near the origin, which is enough for a decodable 2-D grid. Changing the relative weight (for example using ops.sum over latent dims, or a beta factor) changes how smooth and how sharp the results are."
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "chart",
+   "title": "KL term per latent dimension vs. z_log_var",
+   "why": "Plots the exact expression in compute_loss() for mu = 0 and mu = 1, showing the minimum at log-variance 0 (sigma = 1) and the mu^2/2 offset.",
+   "chart": {
+    "type": "line",
+    "data": {
+     "labels": [
+      "-3",
+      "-2",
+      "-1",
+      "-0.5",
+      "0",
+      "0.5",
+      "1",
+      "2"
+     ],
+     "datasets": [
+      {
+       "label": "z_mean = 0",
+       "data": [
+        1.025,
+        0.568,
+        0.184,
+        0.053,
+        0.0,
+        0.074,
+        0.359,
+        2.195
+       ]
+      },
+      {
+       "label": "z_mean = 1",
+       "data": [
+        1.525,
+        1.068,
+        0.684,
+        0.553,
+        0.5,
+        0.574,
+        0.859,
+        2.695
+       ]
+      }
+     ]
+    },
+    "options": {
+     "scales": {
+      "x": {
+       "title": {
+        "display": true,
+        "text": "z_log_var"
+       }
+      },
+      "y": {
+       "title": {
+        "display": true,
+        "text": "-0.5*(1 + logvar - mean^2 - exp(logvar))"
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "Computation inside compute_loss()",
+   "why": "Shows how the two losses of Listing 17.4 are assembled.",
+   "mermaid": "flowchart LR\n  X[x] --> E[\"y_pred = z_mean, z_log_var\"]\n  E --> S[sampler] --> D[decoder] --> R[reconstruction]\n  R --> BCE[BCE sum over pixels, mean over batch]\n  X --> BCE\n  E --> KL[\"-0.5(1+logvar-mean^2-exp logvar)\"] --> KM[mean]\n  BCE --> T((+))\n  KM --> T --> L[total_loss]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Since no loss is passed to compile(), the model trains without a loss.",
+   "correction": "The loss is computed inside the overridden compute_loss(); compile only needs the optimizer."
+  },
+  {
+   "claim": "The test set must always be kept separate.",
+   "correction": "For this generative demo there is no evaluation, so the authors use all 70,000 images for training."
+  },
+  {
+   "claim": "The KL term is minimized by making the variance as small as possible.",
+   "correction": "Its minimum is at variance 1 and mean 0; small variances are penalized (see the chart)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 540,
+    "note": "VAE class and compute_loss signature"
+   },
+   {
+    "page": 538,
+    "note": "Sampler used in compute_loss"
+   },
+   {
+    "page": 539,
+    "note": "Decoder used in compute_loss"
+   },
+   {
+    "page": 536,
+    "note": "The two VAE losses"
+   }
+  ],
+  "later": [
+   {
+    "page": 542,
+    "note": "Using the trained decoder to visualize the latent space; start of diffusion models"
+   },
+   {
+    "page": 561,
+    "note": "Chapter summary"
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 540,
+    "note": "compute_loss override"
+   }
+  ],
+  "related_math": [
+   {
+    "page": 536,
+    "note": "Sampling formula and KL regularization"
+   }
+  ],
+  "related_code": [
+   {
+    "page": 540,
+    "note": "First part of Listing 17.4"
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 536,
+    "note": "Figure 17.4"
+   }
+  ]
+ },
+ "takeaways": [
+  "compute_loss() samples z, decodes it and computes reconstruction + KL loss.",
+  "Reconstruction: binary crossentropy summed over the 28x28 pixels and averaged over the batch.",
+  "KL: -0.5 * (1 + log_var - mean^2 - exp(log_var)), zero only when mean = 0 and variance = 1; here averaged over batch and latent dims.",
+  "compile() receives only an optimizer, and fit() receives only images: the model supplies its own loss.",
+  "All 70,000 MNIST images (train + test) are used, normalized to [0, 1] with a channel axis, for 30 epochs at batch size 128."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "math",
+   "question": "Compute the KL term for one latent dimension with z_mean = 1 and z_log_var = 0.",
+   "options": [],
+   "answer": "-0.5 * (1 + 0 - 1 - 1) = 0.5",
+   "explanation": "exp(0) = 1 and 1^2 = 1, so the bracket is -1 and the result is 0.5. It comes entirely from the mean being off-center.",
+   "page_refs": [
+    541
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "Over which axes is the binary crossentropy summed in the reconstruction loss?",
+   "options": [
+    "Axis 0 (batch)",
+    "Axes 1 and 2 (spatial)",
+    "Axis 3 (channels)",
+    "All axes"
+   ],
+   "answer": "Axes 1 and 2 (spatial)",
+   "explanation": "The callout says the loss is summed over spatial dims (1, 2) and averaged over the batch. The channel axis is already reduced by binary_crossentropy, and the batch is averaged, not summed.",
+   "page_refs": [
+    541
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "Why is no loss passed to compile() and no target to fit()?",
+   "options": [],
+   "answer": "compute_loss() computes the loss from x and y_pred, so Keras needs no external loss, and the built-in train_step() expects no targets.",
+   "explanation": "Directly from the paragraph and the callouts.",
+   "page_refs": [
+    541,
+    540
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why does the code concatenate x_train and x_test?",
+   "options": [],
+   "answer": "The goal is a generative model, not an evaluated classifier, so there is no need for a held-out test set and more data helps learn the latent space.",
+   "explanation": "The callout says: 'We train on all MNIST digits.' Note that the prose's mention of x_train is inconsistent with the code.",
+   "page_refs": [
+    541
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "What is the value of the KL term when z_mean = 0 and z_log_var = 0?",
+   "options": [
+    "0",
+    "0.5",
+    "1",
+    "-0.5"
+   ],
+   "answer": "0",
+   "explanation": "The encoder distribution equals N(0,1): -0.5 * (1 + 0 - 0 - 1) = 0. KL is never negative, and 0.5 or 1 would require an off-center mean or a variance other than 1.",
+   "page_refs": [
+    541
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "What is the effect of using ops.mean(kl_loss) instead of summing over latent dimensions?",
+   "options": [],
+   "answer": "The KL term is divided by latent_dim (2), so regularization is weaker relative to the pixel-summed reconstruction loss than in the standard ELBO.",
+   "explanation": "Beyond the book: the standard VAE objective sums KL over latent dimensions.",
+   "page_refs": [
+    541
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you write the full VAE (encoder, Sampler, decoder, VAE class, training) from memory?",
+   "options": [],
+   "answer": "Check yourself against Listings 17.1-17.5 on p.537-541.",
+   "explanation": "Rebuilding it is the best test of understanding.",
+   "page_refs": [
+    537,
+    538,
+    539,
+    540,
+    541
+   ]
+  }
+ ],
+ "page_id": "page_541",
+ "book_id": "dlwp3"
+}

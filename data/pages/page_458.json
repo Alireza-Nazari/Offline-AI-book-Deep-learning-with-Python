@@ -1,0 +1,458 @@
+{
+ "page_id": "page_458",
+ "pdf_page": 458,
+ "printed_page": "434",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T08:08:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. e03 finishes the sentence from p.457. The `seq2seq_rnn.summary()` table (e10) is cut at the page break after the `not_equal` row and continues on p.459 (embedding_2, bidirectional, gru_2, dropout_1, dense_1, totals). The callout 'Predicts the next word of the translation, given the current word' points at the Dense line of Listing 15.12."
+ },
+ "overview": {
+  "title": "Bidirectional GRU encoder and GRU decoder (Listings 15.11-15.12)",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.2 Sequence-to-sequence learning",
+  "subsection": "15.2.2 Sequence-to-sequence learning with RNNs",
+  "main_topic": "Implementing the RNN encoder-decoder in Keras: a Bidirectional GRU encoder summarizing the English sentence, and a causal GRU decoder initialized with that summary and topped with a softmax over the Spanish vocabulary",
+  "central_idea": "The encoder embeds English tokens (256-d, padding masked) and runs a Bidirectional GRU(1024) whose two final outputs are summed into one 1,024-d vector. The decoder embeds Spanish tokens, runs a GRU(1024, return_sequences=True) with `initial_state=encoder_output`, applies dropout and a Dense softmax over 15,000 tokens. The decoder must stay unidirectional, because a Bidirectional decoder would see the answers.",
+  "importance": "This is the complete trainable translation model that is trained on p.459 and used for inference on p.460. It is the baseline that the Transformer of section 15.3 is built to beat, and it shows concretely how 'conditioning through the initial state' is written in Keras.",
+  "learning_objectives": [
+   "Explain each line of Listings 15.11 and 15.12 and the resulting tensor shapes",
+   "Explain why `merge_mode=\"sum\"` is needed for the encoder output to fit the decoder's initial state",
+   "Explain what `mask_zero=True` does and where the `not_equal` layer in the summary comes from",
+   "Explain why the decoder must not be Bidirectional",
+   "Connect the Input names `\"english\"` and `\"spanish\"` to the dataset dictionary keys of p.456",
+   "Verify the Embedding parameter count 3,840,000 shown in the summary"
+  ],
+  "prerequisites": [
+   "The encoder-decoder idea of figure 15.2 (p.457)",
+   "GRU layers, `return_sequences`, Bidirectional RNNs (chapter 13)",
+   "Embedding layers and masking",
+   "The Keras functional API with multiple inputs"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page completes the argument begun on p.457. The encoder predicts no tokens, so it is free to pass information from the end of the source to the beginning, and that is desirable, because \"we want a rich representation of the source sequence\". A **`Bidirectional`** layer provides this.\n\n**Listing 15.11 (encoder).** `embed_dim = 256` and `hidden_dim = 1024`. The source is `keras.Input(shape=(None,), dtype=\"int32\", name=\"english\")`, a variable-length sequence of token ids. An `Embedding(vocab_size, embed_dim, mask_zero=True)` maps ids to 256-d vectors and marks padding. A `GRU(hidden_dim)` without `return_sequences` is wrapped in `Bidirectional(..., merge_mode=\"sum\")`, so the forward and backward final outputs are added into a single 1,024-d `encoder_output`.\n\n**Listing 15.12 (decoder).** A second input named `\"spanish\"`, its own `Embedding` with `mask_zero=True`, and a `GRU(hidden_dim, return_sequences=True)` called with `initial_state=encoder_output`. That one argument is the whole connection between English and Spanish. Next come `Dropout(0.5)` and `Dense(vocab_size, activation=\"softmax\")`, which \"predicts the next word of the translation, given the current word\". The model is `keras.Model([source, target], target_predictions)`. The authors stress that the decoder must predict the next tokens only from what came before, so a `Bidirectional` decoder \"would break training by making the loss function trivially easy\".\n\nThe start of `seq2seq_rnn.summary()` shows the model named `\"functional_1\"`, the two `InputLayer`s with shape `(None, None)`, `embedding_1` with output `(None, None, 256)` and 3,840,000 parameters (15,000 × 256), and a `not_equal (NotEqual)` layer. That layer is the padding mask computed from the English input and passed on to the encoder. The rest of the table is on p.459.",
+ "paragraphs": [
+  {
+   "ref": "p458_e03",
+   "excerpt": "idea, as we want a rich representation of the source sequence.",
+   "what_it_says": "Completing p.457's sentence: letting the encoder pass information from the end of the source to the beginning is a good idea, because we want a rich representation of the source sequence. A `Bidirectional` layer achieves this.",
+   "what_it_means": "A Bidirectional wrapper runs one copy of the RNN left to right and another right to left. The forward GRU's final output has read the sentence through to its end, and the backward GRU's final output has read it from the end back to the first word. Combining them gives a summary in which neither end of the sentence is relatively 'fresh' or 'forgotten'.",
+   "why_it_matters": "RNNs tend to forget early tokens (p.461). A forward-only encoder's final state is dominated by the last few words, and adding a backward pass gives the beginning of the sentence a strong signal too.",
+   "technical_idea": "$c = \\overrightarrow{h}_T + \\overleftarrow{h}_0$ with `merge_mode=\"sum\"`.",
+   "terminology": [
+    {"term": "Bidirectional layer", "meaning": "A Keras wrapper that runs a recurrent layer forward and backward over the input and merges the two results."}
+   ],
+   "connections": [
+    "p.457: the 'no cheating in the encoder' argument this sentence completes",
+    "p.396: bidirectional recurrent layers were introduced in chapter 13"
+   ]
+  },
+  {
+   "ref": "p458_e06",
+   "excerpt": "Next, let’s add the decoder—a simple GRU layer that takes as its",
+   "what_it_says": "The decoder is a simple `GRU` that takes the encoded source sentence as its initial state, with a `Dense` layer on top that produces a probability distribution over the Spanish vocabulary at each output step. Since the goal is to predict the next tokens based only on what came before, a `Bidirectional` RNN would break training by making the loss function trivially easy.",
+   "what_it_means": "The decoder input at position t is Spanish token t and the target is token t+1 (p.456). A backward-running RNN would have read token t+1 as part of position t+1's input and carried it back to position t, so the model could copy the answer instead of learning to translate. Training loss would collapse toward zero, but the model would be useless at inference, where future tokens do not exist yet.",
+   "why_it_matters": "This is the causal-decoder rule that the Transformer decoder later enforces with a causal attention mask. Breaking it is a classic bug that produces suspiciously good training metrics.",
+   "technical_idea": "The decoder's output at t must be a function of $y_{0:t}$ and $c$ only. `return_sequences=True` gives one prediction per position.",
+   "terminology": [
+    {"term": "initial_state", "meaning": "Argument to a Keras RNN call that sets the hidden state before the first timestep."},
+    {"term": "trivially easy loss", "meaning": "A loss the model can minimize by copying information it should not have access to."}
+   ],
+   "connections": [
+    "p.456: the off-by-one decoder inputs and labels",
+    "p.457: decoder as a language model seeded by the encoder state"
+   ]
+  },
+  {
+   "ref": "p458_e08",
+   "excerpt": "target = keras.Input(shape=(None,), dtype=\"int32\", name=\"spanish\")",
+   "what_it_says": "The callout attached to the Dense line of Listing 15.12 reads: 'Predicts the next word of the translation, given the current word'.",
+   "what_it_means": "The Dense softmax runs independently at each decoder position and outputs a 15,000-way distribution. 'Given the current word' is shorthand: the GRU state also carries the previous Spanish words and the English summary.",
+   "why_it_matters": "It labels the model's output semantics. `target_predictions[b, t]` is $p(y_{t+1} \\mid y_{\\le t}, x)$, which is what Listing 15.13 on p.460 reads with `next_token_predictions[0, i, :]`.",
+   "terminology": [],
+   "connections": [
+    "p.460: generation reads the distribution at position i"
+   ]
+  },
+  {
+   "ref": "p458_e09",
+   "excerpt": "Let’s take a look at the seq2seq model in full:",
+   "what_it_says": "This introduces `seq2seq_rnn.summary()`. The visible rows are the inputs `english` and `spanish` (shape `(None, None)`, 0 params), `embedding_1 (Embedding)` with output `(None, None, 256)` and 3,840,000 params connected to `english[0][0]`, and `not_equal (NotEqual)` with output `(None, None)` connected to `english[0][0]`.",
+   "what_it_means": "Both the batch and time dimensions are `None` because the inputs were declared with `shape=(None,)`, so the model accepts any sentence length. The `NotEqual` op is the automatically generated padding mask (token != 0) of the English Embedding's `mask_zero=True`. It is passed to the Bidirectional GRU so that both directions skip padding.",
+   "why_it_matters": "Reading summaries critically confirms the wiring. On p.459 the Bidirectional layer is shown connected to both `embedding_1` and `not_equal`, which proves the mask reaches the encoder.",
+   "terminology": [
+    {"term": "NotEqual layer", "meaning": "An op node created by Keras to compute `inputs != 0` for the Embedding's mask."},
+    {"term": "Connected to", "meaning": "Summary column listing which layer outputs feed this layer."}
+   ],
+   "connections": [
+    "p.459: the remaining rows and the total of 34,869,912 parameters"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "bidirectional_rnn",
+   "name": "Bidirectional RNN",
+   "definition": "Two RNNs over the same sequence, one forward and one reversed, whose outputs are merged (`concat`, `sum`, `mul`, `ave`).",
+   "intuition": "Read the sentence left to right and right to left, then combine both impressions.",
+   "technical": "Without `return_sequences`, the merged output is $\\overrightarrow{h}_T \\oplus \\overleftarrow{h}_0$. With `merge_mode=\"sum\"` the dimension stays at `hidden_dim`. Parameters double: 7,876,608 = 2 × 3,938,304 (p.459).",
+   "significance": "It gives a richer source summary for the encoder and must never be used in the decoder.",
+   "example": "`layers.Bidirectional(layers.GRU(1024), merge_mode=\"sum\")` → `(None, 1024)`.",
+   "misconception": "That Bidirectional is always better. It requires the whole sequence up front, so it is not allowed where outputs must be causal.",
+   "related": ["rnn", "gru", "encoder_decoder"],
+   "source": "book"
+  },
+  {
+   "id": "embedding",
+   "name": "Embedding layer with mask_zero",
+   "definition": "A trainable lookup table from token ids to dense vectors. With `mask_zero=True`, it also emits a boolean mask marking id 0 as padding.",
+   "intuition": "A dictionary from word ids to learned coordinates, plus a sticky note saying 'ignore these slots'.",
+   "technical": "Weights are `(vocab_size, embed_dim)` = 15,000 × 256 = 3,840,000. The mask `inputs != 0` propagates to downstream mask-aware layers such as the GRU.",
+   "significance": "Masking stops padding tokens from altering the encoder's final state, which matters because most sentences are shorter than 20 tokens.",
+   "example": "Ids `[12, 7, 0, 0]` give mask `[True, True, False, False]`.",
+   "misconception": "That id 0 must still be a real word. `TextVectorization` reserves 0 for padding and 1 for `[UNK]`.",
+   "related": ["tokenization", "masking"],
+   "source": "book"
+  },
+  {
+   "id": "initial_state_conditioning",
+   "name": "Conditioning via `initial_state`",
+   "definition": "Passing the encoder's output as the decoder GRU's starting hidden state: `rnn_layer(x, initial_state=encoder_output)`.",
+   "intuition": "The decoder wakes up already remembering the English sentence.",
+   "technical": "The initial state must match the GRU's state size, `hidden_dim = 1024`. A Bidirectional encoder with `concat` would yield 2,048 and fail, which is why `sum` is used.",
+   "significance": "It is the only channel from source to target in this model, hence the bottleneck discussed on p.461.",
+   "example": "`encoder_output` of shape `(None, 1024)` is used as `initial_state`.",
+   "misconception": "That the decoder sees `encoder_output` at every step as an input. It enters only once, at t=0, and later steps see it only through the recurrence.",
+   "related": ["encoder_decoder", "gru"],
+   "source": "book"
+  },
+  {
+   "id": "gru",
+   "name": "GRU layer",
+   "definition": "Gated Recurrent Unit, an RNN with update and reset gates and a single hidden state.",
+   "intuition": "A lighter LSTM: it decides at each step how much old memory to keep and how much new content to write.",
+   "technical": "Keras parameter count (reset_after=True): $3\\,[u(d+u) + 2u]$. With $d=256$, $u=1024$ this is 3,938,304, matching `gru_2` on p.459.",
+   "significance": "It is cheaper than an LSTM and its output equals its state, so it is straightforward to pass as `initial_state`.",
+   "example": "`layers.GRU(1024, return_sequences=True)`.",
+   "misconception": "That the GRU has a separate cell state like the LSTM. It does not.",
+   "related": ["rnn", "lstm"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Bidirectional encoder output with merge_mode=\"sum\"",
+   "latex": "c = \\overrightarrow{\\mathrm{GRU}}(e_1,\\dots,e_T) + \\overleftarrow{\\mathrm{GRU}}(e_T,\\dots,e_1) \\in \\mathbb{R}^{1024}",
+   "source_text": "rnn_layer = layers.Bidirectional(rnn_layer, merge_mode=\"sum\"); encoder_output = rnn_layer(x)",
+   "variables": [
+    {"symbol": "e_t", "meaning": "256-d embedding of English token t (padding masked)"},
+    {"symbol": "\\overrightarrow{\\mathrm{GRU}}", "meaning": "Forward GRU; returns its final output after reading the last real token"},
+    {"symbol": "\\overleftarrow{\\mathrm{GRU}}", "meaning": "Backward GRU (separate weights); returns its output after reading back to the first token"},
+    {"symbol": "c", "meaning": "encoder_output, shape (batch, 1024)"}
+   ],
+   "operations": "Two independent recurrences followed by element-wise addition.",
+   "purpose": "Produce one source vector that is the right size to initialize a 1,024-unit decoder GRU.",
+   "interpretation": "Each component of c mixes a left-to-right and a right-to-left summary.",
+   "intuition": "Two readers each write a 1,024-number summary and the summaries are added.",
+   "numerical_example": "If the forward summary is [0.2, -0.5, ...] and the backward summary is [0.1, 0.3, ...], then c = [0.3, -0.2, ...]. With `concat` instead, c would have 2,048 entries and could not seed a 1,024-unit GRU.",
+   "source": "ai_explanation",
+   "book_ref": "p.458"
+  },
+  {
+   "id": "m2",
+   "title": "Embedding parameter count",
+   "latex": "\\#\\text{params} = \\text{vocab\\_size} \\times \\text{embed\\_dim} = 15{,}000 \\times 256 = 3{,}840{,}000",
+   "source_text": "embedding_1 (Embedding) │ (None, None, 256) │ 3,840,000",
+   "variables": [
+    {"symbol": "vocab_size", "meaning": "15,000 tokens (p.455)"},
+    {"symbol": "embed_dim", "meaning": "256"}
+   ],
+   "operations": "One 256-d vector per vocabulary entry.",
+   "purpose": "Explains the first non-zero row of the summary.",
+   "interpretation": "The decoder's Spanish embedding (`embedding_2`, p.459) has the same count.",
+   "intuition": "A table with 15,000 rows and 256 columns.",
+   "source": "book",
+   "book_ref": "p.458"
+  },
+  {
+   "id": "m3",
+   "title": "Decoder recurrence and readout",
+   "latex": "\\begin{aligned} s_0 &= c \\\\ s_t &= \\mathrm{GRU}\\bigl(s_{t-1}, E_{es}[y_t]\\bigr) \\\\ p_t &= \\operatorname{softmax}\\bigl(W\\,\\mathrm{dropout}(s_t) + b\\bigr) \\in \\mathbb{R}^{15000} \\end{aligned}",
+   "source_text": "x = rnn_layer(x, initial_state=encoder_output); x = layers.Dropout(0.5)(x); target_predictions = layers.Dense(vocab_size, activation=\"softmax\")(x)",
+   "variables": [
+    {"symbol": "s_t", "meaning": "Decoder GRU state/output at step t (1,024-d)"},
+    {"symbol": "E_{es}[y_t]", "meaning": "256-d Spanish embedding of input token y_t"},
+    {"symbol": "W, b", "meaning": "Dense weights (1024 × 15000) and biases (15000)"},
+    {"symbol": "p_t", "meaning": "Distribution over the next Spanish token y_{t+1}"}
+   ],
+   "operations": "Causal recurrence seeded with c, per-step dropout and a softmax.",
+   "purpose": "The formal content of Listing 15.12.",
+   "interpretation": "p_t estimates $p(y_{t+1} \\mid y_{\\le t}, x)$.",
+   "intuition": "At each step: update memory with the current Spanish word, then guess the next one.",
+   "source": "ai_explanation",
+   "book_ref": "p.458"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "15.11",
+   "title": "Building a sequence-to-sequence encoder",
+   "original_code": "embed_dim = 256\nhidden_dim = 1024\n\nsource = keras.Input(shape=(None,), dtype=\"int32\", name=\"english\")\nx = layers.Embedding(vocab_size, embed_dim, mask_zero=True)(source)\nrnn_layer = layers.GRU(hidden_dim)\nrnn_layer = layers.Bidirectional(rnn_layer, merge_mode=\"sum\")\nencoder_output = rnn_layer(x)",
+   "language": "python",
+   "what_it_does": "Encodes a variable-length sequence of English token ids into one 1,024-dimensional vector.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Hyperparameters: 256-d embeddings and 1,024-unit GRUs, much larger than the 32-unit toy LSTM on p.457."},
+    {"lines": "4", "explanation": "Variable-length int input. `name=\"english\"` must match the dataset dictionary key from Listing 15.10 (p.456)."},
+    {"lines": "5", "explanation": "Embedding lookup to `(batch, T, 256)`. `mask_zero=True` creates a padding mask (the `not_equal` node in the summary)."},
+    {"lines": "6", "explanation": "A GRU returning only its final output (no `return_sequences`)."},
+    {"lines": "7", "explanation": "Wraps it to run in both directions. `merge_mode=\"sum\"` adds the two final outputs, keeping the size at 1,024."},
+    {"lines": "8", "explanation": "`encoder_output` has shape `(batch, 1024)`, the source representation."}
+   ],
+   "inputs_outputs": "Input `(batch, T)` int32 English ids. Output `(batch, 1024)` float vector.",
+   "algorithm": "Embed → masked bidirectional GRU → sum of the two final outputs.",
+   "theory_link": "Implements the 'encoder RNN' box of figure 15.2 (p.457). Bidirectionality is allowed because the encoder makes no predictions.",
+   "parameters": [
+    {"name": "embed_dim", "role": "Embedding size (256)."},
+    {"name": "hidden_dim", "role": "GRU units (1024); must equal the decoder GRU's units."},
+    {"name": "mask_zero", "role": "Treat token 0 as padding and propagate a mask."},
+    {"name": "merge_mode", "role": "How forward/backward outputs are combined; `sum` keeps the dimension."}
+   ],
+   "pitfalls": [
+    "Using the default `merge_mode=\"concat\"` would give a 2,048-d output, incompatible with `initial_state` of a 1,024-unit GRU.",
+    "Without `mask_zero=True`, the backward GRU would start by reading padding zeros, and the forward GRU's final output would come after many padding steps.",
+    "`vocab_size` comes from Listing 15.9 (p.455); the encoder shares its value but not its weights with the decoder embedding."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "15.12",
+   "title": "Building a sequence-to-sequence decoder",
+   "original_code": "target = keras.Input(shape=(None,), dtype=\"int32\", name=\"spanish\")\nx = layers.Embedding(vocab_size, embed_dim, mask_zero=True)(target)\nrnn_layer = layers.GRU(hidden_dim, return_sequences=True)\nx = rnn_layer(x, initial_state=encoder_output)\nx = layers.Dropout(0.5)(x)\ntarget_predictions = layers.Dense(vocab_size, activation=\"softmax\")(x)\nseq2seq_rnn = keras.Model([source, target], target_predictions)",
+   "language": "python",
+   "what_it_does": "Builds a causal GRU decoder conditioned on the encoder output and assembles the full two-input seq2seq model.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Second input, named `\"spanish\"` to match the dataset key: the shifted Spanish tokens `spa[:, :-1]`."},
+    {"lines": "2", "explanation": "A separate Spanish embedding (256-d, padding masked)."},
+    {"lines": "3", "explanation": "A unidirectional GRU that returns an output at every step."},
+    {"lines": "4", "explanation": "Seeds the GRU's hidden state with the English summary. This is the only link between the two languages."},
+    {"lines": "5", "explanation": "Dropout of 0.5 on the decoder outputs, to regularize the large Dense layer."},
+    {"lines": "6", "explanation": "A per-step softmax over 15,000 Spanish tokens (callout: 'Predicts the next word of the translation, given the current word')."},
+    {"lines": "7", "explanation": "A functional model with inputs `[source, target]` and output `(batch, T, 15000)`."}
+   ],
+   "inputs_outputs": "Inputs: English ids `(batch, T_src)` and Spanish ids `(batch, T_tgt)`. Output: `(batch, T_tgt, vocab_size)` next-token probabilities.",
+   "algorithm": "Embed target → GRU with initial state = encoder output → dropout → per-step softmax.",
+   "theory_link": "A conditional language model (p.457). Teacher forcing during training uses ground-truth Spanish prefixes.",
+   "parameters": [
+    {"name": "return_sequences=True", "role": "One prediction per target position."},
+    {"name": "initial_state", "role": "Conditions the decoder on the source."},
+    {"name": "Dropout(0.5)", "role": "Regularization."},
+    {"name": "Dense(vocab_size, softmax)", "role": "Output distribution; about 15.4M of the model's 34.9M parameters (p.459)."}
+   ],
+   "pitfalls": [
+    "Do not wrap the decoder GRU in `Bidirectional`: it would leak future target tokens and make the loss 'trivially easy'.",
+    "The input list order `[source, target]` matters if you pass a list or tuple. With the dict dataset, Keras matches by input names.",
+    "The softmax over 15,000 classes at every step is the dominant compute and memory cost."
+   ]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "seq2seq_rnn.summary() (first part)",
+   "original_code": ">>> seq2seq_rnn.summary()\nModel: \"functional_1\"\n┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓\n┃ Layer (type)          ┃ Output Shape      ┃     Param # ┃ Connected to       ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩\n│ english (InputLayer)  │ (None, None)      │           0 │ -                  │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ spanish (InputLayer)  │ (None, None)      │           0 │ -                  │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ embedding_1           │ (None, None, 256) │   3,840,000 │ english[0][0]      │\n│ (Embedding)           │                   │             │                    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ not_equal (NotEqual)  │ (None, None)      │           0 │ english[0][0]      │",
+   "language": "text",
+   "what_it_does": "Shows the first rows of the model summary: the two named inputs, the English embedding, and the mask op. The table continues on p.459 with embedding_2, bidirectional, gru_2, dropout_1, dense_1 and the parameter totals.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Calls `summary()`. The model got the default name `functional_1`."},
+    {"lines": "6", "explanation": "English input: `(batch, time)`, both unknown."},
+    {"lines": "8", "explanation": "Spanish input, same shape."},
+    {"lines": "10-11", "explanation": "English embedding: 15,000 × 256 = 3,840,000 weights, output `(None, None, 256)`."},
+    {"lines": "13", "explanation": "`NotEqual`: computes `english != 0`, the padding mask from `mask_zero=True`, fed to the Bidirectional GRU (see p.459)."}
+   ],
+   "inputs_outputs": "Printed table only.",
+   "algorithm": "n/a",
+   "theory_link": "Confirms the masking path and the variable-length design.",
+   "parameters": [],
+   "pitfalls": [
+    "Layer suffixes such as `_1` and `_2` depend on how many layers of that type were created earlier in the session (e.g. the naive model on p.457), so your names may differ."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "How the decoder would cheat if it were bidirectional",
+   "kind": "step_by_step",
+   "body": "Decoder input: `[start] tú lo sabes`. Targets: `tú lo sabes [end]`.\n\n1. At position 0 the target is `tú`.\n2. A backward GRU reads the input from the right: `sabes`, then `lo`, then `tú`, then `[start]`. By the time it reaches position 0 it has already consumed the input token `tú` at position 1.\n3. So the merged output at position 0 contains `tú`, which is the label. The model only needs to learn to copy its right neighbor's token.\n4. Training loss approaches zero, but at inference (p.460) there are no future tokens, so the model has learned nothing useful.\n\nThis is the concrete meaning of the book's 'making the loss function trivially easy'.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Where the 1,024 numbers come from, and why it matters",
+   "kind": "breakdown",
+   "body": "The encoder output is the *only* thing the decoder knows about the English sentence. With `hidden_dim = 1024` the model has a sizeable summary, but it is fixed whatever the sentence length. Note (not in the book): the large Dense output (15.4M parameters, p.459) and the large GRUs make this model about 35M parameters, yet its quality is limited mainly by that single-vector interface, as p.461 explains.",
+   "source": "inference"
+  },
+  {
+   "title": "Masks in this model",
+   "kind": "breakdown",
+   "body": "There are two mechanisms for ignoring padding:\n- **Embedding masks** (`mask_zero=True`) tell the GRUs to skip padded timesteps, so the encoder's final state is the state after the last *real* English token.\n- **Sample weights** (`labels != 0`, p.456) remove padding positions from the loss and weighted metrics.\n\nBeyond the book: in Keras the decoder-side embedding mask can also propagate to the output and into the loss. Here the explicit sample weights already encode the same information for the label positions.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "The seq2seq_rnn graph (Listings 15.11-15.12)",
+   "why": "Shows the two inputs, the mask, the Bidirectional encoder and the single initial_state link to the decoder, as defined on this page.",
+   "mermaid": "flowchart TB\n  EN[\"english Input (None, None)\"] --> EM1[\"Embedding 15000x256, mask_zero\"]\n  EN --> NE[\"not_equal mask\"]\n  EM1 --> BI[\"Bidirectional GRU(1024), merge_mode=sum\"]\n  NE --> BI\n  BI -->|\"encoder_output (None, 1024) = initial_state\"| GRU2\n  ES[\"spanish Input (None, None)\"] --> EM2[\"Embedding 15000x256, mask_zero\"]\n  EM2 --> GRU2[\"GRU(1024), return_sequences\"]\n  GRU2 --> DO[\"Dropout(0.5)\"]\n  DO --> DE[\"Dense(15000, softmax): next Spanish token\"]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Decoder shape flow for one batch",
+   "why": "Traces the decoder in Listing 15.12 with the training batch shapes from p.456 (64 × 20).",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "spanish tokens", "shape": [64, 20]},
+     {"op": "Embedding(256)", "shape": [64, 20, 256]},
+     {"op": "GRU(1024, seq)", "shape": [64, 20, 1024]},
+     {"op": "Dropout(0.5)", "shape": [64, 20, 1024]},
+     {"op": "Dense softmax", "shape": [64, 20, 15000]}
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "`merge_mode=\"sum\"` is just a stylistic choice.",
+   "correction": "It keeps the encoder output at 1,024 dimensions, which must match the decoder GRU's state size for `initial_state` to work. The default `concat` would give 2,048."
+  },
+  {
+   "claim": "The decoder could also be Bidirectional for better context.",
+   "correction": "That leaks future target tokens and makes the loss trivially easy (the page says so). Decoders must be causal."
+  },
+  {
+   "claim": "The English and Spanish embeddings share weights.",
+   "correction": "Two separate `Embedding` layers are created (embedding_1 and embedding_2), each with 3,840,000 parameters."
+  },
+  {
+   "claim": "Inputs with `shape=(None,)` mean the model only handles length-20 sequences.",
+   "correction": "`None` means any length. Length 20 is just what the training pipeline produces."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 457, "note": "Figure 15.2 and the argument that the encoder may look at the whole source."},
+   {"page": 456, "note": "Dataset dict keys `\"english\"` and `\"spanish\"`, matched by the Input names here."},
+   {"page": 455, "note": "`vocab_size = 15000` used by both embeddings and the output Dense."},
+   {"page": 396, "note": "Chapter 13 introduced bidirectional recurrent layers."}
+  ],
+  "later": [
+   {"page": 459, "note": "The rest of the summary (Bidirectional 7,876,608; GRU 3,938,304; Dense 15,375,000; total 34,869,912) and training."},
+   {"page": 460, "note": "Listing 15.13 uses `seq2seq_rnn.predict` for greedy decoding."},
+   {"page": 461, "note": "Limits of the single encoder vector."},
+   {"page": 472, "note": "The Transformer model replaces the GRU layers with TransformerEncoder/Decoder in the same setup."}
+  ],
+  "prerequisites": [
+   {"page": 628, "note": "Review of GRU/LSTM and return_sequences."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 457, "note": "The naive single-LSTM model this replaces."},
+   {"page": 459, "note": "Compile and fit of `seq2seq_rnn`."}
+  ],
+  "related_figures": [
+   {"page": 457, "note": "Figure 15.2, the RNN encoder-decoder."}
+  ]
+ },
+ "takeaways": [
+  "The encoder is an Embedding(15000, 256, mask_zero) followed by Bidirectional(GRU(1024), merge_mode=\"sum\"), giving one 1,024-d vector.",
+  "The decoder is an Embedding followed by GRU(1024, return_sequences=True, initial_state=encoder_output), Dropout(0.5) and Dense(15000, softmax).",
+  "`initial_state=encoder_output` is the only bridge from English to Spanish.",
+  "`sum` merging keeps dimensions compatible with the decoder state.",
+  "The decoder must be causal; a Bidirectional decoder makes the loss trivially easy.",
+  "Input names match the dataset dict keys; `mask_zero=True` adds the `not_equal` mask seen in the summary."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why does the encoder use `merge_mode=\"sum\"` in its Bidirectional wrapper?",
+   "options": [
+    "Summing is more accurate than concatenation for all tasks",
+    "It keeps the output at 1,024 dimensions so it can serve as the initial state of the 1,024-unit decoder GRU",
+    "It halves the number of encoder parameters",
+    "It makes the encoder causal"
+   ],
+   "answer": "It keeps the output at 1,024 dimensions so it can serve as the initial state of the 1,024-unit decoder GRU",
+   "explanation": "Concatenation would give 2,048 dimensions, which does not match the decoder's state size. Merge mode does not change parameter count (both directions still have their own weights, 7,876,608 total on p.459). Summing does not make anything causal. No merge mode is universally more accurate.",
+   "page_refs": [458, 459]
+  },
+  {
+   "id": "q2",
+   "type": "conceptual",
+   "question": "The authors say a Bidirectional decoder 'would break training by making the loss function trivially easy'. Explain the mechanism.",
+   "options": [],
+   "answer": "The decoder's target at position t is its input at position t+1. A backward RNN carries information from later positions to earlier ones, so position t would 'see' its own label and the model could copy it rather than learn to translate.",
+   "explanation": "This follows from the off-by-one setup on p.456 and the causal requirement stated on this page.",
+   "page_refs": [458, 456]
+  },
+  {
+   "id": "q3",
+   "type": "math",
+   "question": "Verify the 3,840,000 parameters reported for `embedding_1`, and predict the parameter count of the Spanish embedding.",
+   "options": [],
+   "answer": "15,000 × 256 = 3,840,000. The Spanish embedding has the same vocab size and dimension, so it also has 3,840,000 (confirmed as embedding_2 on p.459).",
+   "explanation": "An Embedding layer stores one embed_dim vector per vocabulary entry and has no bias.",
+   "page_refs": [458, 459]
+  },
+  {
+   "id": "q4",
+   "type": "short",
+   "question": "What is the `not_equal (NotEqual)` row in the summary, and where does its output go?",
+   "options": [],
+   "answer": "It computes the padding mask `english != 0` created by `mask_zero=True`. The mask is fed to the Bidirectional GRU so that padding is skipped.",
+   "explanation": "On p.459 the bidirectional row lists `embedding_1[0][0], not_equal[0][0]` under 'Connected to'.",
+   "page_refs": [458, 459]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Which single line connects the English sentence's information to the Spanish decoder?",
+   "options": [
+    "`x = layers.Dropout(0.5)(x)`",
+    "`x = rnn_layer(x, initial_state=encoder_output)`",
+    "`seq2seq_rnn = keras.Model([source, target], target_predictions)`",
+    "`target = keras.Input(shape=(None,), dtype=\"int32\", name=\"spanish\")`"
+   ],
+   "answer": "`x = rnn_layer(x, initial_state=encoder_output)`",
+   "explanation": "The encoder output enters the decoder only as its initial state. Dropout is regularization. `keras.Model` just declares inputs and outputs. The Spanish Input carries only Spanish tokens.",
+   "page_refs": [458]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Why are both inputs declared with `shape=(None,)` even though the dataset always produces 20-token sequences?",
+   "options": [],
+   "answer": "So the model accepts sequences of any length, such as variable-length inputs at inference or different source and target lengths. Training happens to use 20.",
+   "explanation": "The summary shows `(None, None)` for both inputs: unknown batch and time dimensions.",
+   "page_refs": [458, 456]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Sketch the model graph from memory: inputs, embeddings, mask, encoder, decoder, dropout, output. Then check it against the summary on pp.458-459.",
+   "options": [],
+   "answer": "english → Embedding(+mask) → Bidirectional GRU(1024, sum) → [initial state] → GRU(1024, seq) ← Embedding ← spanish; GRU → Dropout(0.5) → Dense(15000, softmax).",
+   "explanation": "If you drew an arrow from the English embedding straight to the decoder at every step, revisit p.457: the source enters only through the initial state.",
+   "page_refs": [458, 459]
+  }
+ ]
+}

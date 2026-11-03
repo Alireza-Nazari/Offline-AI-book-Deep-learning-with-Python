@@ -1,0 +1,332 @@
+{
+ "page_id": "page_578",
+ "pdf_page": 578,
+ "printed_page": "554",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:00:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction; four code elements and one margin callout (on batch_dim_name) verified against the page image. The last paragraph continues on p.579."
+ },
+ "overview": {
+  "title": "Variable paths, LayoutMap entries and ModelParallel",
+  "chapter": "18 Best practices for the real world",
+  "section": "18.2 Scaling up model training with multiple devices",
+  "subsection": "18.2.2 Distributed training in practice",
+  "main_topic": "Writing a concrete sharding layout for the two-layer model of listing 18.4 and turning on model parallelism with keras.distribution.ModelParallel",
+  "central_idea": "Each model variable has a string path such as \"sequential/dense_1/kernel\"; a LayoutMap maps those paths to per-dimension sharding tuples (shard the last dimension on the \"model\" mesh axis, replicate the rest), and a ModelParallel distribution built from that map, with batch_dim_name=\"data\", is installed globally with set_distribution(). Model and training code then stay unchanged.",
+  "importance": "This is the page where the abstract ideas from the previous pages (device mesh, replication vs. sharding, LayoutMap) become runnable code. It is the whole recipe for combined data + model parallelism with Keras on JAX, and the same pattern scales to very large language-model training runs.",
+  "learning_objectives": [
+   "Explain what a variable path is and how to list the paths of a model's variables",
+   "Apply the rule of thumb: shard the last dimension along the \"model\" axis, replicate the other dimensions",
+   "Write LayoutMap entries for kernels (None, \"model\") and biases (\"model\",)",
+   "Create a ModelParallel distribution with a layout map and a batch dimension name, and install it with keras.distribution.set_distribution()",
+   "Understand that model definition and training code (fit(), evaluate(), custom loops) do not change once the distribution is set"
+  ],
+  "prerequisites": [
+   "The 2 x 4 DeviceMesh with axis names [\"data\", \"model\"] (p.577)",
+   "Replication vs. sharding of a variable, dimension by dimension (p.577)",
+   "Listing 18.4: Dense(64000) then Dense(8000) on 16,000 input features (p.573)",
+   "Vertical partitioning of a Dense kernel along its last axis (p.574)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "This page completes the hands-on recipe for model parallelism with Keras on the JAX backend.\n\n**Variable paths.** The authors introduce the *variable path*: a string identifier such as `\"sequential/dense_1/kernel\"` that names a variable without needing a Python handle to the variable object. You can print every path with `for v in model.variables: print(v.path)`. For the model of listing 18.4 (an `Input(shape=(16000,))` followed by `Dense(64000, activation=\"relu\")` and `Dense(8000, activation=\"sigmoid\")`), this yields four paths: the kernel and bias of `dense` and of `dense_1`.\n\n**The rule of thumb.** For a simple model like this, shard the *last* dimension of each variable along the `\"model\"` mesh axis and replicate every other dimension. Concretely, each kernel gets the layout `(None, \"model\")` and each bias gets `(\"model\",)`. These four assignments go into a `keras.distribution.LayoutMap(device_mesh)`, which behaves like a dictionary keyed by variable path.\n\n**Activating the layout.** A `keras.distribution.ModelParallel(layout_map=layout_map, batch_dim_name=\"data\")` object is created. The margin callout explains that `batch_dim_name=\"data\"` tells Keras to use the mesh axis named `\"data\"` for data parallelism, which means splitting the batch dimension of the inputs across that axis. Calling `keras.distribution.set_distribution(model_parallel)` installs it globally, and variables created afterward follow the layout.\n\n**Nothing else changes.** After the distribution is set, you build the model and call `fit()` as usual. Model-definition code and training code are identical whether you use `fit()`/`evaluate()` or your own training loop. The sentence continuing on p.579 says this small amount of code is enough to distribute the computation of any LLM training run.\n\nOn the 2 x 4 mesh from p.577, each of the four devices on a \"model\" row holds a `(16000, 16000)` slice of the first kernel and a `(64000, 2000)` slice of the second, and the two rows on the \"data\" axis each process half of every batch.",
+ "paragraphs": [
+  {
+   "ref": "p578_e03",
+   "excerpt": "This is the first time you encountered the concept of a variable path",
+   "what_it_says": "A variable path is a string identifier like \"sequential/dense_1/kernel\" that lets you refer to a variable without keeping a handle on the variable instance itself.",
+   "what_it_means": "A path is hierarchical: model name / layer name / variable name. Keras assigns layer names automatically (`dense`, `dense_1`, ...) unless you give your own `name=` arguments, and the model name defaults to `sequential` for a Sequential model. Because the path is plain text, you can write a layout before the model (and its variables) exists.",
+   "why_it_matters": "A LayoutMap has to be written before the variables are created, since the variables are created already sharded. String paths are what make that possible: the layout refers to variables by name, not by object.",
+   "technical_idea": "Paths are deterministic for a given model definition, so a layout written once stays valid each time the same architecture is instantiated. Beyond the book: if you rebuild models in the same session, automatic layer names can change (e.g. `dense_2`, `dense_3`), so naming layers explicitly makes layout maps robust.",
+   "terminology": [
+    {"term": "variable path", "meaning": "Hierarchical string name of a variable, e.g. \"sequential/dense_1/kernel\": model / layer / weight."},
+    {"term": "handle", "meaning": "A Python reference to the actual variable object."}
+   ],
+   "connections": ["p.577: the LayoutMap was described as mapping a variable path to a tuple of per-dimension instructions", "p.89: variables as stateful tensors were introduced with tf.Variable"]
+  },
+  {
+   "ref": "p578_e04",
+   "excerpt": "Here’s how you can print the paths for all variables in a model:",
+   "what_it_says": "The two-line loop `for v in model.variables: print(v.path)` prints all variable paths. On the listing 18.4 model it prints the kernel and bias paths for `dense` and `dense_1`.",
+   "what_it_means": "`model.variables` lists every variable of the model (trainable and non-trainable), and each has a `.path` attribute. Running this loop once on a small, non-distributed instance of your model is the easiest way to find the keys you need for a LayoutMap.",
+   "why_it_matters": "A typo in a path means the variable is not covered by your layout, so in practice you copy the keys from this printout.",
+   "terminology": [
+    {"term": "model.variables", "meaning": "List of all variables (weights) owned by a Keras model."}
+   ],
+   "connections": ["p.573: listing 18.4 defines the Dense(64000) / Dense(8000) model whose paths are printed here"]
+  },
+  {
+   "ref": "p578_e08",
+   "excerpt": "Now let’s shard and replicate these variables. In the case of a simple",
+   "what_it_says": "For a simple model, the go-to rule is: shard the last dimension of each variable along the \"model\" mesh axis, and replicate all other dimensions. The two bullets state this rule.",
+   "what_it_means": "A Dense kernel has shape `(input_dim, units)`. Its last dimension is the output-unit axis, so sharding it gives each device a subset of the layer's output units: a vertical partition of the layer, exactly the `kernel[:, :32000]` split shown on p.574, generalized to four devices. The bias, shape `(units,)`, has only one dimension, which is also the last, so it is sharded the same way and each device holds the biases of its own units.",
+   "why_it_matters": "This rule gives a valid, reasonably efficient layout without any thought about communication patterns. It is the default you should start from.",
+   "technical_idea": "Inference (not stated in the book): applying the rule to both layers means the first layer produces activations sharded along their feature axis, while the second layer's kernel `(64000, 8000)` is sharded on its output axis and therefore needs the *full* 64,000-dimensional input on every device. The XLA compiler inserts the required all-gather automatically. Hand-tuned schemes (e.g. Megatron-style) instead shard the second kernel along its *first* axis to avoid that gather and finish with a reduction, which is why the authors call this a rule of thumb for *simple* models.",
+   "terminology": [
+    {"term": "shard", "meaning": "Split a variable dimension into equal chunks, one chunk per device along a mesh axis."},
+    {"term": "replicate", "meaning": "Keep a full copy of a dimension on every device along the mesh axis."}
+   ],
+   "connections": ["p.574: vertical partitioning of the first Dense kernel into (16000, 32000) halves", "p.577: sharding and replicating are per-dimension decisions"]
+  },
+  {
+   "ref": "p578_e11",
+   "excerpt": "Simple enough, right? Like this:",
+   "what_it_says": "The code creates `keras.distribution.LayoutMap(device_mesh)` and assigns `(None, \"model\")` to both kernels and `(\"model\",)` to both biases.",
+   "what_it_means": "Each tuple has one entry per variable dimension: `None` means \"replicate this dimension\", and `\"model\"` means \"shard this dimension across the devices of the mesh axis named model\" (the callouts on p.577 give these meanings). The LayoutMap is tied to the `device_mesh` built on p.577 (shape (2, 4), axes [\"data\", \"model\"]), so `\"model\"` refers to an axis of size 4.",
+   "why_it_matters": "This is the whole model-parallel configuration: four lines, one per variable.",
+   "terminology": [
+    {"term": "LayoutMap", "meaning": "Dictionary-like object mapping variable paths to sharding layouts on a given DeviceMesh."}
+   ],
+   "connections": ["p.577: DeviceMesh(shape=(2, 4), axis_names=[\"data\", \"model\"]) defines the axes referenced here"]
+  },
+  {
+   "ref": "p578_e13",
+   "excerpt": "Finally, we tell Keras to refer to this sharding layout when instantiating",
+   "what_it_says": "A `ModelParallel` distribution is created from the layout map with `batch_dim_name=\"data\"` and installed with `keras.distribution.set_distribution(model_parallel)`. The callout says the argument tells Keras to use the mesh axis named \"data\" for data parallelism.",
+   "what_it_means": "`ModelParallel` handles two things at once: it shards variables according to the layout map (model parallelism along \"model\"), and it splits each input batch along the \"data\" axis (data parallelism). With two devices on that axis, each of the two model replicas, each spread over four GPUs, sees half of every global batch, which is the 2-replica x 4-shard arrangement of figure 18.2.",
+   "why_it_matters": "`set_distribution` is a global setting that applies when variables are *created*, so it must run before you build the model, a point the authors repeat for TPUs on p.580.",
+   "terminology": [
+    {"term": "ModelParallel", "meaning": "Keras distribution that shards variables per a LayoutMap and splits batches along batch_dim_name."},
+    {"term": "batch_dim_name", "meaning": "Name of the mesh axis along which the batch dimension of the data is split."},
+    {"term": "set_distribution", "meaning": "Installs a distribution globally for subsequently created variables and computations."}
+   ],
+   "connections": ["p.575: the simpler DataParallel distribution is used the same way, before building the model", "p.580: on TPU you likewise call set_distribution with DataParallel or ModelParallel before creating your model"]
+  },
+  {
+   "ref": "p578_e15",
+   "excerpt": "Once the distribution configuration is set, you can create your model and",
+   "what_it_says": "After the distribution is set you create and `fit()` your model. No other code changes: model definition and training code (built-in `fit()`/`evaluate()` or your own logic) are the same. If the LayoutMap is right, these snippets are enough to distribute (continuing on p.579) the computation of any LLM training run.",
+   "what_it_means": "Distribution is handled as configuration separate from the model. The JAX backend uses the variables' shardings to compile one SPMD program, and the XLA compiler places the computation and inserts the communication (all-gathers, reductions) the layout requires. Your code describes *what* to compute; the layout describes *where*.",
+   "why_it_matters": "You can prototype on one device and scale out by adding a few configuration lines, without rewriting your model.",
+   "technical_idea": "Beyond the book: this is the GSPMD approach. Annotating shardings on a few tensors (here the weights and the batch) is enough for the compiler to propagate shardings through the whole computation graph.",
+   "terminology": [
+    {"term": "SPMD", "meaning": "Single program, multiple data: every device runs the same compiled program on its own shard (term not used in the book)."}
+   ],
+   "connections": ["p.579: the sentence continues and shows how to inspect the resulting sharding", "p.246: fit() can also drive a custom train_step, which this distribution also supports"]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "variable_path",
+   "name": "Variable path",
+   "definition": "A string identifier of a model variable, such as \"sequential/dense_1/kernel\", made of the model name, layer name and weight name.",
+   "intuition": "Like a file path in a folder tree, it says where a weight lives inside the model.",
+   "technical": "Available as `v.path` on every Keras variable; used as the key of a LayoutMap.",
+   "significance": "It lets you write a sharding specification before the variables exist.",
+   "example": "`sequential/dense/kernel` is the (16000, 64000) kernel of the first Dense layer of listing 18.4.",
+   "misconception": "It is not the variable's Python name. It is built from layer names, which Keras assigns automatically unless you set them.",
+   "related": ["layout_map", "keras_layer"],
+   "source": "book"
+  },
+  {
+   "id": "layout_map",
+   "name": "LayoutMap",
+   "definition": "A dictionary-like Keras object, attached to a DeviceMesh, that maps variable paths to tuples saying, per dimension, whether to replicate (None) or shard along a named mesh axis.",
+   "intuition": "A seating plan that says which slice of each weight goes to which group of devices.",
+   "technical": "`keras.distribution.LayoutMap(device_mesh)`; entries like `layout_map[\"sequential/dense/kernel\"] = (None, \"model\")`. The tuple length must equal the variable's rank.",
+   "significance": "It is the only model-specific part of a model-parallel setup.",
+   "example": "Kernel (16000, 64000) with (None, \"model\") on a 4-wide model axis gives a (16000, 16000) shard per device.",
+   "misconception": "The tuple does not list devices; it lists *mesh axis names* (or None) per variable dimension.",
+   "related": ["device_mesh", "model_parallelism", "variable_path"],
+   "source": "book"
+  },
+  {
+   "id": "model_parallelism",
+   "name": "Model parallelism (ModelParallel distribution)",
+   "definition": "Splitting a single model's variables and computation across several devices; in Keras, the ModelParallel distribution combines this with data parallelism along batch_dim_name.",
+   "intuition": "Four workers each build a quarter of every layer's output, while two such teams work on different halves of the batch.",
+   "technical": "`ModelParallel(layout_map=..., batch_dim_name=\"data\")` then `keras.distribution.set_distribution(...)` before creating the model.",
+   "significance": "It is required when the model does not fit in a single device's memory, as with the roughly 1.5-billion-parameter model of listing 18.4 on small devices.",
+   "example": "2 x 4 mesh: two replicas, each sharded over four GPUs.",
+   "misconception": "ModelParallel is not *only* model parallelism: the batch_dim_name argument also enables data parallelism along the data axis.",
+   "related": ["data_parallelism", "layout_map", "device_mesh"],
+   "source": "book"
+  },
+  {
+   "id": "sharding",
+   "name": "Sharding vs. replication",
+   "definition": "Sharding splits a variable dimension across the devices of a mesh axis; replication keeps a full copy on each device of that axis.",
+   "intuition": "Sharding divides the work, and replication gives everyone the same copy.",
+   "technical": "The rule of thumb on this page: shard the last dimension on \"model\", replicate the others.",
+   "significance": "Sharding saves memory per device but requires communication; replication avoids communication but costs memory.",
+   "example": "Bias (64000,) with (\"model\",) gives 16,000 biases per device.",
+   "misconception": "Sharding is not chosen per variable as a whole; it is chosen per dimension.",
+   "related": ["layout_map", "model_parallelism"],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Printing every variable path",
+   "original_code": "for v in model.variables:\n    print(v.path)",
+   "language": "python",
+   "what_it_does": "Iterates over all variables of the model and prints each one's path string.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "`model.variables` is the list of all model variables (kernels, biases, and any non-trainable state)."},
+    {"lines": "2", "explanation": "`v.path` is the hierarchical identifier, e.g. `sequential/dense/kernel`."}
+   ],
+   "inputs_outputs": "Input: a built model. Output: one path per line (see c2).",
+   "algorithm": "Simple iteration.",
+   "theory_link": "Paths are the keys of the LayoutMap.",
+   "parameters": [],
+   "pitfalls": ["The model must be built (have its variables) before the loop prints anything.", "Automatic layer names can change if you create several models in one session."],
+   "illustrative_code": "# AI-written: print shapes alongside paths to plan shardings\nfor v in model.variables:\n    print(v.path, v.shape)"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Paths for the listing 18.4 model",
+   "original_code": "sequential/dense/kernel\nsequential/dense/bias\nsequential/dense_1/kernel\nsequential/dense_1/bias",
+   "language": "text",
+   "what_it_does": "Shows the output of c1 on the two-layer model of listing 18.4.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "First Dense layer (64000 units): kernel (16000, 64000), bias (64000,)."},
+    {"lines": "3-4", "explanation": "Second Dense layer (8000 units): kernel (64000, 8000), bias (8000,)."}
+   ],
+   "inputs_outputs": "Printed text.",
+   "algorithm": "n/a",
+   "theory_link": "These four strings become the four LayoutMap keys in c3.",
+   "parameters": [],
+   "pitfalls": ["The shapes are not printed by the book's loop; they come from listing 18.4."]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Building the LayoutMap",
+   "original_code": "layout_map = keras.distribution.LayoutMap(device_mesh)\nlayout_map[\"sequential/dense/kernel\"] = (None, \"model\")\nlayout_map[\"sequential/dense/bias\"] = (\"model\",)\nlayout_map[\"sequential/dense_1/kernel\"] = (None, \"model\")\nlayout_map[\"sequential/dense_1/bias\"] = (\"model\",)",
+   "language": "python",
+   "what_it_does": "Creates a LayoutMap on the 2 x 4 device mesh and assigns a sharding layout to each of the four variables, following the rule: last dimension sharded on \"model\", others replicated.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "The layout map is bound to `device_mesh` (shape (2, 4), axes [\"data\", \"model\"]) from p.577."},
+    {"lines": "2", "explanation": "First kernel (16000, 64000): rows replicated, columns split in 4 → each device holds (16000, 16000)."},
+    {"lines": "3", "explanation": "First bias (64000,): split in 4 → (16000,) per device. Note the trailing comma: `(\"model\",)` is a 1-tuple."},
+    {"lines": "4", "explanation": "Second kernel (64000, 8000) → (64000, 2000) per device."},
+    {"lines": "5", "explanation": "Second bias (8000,) → (2000,) per device."}
+   ],
+   "inputs_outputs": "Input: device mesh. Output: a layout map consumed by ModelParallel.",
+   "algorithm": "Per-dimension sharding specification.",
+   "theory_link": "Vertical partitioning (p.574): each device computes a slice of each layer's output units.",
+   "parameters": [
+    {"name": "None", "role": "Replicate this dimension."},
+    {"name": "\"model\"", "role": "Shard this dimension across the 4 devices of the model axis."}
+   ],
+   "pitfalls": [
+    "Writing `(\"model\")` without the comma gives a string, not a tuple.",
+    "The sharded dimension must be divisible by the axis size (64000, 8000 are divisible by 4).",
+    "A tuple whose length differs from the variable's rank is an error."
+   ],
+   "illustrative_code": "# AI-written sketch: apply the rule of thumb automatically\nfor v in model.variables:\n    layout_map[v.path] = (None,) * (len(v.shape) - 1) + (\"model\",)"
+  },
+  {
+   "id": "c4",
+   "listing": null,
+   "title": "Creating and installing the ModelParallel distribution",
+   "original_code": "model_parallel = keras.distribution.ModelParallel(\n    layout_map=layout_map,\n    batch_dim_name=\"data\",\n)\nkeras.distribution.set_distribution(model_parallel)",
+   "language": "python",
+   "what_it_does": "Wraps the layout map into a ModelParallel distribution that also splits batches along the \"data\" mesh axis, and makes it the global distribution.",
+   "line_explanations": [
+    {"lines": "1-4", "explanation": "`layout_map` drives variable sharding. Per the margin callout, `batch_dim_name=\"data\"` tells Keras to use the mesh axis named \"data\" for data parallelism."},
+    {"lines": "5", "explanation": "Installs the distribution globally. Models created afterwards get sharded variables."}
+   ],
+   "inputs_outputs": "Input: layout map. Output: global configuration (no return value used).",
+   "algorithm": "Configuration of SPMD compilation (JAX backend).",
+   "theory_link": "Combines data parallelism (2 replicas) and model parallelism (4 shards), as in figure 18.2.",
+   "parameters": [
+    {"name": "layout_map", "role": "Variable sharding specification."},
+    {"name": "batch_dim_name", "role": "Mesh axis along which the input batch is split."}
+   ],
+   "pitfalls": ["Call it before building the model, since variables created earlier are not resharded.", "The global batch size should be divisible by the size of the data axis (2 here)."]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Per-device memory with this layout",
+   "kind": "numerical",
+   "body": "Shapes from listing 18.4, mesh (2, 4):\n\n| variable | full shape | layout | shard per device | params per device |\n|---|---|---|---|---|\n| dense/kernel | (16000, 64000) | (None, \"model\") | (16000, 16000) | 256,000,000 |\n| dense/bias | (64000,) | (\"model\",) | (16000,) | 16,000 |\n| dense_1/kernel | (64000, 8000) | (None, \"model\") | (64000, 2000) | 128,000,000 |\n| dense_1/bias | (8000,) | (\"model\",) | (2000,) | 2,000 |\n\nTotal is about 384 M parameters per device instead of about 1.536 B, which is 1.5 GB in float32 instead of about 6.1 GB, before optimizer state (Adam roughly triples it). Devices on the same \"model\" column but different \"data\" rows hold identical shards. (AI calculation from the book's shapes.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "What communication does this layout imply?",
+   "kind": "step_by_step",
+   "body": "1. Each data row receives half the batch: `x` of shape (B/2, 16000), replicated across the 4 model devices of that row.\n2. Each device computes `relu(x @ W1_shard + b1_shard)`, giving (B/2, 16000), its quarter of the 64,000 hidden units. No communication is needed.\n3. The second kernel shard is (64000, 2000) and needs the *full* hidden vector, so the compiler all-gathers the four (B/2, 16000) pieces into (B/2, 64000).\n4. Each device computes its 2,000 output units, and the loss needs them all, so another gather or reduction follows.\n5. In the backward pass, gradients of each shard stay local along \"model\", but are averaged across the \"data\" axis (as in data parallelism).\n\nThis is AI analysis of how XLA would execute the book's layout; the book only says the compiler moves computation to where the variables live (p.577).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Analogy: a seating chart for weights",
+   "kind": "analogy",
+   "body": "Think of the LayoutMap as a seating chart for a banquet. The guests are columns of weight matrices and the tables are GPUs. You don't tell each guest where to walk. You hand the caterer (the XLA compiler) the chart, and the food (computation) is served wherever each guest sits.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "From variable paths to a distributed fit()",
+   "why": "The page is a four-step recipe: list paths, fill a LayoutMap, build ModelParallel, set_distribution, then create and fit the model unchanged.",
+   "mermaid": "flowchart LR\n  A[DeviceMesh 2x4\\naxes data, model] --> B[LayoutMap\\npath -> per-dim tuple]\n  P[model.variables\\nv.path] --> B\n  B --> C[ModelParallel\\nlayout_map, batch_dim_name='data']\n  C --> D[set_distribution]\n  D --> E[build model\\nvariables created sharded]\n  E --> F[fit / evaluate / custom loop\\nunchanged]"
+  },
+  {
+   "id": "v2",
+   "type": "svg",
+   "title": "Sharding dense/kernel (16000, 64000) on the 2 x 4 mesh",
+   "why": "Shows the layout (None, \"model\"): columns split four ways along the model axis, and the same shards repeated on both data rows.",
+   "svg": "<svg viewBox=\"0 0 420 200\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"11\" fill=\"currentColor\"><text x=\"10\" y=\"16\">model axis (4) →</text><text x=\"4\" y=\"110\" transform=\"rotate(-90 12 110)\">data axis (2) →</text><g stroke=\"currentColor\" fill=\"none\"><rect x=\"30\" y=\"30\" width=\"90\" height=\"70\"/><rect x=\"125\" y=\"30\" width=\"90\" height=\"70\"/><rect x=\"220\" y=\"30\" width=\"90\" height=\"70\"/><rect x=\"315\" y=\"30\" width=\"90\" height=\"70\"/><rect x=\"30\" y=\"110\" width=\"90\" height=\"70\"/><rect x=\"125\" y=\"110\" width=\"90\" height=\"70\"/><rect x=\"220\" y=\"110\" width=\"90\" height=\"70\"/><rect x=\"315\" y=\"110\" width=\"90\" height=\"70\"/></g><text x=\"40\" y=\"55\">gpu:0</text><text x=\"40\" y=\"75\">W[:, 0:16k]</text><text x=\"135\" y=\"55\">gpu:1</text><text x=\"135\" y=\"75\">W[:, 16k:32k]</text><text x=\"230\" y=\"55\">gpu:2</text><text x=\"230\" y=\"75\">W[:, 32k:48k]</text><text x=\"325\" y=\"55\">gpu:3</text><text x=\"325\" y=\"75\">W[:, 48k:64k]</text><text x=\"40\" y=\"135\">gpu:4</text><text x=\"40\" y=\"155\">W[:, 0:16k]</text><text x=\"135\" y=\"135\">gpu:5</text><text x=\"135\" y=\"155\">W[:, 16k:32k]</text><text x=\"230\" y=\"135\">gpu:6</text><text x=\"230\" y=\"155\">W[:, 32k:48k]</text><text x=\"325\" y=\"135\">gpu:7</text><text x=\"325\" y=\"155\">W[:, 48k:64k]</text><text x=\"30\" y=\"196\">row 1: batch half A · row 2: batch half B (same weights)</text></svg>"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "You have to rewrite your model or training loop to use model parallelism.", "correction": "The authors stress that model definition and training code are unchanged; only the distribution configuration (mesh, LayoutMap, ModelParallel, set_distribution) is added."},
+  {"claim": "(\"model\") and (\"model\",) are the same layout.", "correction": "In Python, only the version with a comma is a tuple. The bias layout must be a 1-tuple matching the bias's single dimension."},
+  {"claim": "ModelParallel disables data parallelism.", "correction": "With batch_dim_name=\"data\" it also splits the batch across the data axis, so you get both forms of parallelism."},
+  {"claim": "You can set the distribution after building the model.", "correction": "The distribution is applied when variables are instantiated, so set it first (the authors say the same for TPUs on p.580)."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 573, "note": "Listing 18.4 defines the large two-layer Dense model whose variables are sharded here."},
+   {"page": 574, "note": "Vertical partitioning: splitting a Dense kernel along its last axis, done manually with keras.device."},
+   {"page": 575, "note": "DataParallel: the one-line data-parallel distribution that ModelParallel generalizes."},
+   {"page": 576, "note": "The DeviceMesh API: a grid of devices with named axes."},
+   {"page": 577, "note": "The 2 x 4 mesh with axes data/model, and the LayoutMap concept (None = replicate, \"model\" = shard)."}
+  ],
+  "later": [
+   {"page": 579, "note": "Inspecting the resulting sharding with kernel.value.sharding and jax.debug.visualize_sharding."},
+   {"page": 580, "note": "The same set_distribution call activates TPU cores, and it must be called before the model is created."}
+  ],
+  "prerequisites": [
+   {"page": 217, "note": "Sequential models and automatic layer naming."},
+   {"page": 89, "note": "Variables as stateful tensors."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 246, "note": "Custom train_step with fit(), which also works unchanged under a distribution."},
+   {"page": 230, "note": "The standard compile/fit/evaluate/predict workflow."}
+  ],
+  "related_figures": [
+   {"page": 575, "note": "Figure 18.2: two model replicas, each split across four devices."}
+  ]
+ },
+ "takeaways": [
+  "Variables are addressed by string paths like \"sequential/dense_1/kernel\"; print them with `for v in model.variables: print(v.path)`.",
+  "Rule of thumb for simple models: shard the last dimension on the \"model\" axis and replicate the rest, so kernels get (None, \"model\") and biases (\"model\",).",
+  "ModelParallel(layout_map=..., batch_dim_name=\"data\") combines model parallelism with data parallelism along the data axis.",
+  "Call keras.distribution.set_distribution() before creating the model, after which model and training code are unchanged.",
+  "On the 2 x 4 mesh, each device holds a quarter of every layer's output units, which reduces per-device weight memory about fourfold."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "What layout does the book assign to `sequential/dense/bias`?", "options": ["(None,)", "(\"model\",)", "(None, \"model\")", "(\"data\",)"], "answer": "(\"model\",)", "explanation": "Biases have one dimension, which is also their last, so by the rule of thumb it is sharded on the model axis. (None,) would replicate it; (None, \"model\") has the wrong rank; \"data\" is the batch axis, not used for weights.", "page_refs": [578]},
+  {"id": "q2", "type": "short", "question": "On the 2 x 4 mesh, what shape does each device hold for `sequential/dense_1/kernel` (full shape (64000, 8000)) under the layout (None, \"model\")?", "options": [], "answer": "(64000, 2000)", "explanation": "The first dimension is replicated (None), and the last is split across the 4 devices of the model axis: 8000 / 4 = 2000.", "page_refs": [578, 573]},
+  {"id": "q3", "type": "conceptual", "question": "Why does the LayoutMap use string variable paths rather than references to the variable objects?", "options": [], "answer": "Because the layout must be known before the variables are created: set_distribution is called before building the model so variables are instantiated already sharded. A path can be written before the object exists.", "explanation": "The page says the path is a way to refer to a variable without keeping a handle on the instance, and the distribution is used 'when instantiating the variables'.", "page_refs": [578]},
+  {"id": "q4", "type": "mcq", "question": "What does `batch_dim_name=\"data\"` do in `ModelParallel`?", "options": ["Names the dataset to load", "Tells Keras to split the batch dimension along the mesh axis named \"data\" (data parallelism)", "Shards weights along the data axis", "Sets the batch size"], "answer": "Tells Keras to split the batch dimension along the mesh axis named \"data\" (data parallelism)", "explanation": "The margin callout says the argument tells Keras to use the mesh axis named \"data\" for data parallelism. It names a mesh axis, not a dataset or a batch size, and weights are sharded along \"model\".", "page_refs": [578]},
+  {"id": "q5", "type": "conceptual", "question": "What must change in your model-building and `fit()` code once a ModelParallel distribution is set?", "options": [], "answer": "Nothing. Model definition and training code (fit/evaluate or a custom loop) stay the same.", "explanation": "The final paragraph states this explicitly; distribution is purely configuration.", "page_refs": [578]},
+  {"id": "q6", "type": "short", "question": "Roughly how many parameters of `sequential/dense/kernel` does each device store on the 2 x 4 mesh?", "options": [], "answer": "16000 x 16000 = 256 million", "explanation": "Full kernel 16000 x 64000 = 1.024 B; split four ways along the last axis gives 256 M. Devices in the other data row hold duplicates.", "page_refs": [578, 573]},
+  {"id": "q7", "type": "self", "question": "Can you write, from memory, the four lines that build the LayoutMap for listing 18.4 and the two calls that activate it?", "options": [], "answer": "LayoutMap(device_mesh); kernels -> (None, \"model\"); biases -> (\"model\",); ModelParallel(layout_map=layout_map, batch_dim_name=\"data\"); keras.distribution.set_distribution(model_parallel).", "explanation": "If you can reproduce this, you have the full recipe from this page.", "page_refs": [578]}
+ ]
+}

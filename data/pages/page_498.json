@@ -1,0 +1,403 @@
+{
+  "page_id": "page_498",
+  "pdf_page": 498,
+  "printed_page": "474",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:49:53Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean extraction; Listing 16.4 matches the page image verbatim. The four callouts (Self-attention layers, Feedforward layers, Self-attention computation, Feedforward computation) are printed in the margin and were split into fragments by the extractor."
+  },
+  "overview": {
+    "title": "A decoder-only Transformer block for mini-GPT",
+    "chapter": "16 Text generation",
+    "section": "16.2 Training a mini-GPT",
+    "subsection": "16.2.1 Building the model",
+    "main_topic": "Consequences of the decoder-only (GPT) design and the Keras implementation of a Transformer decoder block without cross-attention (Listing 16.4)",
+    "central_idea": "A GPT model is just a stack of Transformer decoder blocks with causal self-attention and no cross-attention; everything, including a question and its answer, is one left-to-right sequence. Listing 16.4 builds that block by stripping cross-attention from chapter 15's decoder and adding dropout inside each block, because the model will stack many of them.",
+    "importance": "This block is the repeated unit of the mini-GPT trained in the rest of section 16.2 (eight of them are stacked on p.499). Understanding why it has no cross-attention, why the mask is causal, and why dropout now lives inside each block explains the architecture of essentially every modern generative LLM.",
+    "learning_objectives": [
+      "Explain why a decoder-only model processes inputs strictly left to right, even for the 'question' part of a prompt, and what that costs and buys",
+      "Describe how Listing 16.4 differs from the chapter 15 TransformerDecoder (no cross-attention, dropout after each sublayer)",
+      "Trace the data flow of the block: causal self-attention, dropout, residual add, LayerNorm, then a two-layer feedforward network with its own dropout, residual and LayerNorm",
+      "Explain what use_causal_mask=True does inside MultiHeadAttention",
+      "Explain why dropout inside each block matters when many blocks are stacked"
+    ],
+    "prerequisites": [
+      "Self-attention and MultiHeadAttention (chapter 15, p.468)",
+      "The chapter 15 Transformer encoder and decoder blocks (p.469-471)",
+      "Residual connections and LayerNormalization (p.469-470)",
+      "Dropout as a regularizer",
+      "Causal (next-token) language modeling (section 16.2)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page finishes the argument, begun on p.497, about what it means for GPT to drop the encoder and keep only a decoder. Because information can only flow left to right, in a prompt like \"Where is the capital of France?\" the representation of \"Where\" **cannot attend** to the later words \"capital\" and \"France\". That limits expressivity compared with a bidirectional encoder, but it makes pretraining enormously simpler: no curated input/output pairs are needed, every piece of text is just one sequence, and the model can be trained on any text found on the internet at massive scale.\n\nThe authors then build the repeated unit of their mini-GPT. They take the `TransformerDecoder` from chapter 15, **remove the cross-attention layer** (there is no encoder sequence to attend to any more), and make one change: **dropout after the attention block and after the feedforward block**. In chapter 15 a single Transformer layer was used, so a single dropout at the end of the model was enough; a GPT stacks many layers, so per-layer dropout is needed to prevent overfitting.\n\n**Listing 16.4** defines the layer. The constructor creates a `MultiHeadAttention` with `key_dim = hidden_dim // num_heads` and attention dropout of 0.1, a `LayerNormalization` for the attention sublayer, two `Dense` layers (ReLU expansion to `intermediate_dim`, then projection back to `hidden_dim`), a second `LayerNormalization`, and one `Dropout(0.1)`. The `call` method runs causal self-attention (`query=x, key=x, value=x, use_causal_mask=True`), dropout, a residual add and LayerNorm; then the feedforward pair, dropout, residual add and LayerNorm. Input and output shapes are identical, so blocks can be stacked.\n\nThe page closes by announcing that the `PositionalEmbedding` layer from chapter 15 will be reused (learned position embeddings added to token embeddings), and starts describing a memory-saving trick: the biggest weights in a Transformer are the input token embedding and the output dense prediction layer, a point continued on p.499 as weight tying.",
+  "paragraphs": [
+    {
+      "ref": "p498_e03",
+      "excerpt": "France?”, the learned representation of the word “Where” cannot attend to the words",
+      "what_it_says": "Finishing the example from p.497: given the input \"Where is the capital of France?\", the representation of \"Where\" cannot attend to \"capital\" and \"France\" in the attention layer. This limits the model's expressivity but makes pretraining much simpler: no need to curate input/output pairs, everything is a single sequence, and the model can be trained on any text from the internet at massive scale.",
+      "what_it_means": "In a decoder-only model, every token's representation at every layer is computed only from itself and tokens to its left. For the first word of a question this means its representation is built almost in a vacuum; only later tokens (like \"?\" or the first answer token) get to see the whole question. A bidirectional encoder (like BERT, p.479) would let \"Where\" be contextualized by \"France\". The trade-off the authors highlight is data, not architecture: the next-token objective turns raw text into training data for free, because every position in every document is a supervised example (predict the next token).",
+      "why_it_matters": "This is the core bet behind GPT-style LLMs: give up bidirectional context in exchange for a training objective that scales to essentially unlimited unlabeled text. The scale this unlocks turned out to matter far more than the lost expressivity.",
+      "technical_idea": "Causal masking enforces $p(x_t \\mid x_{<t})$ factorization; the price is that the hidden state at position $i$ is a function of $x_{\\le i}$ only, at every layer.",
+      "terminology": [
+        {"term": "Expressivity", "meaning": "The range of functions/representations a model can compute; here reduced because early tokens cannot use later context."},
+        {"term": "Pretraining", "meaning": "Training a large model on generic unlabeled text (here with next-token prediction) before any task-specific use."},
+        {"term": "Curated dataset of pairs", "meaning": "Explicit (input, target) examples, as used for the English-to-Spanish translation model in chapter 15."}
+      ],
+      "connections": [
+        "p.497: the paragraph begins there, introducing the decoder-only bet and the 'Where is the capital of France?' example",
+        "p.479: BERT, by contrast, is an encoder model where every position attends both forward and backward",
+        "p.471: the chapter 15 decoder used cross-attention to read the encoder's source sequence"
+      ]
+    },
+    {
+      "ref": "p498_e04",
+      "excerpt": "Let’s copy the TransformerDecoder from chapter 15 but remove the cross-attention layer",
+      "what_it_says": "The authors reuse chapter 15's TransformerDecoder, remove its cross-attention layer (which let the decoder attend to the encoder sequence), and add dropout after the attention and feedforward blocks. Chapter 15 used a single Transformer layer, so a single dropout at the end of the model sufficed; the GPT model stacks many layers, so dropout inside each decoder layer is important to prevent overfitting.",
+      "what_it_means": "The chapter 15 decoder block had three sublayers: causal self-attention, cross-attention to the encoder output, and a feedforward network. With no encoder, the middle sublayer has nothing to attend to, so it simply disappears, leaving a block that is structurally identical to the encoder block except for the causal mask. The dropout change is a regularization choice tied to depth: with eight stacked blocks (p.499), the network has many more parameters and paths for co-adapted features, so dropout is applied to the output of each sublayer before it is added back to the residual stream.",
+      "why_it_matters": "It shows how little code separates the translation Transformer from a GPT: delete one sublayer, keep the causal mask, and stack. It also introduces the standard 'residual dropout' pattern of the original Transformer paper.",
+      "technical_idea": "Dropout is applied to each sublayer output before the residual add: $x \\leftarrow \\mathrm{LN}(x + \\mathrm{Dropout}(F(x)))$.",
+      "terminology": [
+        {"term": "Cross-attention", "meaning": "Attention where queries come from the decoder sequence and keys/values come from the encoder output (p.471)."},
+        {"term": "Dropout", "meaning": "Randomly zeroing a fraction of activations during training (here 10%) and rescaling the rest, to reduce overfitting."},
+        {"term": "Decoder layer / block", "meaning": "One repeated unit of the model; its input and output have the same shape so many can be stacked."}
+      ],
+      "connections": [
+        "p.471: Listing 15.15, the chapter 15 TransformerDecoder with cross-attention",
+        "p.499: eight of these decoder layers are stacked in the mini-GPT (Listing 16.6)"
+      ]
+    },
+    {
+      "ref": "p498_e07",
+      "excerpt": "Next, we can copy the PositionalEmbedding layer from chapter 15. Recall that",
+      "what_it_says": "The PositionalEmbedding layer from chapter 15 will be reused; it learns an embedding for each position in the sequence and combines it with the token embeddings.",
+      "what_it_means": "Attention by itself is permutation-invariant, so the model needs position information injected. The chapter 15 layer uses two Embedding tables, one indexed by token id and one by position index 0..L-1, and adds them. Note that with a causal mask, order is partly implicit (a token knows how many tokens precede it only through what it can attend to), but learned position embeddings make positions explicit and are standard in GPT models.",
+      "why_it_matters": "Together with the decoder block, this is the second building block of the model; p.499 extends it with a 'reverse' mode for weight tying.",
+      "terminology": [
+        {"term": "Positional embedding", "meaning": "A learned vector per sequence position, added to the token embedding so the model can use word order."}
+      ],
+      "connections": [
+        "p.476: the PositionalEmbedding layer was introduced and used in chapter 15",
+        "p.499: Listing 16.5 adds a reverse argument to this layer"
+      ]
+    },
+    {
+      "ref": "p498_e08",
+      "excerpt": "There’s a neat trick we can employ here to save some GPU memory.",
+      "what_it_says": "There is a trick to save GPU memory: the biggest weights in a Transformer model are the input token embeddings and the output dense prediction layer (sentence continues on p.499).",
+      "what_it_means": "Both matrices scale with vocabulary size: the embedding is (vocab_size, hidden_dim) and the output projection is (hidden_dim, vocab_size). With a vocabulary of tens of thousands of tokens these two matrices can rival or exceed the parameters of all the Transformer blocks of a small model. The trick, explained on p.499, is to tie them, using the transpose of the embedding matrix as the output projection.",
+      "why_it_matters": "Weight tying halves the vocabulary-related parameter cost and is a standard technique in language models, including the original GPT.",
+      "connections": [
+        "p.499: the sentence continues and the weight-tying idea ('reverse embedding') is explained"
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "decoder_only_transformer",
+      "name": "Decoder-only Transformer (GPT architecture)",
+      "definition": "A Transformer consisting only of stacked decoder blocks with causal self-attention and no encoder or cross-attention; it models text as a single sequence and is trained to predict the next token.",
+      "intuition": "Like reading a book once, front to back, without ever being allowed to peek ahead: every word is understood only in light of what came before it.",
+      "technical": "Each block maps (batch, seq_len, hidden_dim) to the same shape. Causal masking makes the output at position i depend only on inputs at positions <= i, so a single forward pass yields next-token predictions for every position simultaneously.",
+      "significance": "It is the architecture of GPT and of nearly all current generative LLMs (including Gemma, used later in this chapter).",
+      "example": "To answer a question, the question and answer are concatenated into one token sequence; the model reads the question and then continues it with the answer.",
+      "misconception": "That a decoder-only model cannot do sequence-to-sequence tasks. It can (p.497); it just treats input and output as one sequence processed left to right.",
+      "related": ["transformer", "self_attention", "causal_mask", "language_model"],
+      "source": "book"
+    },
+    {
+      "id": "causal_mask",
+      "name": "Causal attention mask",
+      "definition": "A lower-triangular mask that stops each position from attending to positions after it.",
+      "intuition": "Each token gets a window that only looks backward.",
+      "technical": "In Keras, MultiHeadAttention(..., use_causal_mask=True) builds a boolean mask M with M[i, j] = 1 iff j <= i, and masked scores are excluded from the softmax (set to a very large negative value before it), so the attention weights to future tokens are zero.",
+      "significance": "It prevents the model from cheating during next-token training (otherwise predicting token i+1 would be trivial because it is visible) and is what makes the model usable for left-to-right generation.",
+      "example": "In 'Where is the capital of France ?', the row for 'Where' allows only 'Where'; the row for '?' allows all six tokens.",
+      "misconception": "That the mask is only needed at training time. It is applied at inference too, which is what makes cached generation consistent with training.",
+      "related": ["self_attention", "decoder_only_transformer", "attention"],
+      "source": "book"
+    },
+    {
+      "id": "cross_attention",
+      "name": "Cross-attention",
+      "definition": "Attention whose queries come from one sequence (the decoder) and whose keys and values come from another (the encoder output).",
+      "intuition": "The translator looking back at the source sentence while writing the translation.",
+      "technical": "In the chapter 15 decoder, a second MultiHeadAttention took query = target states and key = value = encoder output.",
+      "significance": "Removing it is precisely what turns the chapter 15 decoder into a GPT block.",
+      "example": "In English-to-Spanish translation, each Spanish token attended to English source tokens via cross-attention.",
+      "misconception": "That GPT models contain a hidden encoder; they do not, the prompt is simply part of the decoder's own sequence.",
+      "related": ["attention", "transformer", "self_attention"],
+      "source": "book"
+    },
+    {
+      "id": "dropout",
+      "name": "Dropout (per-block residual dropout)",
+      "definition": "Randomly zeroing a fraction (here 10%) of a layer's output during training, rescaling the rest by 1/(1-rate).",
+      "intuition": "Forces each block not to rely on any single activation, so features are more robust.",
+      "technical": "In Listing 16.4, Dropout(0.1) is applied to the attention output and to the feedforward output before each residual add; MultiHeadAttention also has dropout=0.1 applied to the attention weights.",
+      "significance": "With many stacked layers, per-block dropout is needed to prevent overfitting, according to the authors.",
+      "example": "During training, about 10 of every 100 entries of the attention output are zeroed and the others multiplied by 1/0.9.",
+      "misconception": "That one Dropout layer object cannot be reused twice. It is stateless (no weights), so calling the same self.dropout after both sublayers is fine; each call draws a fresh random mask.",
+      "related": ["regularization", "overfitting"],
+      "source": "book"
+    },
+    {
+      "id": "residual_connection",
+      "name": "Residual connection with post-LayerNorm",
+      "definition": "Adding a sublayer's input back to its output, then normalizing: x = LayerNorm(x + F(x)).",
+      "intuition": "Each sublayer only has to learn a correction to the representation, not rebuild it.",
+      "technical": "Listing 16.4 stores residual before each sublayer and applies LayerNormalization after the add (the 'post-LN' ordering of the original Transformer and of chapter 15).",
+      "significance": "Residuals plus normalization are what make deep stacks trainable (p.469).",
+      "example": "residual = x; x = attention(x); x = dropout(x); x = x + residual; x = layernorm(x).",
+      "misconception": "That LayerNormalization behaves like BatchNormalization; it normalizes each token's features separately, independent of the batch (p.470).",
+      "related": ["layer_normalization", "transformer"],
+      "source": "book"
+    },
+    {
+      "id": "weight_tying",
+      "name": "Weight tying (preview)",
+      "definition": "Using the transpose of the input token-embedding matrix as the output projection to vocabulary logits.",
+      "intuition": "Embedding maps token to vector; the output layer maps vector back to token, so they can share the same dictionary.",
+      "technical": "Embedding E has shape (vocab_size, hidden_dim); logits = h E^T. Introduced on this page as a GPU-memory trick and detailed on p.499.",
+      "significance": "Removes a second vocab_size x hidden_dim matrix, often a large share of a small model's parameters.",
+      "example": "With vocab 32,000 and hidden 512, each matrix has about 16.4M parameters; tying saves one of them.",
+      "misconception": "That tying makes input and output representations unrelated; on the contrary it forces them to live in the same space.",
+      "related": ["embedding", "positional_encoding"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "What one decoder block computes (from Listing 16.4)",
+      "latex": "\\begin{aligned} h &= \\operatorname{LN}_1\\big(x + \\operatorname{Dropout}(\\operatorname{MHA}(x, x, x;\\ M))\\big) \\\\ y &= \\operatorname{LN}_2\\big(h + \\operatorname{Dropout}(W_2\\,\\operatorname{relu}(W_1 h + b_1) + b_2)\\big) \\end{aligned}",
+      "source_text": "Not printed as a formula; written out from the call() method of Listing 16.4",
+      "variables": [
+        {"symbol": "x", "meaning": "Input to the block, shape (batch, seq_len, hidden_dim)"},
+        {"symbol": "M", "meaning": "Causal mask, M_{ij}=1 iff j <= i (use_causal_mask=True)"},
+        {"symbol": "\\operatorname{MHA}", "meaning": "MultiHeadAttention with num_heads heads of size key_dim = hidden_dim // num_heads"},
+        {"symbol": "W_1, b_1", "meaning": "feed_forward_1: Dense(intermediate_dim, relu)"},
+        {"symbol": "W_2, b_2", "meaning": "feed_forward_2: Dense(hidden_dim)"},
+        {"symbol": "\\operatorname{LN}_1, \\operatorname{LN}_2", "meaning": "self_attention_layernorm and feed_forward_layernorm"},
+        {"symbol": "y", "meaning": "Output, same shape as x"}
+      ],
+      "operations": "Masked self-attention, dropout, residual addition, layer normalization; then a position-wise two-layer MLP, dropout, residual addition, layer normalization.",
+      "purpose": "Makes the code's data flow explicit and shows that input and output shapes match, so blocks can be stacked.",
+      "interpretation": "The first line mixes information across (earlier) positions; the second updates each position independently.",
+      "intuition": "Attention gathers context from the past; the feedforward network then 'thinks about' each token with that context.",
+      "numerical_example": "With hidden_dim = 512 and num_heads = 8, key_dim = 512 // 8 = 64, so each head works in a 64-dimensional subspace and the 8 heads are concatenated back to 512.",
+      "source": "ai_explanation",
+      "book_ref": "p.498"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": "16.4",
+      "title": "A Transformer decoder block without cross-attention",
+      "original_code": "from keras import layers\n\nclass TransformerDecoder(keras.Layer):\n    def __init__(self, hidden_dim, intermediate_dim, num_heads):\n        super().__init__()\n        key_dim = hidden_dim // num_heads\n        self.self_attention = layers.MultiHeadAttention(\n            num_heads, key_dim, dropout=0.1\n        )\n        self.self_attention_layernorm = layers.LayerNormalization()\n        self.feed_forward_1 = layers.Dense(intermediate_dim, activation=\"relu\")\n        self.feed_forward_2 = layers.Dense(hidden_dim)\n        self.feed_forward_layernorm = layers.LayerNormalization()\n        self.dropout = layers.Dropout(0.1)\n\n    def call(self, inputs):\n        residual = x = inputs\n        x = self.self_attention(query=x, key=x, value=x, use_causal_mask=True)\n        x = self.dropout(x)\n        x = x + residual\n        x = self.self_attention_layernorm(x)\n        residual = x\n        x = self.feed_forward_1(x)\n        x = self.feed_forward_2(x)\n        x = self.dropout(x)\n        x = x + residual\n        x = self.feed_forward_layernorm(x)\n        return x",
+      "language": "python",
+      "what_it_does": "Defines a Keras layer implementing one GPT-style decoder block: causal multi-head self-attention followed by a two-layer feedforward network, each wrapped with dropout, a residual connection and LayerNormalization.",
+      "line_explanations": [
+        {"lines": "1-3", "explanation": "Imports Keras layers and subclasses keras.Layer (the listing assumes `keras` was imported earlier in the chapter)."},
+        {"lines": "4-6", "explanation": "The constructor takes the model width hidden_dim, the feedforward width intermediate_dim, and num_heads. Each head gets key_dim = hidden_dim // num_heads so the concatenated heads have total width hidden_dim."},
+        {"lines": "7-10", "explanation": "Self-attention layers (callout). MultiHeadAttention with dropout=0.1, which drops attention weights (not outputs) during training. A LayerNormalization for the attention sublayer."},
+        {"lines": "11-13", "explanation": "Feedforward layers (callout): expand to intermediate_dim with ReLU, project back to hidden_dim, and a second LayerNormalization. There is no cross-attention layer, unlike Listing 15.15."},
+        {"lines": "14", "explanation": "One Dropout(0.1) layer, the new addition compared to chapter 15. It is reused after both sublayers; it has no weights, and each call samples a new mask."},
+        {"lines": "16-21", "explanation": "Self-attention computation (callout): save the residual, attend with query = key = value = x and use_causal_mask=True so each position sees only itself and earlier positions, apply dropout, add the residual, normalize."},
+        {"lines": "22-27", "explanation": "Feedforward computation (callout): save the new residual, apply the two Dense layers position-wise, dropout, add the residual, normalize."},
+        {"lines": "28", "explanation": "Return a tensor with the same shape as the input, so blocks can be stacked."}
+      ],
+      "inputs_outputs": "Input: float tensor (batch_size, sequence_length, hidden_dim), typically the output of PositionalEmbedding or of a previous block. Output: same shape. No padding mask is passed; the causal mask is generated internally from the sequence length.",
+      "algorithm": "Post-LN Transformer block: x = LN(x + Drop(CausalMHA(x))); x = LN(x + Drop(FFN(x))).",
+      "theory_link": "Causal self-attention enforces the left-to-right information flow discussed in the first paragraph; residual connections and LayerNorm make deep stacks trainable; per-block dropout regularizes the deeper model.",
+      "parameters": [
+        {"name": "hidden_dim", "role": "Width of the residual stream and of every token representation."},
+        {"name": "intermediate_dim", "role": "Hidden width of the feedforward network (usually several times hidden_dim)."},
+        {"name": "num_heads", "role": "Number of attention heads; must divide hidden_dim for key_dim to be exact."},
+        {"name": "dropout=0.1 (MultiHeadAttention)", "role": "Attention-weight dropout."},
+        {"name": "Dropout(0.1)", "role": "Residual dropout on each sublayer's output."},
+        {"name": "use_causal_mask=True", "role": "Prevents attention to future positions."}
+      ],
+      "pitfalls": [
+        "Forgetting use_causal_mask=True would let every position see the token it is supposed to predict, making the training loss trivially low and generation useless.",
+        "If hidden_dim is not divisible by num_heads, the integer division silently shrinks the per-head size and the attention output is projected back to the query's last dimension anyway, so no error is raised.",
+        "Dropout is only active when the layer is called with training=True (Keras handles this in fit()); at generation time it is off.",
+        "The class name TransformerDecoder shadows the chapter 15 class of the same name if both are in one notebook."
+      ],
+      "illustrative_code": "# AI-written sanity check (not from the book)\nimport numpy as np, keras\nblock = TransformerDecoder(hidden_dim=64, intermediate_dim=256, num_heads=4)\nx = np.random.rand(2, 10, 64).astype(\"float32\")\ny = block(x)\nprint(y.shape)  # (2, 10, 64): same as input, so blocks stack\n\n# Causality check: changing a late token must not change earlier outputs\nx2 = x.copy(); x2[:, 9] += 1.0\nprint(np.allclose(block(x)[:, :9], block(x2)[:, :9], atol=1e-5))  # True"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why the 'Where' token loses context, and why it is mostly fine",
+      "kind": "step_by_step",
+      "body": "1. At layer 1, the token \"Where\" (position 0) can attend only to itself; its output is a function of \"Where\" alone.\n2. The causal mask is applied at **every** layer, so at layer 8 position 0 is still a function of \"Where\" only.\n3. Position 6 (\"?\") can attend to all of the question, so its representation is fully contextualized.\n4. The next token is predicted from the last position, which has seen everything.\n\nSo the loss of bidirectionality hurts the internal representations of early tokens, but the *prediction* point always sees the whole prefix. Beyond the book: this is why decoder-only models work well for generation even though encoders give richer per-token representations for tasks like classification or tagging.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Diff against the chapter 15 decoder",
+      "kind": "breakdown",
+      "body": "| Chapter 15 decoder (p.471) | Listing 16.4 |\n|---|---|\n| causal self-attention | causal self-attention (same) |\n| cross-attention to encoder output | **removed** |\n| feedforward (2 Dense) | feedforward (same) |\n| one dropout at the end of the model | **Dropout(0.1) after each sublayer** + attention dropout 0.1 |\n| called with source and target | called with a single input |\n\nThe resulting block is essentially the chapter 15 *encoder* block plus a causal mask.",
+      "source": "inference"
+    },
+    {
+      "title": "Free supervision from raw text",
+      "kind": "numerical",
+      "body": "Beyond the book: with the dataset of p.497 (about 29,373 batches x 128 samples x 256 tokens, just under a billion tokens), every token position is a training target. A single 256-token sample yields 256 next-token prediction problems in one forward pass, thanks to the causal mask. No human labeling is involved, which is the 'massive advantage' the first paragraph refers to.",
+      "source": "ai_explanation"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "Data flow through Listing 16.4",
+      "why": "Follows the call() method and the four printed callouts: self-attention layers/computation and feedforward layers/computation.",
+      "mermaid": "flowchart TB\n  I[inputs: batch x seq x hidden_dim] --> A[MultiHeadAttention q=k=v=x, use_causal_mask=True]\n  A --> D1[Dropout 0.1]\n  D1 --> P1((+))\n  I -->|residual| P1\n  P1 --> L1[LayerNormalization]\n  L1 --> F1[Dense intermediate_dim, relu]\n  F1 --> F2[Dense hidden_dim]\n  F2 --> D2[Dropout 0.1]\n  D2 --> P2((+))\n  L1 -->|residual| P2\n  P2 --> L2[LayerNormalization]\n  L2 --> O[output: same shape]"
+    },
+    {
+      "id": "v2",
+      "type": "svg",
+      "title": "Causal mask for the page's example question",
+      "why": "Shows why 'Where' cannot attend to 'capital' and 'France': rows are query tokens, columns are key tokens; only shaded cells (j <= i) are allowed.",
+      "svg": "<svg viewBox=\"0 0 300 260\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"10\" fill=\"currentColor\"><g transform=\"translate(80,50)\"><g fill=\"currentColor\" fill-opacity=\"0.35\"><rect x=\"0\" y=\"0\" width=\"30\" height=\"30\"/><rect x=\"0\" y=\"30\" width=\"30\" height=\"30\"/><rect x=\"30\" y=\"30\" width=\"30\" height=\"30\"/><rect x=\"0\" y=\"60\" width=\"30\" height=\"30\"/><rect x=\"30\" y=\"60\" width=\"30\" height=\"30\"/><rect x=\"60\" y=\"60\" width=\"30\" height=\"30\"/><rect x=\"0\" y=\"90\" width=\"30\" height=\"30\"/><rect x=\"30\" y=\"90\" width=\"30\" height=\"30\"/><rect x=\"60\" y=\"90\" width=\"30\" height=\"30\"/><rect x=\"90\" y=\"90\" width=\"30\" height=\"30\"/><rect x=\"0\" y=\"120\" width=\"30\" height=\"30\"/><rect x=\"30\" y=\"120\" width=\"30\" height=\"30\"/><rect x=\"60\" y=\"120\" width=\"30\" height=\"30\"/><rect x=\"90\" y=\"120\" width=\"30\" height=\"30\"/><rect x=\"120\" y=\"120\" width=\"30\" height=\"30\"/><rect x=\"0\" y=\"150\" width=\"30\" height=\"30\"/><rect x=\"30\" y=\"150\" width=\"30\" height=\"30\"/><rect x=\"60\" y=\"150\" width=\"30\" height=\"30\"/><rect x=\"90\" y=\"150\" width=\"30\" height=\"30\"/><rect x=\"120\" y=\"150\" width=\"30\" height=\"30\"/><rect x=\"150\" y=\"150\" width=\"30\" height=\"30\"/></g><rect x=\"0\" y=\"0\" width=\"180\" height=\"180\" fill=\"none\" stroke=\"currentColor\"/><g text-anchor=\"end\"><text x=\"-5\" y=\"19\">Where</text><text x=\"-5\" y=\"49\">is</text><text x=\"-5\" y=\"79\">the</text><text x=\"-5\" y=\"109\">capital</text><text x=\"-5\" y=\"139\">of</text><text x=\"-5\" y=\"169\">France</text></g><g text-anchor=\"start\"><text transform=\"translate(19,-5) rotate(-45)\">Where</text><text transform=\"translate(49,-5) rotate(-45)\">is</text><text transform=\"translate(79,-5) rotate(-45)\">the</text><text transform=\"translate(109,-5) rotate(-45)\">capital</text><text transform=\"translate(139,-5) rotate(-45)\">of</text><text transform=\"translate(169,-5) rotate(-45)\">France</text></g><text x=\"90\" y=\"200\" text-anchor=\"middle\">rows = query, columns = key; shaded = may attend</text></g></svg>"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "A GPT block is the chapter 15 decoder block unchanged.",
+      "correction": "The cross-attention sublayer is removed (there is no encoder) and dropout is added after the attention and feedforward sublayers."
+    },
+    {
+      "claim": "Decoder-only models were chosen because they are more expressive than encoder-decoder models.",
+      "correction": "The page says the opposite: left-to-right-only flow limits expressivity. The advantage is simplicity of pretraining: any text becomes training data without curated input/output pairs."
+    },
+    {
+      "claim": "One dropout layer at the end of the model is enough no matter how deep it is.",
+      "correction": "The authors note this only worked in chapter 15 because there was a single Transformer layer; with many stacked layers, dropout within each block is important to prevent overfitting."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 497, "note": "Introduction of the decoder-only GPT idea and the start of the 'Where is the capital of France?' example; dataset of 29,373 batches."},
+      {"page": 471, "note": "Listing 15.15, the chapter 15 TransformerDecoder with cross-attention that this listing simplifies."},
+      {"page": 469, "note": "The Transformer encoder block: attention + two-layer feedforward network, residuals and normalization."},
+      {"page": 476, "note": "The PositionalEmbedding layer that is reused here."}
+    ],
+    "later": [
+      {"page": 499, "note": "Weight tying via a reverse mode of PositionalEmbedding (Listing 16.5), and the eight-layer mini-GPT with mixed precision (Listing 16.6)."},
+      {"page": 500, "note": "16.2.2 Pretraining the model."},
+      {"page": 502, "note": "16.2.3 Generative decoding, where the causal model is used to generate text token by token."}
+    ],
+    "prerequisites": [
+      {"page": 468, "note": "Self-attention: a sequence attending to itself."},
+      {"page": 470, "note": "LayerNormalization and attention masks in MultiHeadAttention."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 471, "note": "Listing 15.15 TransformerDecoder (with cross-attention)."},
+      {"page": 499, "note": "Listings 16.5 and 16.6 complete the mini-GPT model."}
+    ],
+    "related_figures": [
+      {"page": 479, "note": "BERT as the bidirectional, encoder-only counterpart."}
+    ]
+  },
+  "takeaways": [
+    "Decoder-only means strictly left-to-right information flow: early tokens of a prompt cannot see later ones, even inside the 'input' part.",
+    "The trade-off is deliberate: less expressivity, but any raw text becomes training data at internet scale.",
+    "Listing 16.4 = chapter 15 decoder minus cross-attention, plus Dropout(0.1) after each sublayer (and attention dropout 0.1).",
+    "use_causal_mask=True is what enforces the left-to-right constraint inside MultiHeadAttention.",
+    "Each block preserves the (batch, seq_len, hidden_dim) shape, so blocks can be stacked; the mini-GPT stacks eight.",
+    "The token embedding and output projection are the largest weights; p.499 ties them to save memory."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "Which change turns the chapter 15 TransformerDecoder into the block of Listing 16.4?",
+      "options": [
+        "Removing the causal mask and adding cross-attention",
+        "Removing cross-attention and adding dropout after the attention and feedforward sublayers",
+        "Replacing LayerNormalization with BatchNormalization",
+        "Removing the feedforward network"
+      ],
+      "answer": "Removing cross-attention and adding dropout after the attention and feedforward sublayers",
+      "explanation": "The page says exactly this. The causal mask is kept (it is essential for left-to-right modeling), LayerNormalization stays (it suits sequences, p.470), and the feedforward network remains as the per-token update.",
+      "page_refs": [498]
+    },
+    {
+      "id": "q2",
+      "type": "conceptual",
+      "question": "In the input \"Where is the capital of France?\", why can the representation of \"Where\" not use \"France\", and why do the authors accept this limitation?",
+      "options": [],
+      "answer": "The causal mask lets each position attend only to itself and earlier positions, at every layer, so \"Where\" never sees later tokens. The authors accept this because it makes pretraining simple: everything is a single sequence, no curated input/output pairs are needed, and the model can be trained on any internet text at massive scale.",
+      "explanation": "This is the trade-off stated in the first paragraph: limited expressivity versus scalable, label-free pretraining.",
+      "page_refs": [497, 498]
+    },
+    {
+      "id": "q3",
+      "type": "short",
+      "question": "Why could the chapter 15 model get away with a single dropout layer, while the GPT model needs dropout in each decoder layer?",
+      "options": [],
+      "answer": "Chapter 15 used only one Transformer layer in the encoder and decoder; the GPT model stacks many layers, so dropout within each layer is needed to prevent overfitting.",
+      "explanation": "Directly from the second paragraph; deeper stacks have more capacity to overfit and benefit from regularization at every block.",
+      "page_refs": [498]
+    },
+    {
+      "id": "q4",
+      "type": "math",
+      "question": "For hidden_dim = 512 and num_heads = 8, what is key_dim in Listing 16.4? What happens to the output width of the attention layer?",
+      "options": [],
+      "answer": "key_dim = 512 // 8 = 64. Each of the 8 heads works in 64 dimensions and the result is projected back to 512 dimensions, so the attention output has the same width as the input and can be added to the residual.",
+      "explanation": "The integer division keeps the total head width equal to hidden_dim, which is what lets x + residual work without a shape mismatch.",
+      "page_refs": [498]
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "question": "What does use_causal_mask=True do in the call to self.self_attention?",
+      "options": [
+        "It masks padding tokens so they get zero attention",
+        "It prevents each position from attending to positions after it",
+        "It randomly drops 10% of attention weights",
+        "It makes the attention bidirectional"
+      ],
+      "answer": "It prevents each position from attending to positions after it",
+      "explanation": "The causal mask is lower-triangular. Padding masks (p.470) are a different mechanism; random dropping of attention weights is the dropout=0.1 argument; bidirectional attention is the encoder behavior that the causal mask removes.",
+      "page_refs": [498]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "Why is it legitimate to reuse the single self.dropout layer twice in call()?",
+      "options": [],
+      "answer": "Dropout has no trainable weights; each call samples a fresh random mask, so reusing the same layer object after both sublayers behaves the same as two separate Dropout layers with the same rate.",
+      "explanation": "Beyond the book: the listing defines only one Dropout(0.1) but calls it after attention and after the feedforward network; this is safe precisely because the layer is stateless.",
+      "page_refs": [498]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Without looking, write down the order of operations inside call() for one block, including where the two residuals are saved.",
+      "options": [],
+      "answer": "residual = x = inputs; causal self-attention; dropout; add residual; LayerNorm; residual = x; Dense(relu); Dense; dropout; add residual; LayerNorm; return.",
+      "explanation": "Compare with Listing 16.4. The second residual is saved after the first LayerNorm, not from the original inputs.",
+      "page_refs": [498]
+    },
+    {
+      "id": "q8",
+      "type": "conceptual",
+      "question": "Why are the token embedding and the output prediction layer the biggest weights in a Transformer like this one?",
+      "options": [],
+      "answer": "Both scale with the vocabulary size: the embedding has shape (vocab_size, hidden_dim) and the output projection (hidden_dim, vocab_size). For a large vocabulary these dwarf the per-block matrices, which scale only with hidden_dim and intermediate_dim.",
+      "explanation": "The page starts this point and p.499 gives the shapes and the weight-tying solution.",
+      "page_refs": [498, 499]
+    }
+  ]
+}

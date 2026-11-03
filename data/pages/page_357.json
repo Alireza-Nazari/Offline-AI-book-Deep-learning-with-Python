@@ -1,0 +1,254 @@
+{
+ "page_id": "page_357",
+ "pdf_page": 357,
+ "printed_page": "333",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:53:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Listing 12.2's callout 'Sorts image metadata by ID' does not match the code it points to: `images = {image[\"id\"]: image for image in annotations[\"images\"]}` builds a dictionary indexed by image ID for lookup; nothing is sorted.",
+   "The text says boxes are rescaled to points in a [0, 1] unit square, but `scale_box` divides both axes by max(width, height) and centres the shorter side, i.e. coordinates are relative to the image padded to a square, not independently normalized by width and height. The text does not mention the padding assumption."
+  ],
+  "extraction_quality": "Clean extraction of the end of listing 12.1, two body paragraphs, listing 12.2 and a one-line transition. Callouts of listing 12.2 were split into fragments in the bundle and re-read from the page image: 'Sorts image metadata by ID', 'Converts bounding box to coordinates on a unit square', 'Aggregates all bounding box annotations by image ID'."
+ },
+ "overview": {
+  "title": "Parsing COCO annotations and normalizing boxes",
+  "chapter": "12 Object detection",
+  "section": "12.2 Training a YOLO model from scratch",
+  "subsection": "12.2.1 Downloading the COCO dataset",
+  "main_topic": "Downloading the COCO annotations JSON, joining boxes to images by image ID, and rescaling pixel boxes to a unit square",
+  "central_idea": "COCO stores images and box annotations separately, linked by image IDs. Listing 12.2 builds one record per image containing its file path, its list of boxes and its list of labels, converting each `x, y, width, height` pixel box into coordinates on a [0, 1] square so later code can ignore image sizes.",
+  "importance": "Every later step — visualization (p.358), grid targets (pp.363–364) and training — consumes the `metadata` list built here, and the normalized box format here is the 'relative xywh' format reused even with RetinaNet (p.372).",
+  "learning_objectives": [
+   "Explain the structure of the COCO annotation JSON: `images` and `annotations` lists linked by `image_id`",
+   "Trace how listing 12.2 collates boxes and labels per image",
+   "Derive the `scale_box` transformation and compute it by hand for a concrete image",
+   "Explain why scaling by max(width, height) and centring the short side corresponds to padding the image to a square",
+   "Describe the final shape of `metadata`: a list of dicts with `boxes`, `labels` and `path`"
+  ],
+  "prerequisites": [
+   "Listing 12.1 and the COCO dataset description (p.356)",
+   "Python dicts, list comprehensions and JSON loading",
+   "Bounding boxes as `x, y, width, height` (p.354)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the end of **listing 12.1**: after closing the image download, a second `keras.utils.get_file` call fetches `annotations_trainval2017.zip` (with `extract=True`) into `annotations_path`.\n\nThe authors then explain the \"input massaging\" needed. The first download is just an **unlabeled directory of images**; the second contains **all image metadata as a JSON file**. COCO assigns each image an ID and pairs each bounding box with one of these IDs, so the boxes must be **collated** with their images.\n\nEach COCO box is given as **`x, y, width, height` in pixels, measured from the top-left corner**. While loading, the authors rescale boxes to points in a **`[0, 1]` unit square**, so later code can manipulate boxes without checking each image's size.\n\n**Listing 12.2** does this:\n\n1. Loads `instances_train2017.json`.\n2. Builds `images`, a dict from image ID to image record (the callout says \"Sorts image metadata by ID\"; it is really an ID-indexed lookup table).\n3. Defines `scale_box(box, width, height)`: multiplies all four values by `1 / max(width, height)` and shifts `x` (for portrait images) or `y` (for landscape images) by half of the size difference — exactly the coordinates the box would have if the image were **centred inside a square** of side max(width, height), then scaled to [0, 1].\n4. Loops over every annotation, creating `{\"boxes\": [], \"labels\": []}` for a new `image_id`, appending the scaled box and the `category_id` label, and storing the image's file path under `images_path + \"/train2017/\"`.\n5. Converts the dict to a list, `metadata`, one entry per image that has annotations.\n\nThe page ends with \"Let's take a look at the data we just loaded\", leading to listing 12.3 on p.358.",
+ "paragraphs": [
+  {
+   "ref": "p357_e04",
+   "excerpt": "We need to do some input massaging before we are ready to use this",
+   "what_it_says": "The images download is an unlabeled directory; the annotations download contains all image metadata as JSON. COCO associates each image file with an ID and pairs each bounding box with one of these IDs, so box and image data must be collated.",
+   "what_it_means": "COCO is stored relationally, like two database tables: `images` (id, file_name, width, height, …) and `annotations` (image_id, bbox, category_id, …). Listing 12.2 performs a join on the ID.",
+   "why_it_matters": "A detector needs, per training example, the image together with all of its boxes and labels — a one-to-many relationship that the raw files don't give directly.",
+   "terminology": [
+    {"term": "collate", "meaning": "Gather related records (here, all boxes of one image) into one structure."},
+    {"term": "image_id", "meaning": "The field in each COCO annotation that links it to its image."}
+   ],
+   "connections": ["p.356: the first part of listing 12.1 downloaded the images"]
+  },
+  {
+   "ref": "p357_e05",
+   "excerpt": "Each bounding box comes with `x, y, width, height` pixel coordinates starting at",
+   "what_it_says": "Boxes are in `x, y, width, height` pixel coordinates from the top-left corner. They are rescaled to points in a [0, 1] unit square so they can be manipulated without checking each image's size.",
+   "what_it_means": "`(x, y)` is the box's top-left corner (y grows downward, as in image arrays). Normalization makes boxes resolution-independent: after resizing an image to the model's input size, the normalized box remains valid.",
+   "why_it_matters": "The YOLO grid utilities (p.363) assume boxes in this normalized format; RetinaNet is later called with the matching `\"rel_xywh\"` format (p.372).",
+   "technical_idea": "Note (not in the book): because `scale_box` uses one scale factor, max(width, height), for both axes and centres the shorter side, the [0, 1] square corresponds to the image padded to a square, preserving aspect ratio. A box on a landscape image therefore never reaches y = 0 or y = 1 unless it touches the padding region.",
+   "terminology": [
+    {"term": "unit square", "meaning": "The square [0, 1] × [0, 1]."},
+    {"term": "xywh format", "meaning": "Box given by its top-left corner (x, y) plus width and height."}
+   ],
+   "connections": ["p.363: x, y are later converted to centres relative to grid cells", "p.372: the 'rel_xywh' box format, rel meaning relative to image size"]
+  },
+  {
+   "ref": "p357_e08",
+   "excerpt": "Let’s take a look at the data we just loaded.",
+   "what_it_says": "Transition to inspecting the loaded data (listing 12.3, p.358).",
+   "what_it_means": "Always sanity-check parsed data before modelling.",
+   "why_it_matters": "Leads to the dataset statistics: 117,266 images, 1 to 63 boxes per image (p.358).",
+   "terminology": [],
+   "connections": ["p.358: listing 12.3 inspects the COCO data"]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "bounding_box",
+   "name": "Bounding box (COCO xywh format)",
+   "definition": "A rectangle given by its top-left corner (x, y) and its width and height, in pixels in raw COCO.",
+   "intuition": "Start at the top-left corner, then extend right by w and down by h.",
+   "technical": "Listing 12.2 converts pixel boxes into normalized coordinates on a [0, 1] square via `scale_box`.",
+   "significance": "Normalized boxes don't depend on image resolution.",
+   "example": "A 640 × 480 image's box [100, 50, 200, 100] becomes [0.15625, 0.203125, 0.3125, 0.15625].",
+   "misconception": "That COCO's x, y is the box centre — it is the top-left corner; YOLO later converts to centres (p.363).",
+   "related": ["object_detection", "coco_dataset"],
+   "source": "book"
+  },
+  {
+   "id": "coco_dataset",
+   "name": "COCO annotation structure",
+   "definition": "A JSON file with an `images` list and an `annotations` list; each annotation references an image by `image_id` and has a `bbox` and a `category_id`.",
+   "intuition": "Two tables joined by an ID.",
+   "technical": "Listing 12.2 builds an ID→image dict and groups annotations per image into `{\"boxes\", \"labels\", \"path\"}` records.",
+   "significance": "This per-image grouping is the input format for the rest of the chapter.",
+   "example": "`metadata[0]` holds all boxes and labels of one training image and its file path.",
+   "misconception": "That every image in `train2017` ends up in `metadata` — only images that have at least one annotation do, since entries are created while looping over annotations.",
+   "related": ["bounding_box"],
+   "source": "book"
+  },
+  {
+   "id": "box_normalization",
+   "name": "Aspect-preserving box normalization",
+   "definition": "Scaling box coordinates by 1/max(W, H) and offsetting the shorter axis by half the size difference.",
+   "intuition": "Place the image in the middle of a square canvas, then measure boxes as fractions of the canvas.",
+   "technical": "Equivalent to letterbox padding the image to a max(W,H) square and normalizing by its side.",
+   "significance": "Lets later code treat every image as a square without distorting box shapes.",
+   "example": "Landscape 640 × 480: vertical offset (640 − 480)/640/2 = 0.125.",
+   "misconception": "That x is divided by width and y by height — both use the same factor.",
+   "related": ["bounding_box"],
+   "source": "inference"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "The scale_box transformation",
+   "latex": "\\begin{aligned} s &= \\frac{1}{\\max(W, H)} \\\\ x' &= s\\,x + \\mathbb{1}[H > W]\\,\\frac{(H - W)\\,s}{2} \\\\ y' &= s\\,y + \\mathbb{1}[W > H]\\,\\frac{(W - H)\\,s}{2} \\\\ w' &= s\\,w, \\quad h' = s\\,h \\end{aligned}",
+   "source_text": "scale = 1.0 / max(width, height); x, y, w, h = [v * scale for v in box]; x += (height - width) * scale / 2 if height > width else 0; y += (width - height) * scale / 2 if width > height else 0",
+   "variables": [
+    {"symbol": "W, H", "meaning": "Image width and height in pixels (`image[\"width\"]`, `image[\"height\"]`)."},
+    {"symbol": "x, y, w, h", "meaning": "COCO box: top-left corner and size in pixels (`annotation[\"bbox\"]`)."},
+    {"symbol": "s", "meaning": "Single scale factor, 1 / max(W, H)."},
+    {"symbol": "\\mathbb{1}[\\cdot]", "meaning": "Indicator: 1 if the condition holds, else 0."},
+    {"symbol": "x', y', w', h'", "meaning": "Normalized box on the unit square."}
+   ],
+   "operations": "Uniform scaling of all four values, then a translation of the coordinate along the image's shorter side.",
+   "purpose": "Put all boxes on a common [0, 1] square regardless of image size, without distorting aspect ratio.",
+   "interpretation": "The offset $(H-W)s/2$ (or $(W-H)s/2$) is the width of the padding band on one side if the image is centred in a square of side $\\max(W,H)$.",
+   "intuition": "Imagine pasting the photo in the centre of a square sheet; the new coordinates are positions on that sheet measured as fractions of its side.",
+   "numerical_example": "Landscape image $W=640$, $H=480$, box $[100, 50, 200, 100]$. $s = 1/640 = 0.0015625$.\n\n- $x' = 100 s = 0.15625$ (no shift, since $H < W$)\n- $y' = 50 s + (640-480) s / 2 = 0.078125 + 0.125 = 0.203125$\n- $w' = 200 s = 0.3125$, $h' = 100 s = 0.15625$\n\nCheck: padding the image to 640 × 640 adds 80 px above, so the top edge is at $50+80 = 130$ px, and $130/640 = 0.203125$. ✓",
+   "source": "book",
+   "book_ref": "p.357"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "12.1",
+   "title": "Downloading the 2017 COCO dataset (continued)",
+   "original_code": ")\nannotations_path = keras.utils.get_file(\n    \"annotations\",\n    \"http://images.cocodataset.org/annotations/annotations_trainval2017.zip\",\n    extract=True,\n)",
+   "language": "python",
+   "what_it_does": "Closes the images download started on p.356, then downloads and extracts COCO 2017's train/val annotations archive, storing the local path in `annotations_path`.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Closing parenthesis of the `images_path = keras.utils.get_file(...)` call from p.356."},
+    {"lines": "2-6", "explanation": "Downloads `annotations_trainval2017.zip` under the cache name `\"annotations\"` and unzips it. The archive contains JSON files such as `annotations/instances_train2017.json`, opened in listing 12.2."}
+   ],
+   "inputs_outputs": "Output: `annotations_path`, the directory with the extracted annotation JSON files.",
+   "algorithm": "Same cache-download-extract logic as for the images.",
+   "theory_link": "Provides the labels (boxes and classes) for supervised training.",
+   "parameters": [
+    {"name": "extract", "role": "Unzip after download."}
+   ],
+   "pitfalls": ["The archive includes annotations for both train and val splits; only the train instances file is used here."]
+  },
+  {
+   "id": "c2",
+   "listing": "12.2",
+   "title": "Parsing the COCO data",
+   "original_code": "import json\n\nwith open(f\"{annotations_path}/annotations/instances_train2017.json\", \"r\") as f:\n    annotations = json.load(f)\n\nimages = {image[\"id\"]: image for image in annotations[\"images\"]}\n\ndef scale_box(box, width, height):\n    scale = 1.0 / max(width, height)\n    x, y, w, h = [v * scale for v in box]\n    x += (height - width) * scale / 2 if height > width else 0\n    y += (width - height) * scale / 2 if width > height else 0\n    return [x, y, w, h]\n\nmetadata = {}\nfor annotation in annotations[\"annotations\"]:\n    id = annotation[\"image_id\"]\n    if id not in metadata:\n        metadata[id] = {\"boxes\": [], \"labels\": []}\n    image = images[id]\n    box = scale_box(annotation[\"bbox\"], image[\"width\"], image[\"height\"])\n    metadata[id][\"boxes\"].append(box)\n    metadata[id][\"labels\"].append(annotation[\"category_id\"])\n    metadata[id][\"path\"] = images_path + \"/train2017/\" + image[\"file_name\"]\nmetadata = list(metadata.values())",
+   "language": "python",
+   "what_it_does": "Loads the COCO training annotations, indexes images by ID, converts every box to normalized unit-square coordinates, and groups boxes and labels per image into a list of records.",
+   "line_explanations": [
+    {"lines": "1-4", "explanation": "Load the whole `instances_train2017.json` into a Python dict `annotations` (a large file; this takes a while and noticeable memory)."},
+    {"lines": "6", "explanation": "Dict comprehension mapping each image ID to its record (file_name, width, height, …). The callout calls this 'Sorts image metadata by ID'; it is an ID-keyed lookup table, giving O(1) access in the loop."},
+    {"lines": "8-13", "explanation": "`scale_box`: one scale factor for both axes; shift x by half the height–width difference for portrait images, or y by half the width–height difference for landscape images. Callout: 'Converts bounding box to coordinates on a unit square'."},
+    {"lines": "15-19", "explanation": "Start an empty dict and loop over every annotation; create a new record with empty `boxes` and `labels` lists the first time an image ID is seen. Callout: 'Aggregates all bounding box annotations by image ID'."},
+    {"lines": "20-23", "explanation": "Look up the image's size, scale the annotation's `bbox`, and append the box and its `category_id` label."},
+    {"lines": "24", "explanation": "Store the image's full file path (overwritten with the same value for each annotation of the image)."},
+    {"lines": "25", "explanation": "Keep only the values: `metadata` becomes a list of dicts `{\"boxes\", \"labels\", \"path\"}`, one per annotated image."}
+   ],
+   "inputs_outputs": "Inputs: `annotations_path`, `images_path`. Output: `metadata`, a list where each element has `boxes` (list of `[x, y, w, h]` floats on the unit square), `labels` (list of integer COCO category IDs) and `path` (JPEG file path).",
+   "algorithm": "Hash join of annotations onto images by ID, with a per-row geometric transformation and grouping.",
+   "theory_link": "Supervised detection needs (image, set of boxes, set of labels) triples; normalized coordinates make the targets independent of image resolution, which matters once images are resized to the model's input size.",
+   "parameters": [
+    {"name": "box", "role": "COCO `bbox`: [x, y, width, height] in pixels, top-left origin."},
+    {"name": "width, height", "role": "Original image dimensions used for scaling and centring."}
+   ],
+   "pitfalls": [
+    "`id` shadows Python's built-in `id()` function; harmless here but best avoided.",
+    "The normalized coordinates only line up with the pixels if the images are later padded to a square (centred) before resizing; resizing with distortion would misalign boxes.",
+    "Images with no annotations never enter `metadata`.",
+    "`category_id` values are COCO IDs, not contiguous 0..N−1 indices (p.358 reports 91 possible labels)."
+   ],
+   "illustrative_code": "# AI-written check of scale_box on the worked example\nprint(scale_box([100, 50, 200, 100], width=640, height=480))\n# [0.15625, 0.203125, 0.3125, 0.15625]\n\n# Inverse (pixels on the original image), assuming the same padding convention\ndef unscale_box(box, width, height):\n    side = max(width, height)\n    x, y, w, h = box\n    x -= (height - width) / side / 2 if height > width else 0\n    y -= (width - height) / side / 2 if width > height else 0\n    return [v * side for v in (x, y, w, h)]"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why one scale factor instead of dividing x by W and y by H?",
+   "kind": "alternative",
+   "body": "Two common normalizations exist (comparison not in the book):\n\n- **Independent**: $x/W$, $y/H$. Every image fills the whole unit square, but if images are then resized to a square input, objects get stretched.\n- **Aspect-preserving (used here)**: divide by $\\max(W,H)$ and centre. The image occupies a centred rectangle inside the square; the rest is padding. Box shapes are preserved.\n\nThe second matches resizing with padding to a square, which keeps object proportions intact — sensible for a detector that must learn box widths and heights.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Tracing the loop on two annotations of the same image",
+   "kind": "step_by_step",
+   "body": "Suppose annotations `A1 = {image_id: 7, bbox: [...], category_id: 1}` and `A2 = {image_id: 7, bbox: [...], category_id: 19}`.\n\n1. `A1`: 7 not in `metadata` → create `{\"boxes\": [], \"labels\": []}`; append scaled box and label 1; set path.\n2. `A2`: 7 already present → append second box and label 19; path reassigned to the same string.\n3. After the loop: `metadata[7] == {\"boxes\": [b1, b2], \"labels\": [1, 19], \"path\": \".../train2017/<file>\"}`.\n\n`list(metadata.values())` then drops the IDs.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "svg",
+   "title": "scale_box: placing a landscape image in the unit square",
+   "why": "Listing 12.2 rescales boxes by 1/max(W,H) and centres the shorter side; this shows the 640 × 480 worked example.",
+   "svg": "<svg viewBox=\"0 0 320 250\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"10\"><rect x=\"40\" y=\"20\" width=\"200\" height=\"200\" fill=\"none\" stroke=\"currentColor\" stroke-dasharray=\"4 3\"/><text x=\"245\" y=\"25\" fill=\"currentColor\">(1,0)</text><text x=\"10\" y=\"25\" fill=\"currentColor\">(0,0)</text><text x=\"10\" y=\"228\" fill=\"currentColor\">(0,1)</text><rect x=\"40\" y=\"45\" width=\"200\" height=\"150\" fill=\"currentColor\" fill-opacity=\"0.08\" stroke=\"currentColor\"/><text x=\"120\" y=\"40\" fill=\"currentColor\">padding 0.125</text><text x=\"120\" y=\"210\" fill=\"currentColor\">padding 0.125</text><text x=\"150\" y=\"185\" fill=\"currentColor\">image 640 x 480</text><rect x=\"71.25\" y=\"60.6\" width=\"62.5\" height=\"31.25\" fill=\"none\" stroke=\"#d33\" stroke-width=\"2\"/><text x=\"72\" y=\"105\" fill=\"#d33\">box [0.156, 0.203, 0.313, 0.156]</text><line x1=\"260\" y1=\"20\" x2=\"260\" y2=\"220\" stroke=\"currentColor\"/><text x=\"265\" y=\"125\" fill=\"currentColor\">side = 640 px</text></svg>"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "COCO's `bbox` [x, y, w, h] gives the box centre.", "correction": "The page says the coordinates start at the top-left corner of the image; x, y is the box's top-left corner."},
+  {"claim": "`scale_box` divides x by the width and y by the height.", "correction": "Both axes are divided by max(width, height), and the shorter axis is shifted to centre the image in the square."},
+  {"claim": "The `images` line sorts the images.", "correction": "It builds a dictionary keyed by image ID for fast lookup, despite the callout's wording."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 356, "note": "COCO description and the first half of listing 12.1."}
+  ],
+  "later": [
+   {"page": 358, "note": "Listing 12.3 inspects `metadata`: 117,266 images, 1 to 63 boxes, 91 possible labels; listing 12.4 draws boxes."},
+   {"page": 363, "note": "`to_grid` / `from_grid` convert these normalized boxes to grid-cell-relative centres."},
+   {"page": 364, "note": "Building YOLO targets from `metadata`."},
+   {"page": 372, "note": "RetinaNet is called with bounding_box_format \"rel_xywh\", the same relative format."}
+  ],
+  "prerequisites": [
+   {"page": 356, "note": "Listing 12.1 defines `images_path`."}
+  ],
+  "related_math": [
+   {"page": 363, "note": "Grid conversion of box centres: cx = (x + w/2) * grid_size."}
+  ],
+  "related_code": [
+   {"page": 356, "note": "Start of listing 12.1."},
+   {"page": 358, "note": "Listings 12.3 and 12.4 use `metadata`."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "COCO images and annotations come as separate downloads linked by image IDs.",
+  "COCO boxes are `x, y, width, height` pixels from the top-left corner.",
+  "`scale_box` normalizes boxes to a [0, 1] square using one factor, 1/max(W, H), and centres the shorter side — equivalent to padding the image to a square.",
+  "`metadata` is a list of per-image records with `boxes`, `labels` (COCO category IDs) and `path`.",
+  "Normalized boxes let later code ignore each image's original size."
+ ],
+ "questions": [
+  {"id": "q1", "type": "math", "question": "Using `scale_box`, convert the box [40, 60, 120, 80] on a portrait image of width 300 and height 400.", "options": [], "answer": "s = 1/400 = 0.0025; x' = 40·0.0025 + (400−300)·0.0025/2 = 0.1 + 0.125 = 0.225; y' = 60·0.0025 = 0.15; w' = 0.3; h' = 0.2. Result: [0.225, 0.15, 0.3, 0.2].", "explanation": "Height > width, so x is shifted by half of the width deficit; y is not shifted.", "page_refs": [357]},
+  {"id": "q2", "type": "mcq", "question": "What does `images = {image[\"id\"]: image for image in annotations[\"images\"]}` actually do?", "options": ["Sorts the images by file name", "Builds a dictionary mapping image IDs to image records", "Loads every image from disk", "Removes images without annotations"], "answer": "Builds a dictionary mapping image IDs to image records", "explanation": "It is a dict comprehension keyed by ID, used for lookup in the loop. Nothing is sorted (despite the callout), no pixels are loaded, and no filtering happens on this line.", "page_refs": [357]},
+  {"id": "q3", "type": "short", "question": "What three keys does each element of `metadata` contain, and what is in each?", "options": [], "answer": "`boxes` — the list of normalized [x, y, w, h] boxes; `labels` — the list of COCO category IDs; `path` — the image file path under train2017/.", "explanation": "See lines 19–24 of listing 12.2.", "page_refs": [357]},
+  {"id": "q4", "type": "conceptual", "question": "Why does rescaling boxes to a unit square make later code simpler?", "options": [], "answer": "Boxes no longer depend on each image's pixel size, so they remain valid after images are resized to a common input size and can be manipulated (e.g. mapped to a grid) without consulting each image's dimensions.", "explanation": "The page: 'This will make it easier to manipulate these boxes without needing to check the size of each input image.'", "page_refs": [357, 363]},
+  {"id": "q5", "type": "mcq", "question": "Why does `scale_box` add an offset to y for a landscape image?", "options": ["To convert the top-left corner into the box centre", "Because the image is assumed centred in a square, leaving padding above and below", "To flip the y axis upward", "To compensate for JPEG compression"], "answer": "Because the image is assumed centred in a square, leaving padding above and below", "explanation": "The offset equals half the width–height difference (scaled), the height of the top padding band. Centre conversion happens later (p.363); there is no axis flip; compression is irrelevant.", "page_refs": [357]},
+  {"id": "q6", "type": "conceptual", "question": "Would an image in `train2017` that has no annotations appear in `metadata`? Why?", "options": [], "answer": "No. Records are created only while iterating over annotations, so an image with none is never added.", "explanation": "Follows from the structure of the loop in listing 12.2.", "page_refs": [357]},
+  {"id": "q7", "type": "self", "question": "Can you write the inverse of `scale_box` to recover pixel coordinates?", "options": [], "answer": "Subtract the same centring offset, then multiply by max(width, height).", "explanation": "See the illustrative `unscale_box` in the code notes.", "page_refs": [357]}
+ ]
+}

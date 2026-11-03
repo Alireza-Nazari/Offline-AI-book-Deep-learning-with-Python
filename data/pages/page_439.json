@@ -1,0 +1,344 @@
+{
+ "page_id": "page_439",
+ "pdf_page": 439,
+ "printed_page": "415",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:56:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "Figure 14.6 labels the step that combines the context words \"sum\", while the text on p.440 and Listing 14.28 compute the *average* with GlobalAveragePooling1D. The two differ only by a constant factor of 1/8, but the figure and the code are not literally the same operation.",
+   "Figure 14.6 shows two context words on each side of the target, whereas the code uses context_size = 4 (four on each side, nine-token windows). This is presumably a simplified illustration, not an error."
+  ],
+  "extraction_quality": "Clean. Figure 14.6 labels (\"the\", \"quick\", \"fox\", \"jumped\" -> sum -> \"brown\", Target word) were confirmed from the image. Listing 14.27 begins at the bottom of this page with only two lines (import tensorflow as tf; context_size = 4, with the callout \"Words to the left or right of label\"); the rest of the listing (window_size, window_data, split_label and the tf.data pipeline) is on p.440."
+ },
+ "overview": {
+  "title": "The CBOW idea and preparing IMDb text for it",
+  "chapter": "14 Text classification",
+  "section": "14.5 Sequence models",
+  "subsection": "14.5.4 Pretraining a word embedding",
+  "main_topic": "How CBOW guesses a missing word from its neighbors (figure 14.6), the goal of learning a 64-dimensional vector per vocabulary word, Listing 14.26 (a TextVectorization layer without padding) and the start of Listing 14.27 (nine-token windows with context_size = 4)",
+  "central_idea": "CBOW slides a window over text and predicts the middle word from the unordered bag of surrounding words with a shallow network. To prime the LSTM's embedding, the authors reuse the existing vocabulary, tokenize reviews without truncation or padding, and cut them into windows of nine tokens: eight context words and one middle label.",
+  "importance": "This turns the abstract idea of unsupervised pretraining from p.438 into a concrete dataset of (context, label) pairs. Reusing the same vocabulary is what lets the pretrained embedding be plugged into the LSTM classifier later (p.442).",
+  "learning_objectives": [
+   "Describe the CBOW task and read figure 14.6",
+   "Explain why the vocabulary of the earlier TextVectorization layer must be reused",
+   "Explain why the pretraining tokenizer must not truncate or pad",
+   "Read Listing 14.26 line by line",
+   "Relate context_size = 4 to the nine-token windows (eight context words plus one label)",
+   "Explain why using tf.data for preprocessing does not tie training to the TensorFlow backend"
+  ],
+  "prerequisites": [
+   "Pretraining and the CBOW introduction (p.438)",
+   "The TextVectorization layer and its vocabulary (earlier in chapter 14)",
+   "The Embedding layer with 64-dimensional vectors (pp.434-437)",
+   "tf.data datasets"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes the description of the **Continuous Bag of Words (CBOW)** model begun on p.438: slide a window over the text in a dataset and repeatedly try to **guess a missing word from the words directly to its left and right**. If the bag of surrounding words contains \"sail,\" \"wave,\" and \"mast,\" the middle word might be \"boat\" or \"ocean.\" **Figure 14.6** shows the model as a shallow network: the context words \"the,\" \"quick\" (left) and \"fox,\" \"jumped\" (right) are combined in a \"sum\" box that predicts the target word \"brown.\"\n\nFor the IMDb problem the goal is to **prime the word embedding of the LSTM** trained just before. The authors reuse the `TextVectorization` vocabulary computed earlier, so all they need to learn is **a good 64-dimensional vector for each word in this vocabulary**.\n\n**Listing 14.26** creates a new `TextVectorization` layer, `tokenize_no_padding`, with the same vocabulary (`text_vectorization.get_vocabulary()`), `split=\"whitespace\"` and `output_mode=\"int\"`, and without the fixed sequence length the classifier used. It therefore **does not truncate or pad** its output: each review becomes a token-ID sequence of its natural length, ready for a sliding context window.\n\nThe preprocessing slides a window over the training data to make **\"bags\" of nine consecutive tokens**: the **middle word is the label** and the **other eight words are an unordered context** used to predict it. As before, `tf.data` does the preprocessing, which, the authors note, **does not limit the backend** used for the actual model training.\n\n**Listing 14.27** begins at the bottom of the page with `import tensorflow as tf` and `context_size = 4`, the number of words to the left or right of the label. The rest of the listing, the windowing function, the label split and the dataset pipeline over the full `train` directory including `unsup/`, is on p.440.",
+ "paragraphs": [
+  {
+   "ref": "p439_e03",
+   "excerpt": "text in a dataset, where we continuously attempt to guess a missing",
+   "what_it_says": "This completes the CBOW definition from p.438: as the window slides over the text, we keep trying to guess a missing word from the words to its immediate right and left (figure 14.6). If the bag of surrounding words holds \"sail,\" \"wave,\" and \"mast,\" we might guess the middle word is \"boat\" or \"ocean.\"",
+   "what_it_means": "This is a fill-in-the-blank task with targets taken from the text itself. The example shows two things: the context is treated as a set (a bag; order does not matter), and the answer is often ambiguous. Several words fit, so the model learns a probability distribution over the vocabulary. Words that fit the same contexts (\"boat\", \"ship\", \"ocean\") get pushed toward similar embeddings because they must produce similar predictions.",
+   "why_it_matters": "It explains why solving CBOW produces a useful embedding space: semantic similarity is learned from shared contexts (the distributional idea that a word is characterized by its neighbors).",
+   "technical_idea": "Beyond the book: this is the distributional hypothesis behind word2vec. The training signal comes from co-occurrence statistics.",
+   "terminology": [
+    {"term": "Bag (of context words)", "meaning": "The surrounding words treated as an unordered collection."},
+    {"term": "Target / middle word", "meaning": "The word the model must predict, used as the label."}
+   ],
+   "connections": ["p.438: CBOW is introduced with the Mikolov et al. 2013 citation.", "p.433: the structured embedding space the CBOW task aims to produce."]
+  },
+  {
+   "ref": "p439_e04",
+   "excerpt": "Figure 14.6 The Continuous Bag of Words predicts a word based on",
+   "what_it_says": "Figure 14.6: CBOW predicts a word from its surrounding context with a shallow neural network. The figure shows four context words, \"the,\" \"quick\" on the left and \"fox,\" \"jumped\" on the right, feeding a \"sum\" box, which feeds the target word \"brown.\"",
+   "what_it_means": "The sentence is \"the quick brown fox jumped\", with \"brown\" hidden. Each context word is mapped to its embedding, the embeddings are combined into one vector, and a single prediction layer outputs the target word. \"Shallow\" means there is no stack of hidden layers: just an embedding lookup, a combination and an output layer.",
+   "why_it_matters": "It is the architecture implemented in Listing 14.28 on p.440, where the combination is an average (GlobalAveragePooling1D).",
+   "technical_idea": "Summing or averaging is permutation-invariant, so word order inside the window is discarded, exactly what \"bag\" means.",
+   "terminology": [
+    {"term": "Shallow neural network", "meaning": "A network with very few layers; here embedding lookup, pooling, and one output layer."}
+   ],
+   "connections": ["p.440: Listing 14.28 uses GlobalAveragePooling1D instead of a literal sum."]
+  },
+  {
+   "ref": "p439_e05",
+   "excerpt": "In our particular IMDb classification problem, we are interested in “priming” the",
+   "what_it_says": "For the IMDb problem, the aim is to prime the word embedding of the LSTM model just trained. The TextVectorization vocabulary computed earlier can be reused, so all we are trying to do is learn a good 64-dimensional vector for each word in this vocabulary.",
+   "what_it_means": "The pretrained embedding must be compatible with the classifier: the same token IDs must refer to the same words, and the vectors must have the same size (64) as the LSTM model's Embedding layer. Reusing the vocabulary guarantees the first, and choosing hidden_dim = 64 (p.440) the second. The embedding matrix to learn therefore has shape (vocabulary size, 64).",
+   "why_it_matters": "It limits the scope of the CBOW model: it is only a tool to produce embedding weights; its prediction head is not reused.",
+   "technical_idea": "Transfer works row by row: row i of the CBOW embedding matrix becomes the initial vector of token ID i in the LSTM's Embedding layer.",
+   "terminology": [
+    {"term": "Vocabulary", "meaning": "The ordered list of tokens; a token's position in it is its integer ID."},
+    {"term": "Priming", "meaning": "Giving the embedding good initial values before task training."}
+   ],
+   "connections": ["p.437: the LSTM with a 64-dimensional Embedding layer that stalled near 84%.", "p.442: the pretrained weights are loaded into the classifier."]
+  },
+  {
+   "ref": "p439_e06",
+   "excerpt": "We can create a new TextVectorization layer with the same vocabulary that",
+   "what_it_says": "A new TextVectorization layer is created with the same vocabulary that does not truncate or pad its input. Its output tokens will be preprocessed by sliding a context window over the text.",
+   "what_it_means": "The classifier's vectorizer cut or padded every review to a fixed length, which is needed for batching whole reviews. For CBOW, padding would create fake windows full of padding tokens (and teach the model to predict padding), and truncation would throw away text, i.e. throw away free training examples. Without either, each review produces exactly as many windows as its length allows.",
+   "why_it_matters": "This is a small but essential preprocessing detail; window extraction only makes sense on the real, unpadded token sequence.",
+   "terminology": [
+    {"term": "Truncation / padding", "meaning": "Cutting sequences to a maximum length / filling short sequences with a padding ID (0) to reach a fixed length."}
+   ],
+   "connections": ["p.440: window_data computes the number of windows from tf.size(token_ids), which only makes sense for unpadded sequences."]
+  },
+  {
+   "ref": "p439_e09",
+   "excerpt": "To preprocess our data, we will slide a window across our training",
+   "what_it_says": "The data is preprocessed by sliding a window over the training data, making bags of nine consecutive tokens. The middle word is the label and the other eight words are an unordered context for predicting it.",
+   "what_it_means": "With four words on each side (context_size = 4), a window spans 4 + 1 + 4 = 9 tokens. A review of n tokens gives n - 8 windows, one per position whose full context fits inside the review (p.440 computes exactly this). Each window becomes one supervised example: input = 8 token IDs, target = 1 token ID.",
+   "why_it_matters": "It defines the shapes of the CBOW dataset: inputs of shape (8,) and a scalar integer label, which p.440 confirms after preprocessing.",
+   "terminology": [
+    {"term": "Sliding window", "meaning": "A fixed-length span moved one position at a time along the sequence."}
+   ],
+   "connections": ["p.440: window_size = 9 and split_label take out the middle token as the label."]
+  },
+  {
+   "ref": "p439_e10",
+   "excerpt": "To do this, we will again use tf.data to preprocess our inputs,",
+   "what_it_says": "tf.data is used again for preprocessing, but this does not limit the backend used for training the model.",
+   "what_it_means": "Keras 3 can train on JAX, PyTorch or TensorFlow. A tf.data.Dataset is just an efficient input pipeline; Keras's fit() can consume it with any backend, so TensorFlow is used here only as a data-loading library.",
+   "why_it_matters": "It reassures readers using the JAX or PyTorch backend that the listing still applies to them.",
+   "terminology": [
+    {"term": "tf.data", "meaning": "TensorFlow's API for building streaming, parallel input pipelines (map, interleave, batch, ...)."},
+    {"term": "Backend", "meaning": "The numerical framework (JAX, PyTorch, TensorFlow) that Keras 3 uses to run the model."}
+   ],
+   "connections": ["p.440: the dataset.map / dataset.interleave pipeline."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "cbow",
+   "name": "Continuous Bag of Words (CBOW)",
+   "definition": "A shallow model that predicts a word from the unordered set of its neighboring words.",
+   "intuition": "Fill in the blank: \"sail, wave, mast\" suggests \"boat\" or \"ocean.\"",
+   "technical": "Embed each context token, combine the embeddings (figure 14.6: sum; Listing 14.28: average), and predict the target over the vocabulary.",
+   "significance": "Solving the task forces words with similar contexts to have similar embeddings, giving a pretrained embedding without labels.",
+   "example": "\"the quick ___ fox jumped\" -> \"brown\" (figure 14.6).",
+   "misconception": "The model is not trying to be a good word predictor for its own sake; only the embedding matrix is kept.",
+   "related": ["embedding", "pretraining", "global_average_pooling"],
+   "source": "book"
+  },
+  {
+   "id": "context_window",
+   "name": "Context window",
+   "definition": "A span of consecutive tokens around a target position; here nine tokens with the middle one as label.",
+   "intuition": "A small frame sliding along the text one word at a time.",
+   "technical": "Window size = 2 x context_size + 1 = 9; a sequence of n tokens gives max(n - 8, 0) windows.",
+   "significance": "Each window is one training example, so a corpus of reviews yields millions of examples.",
+   "example": "context_size = 4 in Listing 14.27.",
+   "misconception": "Order inside the window is not used by CBOW; the eight context words are treated as a bag.",
+   "related": ["cbow", "tokenization"],
+   "source": "book"
+  },
+  {
+   "id": "text_vectorization",
+   "name": "TextVectorization without padding",
+   "definition": "A Keras preprocessing layer mapping strings to token IDs; here created with a fixed vocabulary and no output_sequence_length, so it neither pads nor truncates.",
+   "intuition": "The same dictionary as before, but every review keeps its true length.",
+   "technical": "vocabulary=imdb_vocabulary fixes the token->ID mapping; split=\"whitespace\" splits on spaces; output_mode=\"int\" returns integer IDs.",
+   "significance": "Keeping the same vocabulary makes the CBOW embedding rows line up with the LSTM's token IDs.",
+   "example": "tokenize_no_padding in Listing 14.26.",
+   "misconception": "Creating a new layer does not mean a new vocabulary; get_vocabulary() copies the old one.",
+   "related": ["tokenization", "embedding"],
+   "source": "book"
+  },
+  {
+   "id": "embedding",
+   "name": "Word embedding (64-dimensional)",
+   "definition": "A dense, learned vector for each vocabulary word, stored in an Embedding layer.",
+   "intuition": "Each word gets a point in a 64-dimensional space where similar words are close.",
+   "technical": "Weight matrix of shape (vocab_size, 64); row i is token i's vector.",
+   "significance": "The only thing the CBOW pretraining is meant to produce.",
+   "example": "\"All we are trying to do here is to learn a good 64-dimensional vector for each word in this vocabulary.\"",
+   "misconception": "The embedding dimension is a hyperparameter, not tied to vocabulary size.",
+   "related": ["cbow", "pretraining"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Window size from context size",
+   "latex": "\\text{window\\_size} = 2\\cdot\\text{context\\_size} + 1 = 2\\cdot 4 + 1 = 9",
+   "source_text": "\"bags\" of nine consecutive tokens ... the middle word as our label and the remaining eight words as an unordered context; context_size = 4",
+   "variables": [
+    {"symbol": "\\text{context\\_size}", "meaning": "Number of words to the left (and to the right) of the label: 4"},
+    {"symbol": "\\text{window\\_size}", "meaning": "Total tokens per window: 9 (set explicitly as window_size = 9 on p.440)"}
+   ],
+   "operations": "Four words on each side plus the middle word.",
+   "purpose": "Fixes the shape of each training example: 8 context IDs and 1 label ID.",
+   "interpretation": "A larger context_size gives more context per example but a blurrier, more topical notion of similarity.",
+   "intuition": "Look four words back and four words ahead.",
+   "numerical_example": "A review of 200 tokens gives $200 - 2\\cdot 4 = 192$ windows (the formula used in window_data on p.440).",
+   "source": "book",
+   "book_ref": "p.439"
+  },
+  {
+   "id": "m2",
+   "title": "What the CBOW network in figure 14.6 computes",
+   "latex": "h = \\frac{1}{2c}\\sum_{j \\in \\text{context}} E[w_j], \\qquad p(w \\mid \\text{context}) = \\operatorname{softmax}(W h + b)_w",
+   "source_text": "Figure 14.6: context words -> sum -> target word (the averaging and the softmax output are described on p.440)",
+   "variables": [
+    {"symbol": "E", "meaning": "Embedding matrix, shape (vocabulary size, 64)"},
+    {"symbol": "w_j", "meaning": "Token ID of the j-th context word"},
+    {"symbol": "c", "meaning": "context_size (4), so there are 2c = 8 context words"},
+    {"symbol": "h", "meaning": "Combined context vector (64 dimensions)"},
+    {"symbol": "W, b", "meaning": "Weights and bias of the output layer over the vocabulary"}
+   ],
+   "operations": "Embedding lookup, averaging (the figure says sum, which differs only by the factor 1/8), dense layer, softmax over the vocabulary.",
+   "purpose": "Turns the bag of context words into a probability for every possible middle word.",
+   "interpretation": "Training maximizes the probability of the true middle word, which shapes E.",
+   "intuition": "The averaged context vector must point toward the right word's output weights.",
+   "source": "ai_explanation",
+   "book_ref": "p.439"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "14.26",
+   "title": "Removing padding from our TextVectorization preprocessing layer",
+   "original_code": "imdb_vocabulary = text_vectorization.get_vocabulary()\ntokenize_no_padding = keras.layers.TextVectorization(\n    vocabulary=imdb_vocabulary,\n    split=\"whitespace\",\n    output_mode=\"int\",\n)",
+   "language": "python",
+   "what_it_does": "Copies the vocabulary of the classifier's TextVectorization layer and builds a new layer with that vocabulary that outputs integer token IDs without any fixed output length, so sequences are neither padded nor truncated.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "get_vocabulary() returns the list of tokens learned earlier by text_vectorization; position = token ID."},
+    {"lines": "2-3", "explanation": "A new TextVectorization layer receives this fixed vocabulary, so it needs no adapt() call and maps words to the same IDs as before."},
+    {"lines": "4", "explanation": "split=\"whitespace\" splits text on whitespace into word tokens."},
+    {"lines": "5", "explanation": "output_mode=\"int\" returns token IDs (not multi-hot vectors). No output_sequence_length is given, so the output keeps the review's true length."}
+   ],
+   "inputs_outputs": "Input: a review string. Output: a 1-D integer tensor of variable length with the review's token IDs.",
+   "algorithm": "Standardize, split on whitespace, look each token up in the fixed vocabulary (unknown words map to the out-of-vocabulary ID).",
+   "theory_link": "Same token IDs = same embedding rows, which is required to transfer the CBOW embedding to the LSTM.",
+   "parameters": [
+    {"name": "vocabulary", "role": "Fixed token list copied from the earlier layer"},
+    {"name": "split", "role": "How text is split into tokens (whitespace)"},
+    {"name": "output_mode", "role": "\"int\" for integer token IDs"}
+   ],
+   "pitfalls": [
+    "If the standardization or splitting differs from the original layer, words may map to different IDs or to [UNK], and the transferred embeddings would not match.",
+    "Without padding, outputs have different lengths, so you cannot batch whole reviews directly; here that is fine because the next step cuts them into fixed nine-token windows."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "14.27",
+   "title": "Preprocessing our IMDb data for pretraining a CBOW model (first lines)",
+   "original_code": "import tensorflow as tf\ncontext_size = 4",
+   "language": "python",
+   "what_it_does": "Imports TensorFlow for the tf.data pipeline and sets the number of context words on each side of the label (callout: \"Words to the left or right of label\"). Only these two lines are on this page; the rest of Listing 14.27 (window_size = 9, window_data, split_label, and the dataset pipeline over imdb_extract_dir / \"train\" including unsup/) continues on p.440.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "TensorFlow is imported for tf.data and tensor ops used in the windowing functions; this does not fix the training backend."},
+    {"lines": "2", "explanation": "context_size = 4: four tokens to the left and four to the right of the label, giving eight context tokens."}
+   ],
+   "inputs_outputs": "No inputs or outputs yet; defines a constant used on p.440.",
+   "algorithm": "Setup for the sliding-window preprocessing.",
+   "theory_link": "context_size controls the CBOW window, and so which co-occurrences shape the embedding.",
+   "parameters": [
+    {"name": "context_size", "role": "Words on each side of the label (4)"}
+   ],
+   "pitfalls": [
+    "On p.440, split_label uses label = window[4], a hard-coded index; changing context_size without changing that index would pick the wrong label."
+   ],
+   "illustrative_code": "# AI-written illustration (not from the book): the windowing idea in plain Python\ntokens = [12, 7, 33, 5, 81, 9, 4, 27, 60, 15]\ncontext_size = 4\nfor i in range(context_size, len(tokens) - context_size):\n    bag = tokens[i - context_size:i] + tokens[i + 1:i + 1 + context_size]\n    label = tokens[i]\n    print(bag, '->', label)\n# 10 tokens give 10 - 8 = 2 windows"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why words with similar contexts end up with similar vectors",
+   "kind": "step_by_step",
+   "body": "1. \"boat\" and \"ship\" both appear after \"sail\" and near \"wave\" and \"mast\".\n2. When the context is the bag {sail, wave, mast, ...}, CBOW must assign high probability to both.\n3. Gradient descent adjusts the *context* embeddings of \"sail\", \"wave\", \"mast\" so their average points toward the outputs of boat-like words.\n4. Conversely, whenever \"boat\" or \"ship\" appear as context, they must predict similar neighbors, so their embeddings are pushed toward similar directions.\n\nThe result is an embedding space where distance reflects how interchangeable words are in context. (Explanation beyond the book.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "A crossword clue analogy",
+   "kind": "analogy",
+   "body": "CBOW is like solving a crossword in which the clue is the surrounding words. To solve many clues, you build an internal sense of which words go together. That internal sense, not the individual answers, is what we keep.",
+   "source": "analogy"
+  },
+  {
+   "title": "Why the same vocabulary is non-negotiable",
+   "kind": "breakdown",
+   "body": "The Embedding layer is a lookup table indexed by token ID. If the pretraining tokenizer assigned \"great\" ID 57 but the classifier's tokenizer assigned it ID 102, then after copying the weights the classifier would look up row 102 for \"great\" and get the vector of some other word. Calling `get_vocabulary()` on the original layer and passing that list to the new one keeps the IDs identical, which is why the page stresses reusing the vocabulary.",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Figure 14.6 redrawn",
+   "why": "Reproduces the page's figure: four context words combined in a sum box that predicts the target word \"brown\".",
+   "mermaid": "flowchart TD\n  A[\"the\"] --> S[\"sum (average in Listing 14.28)\"]\n  B[\"quick\"] --> S\n  C[\"fox\"] --> S\n  D[\"jumped\"] --> S\n  S --> T[\"brown<br/>(target word)\"]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "From a review to CBOW examples",
+   "why": "The page describes tokenizing without padding and cutting nine-token windows into 8 context IDs and 1 label; this traces the shapes for an example 200-token review.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "review string", "shape": [1]},
+     {"op": "tokenize_no_padding", "shape": [200]},
+     {"op": "windows of 9", "shape": [192, 9]},
+     {"op": "context bag", "shape": [192, 8]},
+     {"op": "labels", "shape": [192]}
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {"claim": "CBOW uses the order of the context words.", "correction": "The eight context words are an unordered bag; figure 14.6 sums them and Listing 14.28 averages them."},
+  {"claim": "A new TextVectorization layer means a new vocabulary.", "correction": "Listing 14.26 passes the old vocabulary explicitly, so IDs are identical."},
+  {"claim": "Using tf.data forces the TensorFlow backend.", "correction": "The page states that the tf.data choice does not limit the training backend."},
+  {"claim": "Padding is harmless for CBOW.", "correction": "Padding would create windows of padding tokens; the pretraining tokenizer deliberately does not pad or truncate."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 438, "note": "Pretraining and the introduction of CBOW (Mikolov et al. 2013)."},
+   {"page": 437, "note": "The 64-dimensional embedding LSTM that this pretraining will prime."},
+   {"page": 421, "note": "Dataset preparation, where unsup/ was left aside and a validation split was made."}
+  ],
+  "later": [
+   {"page": 440, "note": "Rest of Listing 14.27 (windowing and the tf.data pipeline) and Listing 14.28 (the CBOW model)."},
+   {"page": 442, "note": "Using the pretrained embedding for classification."}
+  ],
+  "prerequisites": [
+   {"page": 434, "note": "The Embedding layer."},
+   {"page": 433, "note": "Why a structured embedding space helps."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 440, "note": "window_data and split_label complete the preprocessing begun here."}
+  ],
+  "related_figures": [
+   {"page": 439, "note": "Figure 14.6, the CBOW model."}
+  ]
+ },
+ "takeaways": [
+  "CBOW guesses a missing word from its left and right neighbors; the context is an unordered bag.",
+  "Figure 14.6 shows a shallow network: context words -> sum -> target word.",
+  "The goal is a good 64-dimensional vector for each word of the existing IMDb vocabulary, to prime the LSTM's embedding.",
+  "Listing 14.26 reuses the vocabulary in a TextVectorization layer that neither pads nor truncates.",
+  "Windows have nine tokens: eight context words (context_size = 4 per side) and a middle-word label.",
+  "tf.data does the preprocessing without restricting the Keras backend; Listing 14.27 continues on p.440."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "In CBOW, what is the training target for each window?", "options": ["The sentiment label of the review", "The middle word of the window", "The next word after the window", "The first word of the review"], "answer": "The middle word of the window", "explanation": "The middle word is the label and the other eight words are the context. Sentiment labels are not used in pretraining; predicting the next word is causal language modeling (chapter 15), not CBOW.", "page_refs": [439]},
+  {"id": "q2", "type": "short", "question": "Why does Listing 14.26 call text_vectorization.get_vocabulary() instead of adapting a new vocabulary?", "options": [], "answer": "So that every word gets the same token ID as in the LSTM classifier; then the pretrained embedding rows line up with the classifier's IDs and can be transferred.", "explanation": "The page says the earlier vocabulary is reused and the goal is a 64-d vector for each word in this vocabulary.", "page_refs": [439]},
+  {"id": "q3", "type": "conceptual", "question": "Why must the pretraining tokenizer not pad or truncate?", "options": [], "answer": "Truncation would discard text (and thus training windows), and padding would create meaningless windows made of padding tokens. Windows should be taken from the real token sequence.", "explanation": "The page specifies a layer that does not truncate or pad before sliding a window over the text.", "page_refs": [439, 440]},
+  {"id": "q4", "type": "math", "question": "With context_size = 4, how many tokens are in each window, and how many windows does a 50-token review yield?", "options": [], "answer": "9 tokens per window; 50 - 8 = 42 windows.", "explanation": "2 x 4 + 1 = 9, and every position with four tokens on each side can be a middle word: n - 2 x context_size windows (the formula in window_data on p.440).", "page_refs": [439, 440]},
+  {"id": "q5", "type": "mcq", "question": "What does figure 14.6 predict from \"the\", \"quick\", \"fox\", \"jumped\"?", "options": ["\"lazy\"", "\"brown\"", "\"dog\"", "\"over\""], "answer": "\"brown\"", "explanation": "The target word box in figure 14.6 is \"brown\", the word between \"quick\" and \"fox\". The other words come from the rest of the familiar sentence but are not the target shown.", "page_refs": [439]},
+  {"id": "q6", "type": "short", "question": "Does using tf.data for preprocessing mean the CBOW model must be trained with the TensorFlow backend?", "options": [], "answer": "No. The book says this choice does not limit the backend used for training.", "explanation": "Keras 3 can feed a tf.data.Dataset into fit() on JAX, PyTorch or TensorFlow.", "page_refs": [439]},
+  {"id": "q7", "type": "self", "question": "Can you explain why predicting \"boat\" or \"ocean\" from \"sail\", \"wave\", \"mast\" would make those words' embeddings meaningful?", "options": [], "answer": "To predict well, words appearing in similar contexts must produce similar context vectors and outputs, so related words end up close together in the embedding space.", "explanation": "This is the intuition behind CBOW described on pp.438-440.", "page_refs": [439]}
+ ]
+}

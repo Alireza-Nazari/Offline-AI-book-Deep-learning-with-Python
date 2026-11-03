@@ -1,0 +1,264 @@
+{
+ "page_id": "page_249",
+ "pdf_page": 249,
+ "printed_page": "225",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:29:50Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction. The JAX CustomModel is printed as two code blocks; the second (train_step) breaks off mid-call at the page bottom and continues on p.250. The extractor split the method name across 'compute_loss_and_' and 'updates()' because of a hyphen-less line break in print."
+ },
+ "overview": {
+  "title": "Customizing fit() with JAX: compute_loss_and_updates() and a stateless train_step",
+  "chapter": "7 A deep dive on Keras",
+  "section": "7.4 Writing your own training and evaluation loops",
+  "subsection": "7.4.4 Using fit() with a custom training loop",
+  "main_topic": "The JAX version of overriding train_step(): a compute_loss_and_updates() method built on self.stateless_call(), and a train_step(self, state, data) that unpacks the state tuple and uses jax.value_and_grad with has_aux=True.",
+  "central_idea": "Under JAX, Keras calls train_step with an explicit state tuple (trainable, non-trainable, optimizer and metrics variables) and expects new state back. The loss function must be a pure method returning both the loss and updated non-trainable variables, so jax.value_and_grad(..., has_aux=True) can differentiate it.",
+  "importance": "It shows that the stateless JAX training step from 7.4.2 fits into fit() with the same structure, and it reveals the different train_step signature JAX requires. It also flags a simplification (no moving average of the loss) that 7.4.5 later resolves.",
+  "learning_objectives": [
+   "Explain why the JAX train_step takes a state argument in addition to data.",
+   "Read compute_loss_and_updates(): stateless_call with explicit variables, returning (loss, non_trainable_variables).",
+   "Explain jax.value_and_grad(fn, has_aux=True) and the shape of its output ((loss, aux), grads).",
+   "Name the four components of the state tuple.",
+   "Explain why this example returns the per-batch loss instead of a moving average."
+  ],
+  "prerequisites": [
+   "The JAX training step function from 7.4.2 with compute_loss_and_updates() and stateless_call() (p.242-244).",
+   "The stateless metrics API (p.246).",
+   "The train_step() recipe and the TensorFlow/PyTorch versions (p.247-248)."
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The last backend for *Customizing fit()* is **JAX**. As in the from-scratch JAX step of section 7.4.2, you first need a function that returns the loss, but now it is a **method** of `CustomModel`: `compute_loss_and_updates(self, trainable_variables, non_trainable_variables, inputs, targets, training=False)`. It runs the forward pass with **`self.stateless_call(trainable_variables, non_trainable_variables, inputs, training=training)`**, which returns the predictions together with updated non-trainable variables, computes `loss_fn(targets, predictions)`, and returns **both** the loss and the non-trainable variables (callout).\n\nThe authors then point out a simplification: unlike the TensorFlow and PyTorch versions, this one does **not compute a moving average of the loss**; it returns the per-batch loss value, which is less useful. Including a stateless loss tracker would make the code very verbose, and metric management is the topic of the next section (7.4.5).\n\nThe page then begins the **JAX `train_step(self, state, data)`**. Note the extra `state` argument: under JAX, Keras passes all variables explicitly. The state is unpacked into `trainable_variables`, `non_trainable_variables`, `optimizer_variables` and `metrics_variables` (callout: metrics_variables are part of it, although we won't use them here), and `data` into `inputs, targets`. A gradient function is created with **`jax.value_and_grad(self.compute_loss_and_updates, has_aux=True)`**, and calling it as `(loss, non_trainable_variables), grads = grad_fn(trainable_variables, non_trainable_variables, inputs, ...` computes the loss, the gradients with respect to the first argument (the trainable variables), and the updated non-trainable variables. The call continues on p.250, where the optimizer update and the returned `(logs, state)` appear.",
+ "paragraphs": [
+  {
+   "ref": "p249_e04",
+   "excerpt": "Finally, let’s write the JAX version. First we need to define a",
+   "what_it_says": "For JAX you first define a compute_loss_and_updates() method, similar to the compute_loss_and_updates() function used in the custom training step example of 7.4.2.",
+   "what_it_means": "JAX obtains gradients by transforming a function (metaprogramming), not by recording a tape. So the loss computation must be packaged as a pure function whose first argument is the thing to differentiate with respect to: the trainable variables.",
+   "why_it_matters": "This is the backend-specific core of the JAX version; everything else (returning logs) parallels the other backends.",
+   "terminology": [{"term": "compute_loss_and_updates()", "meaning": "A pure method mapping (trainable vars, non-trainable vars, inputs, targets) to (loss, updated non-trainable vars)."}],
+   "connections": ["p.242: the function-based compute_loss_and_updates() and the explanation of why JAX needs it.", "p.248: the PyTorch version for comparison."]
+  },
+  {
+   "ref": "p249_e05",
+   "excerpt": "import keras",
+   "what_it_says": "Code: loss_fn and a CustomModel with compute_loss_and_updates() using self.stateless_call().",
+   "what_it_means": "stateless_call runs the model with the variables supplied as arguments rather than those stored on the model. Non-trainable variables (e.g. batch-norm statistics) may change in the forward pass, so their new values are returned rather than written in place. There is no loss_tracker here, unlike the other backends.",
+   "why_it_matters": "Returning the updated non-trainable variables is what keeps the function pure, which jax.value_and_grad and jax.jit require.",
+   "connections": ["p.242: stateless_call() takes the trainable and non-trainable weights in addition to inputs and training."]
+  },
+  {
+   "ref": "p249_e06",
+   "excerpt": "Note we aren’t computing a moving average of the loss like we",
+   "what_it_says": "This version returns the per-batch loss, not a moving average, to keep metric state management simple; metric management comes in the next section.",
+   "what_it_means": "A moving average would require threading a Mean metric's variables through metrics_variables with stateless_update_state (p.246), adding several lines. The progress bar will therefore show the last batch's loss, which is noisier.",
+   "why_it_matters": "Honest about a limitation; the reader should not mistake the noisy per-batch number for the epoch average shown by the TF/PyTorch versions.",
+   "connections": ["p.246: the stateless metrics API that would be needed.", "p.250: 7.4.5 Handling metrics in a custom train_step()."]
+  },
+  {
+   "ref": "p249_e07",
+   "excerpt": "def train_step(self, state, data):",
+   "what_it_says": "Code (continues on p.250): the JAX train_step unpacks state into four variable groups, unpacks data, builds grad_fn with jax.value_and_grad(..., has_aux=True), and calls it.",
+   "what_it_means": "Under JAX, fit() owns the variables and passes them in as state; train_step must return new state. value_and_grad differentiates with respect to the first positional argument (trainable_variables); has_aux=True tells JAX the function returns (loss, aux) and only loss is differentiated.",
+   "why_it_matters": "The different signature, train_step(self, state, data) versus train_step(self, data), is the main surprise when moving a custom step to JAX.",
+   "technical_idea": "jax.value_and_grad(f, has_aux=True)(*args) returns ((f_value, aux), grad_wrt_args[0]).",
+   "terminology": [{"term": "state", "meaning": "Tuple (trainable_variables, non_trainable_variables, optimizer_variables, metrics_variables) passed by fit() to a JAX train_step."}, {"term": "has_aux", "meaning": "Flag indicating the function returns a pair whose second element is auxiliary data not to be differentiated."}],
+   "connections": ["p.243: jax.value_and_grad with has_aux=True in the from-scratch JAX step.", "p.250: remainder of this train_step."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "stateless_call",
+   "name": "model.stateless_call()",
+   "definition": "A forward pass that takes trainable and non-trainable variables explicitly and returns outputs plus updated non-trainable variables.",
+   "intuition": "Using the model as a pure function of its weights.",
+   "technical": "predictions, non_trainable_variables = self.stateless_call(trainable_variables, non_trainable_variables, inputs, training=training)",
+   "significance": "Required so JAX can differentiate the loss with respect to weights passed as arguments.",
+   "example": "Inside compute_loss_and_updates() on this page.",
+   "misconception": "That it modifies the model's stored variables; it does not.",
+   "related": ["stateless_metrics", "jax"],
+   "source": "book"
+  },
+  {
+   "id": "value_and_grad",
+   "name": "jax.value_and_grad with has_aux",
+   "definition": "A JAX transformation turning f into a function that returns f's value and its gradient with respect to the first argument; with has_aux=True, f returns (value, aux).",
+   "intuition": "Ask JAX for the loss and its slope in one go, and let it carry some extra baggage along.",
+   "technical": "grad_fn = jax.value_and_grad(self.compute_loss_and_updates, has_aux=True); (loss, ntv), grads = grad_fn(tv, ntv, inputs, targets, training=True)",
+   "significance": "One call gives the loss for logging, the gradients for the optimizer, and the updated non-trainable state.",
+   "example": "This page's train_step.",
+   "misconception": "That gradients are taken with respect to all arguments; by default only the first (argnums=0).",
+   "related": ["autodiff", "stateless_call"],
+   "source": "book"
+  },
+  {
+   "id": "jax_train_state",
+   "name": "Training state in a JAX train_step",
+   "definition": "The tuple of trainable, non-trainable, optimizer and metrics variables that fit() passes to train_step and expects back updated.",
+   "intuition": "All the model's memory, handed over on each call and handed back changed.",
+   "technical": "train_step(self, state, data) -> (logs, state). The metrics_variables slot is unused in this example.",
+   "significance": "Makes the whole step a pure function that the framework can jit-compile.",
+   "example": "Unpacking on this page; repacking on p.250.",
+   "misconception": "That the JAX train_step has the same signature as the TF/PyTorch one.",
+   "related": ["jax", "custom_train_step"],
+   "source": "book"
+  },
+  {
+   "id": "custom_train_step",
+   "name": "Overriding train_step()",
+   "definition": "Redefining the per-batch method fit() calls.",
+   "intuition": "Swap the loop body, keep the loop.",
+   "technical": "For JAX the method is stateless: takes state and data, returns logs and new state.",
+   "significance": "Same pattern across all three backends.",
+   "example": "This page and p.250.",
+   "misconception": "That JAX cannot be used with fit() for custom algorithms.",
+   "related": ["jax_train_state"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "What grad_fn computes",
+   "latex": "\\big((L,\\ \\theta_{nt}'),\\ \\nabla_{\\theta_t} L\\big) = \\texttt{grad\\_fn}(\\theta_t, \\theta_{nt}, x, y), \\quad L = \\ell\\big(y, f(x; \\theta_t, \\theta_{nt})\\big)",
+   "source_text": "(loss, non_trainable_variables), grads = grad_fn(trainable_variables, non_trainable_variables, inputs, ...",
+   "variables": [
+    {"symbol": "\\theta_t", "meaning": "trainable_variables"},
+    {"symbol": "\\theta_{nt}, \\theta_{nt}'", "meaning": "non_trainable_variables before and after the forward pass"},
+    {"symbol": "x, y", "meaning": "inputs, targets"},
+    {"symbol": "\\ell", "meaning": "loss_fn (sparse categorical crossentropy)"},
+    {"symbol": "f", "meaning": "the model's forward pass via stateless_call"}
+   ],
+   "operations": "Forward pass, loss, reverse-mode differentiation with respect to the first argument only.",
+   "purpose": "Formalizes the line that computes gradients and non-trainable updates (callout).",
+   "interpretation": "Non-trainable variables are carried as auxiliary output, not differentiated.",
+   "intuition": "One function evaluation, three useful outputs.",
+   "source": "ai_explanation",
+   "book_ref": "p.249"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "JAX CustomModel: compute_loss_and_updates()",
+   "original_code": "import keras\nfrom keras import layers\n\nloss_fn = keras.losses.SparseCategoricalCrossentropy()\n\nclass CustomModel(keras.Model):\n    def compute_loss_and_updates(\n        self,\n        trainable_variables,\n        non_trainable_variables,\n        inputs,\n        targets,\n        training=False,\n    ):\n        predictions, non_trainable_variables = self.stateless_call(\n            trainable_variables,\n            non_trainable_variables,\n            inputs,\n            training=training,\n        )\n        loss = loss_fn(targets, predictions)\n        return loss, non_trainable_variables",
+   "language": "python",
+   "what_it_does": "Defines a pure loss method on CustomModel that runs a stateless forward pass and returns the loss plus updated non-trainable variables. The class continues with train_step in the next code block.",
+   "line_explanations": [
+    {"lines": "4", "explanation": "Module-level loss function; note there is no loss_tracker in the JAX version."},
+    {"lines": "7-14", "explanation": "Signature: all variables are explicit arguments; training defaults to False."},
+    {"lines": "15-20", "explanation": "stateless_call runs the model with the given variables and returns predictions and new non-trainable variables."},
+    {"lines": "21", "explanation": "Loss for the batch."},
+    {"lines": "22", "explanation": "Callout: returns both the loss and the updated non-trainable variables."}
+   ],
+   "inputs_outputs": "Inputs: variable lists, inputs, targets, training flag. Output: (loss scalar, non_trainable_variables).",
+   "algorithm": "Pure forward pass + loss.",
+   "theory_link": "JAX gradients are obtained by transforming a pure function (p.242).",
+   "parameters": [
+    {"name": "trainable_variables", "role": "First argument, the one value_and_grad differentiates against."},
+    {"name": "training", "role": "Passed through to stateless_call to enable dropout during training."}
+   ],
+   "pitfalls": [
+    "trainable_variables must be the first positional argument, since value_and_grad differentiates w.r.t. argument 0 by default.",
+    "Forgetting to return non_trainable_variables would lose updates from layers like BatchNormalization."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "JAX CustomModel: train_step (first part; continues on p.250)",
+   "original_code": "    def train_step(self, state, data):\n        (\n            trainable_variables,\n            non_trainable_variables,\n            optimizer_variables,\n            metrics_variables,\n        ) = state\n        inputs, targets = data\n\n        grad_fn = jax.value_and_grad(\n            self.compute_loss_and_updates, has_aux=True\n        )\n\n        (loss, non_trainable_variables), grads = grad_fn(\n            trainable_variables,\n            non_trainable_variables,\n            inputs,",
+   "language": "python",
+   "what_it_does": "Starts the JAX train_step method of CustomModel: unpacks the state and data, creates the value-and-gradient function, and begins calling it. Only this page's lines are reproduced; the call's remaining arguments (targets, training=True), the optimizer.stateless_apply update, and the return of (logs, state) are on p.250.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "JAX signature: state comes in explicitly alongside data."},
+    {"lines": "2-7", "explanation": "Callout: unpacks the state. metrics_variables are part of it, although we won't use them here."},
+    {"lines": "8", "explanation": "Unpacks the batch."},
+    {"lines": "10-12", "explanation": "Callout: gets the gradient function. has_aux=True because compute_loss_and_updates returns (loss, non_trainable_variables)."},
+    {"lines": "14-17", "explanation": "Callout: computes gradients and updates to non-trainable variables. Output structure is ((loss, aux), grads)."}
+   ],
+   "inputs_outputs": "Input: state tuple and a batch. (Output, on p.250: logs dict and new state tuple.)",
+   "algorithm": "Unpack state -> value_and_grad on the pure loss -> (p.250) stateless optimizer update -> repack state.",
+   "theory_link": "Same three training steps (p.239) in stateless form.",
+   "parameters": [
+    {"name": "state", "role": "(trainable, non-trainable, optimizer, metrics) variables managed by fit()."},
+    {"name": "has_aux=True", "role": "Lets the differentiated function return extra non-differentiated outputs."}
+   ],
+   "pitfalls": [
+    "The code uses jax without showing the import; `import jax` is assumed.",
+    "Returning only logs (as in TF/PyTorch) would fail; the JAX train_step must also return the new state (p.250)."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why fit() passes state to a JAX train_step",
+   "kind": "step_by_step",
+   "body": "Beyond the book: for TensorFlow and PyTorch, Keras variables are mutable objects that a step can update in place. For JAX, `fit()` compiles your `train_step` with `jax.jit`, so it must be pure. Keras therefore extracts all variable values into the `state` tuple, calls your compiled step, and after each step (or at the end) writes the returned values back into the model's variables. That is why you must return `state` even if you changed only part of it.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Signature comparison across backends",
+   "kind": "breakdown",
+   "body": "| Backend | Signature | Returns | Gradient mechanism |\n|---|---|---|---|\n| TensorFlow (p.247) | `train_step(self, data)` | logs | `tf.GradientTape` |\n| PyTorch (p.248) | `train_step(self, data)` | logs | `loss.backward()` |\n| JAX (p.249-250) | `train_step(self, state, data)` | `(logs, state)` | `jax.value_and_grad` |\n\nEditorial summary of the three versions.",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "State flow in the JAX train_step",
+   "why": "The page unpacks a four-part state tuple and computes loss, gradients and non-trainable updates in one call; the diagram (including the p.250 continuation) shows where each piece goes.",
+   "mermaid": "flowchart TD\n  S[\"state = (trainable, non_trainable,<br/>optimizer_vars, metrics_vars)\"] --> U[unpack]\n  D[\"data = (inputs, targets)\"] --> G\n  U --> G[\"grad_fn = value_and_grad(<br/>compute_loss_and_updates, has_aux=True)\"]\n  G --> R[\"(loss, non_trainable), grads\"]\n  R --> O[\"optimizer.stateless_apply (p.250)\"]\n  O --> N[\"new state + logs {'loss': loss}\"]\n  U -. metrics_vars unused .-> N"
+  }
+ ],
+ "misconceptions": [
+  {"claim": "The JAX version's reported loss is an epoch average like the other backends.", "correction": "The page says it returns the per-batch loss value, which is less useful, to keep the example simple."},
+  {"claim": "jax.value_and_grad differentiates with respect to all inputs.", "correction": "By default only the first argument, here trainable_variables."},
+  {"claim": "metrics_variables can be dropped from the state since they're unused.", "correction": "They are part of the state contract and are returned unchanged (p.250)."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 242, "note": "The JAX training step from scratch, stateless_call and the need for pure functions."},
+   {"page": 246, "note": "The stateless metrics API that a moving-average loss would require."},
+   {"page": 248, "note": "PyTorch version of CustomModel."},
+   {"page": 247, "note": "TensorFlow version, Listing 7.21."}
+  ],
+  "later": [
+   {"page": 250, "note": "Continuation of this train_step, the fit() call, and 7.4.5 Handling metrics in a custom train_step()."},
+   {"page": 254, "note": "Chapter summary on overriding train_step() with your backend of choice."}
+  ],
+  "prerequisites": [
+   {"page": 243, "note": "jax.value_and_grad with has_aux in the from-scratch JAX step."},
+   {"page": 244, "note": "optimizer.stateless_apply()."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 250, "note": "Second half of the JAX train_step."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "The JAX custom train_step has signature train_step(self, state, data).",
+  "state = (trainable_variables, non_trainable_variables, optimizer_variables, metrics_variables).",
+  "compute_loss_and_updates() uses self.stateless_call and returns (loss, non_trainable_variables).",
+  "jax.value_and_grad(..., has_aux=True) yields ((loss, aux), grads).",
+  "This example reports the per-batch loss, not a moving average, for simplicity."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "What does the JAX train_step receive that the TensorFlow and PyTorch versions do not?", "options": ["A loss function argument", "A state tuple of variables", "A GradientTape", "The optimizer as an argument"], "answer": "A state tuple of variables", "explanation": "train_step(self, state, data). The loss function is a global in all versions; GradientTape is TensorFlow; the optimizer is accessed as self.optimizer.", "page_refs": [249]},
+  {"id": "q2", "type": "short", "question": "List the four components of the state tuple.", "options": [], "answer": "trainable_variables, non_trainable_variables, optimizer_variables, metrics_variables.", "explanation": "Unpacked at the start of train_step; metrics_variables are unused here.", "page_refs": [249]},
+  {"id": "q3", "type": "conceptual", "question": "Why is has_aux=True needed when building grad_fn?", "options": [], "answer": "Because compute_loss_and_updates returns a pair (loss, non_trainable_variables); has_aux tells JAX to differentiate only the first element and pass the second through as auxiliary output.", "explanation": "Without it, JAX would expect a scalar output.", "page_refs": [249]},
+  {"id": "q4", "type": "conceptual", "question": "Why does compute_loss_and_updates() return the non-trainable variables?", "options": [], "answer": "Because the forward pass may update them (e.g. normalization statistics), and in a stateless function updates must be returned rather than written in place.", "explanation": "Callout: returns both the loss and the updated non-trainable variables; see p.242 on JAX statelessness.", "page_refs": [249, 242]},
+  {"id": "q5", "type": "mcq", "question": "Why does this JAX example not report a moving average of the loss?", "options": ["JAX cannot compute averages", "To simplify metric state management; including it would make the code very verbose", "Because the loss is already averaged by the optimizer", "Because fit() averages it automatically for JAX"], "answer": "To simplify metric state management; including it would make the code very verbose", "explanation": "Stated on the page. JAX can compute averages; optimizers don't average losses; fit() doesn't average returned per-batch values for you.", "page_refs": [249]},
+  {"id": "q6", "type": "math", "question": "With respect to which argument does grad_fn compute grads, and what is the output structure?", "options": [], "answer": "With respect to trainable_variables (first argument); output is ((loss, non_trainable_variables), grads).", "explanation": "value_and_grad defaults to argnums=0; has_aux nests the aux value with the loss.", "page_refs": [249]},
+  {"id": "q7", "type": "self", "question": "Can you sketch, before reading p.250, what the rest of the train_step must do?", "options": [], "answer": "Finish the grad_fn call (targets, training=True), apply the gradients with self.optimizer.stateless_apply to get new trainable and optimizer variables, then return logs and the repacked state.", "explanation": "Check against p.250.", "page_refs": [249, 250]}
+ ]
+}

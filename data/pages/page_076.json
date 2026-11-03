@@ -1,0 +1,756 @@
+{
+ "page_id": "page_076",
+ "pdf_page": 76,
+ "printed_page": "52",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-fable-5-1",
+  "generated_at": "2026-11-03T04:09:30Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. Three code blocks and four body paragraphs match the page image exactly; the 'equation candidates' are just the code blocks, not formulas."
+ },
+ "overview": {
+  "title": "Re-reading the MNIST model, compile step and fit loop",
+  "chapter": "2 The mathematical building blocks of neural networks",
+  "section": "2.5 Looking back at our first example",
+  "subsection": "",
+  "main_topic": "Revisiting the three code blocks of the first MNIST example (model definition, compile, fit) and reinterpreting each with the vocabulary of chapter 2: Dense layers, weight tensors, loss, optimizer, mini-batch SGD, epochs and backpropagation",
+  "central_idea": "Every line of the first example now has a precise meaning: the Sequential model is a chain of two Dense layers whose weight tensors hold the model's knowledge; compile picks the loss to minimize (sparse categorical crossentropy) and the gradient-descent rule (adam); fit runs mini-batch gradient descent with batches of 128 for 5 epochs, i.e. 469 updates per epoch and 2,345 updates in total.",
+  "importance": "This page is the bridge between the theory of sections 2.2-2.4 and the from-scratch reimplementation that starts on p.77. It is the moment where the 'magic' Keras calls from p.41 are decoded line by line, and it fixes the concrete numbers (512 units, 10 classes, batch 128, 5 epochs, 2,345 steps) that the low-level version will reproduce.",
+  "learning_objectives": [
+   "Map each argument of keras.Sequential, compile and fit to the concept it implements (layer, weights, loss, optimizer, metric, epoch, batch size).",
+   "Explain why the weights are 'where the knowledge of the model persists'.",
+   "Distinguish the role of the loss (what to minimize) from the role of the optimizer (how gradients are turned into weight updates).",
+   "Compute the number of gradient updates per epoch and in total from dataset size, batch size and epochs (469 and 2,345).",
+   "Describe what happens inside one iteration of fit: forward pass, loss, backpropagation, weight update."
+  ],
+  "prerequisites": [
+   "MNIST input as float32 tensors of shape (60000, 784) (p.75)",
+   "Dense layer transformation output = relu(matmul(input, W) + b) and weights W, b (p.63)",
+   "Mini-batch stochastic gradient descent and the training loop (p.68)",
+   "Backpropagation via the chain rule (p.70-p.74)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "Continuing the review begun on p.75, this page reprints the three remaining code blocks of the chapter's first MNIST example and annotates each with what the reader now knows.\n\n**The model.** `keras.Sequential([layers.Dense(512, activation=\"relu\"), layers.Dense(10, activation=\"softmax\")])` is a *chain of two `Dense` layers*. Each layer applies a few simple tensor operations (a dot product, an addition, an element-wise activation) to its input, and these operations involve **weight tensors**, which are attributes of the layers. The authors stress that the weights are where the *knowledge* of the model persists.\n\n**The compilation step.** `model.compile(optimizer=\"adam\", loss=\"sparse_categorical_crossentropy\", metrics=[\"accuracy\"])` names the **loss function**, which is the feedback signal used to learn the weights and which training tries to minimize, and the **optimizer**. The loss is reduced through mini-batch stochastic gradient descent, and the exact rules of that particular use of gradient descent are set by the `\"adam\"` optimizer.\n\n**The training loop.** `model.fit(train_images, train_labels, epochs=5, batch_size=128)` iterates over the training data in mini-batches of 128 samples, 5 times over; one full pass over the training data is an **epoch**. For each batch the model computes the gradient of the loss with respect to the weights using **backpropagation** (which derives from the chain rule) and moves the weights in the direction that reduces the loss on that batch.\n\n**The arithmetic.** After 5 epochs the model has made **2,345 gradient updates (469 per epoch)**: 60,000 / 128 = 468.75, rounded up to 469 batches because the last, partial batch also produces an update. By then the loss is low enough for the model to classify handwritten digits with high accuracy.\n\nThe next page (p.77) announces that you now know most of what there is to know about neural networks and sets out to prove it by reimplementing this example with low-level operations.",
+ "paragraphs": [
+  {
+   "ref": "p076_e04",
+   "excerpt": "Now you understand that this model consists of a chain of two",
+   "what_it_says": "The model is a chain of two Dense layers; each layer applies a few simple tensor operations to its input; those operations involve weight tensors; weight tensors are attributes of the layers and are where the knowledge of the model persists.",
+   "what_it_means": "The single `Sequential` call hides two parameterized functions composed one after the other. The first, `Dense(512, activation=\"relu\")`, computes `relu(dot(input, W1) + b1)` with a kernel `W1` of shape (784, 512) and a bias `b1` of shape (512,). The second, `Dense(10, activation=\"softmax\")`, computes `softmax(dot(h, W2) + b2)` with `W2` of shape (512, 10) and `b2` of shape (10,). The operations themselves (dot, add, relu, softmax) are fixed and generic; what distinguishes a trained digit classifier from a random function is only the numbers inside W1, b1, W2, b2. That is the precise sense in which the weights 'store the knowledge': saving a model essentially means saving these tensors.",
+   "why_it_matters": "It reframes a neural network as data (weights) plus fixed code (tensor operations). This view is what makes learning possible as an optimization problem over tensors, and it is exactly what the NaiveDense class on p.77 will make explicit by creating W and b as variables.",
+   "technical_idea": "Beyond the book: the parameter count follows directly from the shapes: 784*512 + 512 = 401,920 for the first layer and 512*10 + 10 = 5,130 for the second, 407,050 trainable scalars in total. Keras creates these tensors lazily, the first time the layer sees an input and therefore knows the input dimension (784).",
+   "terminology": [
+    {
+     "term": "Sequential model",
+     "meaning": "A Keras model that applies a list of layers one after another, feeding each layer's output into the next."
+    },
+    {
+     "term": "Dense layer",
+     "meaning": "A fully connected layer computing activation(dot(input, kernel) + bias)."
+    },
+    {
+     "term": "weight tensor",
+     "meaning": "A trainable tensor attribute of a layer (kernel or bias) whose values are adjusted during training."
+    }
+   ],
+   "connections": [
+    "p.63: the Dense transformation relu(matmul(input, W) + b) and the names kernel and bias for W and b.",
+    "p.62: a geometric interpretation of a chain of layers as successive transformations of the input space.",
+    "p.77: NaiveDense reimplements this layer with explicit W and b variables."
+   ]
+  },
+  {
+   "ref": "p076_e05",
+   "excerpt": "This was the model-compilation step:",
+   "what_it_says": "A one-line transition introducing the compile call.",
+   "what_it_means": "Compilation in Keras does not compile code in the usual sense; it attaches the training configuration (optimizer, loss, metrics) to the model.",
+   "why_it_matters": "It separates the model's structure (defined above) from how it will be trained (defined here).",
+   "terminology": [],
+   "connections": [
+    "p.42: the compile step was first shown, without explanation, in the opening example."
+   ]
+  },
+  {
+   "ref": "p076_e07",
+   "excerpt": "Now you understand that \"sparse_categorical_crossentropy\" is the loss function that’s used",
+   "what_it_says": "Sparse categorical crossentropy is the loss: the feedback signal used to learn the weight tensors, which training tries to minimize. The reduction of the loss happens via mini-batch stochastic gradient descent, and the exact rules for this use of gradient descent are defined by the \"adam\" optimizer passed as the first argument.",
+   "what_it_means": "Two different responsibilities are being configured. The loss answers 'how wrong is the model on this batch?' with a single scalar; because the targets are integer labels 0-9 (the 'sparse' part), it compares the softmax probability vector with an integer index rather than a one-hot vector. The optimizer answers 'given the gradient of that scalar, how exactly should each weight change?' Plain SGD would subtract learning_rate * gradient; Adam is a refined variant of mini-batch SGD that keeps running averages of gradients and squared gradients and uses them to set a per-parameter step size. Both still belong to the gradient-descent family the chapter described.",
+   "why_it_matters": "Choosing a loss defines what 'success' means for the task; choosing an optimizer defines the dynamics of learning. Confusing the two is a common beginner error, and the from-scratch loop on p.79-p.81 will implement each explicitly (a loss computation and a separate weight-update step).",
+   "technical_idea": "Beyond the book: for one sample with integer label y and predicted probabilities p, sparse categorical crossentropy is -log p_y; the batch loss is the mean over the batch. Adam's update, with defaults beta1 = 0.9, beta2 = 0.999, is w -= lr * m_hat / (sqrt(v_hat) + eps), where m and v are moving averages of the gradient and its square.",
+   "terminology": [
+    {
+     "term": "loss function",
+     "meaning": "A differentiable scalar measure of the mismatch between predictions and targets; the quantity training minimizes."
+    },
+    {
+     "term": "sparse categorical crossentropy",
+     "meaning": "Cross-entropy loss for multiclass classification where targets are given as integer class indices rather than one-hot vectors."
+    },
+    {
+     "term": "optimizer",
+     "meaning": "The rule that turns the gradient of the loss into weight updates (SGD, RMSprop, Adam, ...)."
+    },
+    {
+     "term": "metric",
+     "meaning": "A quantity (here accuracy) monitored during training and evaluation but not used to compute gradients."
+    }
+   ],
+   "connections": [
+    "p.68: mini-batch stochastic gradient descent and the update W -= learning_rate * gradient.",
+    "p.83: the chapter summary's definition of loss and optimizer.",
+    "p.75: figure 2.26 shows the loss feeding the optimizer, which updates the weights."
+   ]
+  },
+  {
+   "ref": "p076_e08",
+   "excerpt": "Finally, this was the training loop:",
+   "what_it_says": "A transition introducing the fit call, described as the training loop.",
+   "what_it_means": "The authors identify `fit` with the training loop of p.63-p.68: a single method call runs the whole repeated draw-batch / forward / loss / gradient / update cycle.",
+   "why_it_matters": "It prepares the reader to see fit as nothing more than a loop that p.81 will write by hand.",
+   "terminology": [],
+   "connections": [
+    "p.63: the training loop introduced as 'repeat these steps in a loop, until the loss seems sufficiently low'."
+   ]
+  },
+  {
+   "ref": "p076_e10",
+   "excerpt": "Now you understand what happens when you call fit: the model",
+   "what_it_says": "Calling fit makes the model iterate over the training data in mini-batches of 128 samples, 5 times over; each full pass over the training data is an epoch. For each batch the model computes the gradient of the loss with respect to the weights using backpropagation, which derives from the chain rule, and moves the weights in the direction that reduces the loss for this batch.",
+   "what_it_means": "Two nested loops are hidden in fit: an outer loop over epochs (5) and an inner loop over batches (469 per epoch). In each inner step: (1) slice 128 images and labels, (2) run the forward pass through both Dense layers, (3) compute the sparse categorical crossentropy averaged over the batch, (4) obtain the gradient of that scalar with respect to W1, b1, W2, b2 by backpropagation, (5) let Adam update the four tensors. The update is driven by the loss on *this batch only*, which is why it is called stochastic: each step follows a noisy estimate of the full-dataset gradient.",
+   "why_it_matters": "This is the central mechanism of deep learning, now described entirely in terms the reader has derived: batches (p.49), gradients (p.66), SGD (p.67-p.68) and the chain rule (p.70-p.74). Understanding epochs versus batches is also necessary for reading training logs and choosing hyperparameters later in the book.",
+   "technical_idea": "Beyond the book: Keras shuffles the training data at the start of each epoch by default (shuffle=True), so each epoch sees different batch compositions.",
+   "terminology": [
+    {
+     "term": "epoch",
+     "meaning": "One complete iteration over all the training data."
+    },
+    {
+     "term": "batch size",
+     "meaning": "The number of samples used to compute one gradient and one weight update (here 128)."
+    },
+    {
+     "term": "backpropagation",
+     "meaning": "The algorithm that computes the gradient of the loss with respect to every weight by applying the chain rule backward through the computation graph."
+    }
+   ],
+   "connections": [
+    "p.49: the notion of data batches and the batch axis.",
+    "p.68: the five-step mini-batch SGD algorithm.",
+    "p.70-p.74: backpropagation on a computation graph.",
+    "p.124: chapter 3's description of fit's arguments (data, epochs, batch size)."
+   ]
+  },
+  {
+   "ref": "p076_e11",
+   "excerpt": "After these 5 epochs, the model will have performed 2,345 gradient",
+   "what_it_says": "After 5 epochs the model has performed 2,345 gradient updates (469 per epoch), and its loss is low enough that it classifies handwritten digits with high accuracy.",
+   "what_it_means": "469 is the number of batches of 128 needed to cover 60,000 samples: 60,000 / 128 = 468.75, so there are 468 full batches and one last batch of 96 samples, each producing one update. Multiplying by 5 epochs gives 2,345. The quantity that matters for optimization is the number of update steps, not the number of epochs as such.",
+   "why_it_matters": "It makes the abstract loop countable and shows that a few thousand small steps suffice for a good MNIST classifier. The same count lets you predict training time and reason about how batch size changes the number of updates.",
+   "terminology": [
+    {
+     "term": "gradient update",
+     "meaning": "One application of the optimizer's rule to the weights, using the gradient computed on one batch."
+    }
+   ],
+   "connections": [
+    "p.42: the opening example's training log reaching about 98.9% training accuracy.",
+    "p.81: the from-scratch fit function loops over epochs and batches to reproduce these updates."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "sequential_model",
+   "name": "Sequential model",
+   "definition": "A Keras model built from an ordered list of layers, each applied to the output of the previous one.",
+   "intuition": "A pipeline: data goes in at one end, flows through each stage in order, predictions come out the other end.",
+   "technical": "Here: Sequential([Dense(512, relu), Dense(10, softmax)]) implements f(x) = softmax(relu(x W1 + b1) W2 + b2).",
+   "significance": "The simplest way to express a chain of layers, which the page calls 'a chain of two Dense layers'.",
+   "example": "Input batch (128, 784) -> Dense 512 -> (128, 512) -> Dense 10 -> (128, 10) probabilities.",
+   "misconception": "A Sequential model is not limited to Dense layers; it can chain any layers that take one input and produce one output.",
+   "related": [
+    "dense_layer",
+    "keras_model",
+    "keras_layer"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "dense_layer",
+   "name": "Dense layer",
+   "definition": "A fully connected layer applying activation(dot(input, W) + b), with W and b as trainable weight tensors.",
+   "intuition": "Each output unit is a weighted vote over all inputs plus an offset, passed through a nonlinearity.",
+   "technical": "Dense(512, activation=\"relu\") on 784-dimensional inputs has a kernel of shape (784, 512) and a bias of shape (512,).",
+   "significance": "The building block of the first example and the subject of NaiveDense on p.77.",
+   "example": "Parameters: 784*512 + 512 = 401,920 (first layer), 512*10 + 10 = 5,130 (second).",
+   "misconception": "The number passed to Dense (512) is the number of output units, not the number of inputs; the input size is inferred.",
+   "related": [
+    "relu",
+    "softmax",
+    "sequential_model"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "weights",
+   "name": "Weight tensors (trainable parameters)",
+   "definition": "Tensors that are attributes of layers and whose values are adjusted by training; the page calls them the place where the model's knowledge persists.",
+   "intuition": "The architecture is the shape of the container; the weights are what is written into it by learning.",
+   "technical": "For this model: W1 (784, 512), b1 (512,), W2 (512, 10), b2 (10,).",
+   "significance": "Learning is defined as finding weight values that minimize the loss (p.82 summary).",
+   "example": "Two models with identical code but different weights compute completely different functions.",
+   "misconception": "The 'knowledge' is not in the code or the activation functions; those are fixed and generic.",
+   "related": [
+    "dense_layer",
+    "gradient_descent"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "loss_function",
+   "name": "Loss function",
+   "definition": "The scalar feedback signal used to learn the weight tensors, which training attempts to minimize.",
+   "intuition": "A score of how wrong the model is on a batch; lower is better.",
+   "technical": "sparse_categorical_crossentropy: mean over the batch of -log p_y, where p_y is the predicted probability of the true integer label.",
+   "significance": "Defines what the optimizer is trying to achieve.",
+   "example": "If the model gives the true class probability 0.9, the per-sample loss is -ln 0.9 ≈ 0.105; at 0.1 it is ≈ 2.303.",
+   "misconception": "Accuracy, listed under metrics, is not what is minimized; it is not differentiable and is only monitored.",
+   "related": [
+    "cross_entropy",
+    "optimizer"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "optimizer",
+   "name": "Optimizer (adam)",
+   "definition": "The object defining the exact rules governing a specific use of gradient descent, i.e. how the gradient is turned into weight updates.",
+   "intuition": "The loss says where 'downhill' is; the optimizer decides how big and in what precise direction each step goes.",
+   "technical": "Adam keeps exponential moving averages of gradients and squared gradients to set an adaptive per-parameter step size (beyond the book).",
+   "significance": "Separates the update rule from the loss, so either can be changed independently.",
+   "example": "Swapping optimizer=\"adam\" for \"rmsprop\" or \"sgd\" changes training dynamics without touching the model or loss.",
+   "misconception": "Adam is not an alternative to gradient descent; it is a variant of mini-batch gradient descent.",
+   "related": [
+    "adam",
+    "sgd",
+    "learning_rate",
+    "gradient_descent"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "epoch",
+   "name": "Epoch",
+   "definition": "One iteration over all the training data.",
+   "intuition": "One full lap through the training set.",
+   "technical": "With 60,000 samples and batch_size=128, one epoch is 469 batches and thus 469 gradient updates.",
+   "significance": "The unit in which training length is usually specified (epochs=5 here).",
+   "example": "5 epochs x 469 updates = 2,345 updates.",
+   "misconception": "An epoch is not one update; the number of updates per epoch depends on batch size.",
+   "related": [
+    "batch_size",
+    "sgd"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "backpropagation",
+   "name": "Backpropagation",
+   "definition": "The algorithm used by fit to compute the gradient of the loss with respect to the weights; it derives from the chain rule.",
+   "intuition": "Blame is passed backward from the loss through each operation to every weight.",
+   "technical": "Applies the chain rule on the computation graph in reverse, multiplying local derivatives along paths (p.73-p.74).",
+   "significance": "Makes it computationally feasible to get gradients for hundreds of thousands of weights per batch.",
+   "example": "For this model, one backward pass yields four gradient tensors with the shapes of W1, b1, W2, b2.",
+   "misconception": "Backpropagation computes gradients; it does not itself update the weights (that is the optimizer's job).",
+   "related": [
+    "gradient_tape",
+    "autodiff",
+    "gradient_descent"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Number of gradient updates in fit",
+   "latex": "\\text{updates per epoch} = \\left\\lceil \\frac{N}{B} \\right\\rceil = \\left\\lceil \\frac{60000}{128} \\right\\rceil = 469, \\qquad \\text{total} = E \\times 469 = 5 \\times 469 = 2345",
+   "source_text": "2,345 gradient updates (469 per epoch)",
+   "variables": [
+    {
+     "symbol": "N",
+     "meaning": "Number of training samples (60,000 MNIST images)"
+    },
+    {
+     "symbol": "B",
+     "meaning": "Batch size (128)"
+    },
+    {
+     "symbol": "E",
+     "meaning": "Number of epochs (5)"
+    },
+    {
+     "symbol": "\\lceil\\cdot\\rceil",
+     "meaning": "Ceiling: round up to the next integer, because a final partial batch still triggers an update"
+    }
+   ],
+   "operations": "Divide dataset size by batch size, round up, multiply by epochs.",
+   "purpose": "Explains where the page's figures 469 and 2,345 come from.",
+   "interpretation": "Each batch produces exactly one gradient computation and one weight update.",
+   "intuition": "Smaller batches mean more, noisier steps per epoch; larger batches mean fewer, smoother steps.",
+   "numerical_example": "60000 / 128 = 468.75 -> 468 full batches (59,904 samples) + one batch of 96 -> 469 updates. 5 x 469 = 2,345. With batch_size=256 it would be 235 per epoch and 1,175 total.",
+   "source": "book",
+   "book_ref": "p.76"
+  },
+  {
+   "id": "m2",
+   "title": "Sparse categorical crossentropy (not printed on the page)",
+   "latex": "L = -\\frac{1}{B}\\sum_{i=1}^{B} \\log p_{i,\\,y_i}, \\qquad p_i = \\operatorname{softmax}(z_i)",
+   "source_text": "loss=\"sparse_categorical_crossentropy\"",
+   "variables": [
+    {
+     "symbol": "B",
+     "meaning": "Batch size (128)"
+    },
+    {
+     "symbol": "y_i",
+     "meaning": "Integer label (0-9) of sample i"
+    },
+    {
+     "symbol": "z_i",
+     "meaning": "The 10 pre-activation outputs (logits) of the last Dense layer for sample i"
+    },
+    {
+     "symbol": "p_{i,y_i}",
+     "meaning": "Predicted probability that sample i belongs to its true class"
+    }
+   ],
+   "operations": "Pick the probability of the true class, take its negative log, average over the batch.",
+   "purpose": "Gives a concrete formula for the loss the page names; the book itself does not print it here.",
+   "interpretation": "The loss is zero only if the model assigns probability 1 to every true class and grows without bound as that probability approaches 0.",
+   "intuition": "Confidently wrong predictions are punished much more than mildly uncertain correct ones.",
+   "numerical_example": "Batch of two samples with true-class probabilities 0.9 and 0.2: L = -(ln 0.9 + ln 0.2)/2 = (0.105 + 1.609)/2 ≈ 0.857.",
+   "source": "ai_explanation",
+   "book_ref": "p.76"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "The MNIST model: two chained Dense layers",
+   "original_code": "model = keras.Sequential(\n    [\n        layers.Dense(512, activation=\"relu\"),\n        layers.Dense(10, activation=\"softmax\"),\n    ]\n)",
+   "language": "python",
+   "what_it_does": "Builds a Sequential model that maps a 784-dimensional input to 512 ReLU features and then to a 10-way softmax probability distribution over digit classes.",
+   "line_explanations": [
+    {
+     "lines": "1-2",
+     "explanation": "keras.Sequential takes a list of layers to apply in order."
+    },
+    {
+     "lines": "3",
+     "explanation": "Hidden layer: 512 units, relu(dot(x, W1) + b1). W1's shape (784, 512) is inferred from the first input it sees."
+    },
+    {
+     "lines": "4",
+     "explanation": "Output layer: 10 units, one per digit; softmax turns the 10 scores into probabilities that sum to 1."
+    },
+    {
+     "lines": "5-6",
+     "explanation": "Close the list and the constructor call."
+    }
+   ],
+   "inputs_outputs": "Input: float32 batch of shape (batch, 784). Output: (batch, 10) class probabilities.",
+   "algorithm": "Composition of two affine transforms with element-wise nonlinearities.",
+   "theory_link": "Each Dense layer is the tensor operation relu(matmul(input, W) + b) from p.63; the chain is a sequence of geometric transformations (p.62).",
+   "parameters": [
+    {
+     "name": "512",
+     "role": "Number of units (output dimensionality) of the hidden layer"
+    },
+    {
+     "name": "10",
+     "role": "Number of output classes"
+    },
+    {
+     "name": "activation",
+     "role": "Element-wise function applied after the affine transform"
+    }
+   ],
+   "pitfalls": [
+    "The weights do not exist until the model is called on data or built with an input shape.",
+    "Using softmax on the output requires a loss that expects probabilities (the default from_logits=False)."
+   ],
+   "illustrative_code": "# AI-written: inspect the weight tensors once the model is built\nmodel.build(input_shape=(None, 784))\nfor w in model.weights:\n    print(w.name, w.shape)\n# kernel (784, 512), bias (512,), kernel (512, 10), bias (10,)\nprint(model.count_params())  # 407050"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Compilation: optimizer, loss and metrics",
+   "original_code": "model.compile(\n    optimizer=\"adam\",\n    loss=\"sparse_categorical_crossentropy\",\n    metrics=[\"accuracy\"],\n)",
+   "language": "python",
+   "what_it_does": "Configures how the model will be trained: Adam as the gradient-descent rule, sparse categorical crossentropy as the quantity to minimize, accuracy as a monitored metric.",
+   "line_explanations": [
+    {
+     "lines": "2",
+     "explanation": "The optimizer, given by name; Keras instantiates Adam with its default learning rate (0.001, beyond the book)."
+    },
+    {
+     "lines": "3",
+     "explanation": "The loss: crossentropy between softmax probabilities and integer labels."
+    },
+    {
+     "lines": "4",
+     "explanation": "Accuracy is reported during fit and evaluate but does not influence the gradients."
+    }
+   ],
+   "inputs_outputs": "No data in or out; it attaches training configuration to the model.",
+   "algorithm": "Configuration only; the actual minimization happens in fit.",
+   "theory_link": "Loss = feedback signal (figure 2.26, p.75); optimizer = rule for using the gradient (p.68, p.83).",
+   "parameters": [
+    {
+     "name": "optimizer",
+     "role": "Defines the weight-update rule (adam)"
+    },
+    {
+     "name": "loss",
+     "role": "Scalar objective minimized during training"
+    },
+    {
+     "name": "metrics",
+     "role": "Extra quantities to monitor"
+    }
+   ],
+   "pitfalls": [
+    "With one-hot encoded labels you would need \"categorical_crossentropy\" instead of the sparse version.",
+    "Passing strings uses default hyperparameters; to change the learning rate pass an optimizer object, e.g. keras.optimizers.Adam(learning_rate=...)."
+   ]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "The training loop: fit",
+   "original_code": "model.fit(\n    train_images,\n    train_labels,\n    epochs=5,\n    batch_size=128,\n)",
+   "language": "python",
+   "what_it_does": "Runs mini-batch gradient descent: 5 passes over the 60,000 training images in batches of 128, performing one backpropagation and one Adam update per batch (2,345 updates).",
+   "line_explanations": [
+    {
+     "lines": "2-3",
+     "explanation": "Inputs of shape (60000, 784) and integer targets of shape (60000,)."
+    },
+    {
+     "lines": "4",
+     "explanation": "Five epochs: five complete iterations over the training data."
+    },
+    {
+     "lines": "5",
+     "explanation": "128 samples per gradient computation, giving 469 updates per epoch."
+    }
+   ],
+   "inputs_outputs": "Input: training tensors. Effect: the model's weights are updated in place. Returns a History object with per-epoch loss and accuracy (beyond the book).",
+   "algorithm": "for epoch in 1..5: for each batch: forward pass, loss, backpropagation, optimizer step.",
+   "theory_link": "The training loop of p.63 and mini-batch SGD of p.68; gradients via backpropagation (p.70-p.74).",
+   "parameters": [
+    {
+     "name": "epochs",
+     "role": "Number of passes over the training data"
+    },
+    {
+     "name": "batch_size",
+     "role": "Samples per gradient update"
+    }
+   ],
+   "pitfalls": [
+    "Calling fit again continues training from the current weights rather than starting over.",
+    "Training accuracy reported by fit is not a measure of generalization; that needs the test set (p.82)."
+   ],
+   "illustrative_code": "# AI-written sketch of what fit does (Adam replaced by plain SGD for clarity)\nimport math\nn, bs = 60000, 128\nsteps = math.ceil(n / bs)  # 469\nfor epoch in range(5):\n    for i in range(steps):\n        x = train_images[i * bs:(i + 1) * bs]\n        y = train_labels[i * bs:(i + 1) * bs]\n        # forward pass -> loss -> gradients (backprop) -> update weights\n"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "What fit does, step by step, for one batch",
+   "kind": "step_by_step",
+   "body": "1. Take images `128*k ... 128*k+127` and their labels (shape (128, 784) and (128,)).\n2. Forward pass: `h = relu(x @ W1 + b1)` -> (128, 512); `p = softmax(h @ W2 + b2)` -> (128, 10).\n3. Loss: mean of `-log p[i, y_i]` over the 128 rows -> one scalar.\n4. Backward pass: backpropagation produces `dL/dW1` (784, 512), `dL/db1` (512,), `dL/dW2` (512, 10), `dL/db2` (10,).\n5. Optimizer step: Adam updates each tensor using its gradient and its running moment estimates.\n\nRepeat 469 times per epoch, 5 epochs. Steps 1-5 are exactly the loop listed on p.68; the book's own low-level version appears on p.79-p.81.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Recipe analogy for model / compile / fit",
+   "kind": "analogy",
+   "body": "Think of a student preparing for an exam. The **model** is the student's brain wiring with its adjustable memories (the weights). **compile** chooses the grading scheme (the loss) and the study method (the optimizer: how to revise after a mistake). **fit** is the study schedule: go through the whole workbook 5 times (epochs), checking answers 128 exercises at a time (batch) and adjusting after each check. The accuracy metric is the score you glance at, but the study method reacts to the detailed grading scheme, not to the raw score.",
+   "source": "analogy"
+  },
+  {
+   "title": "How batch size trades off number and quality of updates",
+   "kind": "numerical",
+   "body": "| batch_size | updates / epoch | updates in 5 epochs |\n|---|---|---|\n| 32 | 1,875 | 9,375 |\n| 128 | 469 | 2,345 |\n| 512 | 118 | 590 |\n| 60,000 | 1 | 5 |\n\nSmaller batches give more but noisier gradient estimates; the last row is full-batch gradient descent, which the book contrasted with mini-batch SGD on p.68-p.69. (Table computed for this note; the book only gives the 128 row.)",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "The two-layer MNIST model",
+   "why": "The first code block on the page defines exactly this chain: 784 inputs -> Dense(512, relu) -> Dense(10, softmax). Click the layers to see shapes and the parameter counts behind 'weight tensors'.",
+   "widget": "nn_architecture",
+   "params": {
+    "layers": [
+     {
+      "name": "input",
+      "type": "input",
+      "shape": "(None, 784)"
+     },
+     {
+      "name": "dense",
+      "type": "dense",
+      "units": 512,
+      "activation": "relu",
+      "shape": "(None, 512)"
+     },
+     {
+      "name": "dense_1",
+      "type": "output",
+      "units": 10,
+      "activation": "softmax",
+      "shape": "(None, 10)"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "What model.fit(epochs=5, batch_size=128) runs",
+   "why": "The page's description of fit: iterate over mini-batches of 128, 5 times, computing the gradient by backpropagation and updating weights each batch (469 per epoch, 2,345 total).",
+   "mermaid": "flowchart TD\n  S[Start epoch e of 5] --> B[Draw next batch of 128 images and labels]\n  B --> F[Forward pass: Dense 512 relu, Dense 10 softmax]\n  F --> L[Loss: sparse categorical crossentropy]\n  L --> G[Backpropagation: gradient of loss w.r.t. weights]\n  G --> U[Adam updates W1, b1, W2, b2]\n  U --> C{All 469 batches done?}\n  C -- no --> B\n  C -- yes --> E{e = 5?}\n  E -- no --> S\n  E -- yes --> D[Done: 2,345 updates]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The model learns by optimizing accuracy, since that is what we pass in metrics.",
+   "correction": "Training minimizes the loss (sparse categorical crossentropy). Accuracy is only monitored; it is not differentiable and provides no gradient."
+  },
+  {
+   "claim": "One epoch equals one weight update.",
+   "correction": "One epoch is a full pass over the data; with batch size 128 it contains 469 updates. The page's 2,345 updates come from 5 x 469."
+  },
+  {
+   "claim": "Adam is a different learning method from gradient descent.",
+   "correction": "The page says the reduction of the loss happens via mini-batch SGD and that adam merely defines the exact rules of this use of gradient descent."
+  },
+  {
+   "claim": "The weights are updated using the gradient over the whole dataset.",
+   "correction": "Each update uses the loss on the current batch only; the weights move in the direction that reduces the loss for this batch."
+  },
+  {
+   "claim": "60,000 / 128 gives 468 updates per epoch.",
+   "correction": "The remainder of 96 samples forms a final, smaller batch, so there are 469 updates per epoch."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 75,
+    "note": "Start of section 2.5: figure 2.26 (layers, loss, optimizer) and the input data reviewed as float32 tensors of shape (60000, 784)."
+   },
+   {
+    "page": 63,
+    "note": "Dense transformation and weights W, b; the training loop."
+   },
+   {
+    "page": 68,
+    "note": "Mini-batch stochastic gradient descent, the procedure fit runs."
+   },
+   {
+    "page": 73,
+    "note": "Backpropagation on a computation graph via the chain rule."
+   }
+  ],
+  "later": [
+   {
+    "page": 77,
+    "note": "Reimplementing this example from scratch, starting with NaiveDense."
+   },
+   {
+    "page": 79,
+    "note": "Running one training step by hand."
+   },
+   {
+    "page": 81,
+    "note": "The full training loop that replaces fit."
+   },
+   {
+    "page": 82,
+    "note": "Evaluating the model and the chapter summary."
+   },
+   {
+    "page": 124,
+    "note": "Chapter 3's detailed explanation of compile and fit."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 49,
+    "note": "Tensors and data batches (p.45-p.50)."
+   },
+   {
+    "page": 52,
+    "note": "Tensor operations used inside Dense layers (p.52-p.62)."
+   },
+   {
+    "page": 67,
+    "note": "Gradients and stochastic gradient descent (p.63-p.69)."
+   }
+  ],
+  "related_math": [
+   {
+    "page": 63,
+    "note": "Dense layer: relu(matmul(input, W) + b)."
+   },
+   {
+    "page": 68,
+    "note": "Update rule W -= learning_rate * gradient."
+   }
+  ],
+  "related_code": [
+   {
+    "page": 41,
+    "note": "Opening MNIST example (p.41-p.43)."
+   },
+   {
+    "page": 77,
+    "note": "NaiveDense (p.77) and NaiveSequential (p.78)."
+   },
+   {
+    "page": 81,
+    "note": "fit reimplemented from scratch."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 75,
+    "note": "Figure 2.26: network, layers, loss function and optimizer."
+   }
+  ]
+ },
+ "takeaways": [
+  "The model is a chain of two Dense layers; its knowledge lives in the weight tensors W1, b1, W2, b2.",
+  "compile chooses what to minimize (sparse categorical crossentropy) and how to use gradients to do it (adam, a mini-batch SGD variant).",
+  "fit runs the training loop: batches of 128, 5 epochs, backpropagation for gradients, one update per batch.",
+  "An epoch is one full pass over the training data; with 60,000 samples and batch size 128 it contains 469 updates, so 5 epochs = 2,345 updates.",
+  "Every piece of the first example is now explained by chapter 2's concepts, setting up the from-scratch reimplementation on p.77."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "According to the page, where does the 'knowledge' of the model persist?",
+   "options": [
+    "In the activation functions relu and softmax",
+    "In the weight tensors that are attributes of the layers",
+    "In the loss function",
+    "In the optimizer's learning rate"
+   ],
+   "answer": "In the weight tensors that are attributes of the layers",
+   "explanation": "The page states that weight tensors, attributes of the layers, are where the knowledge of the model persists. Activations are fixed functions, the loss is a training signal, and the learning rate is a hyperparameter of the update rule; none of these change to encode what was learned.",
+   "page_refs": [
+    76
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "With 60,000 training samples and batch_size=128, how many gradient updates happen per epoch and in 5 epochs? What if batch_size were 100?",
+   "options": [],
+   "answer": "469 per epoch and 2,345 in 5 epochs; with batch size 100, 600 per epoch and 3,000 in 5 epochs.",
+   "explanation": "60000/128 = 468.75, rounded up to 469 because the last partial batch of 96 samples still produces an update; 5 x 469 = 2,345 as the page states. 60000/100 = 600 exactly, so 3,000 updates.",
+   "page_refs": [
+    76
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Explain the different roles of the loss and the optimizer configured in model.compile.",
+   "options": [],
+   "answer": "The loss (sparse categorical crossentropy) is the scalar feedback signal that training minimizes; the optimizer (adam) defines the exact rules for how the gradient of that loss is used to update the weights during mini-batch SGD.",
+   "explanation": "The page describes the loss as the feedback signal for learning the weights and the optimizer as defining the exact rules governing this use of gradient descent. One defines the objective, the other the update dynamics.",
+   "page_refs": [
+    76,
+    83
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "What does the page say is used to compute the gradient of the loss with regard to the weights for each batch?",
+   "options": [
+    "The softmax function",
+    "Random perturbation of each weight",
+    "The Backpropagation algorithm, derived from the chain rule",
+    "The accuracy metric"
+   ],
+   "answer": "The Backpropagation algorithm, derived from the chain rule",
+   "explanation": "The page explicitly names backpropagation, which derives from the chain rule. Perturbing each weight is the naive approach rejected on p.64; softmax is an activation; accuracy is just a metric.",
+   "page_refs": [
+    76
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "What is an epoch?",
+   "options": [],
+   "answer": "One iteration over all the training data.",
+   "explanation": "The page defines it in parentheses: each iteration over all the training data is called an epoch. Here fit performs 5 of them.",
+   "page_refs": [
+    76
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "Why does fit move the weights in the direction that reduces the loss 'for this batch' rather than for the whole training set, and what is the consequence?",
+   "options": [],
+   "answer": "Computing the gradient on a batch of 128 samples is far cheaper than on all 60,000; the batch gradient is a noisy estimate of the full gradient, so each step is stochastic but many cheap steps still drive the overall loss down.",
+   "explanation": "This is mini-batch stochastic gradient descent (p.68): per-batch gradients allow 469 updates per epoch instead of one, at the cost of noise in each step direction.",
+   "page_refs": [
+    76,
+    68
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "mcq",
+   "question": "Why is the loss called 'sparse' categorical crossentropy in this example?",
+   "options": [
+    "Because most weights are zero",
+    "Because the targets are integer class labels rather than one-hot vectors",
+    "Because only a few batches are used",
+    "Because the inputs are sparse images"
+   ],
+   "answer": "Because the targets are integer class labels rather than one-hot vectors",
+   "explanation": "Beyond the text of this page: MNIST train_labels are integers 0-9, and the 'sparse' variant accepts integer indices. The weights are dense, all batches are used, and 'sparse' does not refer to the images.",
+   "page_refs": [
+    76
+   ]
+  },
+  {
+   "id": "q8",
+   "type": "self",
+   "question": "Without looking at the page, can you explain in your own words what each of the three calls (Sequential, compile, fit) does and which chapter 2 concept each argument corresponds to?",
+   "options": [],
+   "answer": "Sequential: chain of Dense layers with weight tensors. compile: loss (feedback signal to minimize), optimizer (gradient-descent rule), metrics (monitoring). fit: mini-batch SGD over the data, batch size 128, 5 epochs, backpropagation for gradients.",
+   "explanation": "If you can produce this mapping, you have understood the purpose of section 2.5 and are ready for the from-scratch version on p.77.",
+   "page_refs": [
+    76,
+    77
+   ]
+  }
+ ]
+}

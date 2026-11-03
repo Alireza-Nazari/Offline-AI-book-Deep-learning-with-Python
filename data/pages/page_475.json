@@ -1,0 +1,744 @@
+{
+ "page_id": "page_475",
+ "pdf_page": 475,
+ "printed_page": "451",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:51:13Z",
+  "confidence": "high",
+  "review_flags": [
+   "Simplification in the book: it says the \"Attention is all you need\" authors \"used cosine functions\" for their positional encoding. The original paper uses sine functions for even embedding dimensions and cosine functions for odd dimensions, at geometrically spaced frequencies. The notes quote the book as printed and give the paper's formula as an ai_explanation."
+  ],
+  "extraction_quality": "Clean. The extractor merged three printed paragraphs into p475_e06 (\"The most straightforward scheme...\", \"However, that may not be ideal...\", \"The 'Attention is all you need' authors...\"); the notes give each printed paragraph its own note. Listing 15.17 and its single callout are extracted correctly."
+ },
+ "overview": {
+  "title": "Positional embeddings: giving the Transformer word order",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "15.3.5 Embedding positional information",
+  "main_topic": "Injecting word-position information into the embedded sequence, the options for encoding positions, and the learned PositionalEmbedding layer of listing 15.17",
+  "central_idea": "Where an RNN is order aware through its computation, a Transformer is made order aware by its input: each token embedding is summed with a learned embedding of the token's position, producing a position-aware word embedding.",
+  "importance": "This is the missing ingredient diagnosed on p.474. The PositionalEmbedding layer defined here is reused for the improved translator (p.476) and copied into the mini-GPT of chapter 16 (p.498).",
+  "learning_objectives": [
+   "Contrast how RNNs and Transformers obtain word-order information",
+   "Explain why concatenating raw integer positions to embeddings is a poor choice",
+   "Describe the idea behind the original paper's cyclic positional encoding",
+   "Implement and explain a learned positional embedding layer, line by line",
+   "Compute the positions tensor produced by ops.cumsum(ops.ones_like(inputs), axis=-1) - 1"
+  ],
+  "prerequisites": [
+   "The order-blindness of attention (p.474)",
+   "The Embedding layer as a learned lookup table (p.434-435)",
+   "Subclassing keras.Layer (custom layers in earlier chapters)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page answers the question left open on p.474. An RNN relied on its **computation** being order aware; for the Transformer, the authors instead **inject positional information directly into the embedded sequence**. This is a **positional embedding**.\n\nThe idea is simple: each input embedding gets two components, the usual **word vector** (the word independent of context) and a **position vector** (the word's position in the current sentence). The model is left to figure out how to use this extra information.\n\nThe authors consider three schemes:\n\n1. **Concatenating the raw position** as an extra axis with values `0, 1, 2, ...`. This is not ideal: positions can be very large integers that disrupt the range of values in the embedding vector, and neural networks dislike large input values and discrete input distributions.\n2. **The original paper's trick**: Vaswani et al. added a vector of values in `[-1, 1]` that vary cyclically with position (the book says they used cosine functions). This characterizes any integer in a large range uniquely with small values.\n3. **Learned positional embeddings**, which the authors call simpler and more effective: learn a vector for each position the same way word vectors are learned, then **add** it to the word embedding to get a position-aware word embedding.\n\n**Listing 15.17** implements option 3 as `PositionalEmbedding(keras.Layer)`. Its constructor builds two `Embedding` layers: `token_embeddings` (`input_dim` vocabulary entries) and `position_embeddings` (`sequence_length` entries), both of width `output_dim`. In `call()`, `positions = ops.cumsum(ops.ones_like(inputs), axis=-1) - 1` computes the incrementing positions `[0, 1, 2, ...]` for each sequence in the batch (the callout). The layer looks up both embeddings and returns their **sum**, so the output has the same shape as an ordinary embedding's.",
+ "paragraphs": [
+  {
+   "ref": "p475_e03",
+   "excerpt": "For RNNs, we relied on the layer's computation to be order aware.",
+   "what_it_says": "RNNs got word order from their computation; for the Transformer, positional information is instead injected directly into the embedded sequence. This is called a positional embedding.",
+   "what_it_means": "A GRU processes tokens one after another, so order is built into how it computes. Transformer layers are order-blind (p.474), so the order must already be present in the vectors they receive. The fix moves order from the architecture into the data representation.",
+   "why_it_matters": "It is a design choice that keeps every Transformer layer parallel and order-agnostic while still giving the model access to order, which is why Transformers can be trained without sequential loops.",
+   "terminology": [
+    {
+     "term": "Positional embedding",
+     "meaning": "A vector representing a token's position, combined with the token's word embedding so the model can use word order."
+    }
+   ],
+   "connections": [
+    "p.474: the diagnosis that the Transformer built so far is a set model",
+    "p.456: the GRU translator, whose computation is order aware"
+   ]
+  },
+  {
+   "ref": "p475_e05",
+   "excerpt": "The idea behind a positional embedding is very simple: to give the",
+   "what_it_says": "To give the model word-order information, the word's position is added to each word embedding. Each input embedding then has two components: the word vector, representing the word independent of context, and a position vector, representing its position in the current sentence. The hope is that the model learns how best to use this.",
+   "what_it_means": "The same word at position 0 and at position 5 now produces different input vectors, so attention scores between tokens can depend on where they are, not just what they are. The book does not prescribe how the model should use the position information; gradient descent decides.",
+   "why_it_matters": "It breaks the permutation symmetry described on p.474 at the cheapest possible point, the input, without changing the encoder or decoder blocks.",
+   "terminology": [
+    {
+     "term": "Word vector",
+     "meaning": "The context-independent embedding of a token ID."
+    },
+    {
+     "term": "Position vector",
+     "meaning": "A vector that depends only on the index of the token within the sentence."
+    }
+   ],
+   "connections": [
+    "p.434: word embeddings as structured, learned representations"
+   ]
+  },
+  {
+   "ref": "p475_e06",
+   "excerpt": "The most straightforward scheme to add position information would be concatenating",
+   "what_it_says": "The most straightforward scheme is to concatenate each word's position to its embedding: add a 'position' axis and fill it with 0 for the first word, 1 for the second, and so on.",
+   "what_it_means": "A 256-d embedding would become 257-d, the extra coordinate holding the raw index. This is the most literal way to tell the model 'this is word number i'.",
+   "why_it_matters": "It sets up the baseline whose flaws motivate the better schemes in the following printed paragraphs.",
+   "terminology": [
+    {
+     "term": "Concatenation",
+     "meaning": "Joining vectors end to end along an axis, increasing the dimension."
+    }
+   ],
+   "connections": []
+  },
+  {
+   "ref": "p475_e06",
+   "excerpt": "However, that may not be ideal because the positions can potentially be",
+   "what_it_says": "Raw positions may be very large integers that disrupt the range of values in the embedding vector, and neural networks don't like very large input values or discrete input distributions.",
+   "what_it_means": "Embedding values are small floats (around -1 to 1 after training). A position coordinate of 500 would dominate dot products and LayerNorm statistics, and its integer steps are a discrete input unlike the smooth distributions networks handle well.",
+   "why_it_matters": "It echoes the book's general advice on preprocessing: inputs should be small and roughly normalized, as with feature normalization earlier in the book.",
+   "technical_idea": "Beyond the book: with a position coordinate $p$ and a dot-product score, the contribution $p_i p_j$ grows quadratically with position, so later tokens would get extreme attention logits regardless of content.",
+   "terminology": [
+    {
+     "term": "Discrete input distribution",
+     "meaning": "Inputs that take only a set of separate values (0, 1, 2, ...) rather than varying smoothly."
+    }
+   ],
+   "connections": []
+  },
+  {
+   "ref": "p475_e06",
+   "excerpt": "The \"Attention is all you need\" authors used an interesting trick to",
+   "what_it_says": "The original Transformer paper added a vector with values in [-1, 1] that varied cyclically with position (using cosine functions, per the book). This uniquely characterizes any integer in a large range via small values. It's clever, but the authors use something simpler and more effective: learning positional embedding vectors like word embeddings, then adding them to the word embeddings to obtain a position-aware word embedding. Then they implement it.",
+   "what_it_means": "Instead of one big number, a position is encoded as many small oscillating numbers at different frequencies, like the hands of a clock; the combination of phases identifies the position. The book's preferred alternative simply gives each position index its own trainable vector, exactly like a word index.",
+   "why_it_matters": "Both schemes keep values small and add (rather than concatenate) the position vector, so the embedding dimension stays 256. Learned positional embeddings are used in BERT- and GPT-style models; their limitation is that they only exist for positions up to the chosen sequence_length.",
+   "technical_idea": "Beyond the book: the paper's formula is $PE_{(p,2k)} = \\sin(p/10000^{2k/d})$, $PE_{(p,2k+1)} = \\cos(p/10000^{2k/d})$. A learned table instead has shape (sequence_length, d) and is trained by backpropagation.",
+   "terminology": [
+    {
+     "term": "Sinusoidal positional encoding",
+     "meaning": "The original paper's fixed, non-learned position vectors built from sine and cosine waves of different frequencies."
+    },
+    {
+     "term": "Position-aware word embedding",
+     "meaning": "The sum of a word vector and its position vector."
+    }
+   ],
+   "connections": [
+    "p.461: the 2017 paper by Vaswani et al. that introduced the Transformer",
+    "p.498: chapter 16's mini-GPT reuses this PositionalEmbedding layer"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "positional_encoding",
+   "name": "Positional embedding",
+   "definition": "A vector that encodes a token's position in the sequence, added to the token's word embedding so that order-blind attention layers can use word order.",
+   "intuition": "Each word gets a seat-number badge pinned to it before entering the room where attention happens.",
+   "technical": "$x_i = E_{\\text{tok}}[t_i] + E_{\\text{pos}}[i]$ with $E_{\\text{tok}} \\in \\mathbb{R}^{V\\times d}$ and $E_{\\text{pos}} \\in \\mathbb{R}^{L\\times d}$, both learned (listing 15.17).",
+   "significance": "Turns the set model of p.474 into a sequence model; it raises translation accuracy from about 58% to 67% (p.476).",
+   "example": "With sequence_length = 20 and hidden_dim = 256, the position table has 20 x 256 = 5,120 weights.",
+   "misconception": "That positional information is concatenated; in this book (and in the original paper) it is added, keeping the dimension unchanged.",
+   "related": [
+    "embedding",
+    "transformer",
+    "attention",
+    "permutation_invariance_of_attention"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "sinusoidal_positional_encoding",
+   "name": "Cyclic (sinusoidal) positional encoding",
+   "definition": "The original Transformer's fixed position vectors with values in [-1, 1] varying cyclically with position.",
+   "intuition": "Like reading the time from several clock hands moving at different speeds; together they identify a moment uniquely.",
+   "technical": "Beyond the book: $PE_{(p,2k)} = \\sin(p/10000^{2k/d})$, $PE_{(p,2k+1)} = \\cos(p/10000^{2k/d})$; no parameters are learned.",
+   "significance": "Shows that positions can be encoded with small values, solving the scale problem of raw indices.",
+   "example": "At position 0, all sine dims are 0 and all cosine dims are 1.",
+   "misconception": "That it uses cosine only (the book's shorthand); the paper alternates sine and cosine.",
+   "related": [
+    "positional_encoding"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "embedding",
+   "name": "Embedding layer",
+   "definition": "A learned lookup table mapping integer indices to dense vectors.",
+   "intuition": "A dictionary from IDs to vectors; here it is used twice, once for word IDs and once for position IDs.",
+   "technical": "layers.Embedding(input_dim, output_dim) holds an (input_dim, output_dim) weight matrix; listing 15.17 instantiates one with input_dim = vocabulary size and one with input_dim = sequence_length.",
+   "significance": "The insight of the page is that positions can be embedded exactly like words.",
+   "example": "position_embeddings(positions) maps the integer 3 to row 3 of a (sequence_length, output_dim) table.",
+   "misconception": "That embeddings must index words; any categorical integer, including a position, can be embedded.",
+   "related": [
+    "positional_encoding",
+    "keras_layer"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "keras_layer",
+   "name": "Custom Keras layer",
+   "definition": "A subclass of keras.Layer that creates sublayers or weights in __init__ and defines the forward computation in call().",
+   "intuition": "A reusable building block you can drop in place of a built-in layer.",
+   "technical": "PositionalEmbedding composes two Embedding sublayers and uses backend-agnostic keras.ops for the position computation.",
+   "significance": "Lets the positional embedding be used 'just like a regular Embedding layer' (p.476).",
+   "example": "PositionalEmbedding(sequence_length, vocab_size, hidden_dim)(source) in listing 15.18.",
+   "misconception": "That custom layers need to define build(); here all weights live in sublayers that build themselves.",
+   "related": [
+    "embedding"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Position-aware word embedding (listing 15.17)",
+   "latex": "\\mathbf{x}_i = E_{\\text{tok}}[t_i] + E_{\\text{pos}}[i], \\qquad i = 0, 1, \\dots, L-1",
+   "source_text": "return embedded_tokens + embedded_positions",
+   "variables": [
+    {
+     "symbol": "t_i",
+     "meaning": "Token ID at position i of the input sequence"
+    },
+    {
+     "symbol": "E_{\\text{tok}}",
+     "meaning": "Token embedding table, shape (input_dim, output_dim)"
+    },
+    {
+     "symbol": "E_{\\text{pos}}",
+     "meaning": "Position embedding table, shape (sequence_length, output_dim)"
+    },
+    {
+     "symbol": "L",
+     "meaning": "sequence_length, the number of positions with a learned vector"
+    },
+    {
+     "symbol": "\\mathbf{x}_i",
+     "meaning": "The position-aware embedding passed to the Transformer blocks"
+    }
+   ],
+   "operations": "Two table lookups followed by elementwise addition.",
+   "purpose": "Makes the same word at different positions produce different vectors, breaking attention's order blindness.",
+   "interpretation": "The embedding space is shared: word identity and position are superimposed in the same 256 dimensions, and training arranges them so both can be read out.",
+   "intuition": "Mixing a word's colour with a position's tint; the model learns to recognize both.",
+   "numerical_example": "With $d=2$, $E_{\\text{tok}}[\\text{cat}] = (0.5, -0.2)$, $E_{\\text{pos}}[0] = (0.1, 0.1)$, $E_{\\text{pos}}[3] = (-0.3, 0.2)$: 'cat' at position 0 is $(0.6, -0.1)$, at position 3 it is $(0.2, 0.0)$.",
+   "source": "book",
+   "book_ref": "p.475"
+  },
+  {
+   "id": "m2",
+   "title": "Computing positions with a cumulative sum",
+   "latex": "\\text{positions}_{b,i} = \\Big(\\sum_{j=0}^{i} 1\\Big) - 1 = i",
+   "source_text": "positions = ops.cumsum(ops.ones_like(inputs), axis=-1) - 1",
+   "variables": [
+    {
+     "symbol": "b",
+     "meaning": "Index of the sequence in the batch"
+    },
+    {
+     "symbol": "i",
+     "meaning": "Index along the sequence (last) axis"
+    }
+   ],
+   "operations": "ones_like creates a tensor of 1s with the input's shape and integer dtype; cumsum along the last axis gives 1, 2, 3, ...; subtracting 1 gives 0, 1, 2, ...",
+   "purpose": "Produces position indices with the same (batch, length) shape as the token IDs, for any batch size and sequence length, without hard-coding the shape.",
+   "interpretation": "Each row of the result is [0, 1, 2, ...], matching the callout 'Computes incrementing positions [0, 1, 2…] for each sequence in the batch'.",
+   "intuition": "Counting the tokens as you walk along each sentence.",
+   "numerical_example": "inputs = [[12, 7, 3, 0], [5, 9, 0, 0]] gives ones_like = [[1,1,1,1],[1,1,1,1]], cumsum = [[1,2,3,4],[1,2,3,4]], minus 1 = [[0,1,2,3],[0,1,2,3]]. Padding positions get positions too; they are ignored via the masks.",
+   "source": "book",
+   "book_ref": "p.475"
+  },
+  {
+   "id": "m3",
+   "title": "The original paper's cyclic encoding (not printed in the book)",
+   "latex": "PE_{(p,2k)} = \\sin\\!\\left(\\frac{p}{10000^{2k/d}}\\right), \\qquad PE_{(p,2k+1)} = \\cos\\!\\left(\\frac{p}{10000^{2k/d}}\\right)",
+   "source_text": "they added to the word embeddings a vector containing values in the range [-1, 1] that varied cyclically depending on the position (they used cosine functions to achieve this)",
+   "variables": [
+    {
+     "symbol": "p",
+     "meaning": "Position in the sequence"
+    },
+    {
+     "symbol": "k",
+     "meaning": "Index of the frequency pair, 0 to d/2 - 1"
+    },
+    {
+     "symbol": "d",
+     "meaning": "Embedding dimension"
+    }
+   ],
+   "operations": "Each pair of dimensions oscillates at a frequency that decreases geometrically from 1 to 1/10000 radians per position.",
+   "purpose": "Encode any integer position with small values in [-1, 1], as the book describes.",
+   "interpretation": "Fast-changing dimensions distinguish neighbouring positions; slow ones distinguish far-apart positions.",
+   "intuition": "A clock with second, minute and hour hands.",
+   "numerical_example": "For $k=0$: position 1 gives $(\\sin 1, \\cos 1) \\approx (0.841, 0.540)$; position 2 gives $(0.909, -0.416)$.",
+   "source": "ai_explanation",
+   "book_ref": "p.475"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "15.17",
+   "title": "A learned position embedding layer",
+   "original_code": "from keras import ops\n\nclass PositionalEmbedding(keras.Layer):\n    def __init__(self, sequence_length, input_dim, output_dim):\n        super().__init__()\n        self.token_embeddings = layers.Embedding(input_dim, output_dim)\n        self.position_embeddings = layers.Embedding(sequence_length, output_dim)\n\n    def call(self, inputs):\n        positions = ops.cumsum(ops.ones_like(inputs), axis=-1) - 1\n        embedded_tokens = self.token_embeddings(inputs)\n        embedded_positions = self.position_embeddings(positions)\n        return embedded_tokens + embedded_positions",
+   "language": "python",
+   "what_it_does": "Defines a layer that embeds token IDs and their positions with two learned Embedding tables and returns their sum, a position-aware embedding with the same shape as a normal Embedding output.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "keras.ops provides backend-agnostic tensor operations (JAX, TensorFlow, PyTorch)."
+    },
+    {
+     "lines": "3-5",
+     "explanation": "Subclass keras.Layer; the constructor takes the maximum sequence length, the vocabulary size (input_dim) and the embedding width (output_dim)."
+    },
+    {
+     "lines": "6",
+     "explanation": "token_embeddings: a (input_dim, output_dim) table of word vectors."
+    },
+    {
+     "lines": "7",
+     "explanation": "position_embeddings: a (sequence_length, output_dim) table, one learned vector per position."
+    },
+    {
+     "lines": "9-10",
+     "explanation": "Callout: 'Computes incrementing positions [0, 1, 2…] for each sequence in the batch'. Cumulative sum of ones minus one gives the index of each token."
+    },
+    {
+     "lines": "11-12",
+     "explanation": "Look up word vectors and position vectors; both have shape (batch, length, output_dim)."
+    },
+    {
+     "lines": "13",
+     "explanation": "Add them elementwise to get the position-aware word embedding."
+    }
+   ],
+   "inputs_outputs": "Input: int tensor (batch, length) of token IDs with length <= sequence_length. Output: float tensor (batch, length, output_dim).",
+   "algorithm": "Two embedding lookups plus an addition; positions are derived from the input shape at call time.",
+   "theory_link": "Implements the book's 'simpler and more effective' learned positional embedding, the fix for the order blindness shown on p.474.",
+   "parameters": [
+    {
+     "name": "sequence_length",
+     "role": "Number of positions with a learned vector (20 in this chapter, p.455); longer inputs would index out of range"
+    },
+    {
+     "name": "input_dim",
+     "role": "Vocabulary size for the token table (vocab_size = 15000)"
+    },
+    {
+     "name": "output_dim",
+     "role": "Embedding width (hidden_dim = 256)"
+    }
+   ],
+   "pitfalls": [
+    "Sequences longer than sequence_length have no position vector: the model cannot generalize to longer inputs than it was built for.",
+    "Unlike Embedding(mask_zero=True), this layer does not create a padding mask; listings 15.16 and 15.18 pass explicit masks (source != 0) instead.",
+    "Padding tokens still receive position vectors; this is harmless only because they are masked downstream."
+   ],
+   "illustrative_code": "# AI-written check of the positions computation (not from the book)\nimport numpy as np\nfrom keras import ops\ninputs = np.array([[12, 7, 3, 0], [5, 9, 0, 0]])\nprint(ops.cumsum(ops.ones_like(inputs), axis=-1) - 1)\n# [[0 1 2 3]\n#  [0 1 2 3]]\n\nlayer = PositionalEmbedding(sequence_length=20, input_dim=15000, output_dim=256)\nprint(layer(inputs).shape)  # (2, 4, 256)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Three ways to encode position, compared",
+   "kind": "breakdown",
+   "body": "| Scheme | Values | Learned? | Dimension | Book's verdict |\n|---|---|---|---|---|\n| Concatenate raw index | 0, 1, 2, ... (unbounded) | no | d + 1 | may disrupt value range; nets dislike large, discrete inputs |\n| Cyclic (paper) | in [-1, 1], cyclic | no | d (added) | clever |\n| Learned table | small floats, trained | yes | d (added) | simpler and more effective |\n\nNote (not in the book): later models introduced further schemes such as relative position biases and rotary embeddings (RoPE), which act inside attention instead of on the input. The book mentions on p.478 that positional embeddings are among the parts of the Transformer that have since been improved.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why adding does not destroy word identity",
+   "kind": "step_by_step",
+   "body": "It can seem lossy to add two vectors: how can the model separate 'which word' from 'which position'?\n\n1. In 256 dimensions there is a lot of room: 15,000 word vectors and only 20 position vectors.\n2. Both tables are trained jointly, so gradient descent can place position vectors in directions that interfere little with word information.\n3. The subsequent attention projections ($W_Q$, $W_K$) are linear, so a query can respond to the position part, the word part or both.\n\nBeyond the book: this is why adding works in practice and is preferred over concatenation; it costs no extra dimensions.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Seat badges at a dinner party",
+   "kind": "analogy",
+   "body": "On p.474, attention was like a dinner party where seating did not matter. A positional embedding pins a badge with the seat number onto each guest. Everybody still talks to everybody, but now 'the guest in seat 2' is distinguishable from 'the same guest in seat 7', so the conversation can depend on the seating.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Shapes through PositionalEmbedding",
+   "why": "Listing 15.17 looks up token vectors and position vectors of the same shape and adds them; with this chapter's settings (sequence_length 20, vocab 15000, hidden_dim 256) the shapes flow as shown.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "token IDs",
+      "shape": [
+       null,
+       20
+      ]
+     },
+     {
+      "op": "token_embeddings",
+      "shape": [
+       null,
+       20,
+       256
+      ]
+     },
+     {
+      "op": "positions (cumsum-1)",
+      "shape": [
+       null,
+       20
+      ]
+     },
+     {
+      "op": "position_embeddings",
+      "shape": [
+       null,
+       20,
+       256
+      ]
+     },
+     {
+      "op": "sum",
+      "shape": [
+       null,
+       20,
+       256
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "chart",
+   "title": "Cyclic position values in [-1, 1] (original paper's scheme, d = 256)",
+   "why": "The page describes the paper's trick of adding vectors whose values in [-1, 1] vary cyclically with position. This plots a few dimensions of that encoding (sine/cosine formula from the paper, not printed in the book) over the 20 positions used in this chapter.",
+   "chart": {
+    "type": "line",
+    "data": {
+     "labels": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19
+     ],
+     "datasets": [
+      {
+       "label": "dim 0 (sin, k=0)",
+       "data": [
+        0.0,
+        0.841,
+        0.909,
+        0.141,
+        -0.757,
+        -0.959,
+        -0.279,
+        0.657,
+        0.989,
+        0.412,
+        -0.544,
+        -1.0,
+        -0.537,
+        0.42,
+        0.991,
+        0.65,
+        -0.288,
+        -0.961,
+        -0.751,
+        0.15
+       ],
+       "fill": false
+      },
+      {
+       "label": "dim 1 (cos, k=0)",
+       "data": [
+        1.0,
+        0.54,
+        -0.416,
+        -0.99,
+        -0.654,
+        0.284,
+        0.96,
+        0.754,
+        -0.146,
+        -0.911,
+        -0.839,
+        0.004,
+        0.844,
+        0.907,
+        0.137,
+        -0.76,
+        -0.958,
+        -0.275,
+        0.66,
+        0.989
+       ],
+       "fill": false
+      },
+      {
+       "label": "dim 4 (sin, k=2)",
+       "data": [
+        0.0,
+        0.762,
+        0.987,
+        0.517,
+        -0.317,
+        -0.928,
+        -0.885,
+        -0.22,
+        0.601,
+        0.998,
+        0.693,
+        -0.101,
+        -0.823,
+        -0.966,
+        -0.429,
+        0.411,
+        0.961,
+        0.834,
+        0.12,
+        -0.678
+       ],
+       "fill": false
+      },
+      {
+       "label": "dim 16 (sin, k=8)",
+       "data": [
+        0.0,
+        0.533,
+        0.902,
+        0.993,
+        0.778,
+        0.324,
+        -0.23,
+        -0.714,
+        -0.977,
+        -0.94,
+        -0.613,
+        -0.097,
+        0.448,
+        0.856,
+        1.0,
+        0.836,
+        0.414,
+        -0.135,
+        -0.642,
+        -0.952
+       ],
+       "fill": false
+      }
+     ]
+    },
+    "options": {
+     "scales": {
+      "x": {
+       "title": {
+        "display": true,
+        "text": "position"
+       }
+      },
+      "y": {
+       "min": -1,
+       "max": 1,
+       "title": {
+        "display": true,
+        "text": "value"
+       }
+      }
+     }
+    }
+   }
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Positional embeddings are concatenated to word embeddings.",
+   "correction": "In listing 15.17 they are added elementwise (embedded_tokens + embedded_positions); the book rejects concatenating raw positions."
+  },
+  {
+   "claim": "The positions tensor must be passed in as a second input.",
+   "correction": "The layer derives it from the inputs with ops.cumsum(ops.ones_like(inputs), axis=-1) - 1."
+  },
+  {
+   "claim": "A learned positional embedding works for any sequence length.",
+   "correction": "It has exactly sequence_length rows; positions beyond that have no vector. The cyclic encoding, by contrast, can be computed for any position."
+  },
+  {
+   "claim": "The original paper used cosine functions only.",
+   "correction": "The book's shorthand; the paper alternates sine and cosine across dimensions."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 474,
+    "note": "The Transformer without positions reaches only 58% because attention is order-blind"
+   },
+   {
+    "page": 434,
+    "note": "The Embedding layer as a learned dictionary from integers to vectors"
+   },
+   {
+    "page": 455,
+    "note": "vocab_size = 15000 and sequence_length = 20 set in the data preparation"
+   }
+  ],
+  "later": [
+   {
+    "page": 476,
+    "note": "Listing 15.18 uses PositionalEmbedding in the translator, reaching 67% accuracy"
+   },
+   {
+    "page": 478,
+    "note": "Positional embeddings are listed among the Transformer components that later research improved"
+   },
+   {
+    "page": 498,
+    "note": "The mini-GPT of chapter 16 copies this PositionalEmbedding layer"
+   },
+   {
+    "page": 627,
+    "note": "Conclusions: positional encoding makes Transformers order aware"
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 463,
+    "note": "Dot-product attention"
+   }
+  ],
+  "related_math": [
+   {
+    "page": 474,
+    "note": "Permutation equivariance of attention, which positional embeddings break"
+   }
+  ],
+  "related_code": [
+   {
+    "page": 476,
+    "note": "Listing 15.18, the model built with this layer"
+   },
+   {
+    "page": 473,
+    "note": "Listing 15.16, the same model with plain Embedding layers"
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "RNNs get order from their computation; Transformers get it from their input embeddings.",
+  "A positional embedding combines a context-free word vector with a vector for the word's position.",
+  "Concatenating raw integer positions is a poor idea: large, discrete values disrupt the embedding's value range.",
+  "The original paper used fixed cyclic vectors in [-1, 1]; the book uses simpler learned position vectors.",
+  "Listing 15.17 builds two Embedding tables and returns their sum; positions come from a cumulative sum of ones minus one.",
+  "The learned table only covers positions up to sequence_length."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why does the book reject concatenating the raw position index to each embedding?",
+   "options": [
+    "It would make the model too slow to train",
+    "Positions can be large integers that disrupt the embedding's value range, and networks dislike large, discrete inputs",
+    "Keras does not support concatenation of integer and float tensors",
+    "It would make attention order-blind again"
+   ],
+   "answer": "Positions can be large integers that disrupt the embedding's value range, and networks dislike large, discrete inputs",
+   "explanation": "This is the reason printed on the page. Speed and Keras support are not mentioned (and concatenation after casting is possible), and concatenated positions would actually give attention order information, not remove it.",
+   "page_refs": [
+    475
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "For inputs = [[4, 8, 15, 0, 0]], what does ops.cumsum(ops.ones_like(inputs), axis=-1) - 1 return?",
+   "options": [],
+   "answer": "[[0, 1, 2, 3, 4]]",
+   "explanation": "ones_like gives [[1,1,1,1,1]]; cumsum gives [[1,2,3,4,5]]; subtracting 1 gives the positions 0-4. Padding zeros also get positions; masks handle them downstream.",
+   "page_refs": [
+    475
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "math",
+   "question": "With sequence_length = 20, vocab_size = 15000 and hidden_dim = 256, how many parameters does one PositionalEmbedding layer have?",
+   "options": [],
+   "answer": "15,000 x 256 + 20 x 256 = 3,840,000 + 5,120 = 3,845,120.",
+   "explanation": "The layer holds two Embedding tables without biases: the token table and the position table.",
+   "page_refs": [
+    475,
+    455
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Contrast how a GRU and a Transformer with positional embeddings obtain word-order information.",
+   "options": [],
+   "answer": "The GRU's computation is order aware because it processes tokens sequentially with a carried state; the Transformer's layers are order-blind, so order is injected into the input vectors themselves by adding position vectors.",
+   "explanation": "The page's opening paragraph makes exactly this contrast between relying on the layer's computation and injecting positional information into the embedded sequence.",
+   "page_refs": [
+    475,
+    474
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "What property makes the original paper's cyclic encoding attractive, according to the book?",
+   "options": [],
+   "answer": "It uniquely characterizes any integer in a large range using a vector of small values in [-1, 1].",
+   "explanation": "The book describes values varying cyclically with position, giving a unique, small-valued code for each position.",
+   "page_refs": [
+    475
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "mcq",
+   "question": "What is a limitation of the learned PositionalEmbedding layer in listing 15.17?",
+   "options": [
+    "It cannot be trained with backpropagation",
+    "It changes the embedding dimension from output_dim to output_dim + 1",
+    "It has no vectors for positions at or beyond sequence_length",
+    "It only works with the TensorFlow backend"
+   ],
+   "answer": "It has no vectors for positions at or beyond sequence_length",
+   "explanation": "position_embeddings is Embedding(sequence_length, output_dim). It is trained by backpropagation, keeps the dimension (it adds), and uses keras.ops, which is backend-agnostic.",
+   "page_refs": [
+    475
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you explain, without looking, why adding position vectors fixes the problem that shuffling source words was invisible to the model (p.474)?",
+   "options": [],
+   "answer": "Open answer; after adding position vectors, a shuffled sentence produces different input vectors (each word gets a different position vector), so attention scores and outputs change.",
+   "explanation": "Permutation equivariance only holds when the same vectors are reordered; positional embeddings make the vector of a word depend on its position, so reordering changes the vectors themselves.",
+   "page_refs": [
+    474,
+    475
+   ]
+  }
+ ]
+}

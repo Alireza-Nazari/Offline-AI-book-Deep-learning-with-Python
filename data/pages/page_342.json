@@ -1,0 +1,344 @@
+{
+  "page_id": "page_342",
+  "pdf_page": 342,
+  "printed_page": "318",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:38:03Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean extraction: one code block, the Figure 11.6 caption, three body paragraphs and a footnote split across two elements (p342_e09/e10). The figure (photo + predicted mask) was read from the page image."
+  },
+  "overview": {
+    "title": "Predicting a mask with the from-scratch model; introducing SAM",
+    "chapter": "11 Image segmentation",
+    "section": "11.3 Using a pretrained segmentation model",
+    "subsection": "",
+    "main_topic": "Running inference with the trained Oxford-IIIT Pets segmentation model, visualizing its per-pixel class prediction, and the transition to the pretrained Segment Anything Model (SAM).",
+    "central_idea": "A segmentation model outputs a per-pixel probability distribution over classes; taking the argmax over the last axis turns it into a displayable mask. Having trained such a model from scratch, the chapter now turns to a much stronger option: the large pretrained Segment Anything Model.",
+    "importance": "This page closes the from-scratch segmentation workflow of section 11.2 (train, then predict and inspect a mask) and opens section 11.3, which reuses the chapter 8 lesson that pretrained models beat small from-scratch models when data is scarce.",
+    "learning_objectives": [
+      "Explain why `np.expand_dims(test_image, 0)` and the trailing `[0]` are needed around `model.predict`.",
+      "Describe what `np.argmax(pred, axis=-1)` does to a `(200, 200, 3)` softmax output.",
+      "Explain why the mask is multiplied by 127 before display and how the three classes appear in Figure 11.6.",
+      "Interpret the small artifacts in the predicted mask.",
+      "State the key facts about the Segment Anything Model: who built it, when, and on how much data."
+    ],
+    "prerequisites": [
+      "The Oxford-IIIT Pets masks with labels 1/2/3 shifted to 0/1/2 (p.335, p.337).",
+      "The Conv2D / Conv2DTranspose segmentation model ending in a 3-channel softmax (p.339).",
+      "Pretrained models and feature reuse from chapter 8 (p.280).",
+      "NumPy array axes and argmax."
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page opens with the end of the from-scratch segmentation example. The best checkpoint (`oxford_segmentation.keras`, reloaded on p.341) is run on a single validation image: `np.expand_dims(test_image, 0)` adds a batch axis so the model receives a batch of one, `model.predict` returns an array of shape `(1, 200, 200, 3)`, and `[0]` pulls the single prediction back out. A small utility, `display_mask`, converts the per-pixel softmax probabilities into a class map with `np.argmax(pred, axis=-1)`, scales the class indices 0/1/2 by 127 (to 0/127/254, the same trick used when visualizing the ground-truth masks on p.336), and shows it with `plt.imshow`.\n\n**Figure 11.6** shows the result: on the left, a white dog in front of a dark background; on the right, the predicted mask, with the dog (foreground, class 0) in dark purple, the background (class 1) in teal and the contour (class 2) as a yellow outline. The authors note a few small artifacts — for example, a spurious purple blob in the background on the right — which they attribute to geometric shapes in the foreground and background, but conclude that the model works nicely.\n\nSection **11.3** then begins. Just as a pretrained ConvNet boosted accuracy on a small image-classification dataset in chapter 8, a pretrained model can help with segmentation. The authors introduce the **Segment Anything Model (SAM)**, developed by Meta AI and released in April 2023, trained on 11 million images and their masks covering over 1 billion object instances (footnote: Kirillov et al., \"Segment Anything,\" ICCV 2023, arXiv:2304.02643). The paragraph continues on p.343, which explains that this scale of data gives SAM built-in knowledge of virtually any object and that it is not restricted to a fixed set of classes.",
+  "paragraphs": [
+    {
+      "ref": "p342_e05",
+      "excerpt": "There are a couple of small artifacts in our predicted mask, caused by geometric shapes",
+      "what_it_says": "The predicted mask in Figure 11.6 has a few small errors, which the authors attribute to geometric shapes in the foreground and background; overall, the model works well.",
+      "what_it_means": "The model gets the overall silhouette of the dog and its contour band right, but makes local mistakes: in the figure, a small patch of the background on the right is labelled as foreground (purple), and there are small specks near the lower-left edge and inside the body. Such errors happen where local texture or edges look like the patterns the model associates with a pet or a contour.",
+      "why_it_matters": "It sets realistic expectations for a small model trained from scratch on a few thousand images: good, but imperfect at the pixel level. This sets up the motivation for the pretrained model in section 11.3.",
+      "technical_idea": "Each output pixel is classified from a limited receptive field after downsampling to 25x25 feature maps and upsampling back with Conv2DTranspose (p.339). Nothing forces the prediction to be one connected region, so isolated misclassified blobs can appear. Beyond the book: post-processing such as keeping only the largest connected component, or a CRF, is a common fix.",
+      "terminology": [
+        {"term": "Artifact", "meaning": "A spurious, small error region in a predicted mask that does not correspond to a real object boundary."}
+      ],
+      "connections": [
+        "p.341: overfitting began around epoch 25, and the best checkpoint by validation loss was reloaded for this prediction.",
+        "p.339: the model downsamples with strided convolutions and upsamples with Conv2DTranspose."
+      ]
+    },
+    {
+      "ref": "p342_e07",
+      "excerpt": "In the image classification example from chapter 8, you saw how using a pretrained",
+      "what_it_says": "Chapter 8 showed that a pretrained model can greatly improve accuracy, especially with few training samples; the same holds for image segmentation.",
+      "what_it_means": "The transfer-learning argument carries over: features learned from a huge, diverse dataset (edges, textures, object parts, objectness) are general enough to reuse on a new task, so you do not have to learn them from a few thousand labelled masks.",
+      "why_it_matters": "It frames section 11.3: rather than improving the from-scratch model, we take a model that has already learned segmentation from massive data.",
+      "technical_idea": "In chapter 8 the reuse took the form of feature extraction and fine-tuning of an ImageNet ConvNet. Here (as p.343 explains) the reuse goes further: the pretrained model is used as is, without any fine-tuning, guided by prompts.",
+      "terminology": [
+        {"term": "Pretrained model", "meaning": "A model previously trained on a large dataset, whose learned representations are reused for a new problem (p.280)."}
+      ],
+      "connections": [
+        "p.280: a pretrained model's spatial hierarchy of features can act as a generic model of the visual world."
+      ]
+    },
+    {
+      "ref": "p342_e08",
+      "excerpt": "The Segment Anything Model ,1 or SAM for short, is a powerful pretrained segmentation",
+      "what_it_says": "SAM is a powerful pretrained segmentation model, usable for almost anything. Meta AI developed it and released it in April 2023. It was trained on 11 million images and their segmentation masks, covering over 1 billion object instances. The sentence continues on p.343: this data gives the model built-in knowledge of virtually any object in natural images.",
+      "what_it_means": "The figures give a sense of scale. The Oxford-IIIT Pets dataset used so far has 7,390 images with one foreground/background/contour mask each (p.335). SA-1B has about 1,500 times more images and more than 1 billion individual object masks, roughly 100 per image. A model trained on this much data learns a very general notion of what an object is and where its boundary lies.",
+      "why_it_matters": "This is why SAM can segment objects it was never explicitly labelled for. The rest of the chapter (pp.343–352) uses it through KerasHub with point and box prompts.",
+      "technical_idea": "SAM is a promptable segmentation model: an image encoder, a prompt encoder and a mask decoder (described on p.344). It is trained on (image, prompt, mask) triples rather than on a fixed list of classes.",
+      "terminology": [
+        {"term": "SAM (Segment Anything Model)", "meaning": "Meta AI's 2023 promptable segmentation model trained on the SA-1B dataset."},
+        {"term": "Object instance", "meaning": "A single occurrence of an object in an image; each has its own mask (as in instance segmentation, p.334)."}
+      ],
+      "connections": [
+        "p.343: SAM is not limited to predefined classes; it is loaded as `sam_huge_sa1b` with 641 million parameters.",
+        "p.344: SAM's architecture and its (image, prompt, mask) training triples.",
+        "p.335: the much smaller Oxford-IIIT Pets dataset (7,390 images)."
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "segmentation_mask",
+      "name": "Segmentation mask",
+      "definition": "An image the same height and width as the input, where each pixel holds the class index of the corresponding input pixel (p.335).",
+      "intuition": "A paint-by-numbers version of the photo: every pixel is tagged with a label.",
+      "technical": "For the pets model the target mask has shape (200, 200) with values in {0, 1, 2} after the -1 shift (p.337); the model predicts (200, 200, 3) probabilities, reduced to a mask by argmax.",
+      "significance": "It is both the label the segmentation model is trained on and the form its output takes after argmax.",
+      "example": "In Figure 11.6, the purple region is class 0 (pet), teal is class 1 (background), yellow is class 2 (contour).",
+      "misconception": "The model does not output a mask directly; it outputs per-pixel class probabilities, which you turn into a mask.",
+      "related": ["image_segmentation", "semantic_segmentation", "softmax"],
+      "source": "book"
+    },
+    {
+      "id": "pixelwise_argmax",
+      "name": "Per-pixel argmax decoding",
+      "definition": "Converting a (H, W, C) probability map into a (H, W) class map by picking, for each pixel, the class with the highest probability.",
+      "intuition": "For each pixel, ask which of the three classes the model is most sure about.",
+      "technical": "`np.argmax(pred, axis=-1)` reduces the last (channel/class) axis; the result is an integer array of indices.",
+      "significance": "It is the standard decoding step for semantic segmentation models trained with a per-pixel softmax.",
+      "example": "A pixel with probabilities [0.7, 0.2, 0.1] becomes class 0 (foreground).",
+      "misconception": "argmax throws away confidence: a pixel at [0.34, 0.33, 0.33] and one at [0.99, 0.005, 0.005] both become class 0.",
+      "related": ["softmax", "segmentation_mask"],
+      "source": "book"
+    },
+    {
+      "id": "transfer_learning",
+      "name": "Transfer learning / pretrained models",
+      "definition": "Reusing a model trained on a large dataset for a new task, which especially helps when the new dataset is small.",
+      "intuition": "Rather than learn to see from scratch, start with a model that already knows what visual objects look like.",
+      "technical": "In chapter 8: feature extraction and fine-tuning of an ImageNet ConvNet (p.280). In section 11.3: using SAM zero-shot with prompts.",
+      "significance": "The page uses it to justify switching from the from-scratch model to SAM.",
+      "example": "SAM trained on SA-1B (11M images, 1B+ masks) versus our model trained on a few thousand pet images.",
+      "misconception": "Pretrained does not always mean fine-tuned; SAM is used here without any additional training (p.343).",
+      "related": ["fine_tuning", "feature_extraction"],
+      "source": "book"
+    },
+    {
+      "id": "segment_anything_model",
+      "name": "Segment Anything Model (SAM)",
+      "definition": "A large pretrained, promptable segmentation model released by Meta AI in April 2023, trained on 11 million images with over 1 billion masks.",
+      "intuition": "A general-purpose 'cut out this object' tool that works on almost any object you point at.",
+      "technical": "Image encoder + prompt encoder + mask decoder (p.344); available in KerasHub as `sam_huge_sa1b`, 641M parameters (p.343).",
+      "significance": "It shows how scale in data and model size gives open-ended segmentation without a fixed class list.",
+      "example": "Later pages segment a dog and a mango by giving a point or a box prompt (pp.347–352).",
+      "misconception": "SAM does not tell you *what* the object is (no class label in the point/box setting); it tells you *where* the object indicated by the prompt is.",
+      "related": ["transfer_learning", "image_segmentation", "instance_segmentation"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "Decoding the predicted mask",
+      "latex": "\\hat{m}_{ij} = \\arg\\max_{c\\in\\{0,1,2\\}} p_{ijc}, \\qquad \\text{display}_{ij} = 127\\,\\hat{m}_{ij}",
+      "source_text": "mask = np.argmax(pred, axis=-1); mask *= 127",
+      "variables": [
+        {"symbol": "p_{ijc}", "meaning": "Softmax probability the model assigns to class c at pixel (i, j); `pred` has shape (200, 200, 3)."},
+        {"symbol": "\\hat{m}_{ij}", "meaning": "Predicted class index at pixel (i, j): 0 = foreground, 1 = background, 2 = contour."},
+        {"symbol": "\\text{display}_{ij}", "meaning": "The value shown on screen: 0, 127 or 254."}
+      ],
+      "operations": "An argmax over the class axis for every pixel, then elementwise multiplication by 127.",
+      "purpose": "To turn the model's probability tensor into one integer label per pixel and spread the labels over the 0–255 range for display.",
+      "interpretation": "Each pixel gets the label of its most probable class.",
+      "intuition": "Three probabilities compete at each pixel; the winner names the pixel.",
+      "numerical_example": "If $p_{ij\\cdot} = [0.15, 0.25, 0.60]$, then $\\hat m_{ij}=2$ (contour) and the displayed value is $254$, which the default viridis colormap draws as yellow.",
+      "source": "book",
+      "book_ref": "p.342"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Predicting and displaying a segmentation mask",
+      "original_code": "mask = model.predict(np.expand_dims(test_image, 0))[0]\ndef display_mask(pred):\n    mask = np.argmax(pred, axis=-1)\n    mask *= 127\n    plt.axis(\"off\")\n    plt.imshow(mask)\ndisplay_mask(mask)",
+      "language": "python",
+      "what_it_does": "Runs the reloaded segmentation model on one validation image, then defines and calls a utility (callout: \"Utility to display a model's prediction\") that converts the per-pixel class probabilities into a class-index image and plots it. The output is the right half of Figure 11.6.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "`test_image` has shape (200, 200, 3) (set on p.341 as `val_input_imgs[4]`). `np.expand_dims(..., 0)` makes it (1, 200, 200, 3), a batch of one, because Keras models always take batches. `model.predict` returns (1, 200, 200, 3) softmax probabilities, and `[0]` removes the batch axis, giving (200, 200, 3)."},
+        {"lines": "2", "explanation": "Defines the display helper; its parameter `pred` is the (200, 200, 3) probability map."},
+        {"lines": "3", "explanation": "`np.argmax(pred, axis=-1)` picks the most probable class for each pixel, giving a (200, 200) integer array with values 0, 1 or 2. This local `mask` shadows the outer `mask`; the outer one is unchanged."},
+        {"lines": "4", "explanation": "Scales class indices to 0, 127 and 254, the same scaling used to display the ground-truth targets (p.336: `(target_array.astype(\"uint8\") - 1) * 127`)."},
+        {"lines": "5-6", "explanation": "Hides the axes and draws the array with Matplotlib's default colormap (viridis): 0 is dark purple, 127 teal, 254 yellow."},
+        {"lines": "7", "explanation": "Calls the helper on the prediction."}
+      ],
+      "inputs_outputs": "Input: one (200, 200, 3) float image. Intermediate: (200, 200, 3) probabilities. Output: a plot of a (200, 200) class map (Figure 11.6, right).",
+      "algorithm": "Add batch axis → forward pass → remove batch axis → per-pixel argmax → scale → imshow.",
+      "theory_link": "The model's last layer is `Conv2D(num_classes, 3, activation=\"softmax\", padding=\"same\")` (p.339), so each pixel's three channels sum to 1. Argmax is the matching decoding rule.",
+      "parameters": [
+        {"name": "axis=0 (expand_dims)", "role": "Position of the new batch axis."},
+        {"name": "axis=-1 (argmax)", "role": "Reduce over the class/channel axis, the last one."},
+        {"name": "127", "role": "Display scale factor so the three classes are spread across 0–254."}
+      ],
+      "pitfalls": [
+        "Forgetting `expand_dims` passes a (200, 200, 3) array, which Keras reads as a batch of 200 images of shape (200, 3), causing a shape error.",
+        "Forgetting `[0]` leaves a batch axis; argmax would then give (1, 200, 200) and imshow would fail.",
+        "Note (not in the book): `plt.imshow` rescales integer arrays to its colormap range automatically, so the `*= 127` doesn't change the colors here; it matters when saving or showing the mask as an 8-bit grayscale image (for example with `array_to_img`).",
+        "Reusing the name `mask` for both the probabilities and the class map can confuse readers; the function's local variable is separate from the global one."
+      ],
+      "illustrative_code": "# AI-written: inspect class proportions and confidence of the prediction\nimport numpy as np\nprobs = model.predict(np.expand_dims(test_image, 0))[0]   # (200, 200, 3)\nlabels = probs.argmax(-1)                                   # (200, 200)\nprint(np.bincount(labels.ravel(), minlength=3) / labels.size)  # share of fg/bg/contour\nconfidence = probs.max(-1)                                  # (200, 200)\nprint(\"low-confidence pixels:\", (confidence < 0.5).mean())"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Reading Figure 11.6 against the label encoding",
+      "kind": "breakdown",
+      "body": "The ground-truth masks use 1 = foreground, 2 = background, 3 = contour (p.335), shifted to 0/1/2 (p.337). After `argmax` and `*127`:\n\n| class index | meaning | display value | viridis color in Fig. 11.6 |\n|---|---|---|---|\n| 0 | foreground (pet) | 0 | dark purple (the dog) |\n| 1 | background | 127 | teal |\n| 2 | contour | 254 | yellow outline |\n\nSo the yellow band around the dog is not an error; it is the model predicting the *contour* class that the dataset annotates around each pet. The real errors are the isolated purple blob in the background (right side) and the specks near the bottom left.",
+      "source": "inference"
+    },
+    {
+      "title": "Why the batch axis dance is needed",
+      "kind": "step_by_step",
+      "body": "1. `test_image`: (200, 200, 3).\n2. `np.expand_dims(test_image, 0)`: (1, 200, 200, 3); Keras models work on batches, even of size one.\n3. `model.predict(...)`: (1, 200, 200, 3), one probability vector per pixel.\n4. `[0]`: (200, 200, 3).\n5. `np.argmax(..., axis=-1)`: (200, 200).\n\nThe same pattern (add a batch axis, predict, index `[0]`) comes back whenever you run a Keras model on a single sample.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Scale comparison: Pets vs. SA-1B",
+      "kind": "numerical",
+      "body": "Oxford-IIIT Pets: 7,390 images, one 3-class mask each (p.335). SA-1B: about 11,000,000 images and more than 1,000,000,000 object masks (this page). That is roughly $11{,}000{,}000 / 7{,}390 \\approx 1{,}490\\times$ more images, and on average about $10^9/1.1\\times10^7 \\approx 90$ masks per image. Beyond the book: this density of masks, covering everything from whole objects to small parts, is what lets SAM segment things that no fixed label set would include.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "A cookie-cutter analogy for SAM",
+      "kind": "analogy",
+      "body": "The from-scratch model is like a stencil that can only cut out one shape: \"pet vs. not pet.\" SAM is more like an expert with scissors: you point at anything (a point or a box, as later pages show) and it cuts along that object's edge, because it has practised on over a billion different shapes.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "widget",
+      "title": "Shape flow of the prediction code",
+      "why": "The first line of the page wraps `model.predict` in `np.expand_dims(..., 0)` and `[0]`, and `display_mask` reduces the class axis with argmax; this traces the exact shapes (200×200 images, 3 classes from p.339).",
+      "widget": "tensor_shapes",
+      "params": {
+        "steps": [
+          {"op": "test_image", "shape": [200, 200, 3]},
+          {"op": "expand_dims(…, 0)", "shape": [1, 200, 200, 3]},
+          {"op": "model.predict", "shape": [1, 200, 200, 3]},
+          {"op": "[0]", "shape": [200, 200, 3]},
+          {"op": "argmax(axis=-1)", "shape": [200, 200]}
+        ]
+      }
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "The yellow outline around the dog in Figure 11.6 is a model error.",
+      "correction": "Yellow is class 2, \"contour\", which the Oxford-IIIT Pets masks annotate explicitly (p.335). The model is meant to predict it. The artifacts the authors mention are the small stray regions."
+    },
+    {
+      "claim": "`model.predict` on one image returns a mask of integers.",
+      "correction": "It returns per-pixel softmax probabilities of shape (1, 200, 200, 3); you need `[0]` and `argmax` to get integer labels."
+    },
+    {
+      "claim": "SAM is just a bigger version of the model we trained, with more classes.",
+      "correction": "SAM is not tied to a fixed set of classes; it is promptable and segments whatever object a prompt indicates (p.343–344)."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 341, "note": "Reloads the best checkpoint and selects `test_image = val_input_imgs[4]`, used in this page's code."},
+      {"page": 339, "note": "Defines the segmentation model with a 3-class per-pixel softmax output of shape (200, 200, 3)."},
+      {"page": 337, "note": "Shifts the mask labels from 1/2/3 to 0/1/2 and sets img_size = (200, 200)."},
+      {"page": 336, "note": "Displays ground-truth masks using the same (label - 1) * 127 scaling."},
+      {"page": 280, "note": "Chapter 8's introduction to pretrained models, which section 11.3 builds on."}
+    ],
+    "later": [
+      {"page": 343, "note": "Continues the SAM paragraph; downloads `sam_huge_sa1b` via KerasHub's ImageSegmenter (641M parameters)."},
+      {"page": 344, "note": "Explains SAM's (image, prompt, mask) training and its encoder/prompt-encoder/decoder architecture."},
+      {"page": 347, "note": "Prompting SAM with a target point."},
+      {"page": 352, "note": "Chapter summary: build a segmentation model from scratch, or use a pretrained one like SAM."}
+    ],
+    "prerequisites": [
+      {"page": 335, "note": "Definition of a segmentation mask and the three pixel classes."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 341, "note": "The code that loads the model and picks the test image."}
+    ],
+    "related_figures": [
+      {"page": 341, "note": "Figure 11.5: training and validation loss curves for this model."}
+    ]
+  },
+  "takeaways": [
+    "To predict on one image, add a batch axis with `np.expand_dims(x, 0)` and take `[0]` of the result.",
+    "The model outputs (200, 200, 3) per-pixel probabilities; `np.argmax(pred, axis=-1)` turns them into a (200, 200) class map.",
+    "In Figure 11.6, purple = pet, teal = background, yellow = contour; the small stray blobs are the artifacts the authors mention.",
+    "The from-scratch model works nicely, but pretrained models help segmentation just as they help classification (chapter 8).",
+    "SAM (Meta AI, April 2023) was trained on 11 million images and over 1 billion object masks."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "What is the shape of `mask` right after `mask = model.predict(np.expand_dims(test_image, 0))[0]`?",
+      "options": ["(200, 200)", "(1, 200, 200, 3)", "(200, 200, 3)", "(3, 200, 200)"],
+      "answer": "(200, 200, 3)",
+      "explanation": "The model outputs (batch, 200, 200, num_classes) = (1, 200, 200, 3); `[0]` removes the batch axis. (200, 200) appears only after argmax; (1, 200, 200, 3) is before indexing; Keras puts channels last, not first.",
+      "page_refs": [342, 339]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "Why does `display_mask` multiply the argmax result by 127?",
+      "options": [],
+      "answer": "To map the class indices 0, 1, 2 to 0, 127, 254 so that they are spread across the 0–255 range and are visually distinct, as with the ground-truth masks.",
+      "explanation": "The same scaling is applied to the targets on p.336. Beyond the book: `plt.imshow` would auto-scale anyway, but the scaling matters for 8-bit image display.",
+      "page_refs": [342, 336]
+    },
+    {
+      "id": "q3",
+      "type": "mcq",
+      "question": "In Figure 11.6, which class does the yellow band around the dog represent?",
+      "options": ["Foreground (pet)", "Background", "Contour", "A prediction artifact"],
+      "answer": "Contour",
+      "explanation": "Class 2 (contour) becomes 254 after scaling, which viridis renders as yellow. The pet (class 0) is purple and the background (class 1) teal. The artifacts are small stray regions, not the outline.",
+      "page_refs": [342, 335]
+    },
+    {
+      "id": "q4",
+      "type": "conceptual",
+      "question": "The authors attribute small artifacts to geometric shapes in the image. Why might a per-pixel classifier produce isolated wrong blobs?",
+      "options": [],
+      "answer": "Each pixel is classified from local features within its receptive field; edges or textures in the background can resemble pet or contour features, and nothing in the model forces the prediction to be one connected region.",
+      "explanation": "The page states the cause briefly; the explanation about receptive fields and lack of connectivity constraints is an added interpretation.",
+      "page_refs": [342]
+    },
+    {
+      "id": "q5",
+      "type": "short",
+      "question": "Give three facts about SAM stated on this page.",
+      "options": [],
+      "answer": "Developed by Meta AI; released in April 2023; trained on 11 million images and their masks covering over 1 billion object instances.",
+      "explanation": "All three appear in the SAM paragraph; the footnote cites Kirillov et al., \"Segment Anything\" (ICCV 2023).",
+      "page_refs": [342]
+    },
+    {
+      "id": "q6",
+      "type": "math",
+      "question": "A pixel's predicted probabilities are [0.30, 0.45, 0.25]. What value does `display_mask` assign to it, and what class is that?",
+      "options": [],
+      "answer": "argmax = 1, so 1 × 127 = 127: background (teal).",
+      "explanation": "argmax over the last axis returns the index of the largest probability (0.45 at index 1); the scaling multiplies it by 127.",
+      "page_refs": [342]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you explain, without looking, why section 11.3 switches to a pretrained model even though the from-scratch model 'appears to work nicely'?",
+      "options": [],
+      "answer": "Pretrained models trained on huge data (SAM: 11M images, 1B+ masks) give much more general and accurate segmentations than a small model trained on ~7k images, just as pretrained ConvNets helped classification in chapter 8.",
+      "explanation": "Check that you mention both the chapter 8 parallel and the scale of SAM's training data.",
+      "page_refs": [342, 280]
+    }
+  ]
+}

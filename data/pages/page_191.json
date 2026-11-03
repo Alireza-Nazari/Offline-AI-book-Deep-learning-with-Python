@@ -1,0 +1,495 @@
+{
+ "page_id": "page_191",
+ "pdf_page": 191,
+ "printed_page": "167",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:16:28Z",
+  "confidence": "high",
+  "review_flags": [
+   "The book says outputs are scaled at test time 'by a factor equal to the dropout rate'. Strictly, the factor is the keep probability (1 - rate). The two coincide for the page's 0.5 example. The notes point this out as an AI clarification rather than altering the book's text."
+  ],
+  "extraction_quality": "Clean text and code. Figure 5.21 matrix values were read from the extracted labels and checked against the page image."
+ },
+ "overview": {
+  "title": "How dropout works: masking and rescaling",
+  "chapter": "5 Fundamentals of machine learning",
+  "section": "5.4 Improving generalization",
+  "subsection": "5.4.4 Regularizing your model",
+  "main_topic": "The mechanics of dropout: randomly zeroing output features during training, the dropout rate, test-time scaling versus training-time rescaling (inverted dropout), with NumPy snippets and figure 5.21",
+  "central_idea": "Dropout zeroes a random fraction (the dropout rate, usually 0.2-0.5) of a layer's output features at each training step. To keep the expected activation consistent between training and test, you either scale the outputs down at test time or, as is usual in practice, scale them up during training and leave test-time outputs unchanged.",
+  "importance": "Dropout is the regularizer the book recommends for large models (p.190). This page gives the exact computation, which explains why Keras Dropout layers behave differently in training and inference.",
+  "learning_objectives": [
+   "Describe what dropout does to a layer's output vector, using the page's example",
+   "Define the dropout rate and its typical range",
+   "Explain why outputs must be rescaled and the two ways of doing it",
+   "Read the NumPy snippets: the random 0/1 mask, test-time *= 0.5, training-time /= 0.5",
+   "Interpret figure 5.21"
+  ],
+  "prerequisites": [
+   "The motivation for dropout over weight regularization in large models (p.190)",
+   "NumPy element-wise operations and broadcasting (chapter 2)",
+   "Layer outputs as (batch_size, features) matrices"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "Dropout, applied to a layer, consists of **randomly *dropping out* (setting to zero) a number of output features of the layer during training**. The book's example: a layer that would return `[0.2, 0.5, 1.3, 0.8, 1.1]` for a sample might, after dropout, return `[0, 0.5, 1.3, 0, 1.1]`, with zeros at random positions. The ***dropout rate*** is the fraction of features zeroed out. It is **usually set between 0.2 and 0.5**. **At test time no units are dropped**. Instead, the layer's outputs are scaled down to compensate for the fact that more units are active than during training. (The book says 'by a factor equal to the dropout rate'. In general the multiplier is the keep probability, 1 − rate, which equals 0.5 in the page's example.)\n\nThe authors then show the computation in NumPy on a matrix `layer_output` of shape `(batch_size, features)`:\n\n- **Training time**: `layer_output *= np.random.randint(low=0, high=2, size=layer_output.shape)`. This multiplies by a random 0/1 mask, dropping about 50% of the units.\n- **Test time**: `layer_output *= 0.5`, scaling down because half the units were dropped during training.\n\nThis can equivalently be done **entirely at training time**, leaving the output unchanged at test time, **which is often how it is implemented in practice**: apply the mask, then `layer_output /= 0.5`. The callout notes that this scales *up* rather than down.\n\n**Figure 5.21** illustrates this on a 4×4 activation matrix. 50% dropout zeroes eight cells (shaded), and the result is multiplied by 2 during training. At test time the activation matrix is unchanged.",
+ "paragraphs": [
+  {
+   "ref": "p191_e03",
+   "excerpt": "neural networks. Dropout, applied to a layer, consists of randomly dropping out",
+   "what_it_says": "Dropout sets a random subset of a layer's output features to zero during training. The example turns [0.2, 0.5, 1.3, 0.8, 1.1] into [0, 0.5, 1.3, 0, 1.1]. The dropout rate (typically 0.2-0.5) is the fraction zeroed. At test time nothing is dropped, and outputs are scaled down to balance the larger number of active units.",
+   "what_it_means": "Dropout acts on *activations*, not weights, and a fresh random mask is drawn for every sample at every step. Downstream layers can never count on any particular feature being present, so they must learn redundant, robust combinations. The scaling exists because at test time all units contribute, so without correction the next layer would see inputs roughly 1/(1−rate) times larger than it was trained on. Note (AI clarification): to match the training-time expectation, test outputs are multiplied by the *keep* probability 1 − rate. The book's phrase 'a factor equal to the dropout rate' is exact only when rate = 0.5, as in its example.",
+   "why_it_matters": "It defines dropout precisely and explains why the network must behave differently in training and inference, which is the source of Keras's `training` flag.",
+   "technical_idea": "Training: $y = m \\odot h$ with $m_i \\sim \\text{Bernoulli}(1-p)$, so $\\mathbb{E}[y_i] = (1-p)h_i$. Test: $y = (1-p)h$, which matches that expectation.",
+   "terminology": [
+    {
+     "term": "Dropping out",
+     "meaning": "Setting a feature (unit output) to zero for one training step."
+    },
+    {
+     "term": "Dropout rate",
+     "meaning": "The fraction of features set to zero, usually 0.2 to 0.5."
+    }
+   ],
+   "connections": [
+    "p.190: why dropout is preferred for large models",
+    "p.239: training vs. inference behaviour of layers in custom loops"
+   ]
+  },
+  {
+   "ref": "p191_e04",
+   "excerpt": "Consider a NumPy matrix containing the output of a layer, layer_output, of shape",
+   "what_it_says": "For a layer output matrix of shape (batch_size, features), dropout at training time zeroes a random fraction of its entries.",
+   "what_it_means": "The mask has the same shape as the matrix, so each sample in the batch gets its own independent pattern of dropped features.",
+   "why_it_matters": "It connects the abstract description to an actual tensor operation.",
+   "terminology": [
+    {
+     "term": "(batch_size, features)",
+     "meaning": "Rows are samples, columns are a layer's output units."
+    }
+   ],
+   "connections": [
+    "chapter 2: element-wise tensor operations"
+   ]
+  },
+  {
+   "ref": "p191_e06",
+   "excerpt": "At test time, we scale down the output by the dropout rate.",
+   "what_it_says": "At test time the output is multiplied by 0.5, because half the units were dropped during training.",
+   "what_it_means": "With rate 0.5, each unit was active half the time during training, so its average contribution was half its full value. Multiplying by 0.5 at test time reproduces that average.",
+   "why_it_matters": "Without this step, test-time activations would be systematically twice as large as anything the downstream layers saw during training.",
+   "terminology": [],
+   "connections": []
+  },
+  {
+   "ref": "p191_e08",
+   "excerpt": "Note that this process can be implemented by doing both operations at training time",
+   "what_it_says": "You can instead apply both the mask and the rescaling during training (dividing by 0.5, i.e. scaling up) and leave the output unchanged at test time. This is the usual practical implementation (figure 5.21).",
+   "what_it_means": "This is 'inverted dropout'. Training activations are boosted by 1/(1−rate), so their expectation equals the full activation, and inference becomes a no-op. That makes deployment simpler and faster, because the inference graph needs no dropout-specific code.",
+   "why_it_matters": "This is what Keras's Dropout layer does: it rescales by 1/(1−rate) in training and is the identity at inference.",
+   "technical_idea": "$y = \\dfrac{m \\odot h}{1-p}$ with $\\mathbb{E}[y] = h$.",
+   "terminology": [
+    {
+     "term": "Inverted dropout",
+     "meaning": "Rescaling during training so that the test-time layer is the identity. (This name is not used in the book.)"
+    }
+   ],
+   "connections": [
+    "p.192: the Keras Dropout layer in listing 5.15"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "dropout",
+   "name": "Dropout",
+   "definition": "Randomly setting a fraction (the dropout rate) of a layer's output features to zero at each training step. At test time no units are dropped.",
+   "intuition": "Every training step trains a different random 'thinned' sub-network, so no unit can rely on specific partners.",
+   "technical": "Mask $m \\sim \\text{Bernoulli}(1-p)$ element-wise. Train: $m\\odot h/(1-p)$. Test: $h$ (inverted form).",
+   "significance": "One of the most effective regularizers and the preferred one for large models (p.190).",
+   "example": "[0.2, 0.5, 1.3, 0.8, 1.1] becomes [0, 0.5, 1.3, 0, 1.1].",
+   "misconception": "Dropout does not delete weights or neurons permanently, and it is not active during inference.",
+   "related": [
+    "regularization",
+    "overfitting",
+    "dense_layer"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "dropout_rate",
+   "name": "Dropout rate",
+   "definition": "The fraction of features zeroed out. The book gives a usual range of 0.2 to 0.5.",
+   "intuition": "How hard you shake the network during training.",
+   "technical": "Keep probability = 1 − rate. The rescaling factor is 1/(1 − rate) in training, or (1 − rate) at test time.",
+   "significance": "It is the dropout hyperparameter. Too high underfits, too low does little.",
+   "example": "Rate 0.5: each feature is kept with probability 0.5, and kept features are doubled in training.",
+   "misconception": "Rate is the fraction *dropped*, not kept. Some other libraries' APIs (for example, old TensorFlow keep_prob) used the opposite convention.",
+   "related": [
+    "dropout"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "train_test_behavior",
+   "name": "Training vs. inference behaviour",
+   "definition": "Some layers compute differently during training and inference. Dropout is the first example in the book.",
+   "intuition": "Practice under hard conditions, then perform at full strength.",
+   "technical": "In Keras, layers receive a `training` argument. Dropout is the identity when training=False.",
+   "significance": "It explains why model(x) and model(x, training=True) can differ.",
+   "example": "Figure 5.21: training applies the mask and ×2. At test time the matrix is unchanged.",
+   "misconception": "That predict() still drops units. It does not.",
+   "related": [
+    "dropout",
+    "keras_layer"
+   ],
+   "source": "inference"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Dropout with test-time scaling (first scheme on the page)",
+   "latex": "\\begin{aligned} \\text{train: } & y = m \\odot h, \\quad m_{ij} \\sim \\text{Bernoulli}(1-p) \\\\ \\text{test: } & y = (1-p)\\, h \\end{aligned}",
+   "source_text": "layer_output *= np.random.randint(low=0, high=2, size=layer_output.shape)  …  layer_output *= 0.5",
+   "variables": [
+    {
+     "symbol": "h",
+     "meaning": "The layer output matrix, shape (batch_size, features)"
+    },
+    {
+     "symbol": "m",
+     "meaning": "Random 0/1 mask of the same shape. randint(0, 2) gives keep probability 0.5"
+    },
+    {
+     "symbol": "p",
+     "meaning": "Dropout rate (fraction dropped). p = 0.5 on this page"
+    },
+    {
+     "symbol": "\\odot",
+     "meaning": "Element-wise multiplication"
+    }
+   ],
+   "operations": "Multiply element-wise by a random mask during training. Multiply by the keep probability at test time.",
+   "purpose": "Make the test-time output equal the expected training-time output.",
+   "interpretation": "$\\mathbb{E}[m_{ij} h_{ij}] = (1-p)h_{ij}$, which is what the test-time formula produces.",
+   "intuition": "On average each unit only 'showed up' a fraction 1−p of the time during training.",
+   "numerical_example": "h = 0.8, p = 0.5: during training y is 0 or 0.8 with equal probability (mean 0.4). At test time y = 0.5 × 0.8 = 0.4.",
+   "source": "book",
+   "book_ref": "p.191"
+  },
+  {
+   "id": "m2",
+   "title": "Inverted dropout (rescaling during training)",
+   "latex": "\\begin{aligned} \\text{train: } & y = \\frac{m \\odot h}{1-p} \\\\ \\text{test: } & y = h \\end{aligned}",
+   "source_text": "layer_output *= np.random.randint(low=0, high=2, size=layer_output.shape)\nlayer_output /= 0.5",
+   "variables": [
+    {
+     "symbol": "1-p",
+     "meaning": "Keep probability. Dividing by it (0.5 here) scales the surviving values up"
+    }
+   ],
+   "operations": "Mask, then divide by the keep probability during training. Use the identity at test time.",
+   "purpose": "Keep inference unchanged, which is the common practical implementation.",
+   "interpretation": "$\\mathbb{E}[y] = h$ during training, so no correction is needed later.",
+   "intuition": "Survivors work twice as hard to make up for their dropped neighbours.",
+   "numerical_example": "Figure 5.21: cell 1.5 survives and becomes 1.5 × 2 = 3.0 in training. At test time it stays 1.5.",
+   "source": "book",
+   "book_ref": "p.191"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Dropout mask at training time",
+   "original_code": "layer_output *= np.random.randint(low=0, high=2, size=layer_output.shape)",
+   "language": "python",
+   "what_it_does": "Multiplies the layer output in place by a random matrix of 0s and 1s of the same shape. Callout: 'At training time, drops out 50% of the units in the output.'",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "np.random.randint(low=0, high=2, ...) draws integers from {0, 1} uniformly (high is exclusive), so each entry is kept with probability 0.5."
+    }
+   ],
+   "inputs_outputs": "Input/output: layer_output, shape (batch_size, features), modified in place.",
+   "algorithm": "Bernoulli(0.5) masking.",
+   "theory_link": "Implements dropout rate 0.5.",
+   "parameters": [
+    {
+     "name": "high=2",
+     "role": "Exclusive upper bound, which gives values 0 or 1. Only rate 0.5 can be expressed this way."
+    }
+   ],
+   "pitfalls": [
+    "For other rates, use (np.random.rand(*shape) >= rate) rather than randint.",
+    "`*=` on an integer array with a float operand fails. layer_output must be a float array."
+   ],
+   "illustrative_code": "# AI-written: general dropout rate\nrate = 0.3\nmask = (np.random.rand(*layer_output.shape) >= rate)\nlayer_output = layer_output * mask"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Scaling at test time",
+   "original_code": "layer_output *= 0.5",
+   "language": "python",
+   "what_it_does": "At test time (callout: 'At test time'), multiplies all outputs by 0.5 to match the average magnitude seen during training with 50% dropout.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Scales down by the keep probability, which is 0.5 here and so equal to the dropout rate."
+    }
+   ],
+   "inputs_outputs": "layer_output (batch_size, features), scaled in place.",
+   "algorithm": "Deterministic rescaling.",
+   "theory_link": "Matches the expected training-time output (1 − p)·h.",
+   "parameters": [
+    {
+     "name": "0.5",
+     "role": "Keep probability 1 − rate (equal to the rate when rate = 0.5)."
+    }
+   ],
+   "pitfalls": [
+    "For rate 0.2 you would multiply by 0.8, not 0.2."
+   ],
+   "illustrative_code": ""
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Both operations at training time (inverted dropout)",
+   "original_code": "layer_output *= np.random.randint(low=0, high=2, size=layer_output.shape)\nlayer_output /= 0.5",
+   "language": "python",
+   "what_it_does": "During training (callout: 'At training time'), applies the random mask and then divides by 0.5, doubling the survivors. The callout notes: 'Note that we're scaling up rather scaling down in this case.' At test time the output is left unchanged.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Random 0/1 mask, as before."
+    },
+    {
+     "lines": "2",
+     "explanation": "Divides by the keep probability so the expected value equals the original activation."
+    }
+   ],
+   "inputs_outputs": "layer_output modified in place. Its expected value equals the pre-dropout output.",
+   "algorithm": "Inverted dropout.",
+   "theory_link": "This is the scheme used by Keras's Dropout layer (figure 5.21).",
+   "parameters": [
+    {
+     "name": "/= 0.5",
+     "role": "Rescale by 1/(1 − rate) = 2."
+    }
+   ],
+   "pitfalls": [
+    "Do not also scale at test time when using this form. That would double-correct.",
+    "Again, the general divisor is 1 − rate."
+   ],
+   "illustrative_code": "# AI-written: inverted dropout as a function, and the Keras equivalent\ndef dropout(x, rate, training):\n    if not training:\n        return x\n    mask = np.random.rand(*x.shape) >= rate\n    return x * mask / (1.0 - rate)\n\nfrom keras import layers\nlayers.Dropout(0.5)   # same behaviour; identity at inference"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Figure 5.21 cell by cell",
+   "kind": "numerical",
+   "body": "The input activation matrix is\n\n$$\\begin{pmatrix}0.3&0.2&1.5&0.0\\\\0.6&0.1&0.0&0.3\\\\0.2&1.9&0.3&1.2\\\\0.7&0.5&1.0&0.0\\end{pmatrix}\\xrightarrow{\\text{50\\% dropout}}\\begin{pmatrix}0.0&0.2&1.5&0.0\\\\0.6&0.1&0.0&0.3\\\\0.0&1.9&0.3&0.0\\\\0.7&0.0&0.0&0.0\\end{pmatrix}\\times 2$$\n\nEight of the 16 cells are shaded as dropped. Some of them (for example, the one in row 2, column 3) were already 0.0. The figure shows the masked values before the ×2. After rescaling, the survivors would be, for instance, 0.2 becoming 0.4 and 1.9 becoming 3.8. The sum of the original matrix is 8.8. The masked sum is 5.3, and doubled it is 10.6. That is only equal to 8.8 *in expectation*, not for each draw.",
+  "source": "inference"
+  },
+  {
+   "title": "Why rescaling matters",
+   "kind": "step_by_step",
+   "body": "Beyond the book:\n1. The next layer computes W·y + b.\n2. If, during training, y has half its entries zeroed, W adapts to inputs of about half the typical magnitude.\n3. At test time, if nothing is dropped and nothing is rescaled, the inputs are about twice as large, so pre-activations shift and predictions drift.\n4. Rescaling, either down at test time or up during training, keeps the input statistics the same in both phases.",
+  "source": "ai_explanation"
+  },
+  {
+   "title": "Analogy: training with random absences",
+   "kind": "analogy",
+   "body": "A team that rehearses with random members missing each day learns not to depend on any single person. On performance day everyone shows up. Each member's contribution is calibrated so the total sound is right, which is the job the rescaling does. (The book's own motivating story, Hinton's bank tellers, is on p.192.)",
+  "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Re-sample dropout masks at rate 0.5",
+   "why": "The page drops features from a 5-element output vector, using rate 0.5 in the NumPy snippets. Re-sample masks and watch the survivors get scaled by 1/(1 − 0.5) = 2.",
+   "widget": "dropout",
+   "params": {
+    "units": 5,
+    "rate": 0.5
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "Two equivalent ways to implement dropout",
+   "why": "The page shows test-time scaling (*= 0.5) and training-time rescaling (/= 0.5). Figure 5.21 uses the second.",
+   "mermaid": "flowchart LR\n  subgraph A[Scheme 1: scale at test time]\n    A1[train: h * mask] --> A2[test: h * 0.5]\n  end\n  subgraph B[Scheme 2: inverted, common in practice]\n    B1[train: h * mask / 0.5] --> B2[test: h unchanged]\n  end"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Dropout removes weights from the network.",
+   "correction": "It zeroes *output features* (activations) of a layer, with a new random mask at every training step. The weights stay intact."
+  },
+  {
+   "claim": "Dropout is also applied at test time.",
+   "correction": "At test time no units are dropped. Only the scaling (scheme 1), or nothing at all (scheme 2), happens."
+  },
+  {
+   "claim": "With dropout rate p you always multiply by p at test time.",
+   "correction": "You multiply by the keep probability 1 − p, or divide by 1 − p during training. The book's 'equal to the dropout rate' wording is exact only for p = 0.5."
+  },
+  {
+   "claim": "A dropout rate of 0.8 means 80% of units are kept.",
+   "correction": "The rate is the fraction zeroed out. The usual values are 0.2 to 0.5."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 190,
+    "note": "Dropout is introduced as the preferred regularizer for large models."
+   },
+   {
+    "page": 189,
+    "note": "Weight regularization, the alternative that constrains weights rather than activations."
+   }
+  ],
+  "later": [
+   {
+    "page": 192,
+    "note": "Hinton's bank-teller motivation, the Keras Dropout layer and listing 5.15."
+   },
+   {
+    "page": 193,
+    "note": "Recap of ways to prevent overfitting, including adding dropout."
+   },
+   {
+    "page": 239,
+    "note": "Training vs. inference: layers such as Dropout behave differently (training argument)."
+   },
+   {
+    "page": 278,
+    "note": "Dropout used in a convnet trained from scratch on a small dataset."
+   },
+   {
+    "page": 397,
+    "note": "Dropout in recurrent networks for timeseries."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 190,
+    "note": "Why weight regularization is insufficient for large models."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 192,
+    "note": "Listing 5.15 adds Dropout layers to the IMDb model."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 192,
+    "note": "Figure 5.22, the effect of dropout on IMDb validation loss."
+   }
+  ]
+ },
+ "takeaways": [
+  "Dropout randomly zeroes a fraction of a layer's output features at each training step.",
+  "The dropout rate is the fraction zeroed, usually 0.2 to 0.5.",
+  "No units are dropped at test time. Activations must be rescaled so training and test magnitudes match.",
+  "Either scale down at test time (*= 0.5) or, more commonly, scale up during training (/= 0.5) and leave inference unchanged.",
+  "In general the scale factor is the keep probability 1 − rate. It equals the rate only when the rate is 0.5."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "In the common practical implementation of dropout described on this page, what happens at test time?",
+   "options": [
+    "Half the units are dropped at random",
+    "Outputs are multiplied by 0.5",
+    "The activation matrix is left unchanged",
+    "Outputs are divided by 0.5"
+   ],
+   "answer": "The activation matrix is left unchanged",
+   "explanation": "When both masking and rescaling (/= 0.5) are done during training, test-time output is unchanged (figure 5.21). Multiplying by 0.5 is the *other* scheme. Units are never dropped at test time, and dividing by 0.5 happens during training.",
+   "page_refs": [
+    191
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "A unit's activation is 1.3 and the dropout rate is 0.5. Using inverted dropout, what are the possible training-time outputs, their expected value, and the test-time output?",
+   "options": [],
+   "answer": "Training: 0 or 2.6, each with probability 0.5, so the expected value is 1.3. Test: 1.3.",
+   "explanation": "Survivors are divided by the keep probability 0.5, which doubles them. The expectation equals the original activation, so inference needs no change.",
+   "page_refs": [
+    191
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What is the dropout rate, and what range does the book give as usual?",
+   "options": [],
+   "answer": "The fraction of a layer's output features that are zeroed out, usually between 0.2 and 0.5.",
+   "explanation": "This is stated in the first paragraph of the page.",
+   "page_refs": [
+    191
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why must dropout outputs be rescaled somewhere, either at training or at test time?",
+   "options": [],
+   "answer": "At test time all units are active, so without correction the next layer would receive inputs about 1/(1 − rate) times larger than during training. Rescaling keeps the expected activation the same in both phases.",
+   "explanation": "The book: scaling balances 'the fact that more units are active than at training time.'",
+   "page_refs": [
+    191
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "math",
+   "question": "With a dropout rate of 0.2 and test-time scaling (scheme 1), by what should you multiply the outputs at test time? With inverted dropout, by what do you divide during training?",
+   "options": [],
+   "answer": "Multiply by 0.8 at test time, or divide by 0.8 during training.",
+   "explanation": "The factor is the keep probability 1 − 0.2 = 0.8. The book's 0.5 example hides this because 1 − 0.5 = 0.5.",
+   "page_refs": [
+    191
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "What does np.random.randint(low=0, high=2, size=layer_output.shape) produce, and why does it give 50% dropout?",
+   "options": [],
+   "answer": "A matrix of the same shape with entries 0 or 1 chosen uniformly (high is exclusive). Each entry is 0 with probability 0.5, so multiplying by it zeroes about half the values.",
+   "explanation": "The callout says: 'At training time, drops out 50% of the units in the output.'",
+   "page_refs": [
+    191
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you reproduce figure 5.21 by hand: pick a 4×4 matrix, apply a 50% mask, and rescale?",
+   "options": [],
+   "answer": "Self-check: zero about 8 cells at random, double the rest, and check that the expected sum equals the original sum.",
+   "explanation": "See the deeper note on figure 5.21.",
+   "page_refs": [
+    191
+   ]
+  }
+ ]
+}

@@ -1,0 +1,108 @@
+{
+ "page_id": "page_336", "pdf_page": 336, "printed_page": "312", "book_id": "dlwp3",
+ "generation": {"status": "complete", "model": "claude-opus-5-5", "generated_at": "2026-11-03T07:38:05Z",
+  "confidence": "high",
+  "review_flags": ["The callout on display_target says the rescaled labels become 0 (black), 127 (gray), 254 (near-white), but the code calls plt.imshow on a single-channel array without cmap=\"gray\"; Matplotlib's default colormap (viridis) would show them as dark purple, teal and yellow on screen. The printed figure 11.4 on p.337 indeed shows viridis colours (purple cat, teal background, yellow contour), so the callout's colour names do not match the figure; they would only hold with cmap=\"gray\"."],
+  "extraction_quality": "Clean: two short body lines, two code blocks with callouts, and figure 11.3 (a photo of an Abyssinian cat on a carpet next to a blue bag). Callouts were matched to code lines from the page image."},
+ "overview": {
+  "title": "Inspecting a Pets image and its trimap mask",
+  "chapter": "11 Image segmentation",
+  "section": "11.2 Training a segmentation model from scratch",
+  "subsection": "11.2.1 Downloading a segmentation dataset",
+  "main_topic": "Visual sanity check of one Oxford-IIIT Pets input image and its 3-class segmentation mask",
+  "central_idea": "Before training, look at the data: display input image number 9 with Matplotlib, then load its mask as a single-channel grayscale image and rescale the labels 1/2/3 to 0/127/254 so that the three classes become visibly distinct.",
+  "importance": "Masks stored with tiny integer values (1, 2, 3) look completely black when displayed raw. Knowing how to load and rescale them is the first practical step of every segmentation project, and it confirms that input paths and mask paths really line up.",
+  "learning_objectives": [
+   "Use keras.utils.load_img and Matplotlib to display a dataset image",
+   "Load a segmentation mask with color_mode=\"grayscale\" and understand why the channel count matters",
+   "Explain the transformation (label - 1) * 127 and why it is needed for display",
+   "Map each displayed intensity back to its class: foreground, background, contour"
+  ],
+  "prerequisites": [
+   "The list input_img_paths and target_paths built on p.335",
+   "The meaning of the trimap labels 1 (foreground), 2 (background), 3 (contour) from p.335",
+   "Basic NumPy indexing and dtypes"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "This page continues the data-preparation part of section 11.2.1. Having built two parallel, sorted lists of file paths on p.335 (`input_img_paths` for the JPG photos and `target_paths` for the PNG trimaps), the authors now **look at one example** to make sure everything is in order.\n\n1. **The input image.** A three-line snippet imports `matplotlib.pyplot` and three helpers from `keras.utils` (`load_img`, `img_to_array`, `array_to_img`), turns the axes off, and displays `load_img(input_img_paths[9])`. The result is figure 11.3: an Abyssinian cat lying on a carpet next to a blue bag.\n\n2. **The target mask.** A small helper, `display_target`, takes a mask array, casts it to `uint8`, subtracts 1 and multiplies by 127. The callout explains why: the original labels are 1, 2 and 3; subtracting 1 makes them 0–2 and multiplying by 127 spreads them to 0, 127 and 254 so they can be told apart visually (black, gray, near-white). The function then shows channel 0 of the array (`normalized_array[:, :, 0]`). The mask itself is loaded with `load_img(target_paths[9], color_mode=\"grayscale\")` and converted with `img_to_array`; the second callout explains that `grayscale` makes Keras treat the PNG as having a **single color channel**, matching the definition of a mask given on p.335 (one integer class per pixel). The resulting picture is figure 11.4, which appears on the next page (p.337).\n\nThe take-home is methodological: a mask is a label image whose raw values are class ids, not intensities, so you must remap them before eyeballing them, and you should always verify that inputs and targets correspond before training. On p.337 the authors move on to loading all images and masks into NumPy arrays.",
+ "paragraphs": [
+  {"ref": "p336_e03", "excerpt": "Now, what does one of these inputs and its mask look like?",
+   "what_it_says": "The authors propose to look at one input image and its mask, pointing to figure 11.3, and give a short Matplotlib snippet that displays input image number 9.",
+   "what_it_means": "After building the file-path lists on p.335, the natural next step is a visual sanity check: open one sample and see what the network will be fed. Index 9 is just an arbitrary example from the sorted list.",
+   "why_it_matters": "Looking at raw samples catches problems early: wrong folders, mismatched sorting between images and masks, corrupt files, or unexpected formats. It also gives intuition about the task: the photo has a cluttered background (carpet, bag), so separating the cat from the background is non-trivial.",
+   "technical_idea": "load_img returns a PIL image; plt.imshow can display PIL images directly, and plt.axis(\"off\") hides the tick marks so the figure looks like a photo rather than a plot.",
+   "terminology": [{"term": "load_img", "meaning": "keras.utils function that opens an image file and returns a PIL Image, optionally converting colour mode and resizing."}],
+   "connections": ["p.335: input_img_paths was built there by sorting the JPG files in images/.", "p.311: chapter 10 also used Matplotlib to display images and activations."]},
+  {"ref": "p336_e06", "excerpt": "Let’s look at its target mask as well (see figure 11.4):",
+   "what_it_says": "The authors introduce a helper to display the mask that corresponds to the same image, shown as figure 11.4 on the next page.",
+   "what_it_means": "Because target_paths[9] has the same filename stem as input_img_paths[9] (both lists were sorted), the mask displayed is the ground-truth label for the cat in figure 11.3. The helper exists because raw masks contain values 1–3, which would look nearly black on a 0–255 scale.",
+   "why_it_matters": "Seeing image and mask side by side confirms the pairing is correct and shows what the model is expected to predict: a pixel-wise map of foreground, background and contour.",
+   "technical_idea": "The rescaling (x - 1) * 127 is purely for visualization; the training targets used later keep the class ids (p.337 subtracts 1 so labels are 0, 1, 2).",
+   "terminology": [{"term": "trimap", "meaning": "A three-valued mask (foreground, background, uncertain/contour region); the Oxford-IIIT Pets annotations are stored in annotations/trimaps/."}, {"term": "color_mode=\"grayscale\"", "meaning": "load_img option that converts the image to a single channel (PIL mode 'L')."}],
+   "connections": ["p.335: masks hold values 1 (foreground), 2 (background), 3 (contour).", "p.337: figure 11.4 shows the resulting mask, and the data is then loaded into NumPy arrays."]}
+ ],
+ "concepts": [
+  {"id": "segmentation_mask", "name": "Segmentation mask", "definition": "An image the same size as the input with a single channel, where each integer value is the class of the corresponding input pixel.", "intuition": "A paint-by-numbers sheet laid over the photo: every pixel carries a number telling which region it belongs to.", "technical": "For Oxford-IIIT Pets the mask is a PNG with values in {1, 2, 3}. Loaded with img_to_array it becomes a float32 array of shape (H, W, 1).", "significance": "It is the label for semantic segmentation; the model will output one class-probability vector per pixel and be trained against it.", "example": "Pixel (120, 80) on the cat's body has value 1; a pixel on the carpet has value 2; a pixel on the outline of the cat has value 3.", "misconception": "Mask values are not brightness levels; displaying them directly yields an almost black image because 1–3 are tiny on a 0–255 scale.", "related": ["semantic_segmentation", "image_tensor"], "source": "book"},
+  {"id": "label_rescaling_for_display", "name": "Rescaling class ids for visualization", "definition": "Mapping small integer labels to widely spaced intensities so different classes are visually distinguishable.", "intuition": "Stretching the values 1, 2, 3 across the whole 0–255 range, like turning up the contrast to the maximum.", "technical": "(x - 1) * 127 maps 1→0, 2→127, 3→254. The cast to uint8 first ensures integer arithmetic; 254 is still within the uint8 range 0–255 so nothing overflows.", "significance": "Only for human inspection; the training targets keep the class ids.", "example": "A mask row [1, 1, 3, 2, 2] becomes [0, 0, 254, 127, 127].", "misconception": "This rescaling is not a preprocessing step for the model.", "related": ["segmentation_mask"], "source": "book"},
+  {"id": "semantic_segmentation", "name": "Semantic segmentation", "definition": "Assigning a class label to every pixel of an image.", "intuition": "Classification done per pixel instead of per image.", "technical": "Here there are three classes per pixel: foreground (the pet), background, and contour.", "significance": "The task of section 11.2; this page inspects one training example of it.", "example": "Figure 11.3's cat pixels should be labeled foreground, carpet and bag pixels background.", "misconception": "Semantic segmentation does not separate two individual cats; that is instance segmentation (p.334).", "related": ["segmentation_mask", "instance_segmentation"], "source": "book"}
+ ],
+ "math": [
+  {"id": "m1", "title": "Rescaling trimap labels for display", "latex": "\\tilde{y}_{ij} = (y_{ij} - 1)\\times 127,\\qquad y_{ij}\\in\\{1,2,3\\}\\;\\Rightarrow\\;\\tilde{y}_{ij}\\in\\{0,127,254\\}", "source_text": "normalized_array = (target_array.astype(\"uint8\") - 1) * 127", "variables": [{"symbol": "y_{ij}", "meaning": "Original mask label at row i, column j (1 = foreground, 2 = background, 3 = contour)"}, {"symbol": "\\tilde{y}_{ij}", "meaning": "Display intensity at that pixel"}], "operations": "Elementwise subtraction then multiplication on a uint8 array.", "purpose": "Spread three tiny class ids across the 0–255 display range.", "interpretation": "Foreground becomes 0, background 127, contour 254. The callout calls these black, gray and near-white; with Matplotlib's default colormap they actually appear purple, teal and yellow, as in figure 11.4 (p.337).", "intuition": "Shift so the smallest label is zero, then scale so the labels are as far apart as possible without exceeding 255 (127 × 2 = 254).", "numerical_example": "Labels `[1, 2, 3]` → subtract 1 → `[0, 1, 2]` → × 127 → `[0, 127, 254]`. Using 128 instead would give 256 for label 3, which wraps to 0 in uint8.", "source": "book", "book_ref": "p.336"}
+ ],
+ "code": [
+  {"id": "c1", "listing": null, "title": "Displaying input image number 9", "original_code": "import matplotlib.pyplot as plt\nfrom keras.utils import load_img, img_to_array, array_to_img\n\nplt.axis(\"off\")\nplt.imshow(load_img(input_img_paths[9]))", "language": "python",
+   "what_it_does": "Imports Matplotlib and Keras image utilities, hides the axes, and displays the 10th image (index 9) of the sorted input list, producing figure 11.3.",
+   "line_explanations": [{"lines": "1", "explanation": "Imports Matplotlib's plotting interface."}, {"lines": "2", "explanation": "Imports load_img (file → PIL image), img_to_array (PIL image → NumPy array) and array_to_img (array → PIL image). Only load_img is used here; img_to_array is used in the next snippet; array_to_img is not used on this page."}, {"lines": "4", "explanation": "Turns off axis ticks and frame."}, {"lines": "5", "explanation": "Loads input_img_paths[9] and displays it; callout: 'Displays input image number 9'."}],
+   "inputs_outputs": "Input: the path list from p.335. Output: an inline RGB image plot (figure 11.3).",
+   "algorithm": "Load → display.",
+   "theory_link": "Data inspection before modeling (a habit repeated throughout the book).",
+   "parameters": [{"name": "input_img_paths[9]", "role": "Which sample to display; any index works."}],
+   "pitfalls": ["input_img_paths must have been defined (p.335); run the cells in order.", "Images in this dataset have varying sizes; display works, but training requires resizing (done on p.337)."],
+   "illustrative_code": "# Not from the book: show image and mask side by side\nfig, axes = plt.subplots(1, 2)\naxes[0].imshow(load_img(input_img_paths[9]))\nmask = img_to_array(load_img(target_paths[9], color_mode=\"grayscale\"))\naxes[1].imshow(mask[:, :, 0], cmap=\"gray\")\nfor ax in axes: ax.axis(\"off\")"},
+  {"id": "c2", "listing": null, "title": "Displaying the corresponding target mask", "original_code": "def display_target(target_array):\n    normalized_array = (target_array.astype(\"uint8\") - 1) * 127\n    plt.axis(\"off\")\n    plt.imshow(normalized_array[:, :, 0])\n\nimg = img_to_array(load_img(target_paths[9], color_mode=\"grayscale\"))\ndisplay_target(img)", "language": "python",
+   "what_it_does": "Defines a helper that rescales mask labels 1/2/3 to 0/127/254 and displays the single channel, then loads mask number 9 as a one-channel array and shows it (figure 11.4, p.337).",
+   "line_explanations": [{"lines": "1", "explanation": "Helper taking a mask array of shape (H, W, 1)."}, {"lines": "2", "explanation": "Casts float32 → uint8, subtracts 1 and multiplies by 127 (callout: labels 1, 2, 3 → 0–2 → 0 black, 127 gray, 254 near-white)."}, {"lines": "3-4", "explanation": "Hides axes and displays channel 0, i.e. a 2-D (H, W) array; imshow needs 2-D or 3/4-channel data, not (H, W, 1)."}, {"lines": "6", "explanation": "Loads the PNG with color_mode=\"grayscale\" so it has a single channel (callout), then img_to_array returns a float32 array of shape (H, W, 1)."}, {"lines": "7", "explanation": "Displays it."}],
+   "inputs_outputs": "Input: target_paths[9]. Output: a plot of the trimap.",
+   "algorithm": "Load as grayscale → array → shift and scale labels → slice channel → display.",
+   "theory_link": "A mask is a single-channel label image (p.335); this makes its classes visible.",
+   "parameters": [{"name": "color_mode", "role": "\"grayscale\" forces one channel; default \"rgb\" would yield 3 identical channels."}, {"name": "127", "role": "Scale factor chosen so the largest shifted label (2) maps to 254 ≤ 255."}],
+   "pitfalls": ["Without cmap=\"gray\", plt.imshow uses Matplotlib's default colormap (viridis), so on screen the classes appear purple/teal/yellow rather than black/gray/white.", "Casting to uint8 before subtracting matters: on an array containing 0 the subtraction would wrap to 255. Here labels are ≥ 1, so it is safe.", "Displaying the mask without rescaling shows an almost black image."],
+   "illustrative_code": "# Not from the book: check the label values present in the mask\nimport numpy as np\nprint(np.unique(img))   # expected: [1. 2. 3.]\nprint(img.shape)        # (H, W, 1)"}
+ ],
+ "deeper": [
+  {"title": "Why look before you train", "kind": "application", "body": "Beyond the book: in segmentation the most common silent bug is a misalignment between inputs and masks (e.g. one list sorted, the other not, or a mask resized with interpolation that creates non-integer labels). A single side-by-side plot like the one on this page catches the first problem immediately; `np.unique` on a mask catches the second.", "source": "ai_explanation"},
+  {"title": "Reading the trimap", "kind": "breakdown", "body": "Note (inference from the callout and p.335): after rescaling, the **cat** (label 1) has value 0, the **carpet and bag** (label 2) 127, and the thin **outline** around the cat (label 3) 254. In figure 11.4 (p.337), drawn with the default viridis colormap, these appear as a purple cat, a teal background and a yellow outline. The contour class marks the ambiguous boundary pixels where annotators could not be sure whether a pixel belongs to the pet or the background.", "source": "inference"}
+ ],
+ "visualizations": [
+  {"id": "v1", "type": "svg", "title": "From label ids to display intensities", "why": "The display_target callout maps labels 1, 2, 3 to 0, 127, 254; this diagram shows the mapping and the class each value stands for.", "svg": "<svg viewBox=\"0 0 420 150\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"sans-serif\" font-size=\"12\" fill=\"currentColor\"><text x=\"10\" y=\"20\">label</text><text x=\"120\" y=\"20\">label - 1</text><text x=\"230\" y=\"20\">x 127</text><text x=\"320\" y=\"20\">class</text><g><text x=\"20\" y=\"50\">1</text><text x=\"140\" y=\"50\">0</text><rect x=\"225\" y=\"36\" width=\"40\" height=\"20\" fill=\"#000\" stroke=\"currentColor\"/><text x=\"270\" y=\"50\">0</text><text x=\"320\" y=\"50\">foreground</text></g><g><text x=\"20\" y=\"85\">2</text><text x=\"140\" y=\"85\">1</text><rect x=\"225\" y=\"71\" width=\"40\" height=\"20\" fill=\"#7f7f7f\" stroke=\"currentColor\"/><text x=\"270\" y=\"85\">127</text><text x=\"320\" y=\"85\">background</text></g><g><text x=\"20\" y=\"120\">3</text><text x=\"140\" y=\"120\">2</text><rect x=\"225\" y=\"106\" width=\"40\" height=\"20\" fill=\"#fefefe\" stroke=\"currentColor\"/><text x=\"270\" y=\"120\">254</text><text x=\"320\" y=\"120\">contour</text></g><path d=\"M40 46 H110 M40 81 H110 M40 116 H110 M160 46 H215 M160 81 H215 M160 116 H215\" stroke=\"currentColor\"/></svg>"}
+ ],
+ "misconceptions": [
+  {"claim": "The (x - 1) * 127 step is part of preprocessing for the model.", "correction": "It is only for display. For training, p.337 subtracts 1 so targets are the class ids 0, 1, 2, with no scaling."},
+  {"claim": "A mask loaded with load_img has three channels like the photo.", "correction": "With color_mode=\"grayscale\" it has one channel, shape (H, W, 1), matching the definition of a mask as one class id per pixel."},
+  {"claim": "plt.imshow on a 2-D array always shows grayscale.", "correction": "Matplotlib applies its default colormap (viridis) to single-channel data unless cmap=\"gray\" is passed."}
+ ],
+ "connections": {
+  "earlier": [{"page": 335, "note": "Dataset download, trimap label definitions (1, 2, 3) and construction of input_img_paths and target_paths."}, {"page": 334, "note": "Types of image segmentation: semantic vs instance vs panoptic."}],
+  "later": [{"page": 337, "note": "Figure 11.4 (the mask) and loading all inputs and targets into NumPy arrays."}, {"page": 338, "note": "Building and training the segmentation model."}, {"page": 341, "note": "Predicting a mask and displaying it, reusing display_target-style visualization."}],
+  "prerequisites": [{"page": 335, "note": "Path lists and label meaning."}],
+  "related_math": [],
+  "related_code": [{"page": 337, "note": "Loading images with load_img(target_size=...) into arrays."}],
+  "related_figures": [{"page": 337, "note": "Figure 11.4, the mask for this cat."}, {"page": 342, "note": "Figure 11.6, a test image and its predicted mask."}]
+ },
+ "takeaways": [
+  "Always visually inspect a sample image and its label before training.",
+  "Load masks with color_mode=\"grayscale\" so they have one channel.",
+  "Mask values are class ids (1, 2, 3); remap them with (x - 1) * 127 to see them.",
+  "Displayed: foreground 0, background 127, contour 254.",
+  "Display uses channel 0 because imshow expects a 2-D array for single-channel data."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "After display_target's transformation, what value does a contour pixel have?", "options": ["0", "127", "254", "255"], "answer": "254", "explanation": "Contour is label 3: (3 - 1) × 127 = 254. 0 is foreground (label 1), 127 is background (label 2), and 255 never occurs because the scale factor is 127.", "page_refs": [336, 335]},
+  {"id": "q2", "type": "short", "question": "Why does the code pass color_mode=\"grayscale\" when loading the mask?", "options": [], "answer": "So the mask is treated as having a single color channel (one class id per pixel), giving an array of shape (H, W, 1).", "explanation": "The callout says exactly this; a mask is defined on p.335 as a single-channel image.", "page_refs": [336]},
+  {"id": "q3", "type": "math", "question": "Why is the multiplier 127 and not 128?", "options": [], "answer": "The largest shifted label is 2; 2 × 128 = 256 overflows uint8 (wraps to 0), whereas 2 × 127 = 254 fits.", "explanation": "The array is cast to uint8 (range 0–255) before the arithmetic, so the result must stay ≤ 255.", "page_refs": [336]},
+  {"id": "q4", "type": "conceptual", "question": "What would you see if you displayed the raw mask (values 1–3) on a 0–255 grayscale scale, and why?", "options": [], "answer": "An almost uniformly black image, because 1, 2 and 3 are barely above 0 on a 0–255 scale.", "explanation": "This is why the authors rescale labels before display.", "page_refs": [336]},
+  {"id": "q5", "type": "short", "question": "Why does display_target index normalized_array[:, :, 0]?", "options": [], "answer": "To drop the trailing channel axis of size 1 and pass a 2-D (H, W) array to plt.imshow.", "explanation": "img_to_array returns shape (H, W, 1); imshow accepts 2-D arrays or arrays with 3 or 4 channels.", "page_refs": [336]},
+  {"id": "q6", "type": "self", "question": "Can you explain how you know that target_paths[9] is the mask of input_img_paths[9]?", "options": [], "answer": "Both lists were built by sorting filenames that share the same stem (e.g. Abyssinian_1.jpg / Abyssinian_1.png), so equal indices refer to the same picture.", "explanation": "See the path-list construction on p.335.", "page_refs": [335, 336]}
+ ]
+}

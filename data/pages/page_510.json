@@ -1,0 +1,511 @@
+{
+ "page_id": "page_510",
+ "pdf_page": 510,
+ "printed_page": "486",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:51:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. The model-summary table (element e03) continues the `gemma_lm.summary()` call that starts on p.509; its first line (`Preprocessor: \"gemma3_causal_lm_preprocessor\"`) is printed on p.509. The two generate() examples and both body paragraphs are extracted cleanly and match the page image."
+ },
+ "overview": {
+  "title": "Gemma's model summary and first generations with generate()",
+  "chapter": "16 Text generation",
+  "section": "16.3 Using a pretrained LLM",
+  "subsection": "16.3.1 Text generation with the Gemma model",
+  "main_topic": "Reading the summary of the pretrained Gemma 3 1B CausalLM, and generating text from it with the built-in, compilable generate() method using greedy sampling",
+  "central_idea": "The KerasHub Gemma CausalLM bundles a 262,144-token tokenizer with a ~1-billion-parameter backbone (hidden size 1152) whose token embedding is reused as the output projection. Its built-in generate() method, compiled with a sampler such as \"greedy\", produces text far more coherent than the mini-GPT, but a pure pretrained model just continues text like a web document and is not yet useful.",
+  "importance": "This is the first time in the book the reader runs a real, production-scale LLM. The page sets up the key tension of the rest of section 16.3: scale gives fluency, but the pretraining objective alone does not give usefulness. That motivates prompting (p.511), instruction fine-tuning (p.512) and LoRA (p.514).",
+  "learning_objectives": [
+   "Read a KerasHub CausalLM summary: tokenizer config, input layers, backbone and token embedding, and their shapes",
+   "Explain why the token_embedding row shows 301,989,888 parameters but the total equals the backbone's 999,885,952",
+   "Relate the parameter count to the 3.72 GB memory figure (4 bytes per float32 parameter)",
+   "Use CausalLM.compile(sampler=...) and generate(prompt, max_length=...) instead of a hand-written decoding loop",
+   "Describe what the two sample generations show: coherent, C4-like text that is not task-useful"
+  ],
+  "prerequisites": [
+   "Greedy search and other sampling strategies (p.505, p.508)",
+   "The hand-written mini-GPT generation loop (p.502–503)",
+   "Tied input/output embeddings from the mini-GPT build (p.498)",
+   "Loading Gemma with keras_hub.models.CausalLM.from_preset (p.509)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the rest of `gemma_lm.summary()` (begun on p.509). The **preprocessor** contains a `gemma3_tokenizer` (`Gemma3Tokenizer`) with a **vocabulary of 262,144** tokens. The model, `\"gemma3_causal_lm\"`, has two `InputLayer`s, `padding_mask` and `token_ids`, both shaped `(None, None)` (batch size and sequence length are both variable). They feed a `gemma3_backbone` (`Gemma3Backbone`) with **999,885,952** parameters that outputs `(None, None, 1152)`: one 1152-dimensional vector per token. A `token_embedding` layer (`ReversibleEmbedding`) then maps those vectors to `(None, None, 262144)`, i.e. one logit per vocabulary entry for every position. It lists **301,989,888** parameters, but the total is still 999,885,952 (3.72 GB). All parameters are trainable and none are non-trainable.\n\nThe arithmetic explains the apparent double count: $262{,}144 \\times 1152 = 301{,}989{,}888$, the size of the embedding matrix. That matrix lives inside the backbone and is *reused* (\"reversed\") as the output projection, the same weight-tying trick the mini-GPT used (p.498). So it is counted only once in the total. And $999{,}885{,}952 \\times 4$ bytes $\\approx 3.72$ GiB, because the model was loaded with `dtype=\"float32\"` (p.509).\n\nThe authors then skip writing a decoding loop like Listing 16.9/16.10 (p.502–503) and use the `generate()` method that comes with the `CausalLM` class. It can be **compiled with different sampling strategies** (section 16.2). With `gemma_lm.compile(sampler=\"greedy\")` and `max_length=40`, the prompt \"A piece of advice\" continues as a quote from \"a former student of mine\" with a stray `<blockquote>` HTML tag. \"How can I make brownies?\" turns into a forum-style post (`[User 0001]`, \"I'm trying to make brownies for my son's birthday party…\").\n\nTwo observations close the page. The output is **much more coherent** than the mini-GPT's, hard to tell apart from the C4 training data. But it is **still not that useful**: vaguely plausible text whose purpose is unclear. The model answers no question; it imitates web documents. p.511 explains why.",
+ "paragraphs": [
+  {
+   "ref": "p510_e04",
+   "excerpt": "Rather than implementing a generation routine ourselves, we can simplify our lives",
+   "what_it_says": "Instead of writing our own generation loop, we can use the `generate()` function that belongs to the `CausalLM` class. It can be compiled with different sampling strategies, the ones explored in section 16.2.",
+   "what_it_means": "In section 16.2 the authors wrote the autoregressive loop by hand: tokenize, predict, take the argmax at the last position, append, repeat (Listing 16.9), then a fixed-length, compiled-friendly variant (Listing 16.10). KerasHub ships that machinery ready-made. `compile()` on a CausalLM takes a `sampler` argument, a string such as `\"greedy\"` or a sampler object, which decides how to pick each next token from the predicted distribution. `generate()` then runs the whole loop, including tokenization and detokenization.",
+   "why_it_matters": "Decoding a 1B-parameter model efficiently is non-trivial: it needs a fixed-shape buffer, a compiled loop and caching of attention keys and values. The built-in method hides this. Choosing a sampler is still the user's job, which is why the book taught sampling strategies first.",
+   "technical_idea": "Beyond the book: KerasHub's generate() compiles the decoding step into the backend graph (XLA for JAX/TF) and uses a key/value cache, so each new token costs one forward pass over a single position rather than re-running the whole sequence. Listing 16.9 re-ran the whole sequence for every token.",
+   "terminology": [
+    {
+     "term": "CausalLM",
+     "meaning": "KerasHub's high-level task model for causal (left-to-right, next-token) language modeling; it bundles a preprocessor (tokenizer) and a backbone."
+    },
+    {
+     "term": "sampler",
+     "meaning": "The strategy used to choose the next token from the model's predicted probability distribution (greedy, random, top-K, beam, …)."
+    }
+   ],
+   "connections": [
+    "p.502: Listing 16.9, the hand-written generate() for mini-GPT.",
+    "p.503: Listing 16.10, the fixed-length compiled generation function.",
+    "p.505: greedy search is introduced as taking the most likely token at each step.",
+    "p.508: beam search and top-K sampling as further sampling strategies."
+   ]
+  },
+  {
+   "ref": "p510_e06",
+   "excerpt": "We can notice a few things right off the bat. First, the",
+   "what_it_says": "First, the output is much more coherent than the mini-GPT's; it would be hard to tell it apart from much of the C4 training data. Second, the output still isn't that useful: the model produces vaguely plausible text, but it's unclear what you could do with it.",
+   "what_it_means": "Scale has bought fluency. The 1B-parameter model trained on about 2 trillion tokens (p.509) writes grammatical, topical English, while the mini-GPT drifted and repeated itself. But both generations read like scraps of web pages: a quotation with an HTML tag, a forum post with a user header. The brownie prompt was treated as the title of a forum thread, not as a question to answer.",
+   "why_it_matters": "This separates two properties people often conflate: *modeling text well* and *being helpful*. Pretraining optimizes the first. Getting the second takes better prompts (p.511), instruction fine-tuning (p.512) or preference tuning such as RLHF (p.519).",
+   "technical_idea": "The artifacts in the samples (`<blockquote>`, `[User 0001]`) show the training distribution through the output. C4 is filtered web text, and greedy decoding returns the single most probable continuation under that distribution, so the most typical web-page structure comes back.",
+   "terminology": [
+    {
+     "term": "C4",
+     "meaning": "The Colossal Clean Crawled Corpus, a large filtered web-text dataset; the book trained the mini-GPT on a subset of it in section 16.2."
+    },
+    {
+     "term": "coherence",
+     "meaning": "Locally and globally consistent, grammatical, on-topic text."
+    }
+   ],
+   "connections": [
+    "p.505: the mini-GPT's greedy output got stuck in repetitive loops.",
+    "p.508: even with top-K sampling the mini-GPT's output had 'little apparent utility', like GPT-1.",
+    "p.511: the explanation: Gemma is 'effectively a fancy autocomplete for the internet'."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "causal_lm_task",
+   "name": "KerasHub CausalLM task",
+   "definition": "A high-level KerasHub model that combines a text preprocessor (tokenizer plus packing/padding) with a Transformer backbone for next-token prediction, and provides fit(), predict() and generate().",
+   "intuition": "A ready-to-use 'language model in a box': text in, next-token probabilities or generated text out.",
+   "technical": "Loaded with `keras_hub.models.CausalLM.from_preset(\"gemma3_1b\", dtype=\"float32\")` (p.509). Its summary shows the preprocessor (tokenizer) and the functional model with inputs `token_ids` and `padding_mask`. `compile(sampler=...)` configures decoding for `generate()`.",
+   "significance": "The same object is used for generation here and for instruction fine-tuning on p.513–517.",
+   "example": "`gemma_lm.compile(sampler=\"greedy\"); gemma_lm.generate(\"A piece of advice\", max_length=40)`",
+   "misconception": "That compile(sampler=...) changes the model's weights or training. It only sets how generate() picks tokens; it can also take optimizer and loss arguments for training.",
+   "related": [
+    "language_model",
+    "keras_model",
+    "tokenization"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "greedy_search",
+   "name": "Greedy search (greedy decoding)",
+   "definition": "A decoding strategy that picks the single most probable next token at each generation step.",
+   "intuition": "Always take the locally best step; deterministic, so the same prompt gives the same output.",
+   "technical": "$x_{t} = \\arg\\max_{v} p_\\theta(v \\mid x_{<t})$ repeated until `max_length`. Selected here with `sampler=\"greedy\"`.",
+   "significance": "Shows the model's single most typical continuation, which is why the outputs look like the most typical web text.",
+   "example": "Both generations on this page are greedy and would be identical on every run.",
+   "misconception": "Greedy decoding finds the most probable *sequence*. It does not: it maximizes each step separately. Beam search (p.508) approximates the most probable sequence better.",
+   "related": [
+    "sampling_strategy",
+    "language_model"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "tied_embeddings",
+   "name": "Tied (reversible) token embedding",
+   "definition": "Using the same matrix both to embed input token IDs into vectors and, transposed, to project the final hidden states back to vocabulary logits.",
+   "intuition": "The vector that represents a word on the way in is also the 'template' the output is compared with when deciding whether to predict that word.",
+   "technical": "Embedding matrix $E \\in \\mathbb{R}^{V\\times d}$ with $V=262{,}144$, $d=1152$. Input: $h_0 = E[\\text{ids}]$; output logits: $z = h_L E^\\top \\in \\mathbb{R}^{V}$. KerasHub's `ReversibleEmbedding` layer implements both directions.",
+   "significance": "With a 262k vocabulary the embedding is 302M parameters, about 30% of the model. Tying avoids a second matrix of that size.",
+   "example": "The summary lists token_embedding at 301,989,888 parameters, yet the total (999,885,952) equals the backbone alone, because the matrix is shared.",
+   "misconception": "That the model has 999.9M + 302M ≈ 1.3B parameters. The summary rows overlap; the total is counted once.",
+   "related": [
+    "embedding",
+    "transformer"
+   ],
+   "source": "inference"
+  },
+  {
+   "id": "language_model",
+   "name": "Pretrained language model as autocomplete",
+   "definition": "A model trained only to predict the next token over a large corpus; generation continues the prompt with text that is probable under that corpus distribution.",
+   "intuition": "Not an assistant but a very good imitator of documents.",
+   "technical": "Gemma was pretrained on ~2 trillion tokens (p.509) with the same objective as the mini-GPT.",
+   "significance": "Explains why the outputs here are coherent yet unhelpful.",
+   "example": "\"How can I make brownies?\" continues as a forum post, not a recipe.",
+   "misconception": "That fluent output implies understanding of the request.",
+   "related": [
+    "transformer",
+    "instruction_fine_tuning"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Size of the token embedding matrix",
+   "latex": "|E| = V \\times d = 262{,}144 \\times 1{,}152 = 301{,}989{,}888",
+   "source_text": "Vocab size: 262,144; Output Shape (None, None, 1152); token_embedding Param # 301,989,888",
+   "variables": [
+    {
+     "symbol": "V",
+     "meaning": "Vocabulary size of the Gemma 3 tokenizer (262,144)"
+    },
+    {
+     "symbol": "d",
+     "meaning": "Hidden size of the backbone, the last dimension of its output (1152)"
+    },
+    {
+     "symbol": "|E|",
+     "meaning": "Number of entries in the embedding matrix"
+    }
+   ],
+   "operations": "One d-dimensional vector per vocabulary entry, so the parameter count is the product.",
+   "purpose": "Checks the summary's numbers against each other and shows how large the vocabulary layer is.",
+   "interpretation": "About 30% of Gemma 3 1B's parameters ($301.99\\text{M}/999.89\\text{M}\\approx 0.302$) sit in the embedding table, because the vocabulary is huge.",
+   "intuition": "A big multilingual vocabulary costs a lot of parameters even in a 'small' model.",
+   "numerical_example": "$262{,}144 \\times 1{,}152 = 262{,}144 \\times 1{,}000 + 262{,}144\\times 152 = 262{,}144{,}000 + 39{,}845{,}888 = 301{,}989{,}888$.",
+   "source": "ai_explanation",
+   "book_ref": "p.510"
+  },
+  {
+   "id": "m2",
+   "title": "Memory of float32 weights",
+   "latex": "\\text{bytes} = N \\times 4 = 999{,}885{,}952 \\times 4 \\approx 4.0\\times 10^{9}\\ \\text{B} \\approx 3.72\\ \\text{GiB}",
+   "source_text": "Total params: 999,885,952 (3.72 GB)",
+   "variables": [
+    {
+     "symbol": "N",
+     "meaning": "Total number of parameters"
+    },
+    {
+     "symbol": "4",
+     "meaning": "Bytes per float32 value (the model was loaded with dtype=\"float32\", p.509)"
+    }
+   ],
+   "operations": "Multiply by bytes per parameter, then divide by $2^{30}$ to get GiB (Keras prints 'GB' but computes binary gigabytes).",
+   "purpose": "Explains the 3.72 GB figure, which p.514 uses for the out-of-memory argument.",
+   "interpretation": "Just holding the weights takes ~3.7 GB; training needs several times more (p.514).",
+   "intuition": "Each parameter is one 4-byte number.",
+   "numerical_example": "$999{,}885{,}952\\times 4 = 3{,}999{,}543{,}808$ bytes; $/\\,1{,}073{,}741{,}824 \\approx 3.725$. In bfloat16 (2 bytes, p.521) it would be ~1.86 GiB.",
+   "source": "ai_explanation",
+   "book_ref": "p.514"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Gemma 3 1B CausalLM summary (continuation of gemma_lm.summary() from p.509)",
+   "original_code": "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n┃ Layer (type)                                 ┃                        Config ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩\n│ gemma3_tokenizer (Gemma3Tokenizer)           │           Vocab size: 262,144 │\n└──────────────────────────────────────────────┴───────────────────────────────┘\nModel: \"gemma3_causal_lm\"\n┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓\n┃ Layer (type)          ┃ Output Shape      ┃     Param # ┃ Connected to       ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩\n│ padding_mask          │ (None, None)      │           0 │ -                  │\n│ (InputLayer)          │                   │             │                    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ token_ids             │ (None, None)      │           0 │ -                  │\n│ (InputLayer)          │                   │             │                    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ gemma3_backbone       │ (None, None,      │ 999,885,952 │ padding_mask[0][0… │\n│ (Gemma3Backbone)      │ 1152)             │             │ token_ids[0][0]    │\n├───────────────────────┼───────────────────┼─────────────┼────────────────────┤\n│ token_embedding       │ (None, None,      │ 301,989,888 │ gemma3_backbone[0… │\n│ (ReversibleEmbedding) │ 262144)           │             │                    │\n└───────────────────────┴───────────────────┴─────────────┴────────────────────┘\n Total params: 999,885,952 (3.72 GB)\n Trainable params: 999,885,952 (3.72 GB)\n Non-trainable params: 0 (0.00 B)",
+   "language": "text",
+   "what_it_does": "Shows the structure of the pretrained Gemma CausalLM: the preprocessor's tokenizer, then the functional model graph from the two inputs through the backbone to the vocabulary logits.",
+   "line_explanations": [
+    {
+     "lines": "1-5",
+     "explanation": "The preprocessor table (its 'Preprocessor: \"gemma3_causal_lm_preprocessor\"' header is on p.509). It holds one layer, the Gemma 3 tokenizer, with 262,144 vocabulary entries."
+    },
+    {
+     "lines": "6",
+     "explanation": "Name of the Keras functional model wrapped by the CausalLM task."
+    },
+    {
+     "lines": "10-15",
+     "explanation": "Two inputs, `padding_mask` and `token_ids`, both `(None, None)`: batch size and sequence length are unspecified, so any length works. They have no parameters."
+    },
+    {
+     "lines": "16-18",
+     "explanation": "The Gemma3Backbone (embedding lookup plus all Transformer decoder blocks) takes both inputs and returns one 1152-dim hidden vector per token. Its 999,885,952 parameters include the embedding matrix."
+    },
+    {
+     "lines": "19-21",
+     "explanation": "The ReversibleEmbedding applied in reverse: hidden states times the transposed embedding matrix give 262,144 logits per position. Its 301,989,888 parameters (262,144 × 1152) are the same weights already counted in the backbone."
+    },
+    {
+     "lines": "22-24",
+     "explanation": "Totals: ~1B parameters, 3.72 GB in float32, all trainable. This is what p.514 uses to argue that full fine-tuning runs out of memory."
+    }
+   ],
+   "inputs_outputs": "Inputs: integer token IDs and a 0/1 padding mask, each (batch, seq_len). Output: logits (batch, seq_len, 262144), one next-token distribution per position.",
+   "algorithm": "Standard decoder-only Transformer: embed tokens → stack of causal self-attention + feed-forward blocks → project to vocabulary with the tied embedding.",
+   "theory_link": "Same layout as the mini-GPT of section 16.2, including the weight-tying trick of p.498, at about 1,000× larger scale.",
+   "parameters": [
+    {
+     "name": "Vocab size 262,144",
+     "role": "Number of distinct tokens; sets the size of the output distribution and of the embedding table."
+    },
+    {
+     "name": "Hidden size 1152",
+     "role": "Width of the representation each token carries through the backbone."
+    }
+   ],
+   "pitfalls": [
+    "Do not add the token_embedding row to the backbone row; the weights are shared.",
+    "Keras's 'GB' here means GiB (2^30 bytes)."
+   ],
+   "illustrative_code": "# AI-written check of the numbers in the summary\nV, d = 262_144, 1152\nprint(V * d)                    # 301989888 -> token_embedding row\nN = 999_885_952\nprint(N * 4 / 2**30)            # ~3.72 -> 'GB' in the summary (float32)\nprint((N - V * d) / 1e6)        # ~697.9M parameters outside the embedding"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Greedy generation with CausalLM.generate()",
+   "original_code": ">>> gemma_lm.compile(sampler=\"greedy\")\n>>> gemma_lm.generate(\"A piece of advice\", max_length=40)\nA piece of advice from a former student of mine:\n\n<blockquote>\"I'm not sure if you've heard of it, but I've been told that the\nbest way to learn\n>>> gemma_lm.generate(\"How can I make brownies?\", max_length=40)\nHow can I make brownies?\n\n[User 0001]\n\nI'm trying to make brownies for my son's birthday party. I've never made\nbrownies before.",
+   "language": "python",
+   "what_it_does": "Configures greedy decoding, then generates continuations of up to 40 tokens (prompt included) for two prompts.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "`compile(sampler=\"greedy\")` sets the decoding strategy: always pick the argmax token."
+    },
+    {
+     "lines": "2-6",
+     "explanation": "`generate()` tokenizes the prompt, runs the autoregressive loop and detokenizes. The result is the prompt followed by its continuation, here a quotation with a stray HTML `<blockquote>` tag, cut off mid-sentence when the 40-token limit is reached."
+    },
+    {
+     "lines": "7-12",
+     "explanation": "The question is continued as if it were a forum thread title: a `[User 0001]` header and a post asking for help. It is typical web text, not an answer."
+    }
+   ],
+   "inputs_outputs": "Input: a Python string prompt. Output: a string with the prompt plus generated text; total length capped at max_length tokens.",
+   "algorithm": "Greedy autoregressive decoding: repeatedly append $\\arg\\max_v p(v\\mid\\text{tokens so far})$ until max_length (or an end token).",
+   "theory_link": "The automated version of Listings 16.9/16.10 (p.502–503), with the sampler chosen as in section 16.2.4 (p.504).",
+   "parameters": [
+    {
+     "name": "sampler",
+     "role": "Decoding strategy; \"greedy\" is deterministic. Other KerasHub samplers include random, top-K, top-P and beam."
+    },
+    {
+     "name": "max_length",
+     "role": "Maximum total sequence length in tokens, prompt included, which is why outputs stop mid-sentence."
+    }
+   ],
+   "pitfalls": [
+    "max_length counts the prompt tokens too, not just new tokens.",
+    "Greedy outputs are deterministic, so rerunning will not give variety; use a stochastic sampler for that."
+   ],
+   "illustrative_code": "# AI-written: trying another sampler from section 16.2.4\nimport keras_hub\ngemma_lm.compile(sampler=keras_hub.samplers.TopKSampler(k=5))\nprint(gemma_lm.generate(\"How can I make brownies?\", max_length=40))"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why the summary seems to count the embedding twice",
+   "kind": "breakdown",
+   "body": "Keras prints a row for every layer called in the functional graph. `token_embedding` is a layer *owned by the backbone*: the backbone calls it in the forward direction to embed `token_ids`. The CausalLM then calls the same layer object again with `reverse=True` to compute logits. Two calls, one set of weights. The 'Total params' line deduplicates weights, so it equals the backbone count. Without tying, Gemma 3 1B would need another 302M parameters (≈1.2 GB in float32) for a separate output layer.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Reading the two outputs as samples of the web",
+   "kind": "application",
+   "body": "Try to name the kind of web page each output resembles. The first looks like a blog or forum post that quotes someone (with HTML left over from crawling). The second looks like a Q&A forum (a thread title, then a numbered user's post). A pretrained LM's continuation tells you which documents in its training data your prompt most resembles. That is the idea p.511 builds on: if you want a recipe, make the prompt look like the start of a recipe.",
+   "source": "inference"
+  },
+  {
+   "title": "Scale comparison with the mini-GPT",
+   "kind": "numerical",
+   "body": "p.509 says Gemma was trained on roughly 2 trillion tokens, 2,000× the mini-GPT's training data. p.508 says reaching today's generative quality would need at least 100× more parameters and 1,000× more training steps than the mini-GPT. This page shows the result of that scale-up: same objective and architecture family, far more fluent text.",
+   "source": "book"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Shape flow through gemma3_causal_lm",
+   "why": "The summary on this page lists the shapes: token IDs (None, None) → backbone hidden states (None, None, 1152) → logits (None, None, 262144). Here the batch is 1 and the prompt is 40 tokens long (max_length=40).",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "token_ids",
+      "shape": [
+       1,
+       40
+      ]
+     },
+     {
+      "op": "gemma3_backbone",
+      "shape": [
+       1,
+       40,
+       1152
+      ]
+     },
+     {
+      "op": "token_embedding (reverse)",
+      "shape": [
+       1,
+       40,
+       262144
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "What generate() does under the hood",
+   "why": "The page replaces the hand-written loop of section 16.2 with CausalLM.generate(); this shows the steps it automates.",
+   "mermaid": "flowchart LR\n P[\"prompt string\"] --> T[\"Gemma3Tokenizer\\n(vocab 262,144)\"]\n T --> B[\"gemma3_backbone\\n(1152-dim states)\"]\n B --> L[\"token_embedding reversed\\n→ 262,144 logits\"]\n L --> S[\"sampler = greedy\\nargmax\"]\n S -->|append token| B\n S -->|max_length reached| D[\"detokenize → text\"]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Gemma 3 1B has about 1.3 billion parameters because the backbone and token_embedding rows add up to that.",
+   "correction": "The token embedding is part of the backbone and is reused for output logits; the total, 999,885,952, counts it once."
+  },
+  {
+   "claim": "Because Gemma's output is fluent, it understands and answers the question.",
+   "correction": "The brownie prompt was continued as a forum post. A pretrained LM predicts likely text; the book stresses that the output is 'still not that useful'."
+  },
+  {
+   "claim": "max_length=40 means 40 new tokens.",
+   "correction": "It is the total length including the prompt, which is why the outputs are short and cut off mid-sentence."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 509,
+    "note": "Listing 16.11 loads gemma3_1b with dtype=\"float32\" and starts the summary shown here."
+   },
+   {
+    "page": 502,
+    "note": "Hand-written greedy generation loop (Listing 16.9) that generate() replaces."
+   },
+   {
+    "page": 505,
+    "note": "Greedy search defined; mini-GPT output gets stuck in loops."
+   },
+   {
+    "page": 498,
+    "note": "Weight-tying of input embeddings and output projection, which ReversibleEmbedding implements."
+   }
+  ],
+  "later": [
+   {
+    "page": 511,
+    "note": "Why the output isn't useful (autocomplete for the internet) and how prompting helps."
+   },
+   {
+    "page": 512,
+    "note": "Instruction fine-tuning to make the model a useful conversation partner."
+   },
+   {
+    "page": 514,
+    "note": "The 3.7 GB weight size from this summary drives the out-of-memory analysis."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 504,
+    "note": "Section 16.2.4 on sampling strategies."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 503,
+    "note": "Listing 16.10, compiled fixed-length generation."
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "Gemma 3 1B: 262,144-token vocabulary, 1152-dim hidden states, 999,885,952 parameters (3.72 GB in float32).",
+  "The token_embedding (262,144 × 1152 = 301,989,888 params) is shared between input and output, so it is not double-counted.",
+  "CausalLM.compile(sampler=...) chooses the decoding strategy; generate(prompt, max_length=...) runs the whole loop.",
+  "Pretrained Gemma is far more coherent than mini-GPT, but it continues text like a web document rather than helping."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "math",
+   "question": "Using the summary, verify the token_embedding parameter count and the 3.72 GB figure for the total.",
+   "options": [],
+   "answer": "262,144 × 1152 = 301,989,888; 999,885,952 × 4 bytes = 3,999,543,808 bytes ≈ 3.72 GiB.",
+   "explanation": "The embedding holds one 1152-dim vector per vocabulary token. The model is in float32 (4 bytes per parameter), and Keras reports binary gigabytes.",
+   "page_refs": [
+    510,
+    509
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "mcq",
+   "question": "Why does the total parameter count equal the gemma3_backbone count even though token_embedding lists 301,989,888 parameters?",
+   "options": [
+    "The token_embedding is frozen and so is excluded from the total",
+    "The token embedding matrix is part of the backbone and is reused to compute output logits",
+    "Keras only counts parameters of the first layer after the inputs",
+    "The 301,989,888 parameters are optimizer state, not weights"
+   ],
+   "answer": "The token embedding matrix is part of the backbone and is reused to compute output logits",
+   "explanation": "ReversibleEmbedding ties input and output embeddings (as on p.498), so the shared weights are counted once. It is not frozen (non-trainable is 0), Keras counts all layers, and optimizer state is not shown in summaries.",
+   "page_refs": [
+    510,
+    498
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "short",
+   "question": "What does gemma_lm.compile(sampler=\"greedy\") control, and what would change if you used a top-K sampler?",
+   "options": [],
+   "answer": "It sets how generate() picks each next token: greedy takes the argmax, so output is deterministic. A top-K sampler would sample randomly among the K most likely tokens, giving varied output for the same prompt.",
+   "explanation": "The page says generate() can be compiled with the sampling strategies explored in section 16.2 (greedy, random, top-K; p.505, p.508).",
+   "page_refs": [
+    510,
+    508
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "The prompt \"How can I make brownies?\" produced a forum post rather than a recipe. Explain this in terms of the training objective.",
+   "options": [],
+   "answer": "Gemma was pretrained only to predict the next token of web text. In that data, a question like this is most often followed by a forum-style post, so greedy decoding reproduces that typical continuation instead of answering.",
+   "explanation": "The page notes the output resembles C4 training data but is 'still not that useful'; p.511 calls the model 'a fancy autocomplete for the internet'.",
+   "page_refs": [
+    510,
+    511
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "What does the output shape (None, None, 262144) of token_embedding represent?",
+   "options": [
+    "A one-hot encoding of the input tokens",
+    "Logits over the full vocabulary for every position in every sequence of the batch",
+    "The attention weights between all pairs of tokens",
+    "The 1152-dim hidden state repeated 262,144 times"
+   ],
+   "answer": "Logits over the full vocabulary for every position in every sequence of the batch",
+   "explanation": "Batch and length are variable (None); the last axis has one score per vocabulary entry, giving a next-token distribution after softmax. It is not an input encoding, not attention (which would be seq×seq), and not a repeated hidden state.",
+   "page_refs": [
+    510
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "self",
+   "question": "Can you list which parts of the mini-GPT generation code (Listings 16.9/16.10) are now handled by generate()?",
+   "options": [],
+   "answer": "Tokenizing the prompt, padding to a fixed length, running the model, selecting the next token at the last position with the sampler, appending it, looping until max_length, and detokenizing.",
+   "explanation": "Compare p.502–503 with the one-line generate() call on this page.",
+   "page_refs": [
+    502,
+    503,
+    510
+   ]
+  }
+ ]
+}

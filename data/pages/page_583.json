@@ -1,0 +1,334 @@
+{
+ "page_id": "page_583",
+ "pdf_page": 583,
+ "printed_page": "559",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:00:00Z",
+  "confidence": "high",
+  "review_flags": [
+   "p583_e08 says gradient descent wouldn't run in float16 or bfloat16 'since we couldn't represent small gradient updates of around 1e-5 or 1e-6'. Both formats can represent such magnitudes on their own (bfloat16 down to ~1e-38; float16 to ~6e-8 with subnormals). The real problem is that adding such an update to a weight of order 1 rounds back to the same weight (resolution ~1e-3 for float16, ~8e-3 for bfloat16). For float16 specifically, very small *gradients* can also underflow, which is what loss scaling (p.584) addresses. The notes give the precise explanation."
+  ],
+  "extraction_quality": "Table 18.1 extracted in pieces (caption, header 'dtype' as figure caption, column names as a code element, rows as table_text) and reconstructed from the image. Book typos 'bfloa16' and 'those layer' are noted in paragraph notes only. The last paragraph continues on p.584."
+ },
+ "overview": {
+  "title": "float16 vs bfloat16 table; mixed-precision training",
+  "chapter": "18 Best practices for the real world",
+  "section": "18.3 Speeding up training and inference with lower-precision computation",
+  "subsection": "18.3.4 Using loss scaling with mixed precision",
+  "main_topic": "Table 18.1 (bit layouts of float16 and bfloat16), mixed-precision training with the \"mixed_float16\" policy, variable_dtype vs compute_dtype, opting layers out, and the start of loss scaling",
+  "central_idea": "Training cannot run purely in 16-bit because small weight updates would be lost. Mixed precision computes most of the forward pass in float16 while keeping variables, and therefore updates, in float32: layers get compute_dtype=float16 and variable_dtype=float32. Unstable operations like softmax and crossentropy can stay in float32 via dtype=\"float32\". Because gradients are still float16, small ones may underflow, which motivates loss scaling.",
+  "importance": "Mixed precision is the standard way to train modern models quickly, and was already used for the mini-GPT in chapter 16. Knowing the split between variable and compute dtypes lets you use it safely and debug numerical problems.",
+  "learning_objectives": [
+   "Read table 18.1 and compare float16 and bfloat16 bit allocations",
+   "Explain why pure 16-bit training fails and what mixed precision changes",
+   "Enable mixed precision with keras.config.set_dtype_policy(\"mixed_float16\")",
+   "Distinguish a layer's variable_dtype from its compute_dtype",
+   "Keep numerically sensitive layers in float32 with dtype=\"float32\"",
+   "Explain why float16 gradients can underflow (motivation for loss scaling)"
+  ],
+  "prerequisites": [
+   "Float resolution and float16/bfloat16 (p.582)",
+   "Floating-point encoding (p.581)",
+   "Backpropagation and optimizer updates (p.64)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Table 18.1** compares the two 16-bit formats: `float16` has 5 exponent bits, 10 mantissa bits and 1 sign bit, while `bfloat16` has 8 exponent bits, 7 mantissa bits and 1 sign bit.\n\n**18.3.3 Mixed-precision training.** A 16-bit default policy is great for inference, but training adds a complication: gradient descent wouldn't run smoothly in `float16` or `bfloat16`, because small updates of around 1e-5 or 1e-6, which are common, can't be represented. More precisely, they are lost when added to weights of order 1. The solution is a hybrid: **mixed-precision training** uses 16-bit computation where precision isn't an issue and 32-bit values where numerical stability matters, notably gradients and variable updates. This keeps most of the 16-bit speed without meaningfully hurting model quality. You enable it with `keras.config.set_dtype_policy(\"mixed_float16\")`.\n\nMost of the forward pass then runs in `float16`, except numerically unstable operations like softmax, while the weights are stored and updated in `float32`. `float16` gradients are cast to `float32` before they update the `float32` variables.\n\nKeras layers have a `variable_dtype` and a `compute_dtype`, both `float32` by default. Under mixed precision, most layers switch `compute_dtype` to `float16`: they cast inputs to `float16` and compute with half-precision copies of the weights. `variable_dtype` stays `float32`, so the optimizer can apply accurate float32 updates. Softmax and crossentropy can be unstable in float16, so to opt a layer out you pass `dtype=\"float32\"` to its constructor.\n\n**18.3.4 Using loss scaling with mixed precision** begins: gradients can become very small, and under mixed precision they remain in `float16` like the forward pass, so the limited range of representable numbers (continued on p.584) can round small gradients to zero.",
+ "paragraphs": [
+  {
+   "ref": "p583_e06",
+   "excerpt": "Exponent bits 5 8 Mantissa bits 10 7 Sign bits 1 1",
+   "what_it_says": "Table 18.1: float16 has 5 exponent, 10 mantissa and 1 sign bit; bfloat16 has 8 exponent, 7 mantissa and 1 sign bit.",
+   "what_it_means": "Both total 16 bits; they differ in how they divide them between range (exponent) and resolution (mantissa). bfloat16's 8 exponent bits match float32, so it covers the same range (~1e-38 to ~3e38). float16's 5 bits limit it to a maximum of 65,504 and a smallest normal of ~6.1e-5.",
+   "why_it_matters": "The table explains the behavior seen in practice: float16 needs loss scaling to avoid gradient underflow, while bfloat16 usually does not, but bfloat16 is about 8x coarser in resolution.",
+   "terminology": [
+    {"term": "exponent bits", "meaning": "Determine the range of magnitudes."},
+    {"term": "mantissa bits", "meaning": "Determine the relative resolution within each power-of-two interval."}
+   ],
+   "connections": ["p.582: bfloat16 introduced as 8 exponent / 7 mantissa bits", "p.581: float32 uses 1 / 8 / 23 bits"]
+  },
+  {
+   "ref": "p583_e08",
+   "excerpt": "Setting your default float precision to 16 bits is a great way to",
+   "what_it_says": "16-bit default precision is good for inference, but training is harder: gradient descent wouldn't run smoothly in float16 or bfloat16 because small gradient updates around 1e-5 or 1e-6 couldn't be represented. (The book writes 'bfloa16', a typo for bfloat16.)",
+   "what_it_means": "The precise problem is the update w ← w − Δw. If |Δw| is below half the spacing between representable numbers around w (≈ |w|·2^-11 for float16, |w|·2^-8 for bfloat16), the result rounds back to w. For a weight near 0.5, float16 can't register updates below ~2.4e-4, and bfloat16 below ~2e-3. Updates of 1e-6 are therefore lost, even though each format could store 1e-6 as a standalone value (see the review flag).",
+   "why_it_matters": "Without fixing this, a 16-bit model trains erratically or stops improving, with no error message.",
+   "technical_idea": "This rounding is called 'swamping' or stagnation. Beyond the book: besides keeping float32 master weights, some low-precision optimizers use stochastic rounding or Kahan-style compensated summation to keep the lost low-order bits.",
+   "terminology": [
+    {"term": "update stagnation", "meaning": "When w + Δw == w in finite precision because Δw is too small relative to w."}
+   ],
+   "connections": ["p.582: float16 resolution ~1e-3 and typical updates ~1e-6"]
+  },
+  {
+   "ref": "p583_e09",
+   "excerpt": "You can, however, use a hybrid approach: that’s what mixed-precision training is about.",
+   "what_it_says": "Mixed-precision training is a hybrid: 16-bit computation where precision isn't an issue, 32-bit values elsewhere for numerical stability, particularly gradients and variable updates. Keeping the precision-sensitive parts in full precision gives most of the 16-bit speed without meaningfully affecting model quality. Enable it with `keras.config.set_dtype_policy(\"mixed_float16\")`.",
+   "what_it_means": "Matmuls and convolutions are where nearly all the FLOPs and memory traffic go, and they tolerate 16-bit inputs, especially when hardware accumulates in float32. The optimizer step is cheap but sensitive, so it runs in float32. The extra float32 copy of the weights costs some memory, but activations, usually the bigger share, are halved.",
+   "why_it_matters": "This is the standard way to train on modern accelerators. Chapter 16's mini-GPT turned it on (p.499).",
+   "technical_idea": "Beyond the book: \"mixed_bfloat16\" is the analogous policy for bfloat16 and is preferred on TPUs; it typically doesn't need loss scaling.",
+   "terminology": [
+    {"term": "mixed precision", "meaning": "Training with 16-bit computation and 32-bit variables/updates."},
+    {"term": "mixed_float16", "meaning": "Keras dtype policy: compute in float16, variables in float32."}
+   ],
+   "connections": ["p.499: mini-GPT used mixed precision with the explanation deferred to chapter 18", "p.582: the pure float16 policy for inference"]
+  },
+  {
+   "ref": "p583_e11",
+   "excerpt": "Typically, most of the forward pass of the model will be done in",
+   "what_it_says": "Most of the forward pass runs in float16, except numerically unstable operations like softmax, while weights are stored and updated in float32. float16 gradients are cast to float32 before updating the float32 variables.",
+   "what_it_means": "Data flow: float32 master weight → cast to float16 → float16 forward/backward → float16 gradient → cast to float32 → float32 optimizer update of the master weight. The cast back to float32 is what lets a 1e-6 step change a weight near 1.",
+   "why_it_matters": "This makes it clear which tensors live in which precision, which helps when debugging NaNs or stalled training.",
+   "technical_idea": "Softmax involves exponentials, which overflow float16 above e^11 ≈ 65,504, and normalizing sums. Even with max-subtraction, float32 is safer, especially for large vocabularies.",
+   "terminology": [
+    {"term": "master weights", "meaning": "The float32 copy of the variables that the optimizer updates (term not used in the book)."}
+   ],
+   "connections": ["p.64: backpropagation and gradient updates"]
+  },
+  {
+   "ref": "p583_e12",
+   "excerpt": "Keras layers have a variable_dtype and a compute_dtype attribute. By default, both of",
+   "what_it_says": "Keras layers have `variable_dtype` and `compute_dtype`, both float32 by default. Under mixed precision most layers switch compute_dtype to float16: they cast inputs to float16 and compute with half-precision copies of the weights. variable_dtype stays float32, so weights get accurate float32 updates. Softmax and crossentropy may be unstable in float16; to opt a layer out, pass `dtype=\"float32\"` to its constructor. (The book's 'those layer' should read 'those layers'.)",
+   "what_it_means": "The dtype policy sets two dtypes per layer. The automatic casting of inputs means you can mix float16 and float32 layers freely. Common practice is to make the final classification layer (or its softmax activation) float32, e.g. `layers.Dense(10, activation=\"softmax\", dtype=\"float32\")`, so that model outputs and the loss are computed in full precision.",
+   "why_it_matters": "This gives you precise per-layer control: global speed, with local exceptions where numerics demand it.",
+   "technical_idea": "You can check a layer with `layer.compute_dtype` and `layer.variable_dtype`, or `layer.dtype_policy` (beyond the book).",
+   "terminology": [
+    {"term": "variable_dtype", "meaning": "Dtype in which a layer stores its weights."},
+    {"term": "compute_dtype", "meaning": "Dtype in which a layer casts inputs and performs computation."}
+   ],
+   "connections": ["p.582: keras.config.set_dtype_policy for the global default"]
+  },
+  {
+   "ref": "p583_e14",
+   "excerpt": "During training, gradients can become very small. When using mixed precision, your gradients",
+   "what_it_says": "Gradients can become very small during training. Under mixed precision they remain in float16, like the forward pass, so the limited range of representable numbers (continued on p.584) can round small gradients to zero.",
+   "what_it_means": "This is a different problem from the one above. Even before the update, float16 cannot hold gradient values below ~6e-8 (subnormal limit), and below ~6.1e-5 it loses precision. Activation gradients deep in the network often fall in that range. On p.584 the authors scale the loss up so the gradients scale up too, then unscale before the update.",
+   "why_it_matters": "Without loss scaling, float16 mixed precision can quietly zero out learning signals for parts of the network.",
+   "technical_idea": "bfloat16's 8-bit exponent gives float32-like range, which is why loss scaling is generally unnecessary with mixed_bfloat16 (beyond the book).",
+   "terminology": [
+    {"term": "underflow", "meaning": "A value too small in magnitude for the format, rounded to zero (or to a subnormal)."},
+    {"term": "loss scaling", "meaning": "Multiplying the loss by a large factor before backpropagation to keep float16 gradients representable."}
+   ],
+   "connections": ["p.584: loss_scale_factor and LossScaleOptimizer"]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "mixed_precision",
+   "name": "Mixed-precision training",
+   "definition": "Training with most computation in 16-bit floats while storing and updating variables in float32.",
+   "intuition": "Do the heavy, error-tolerant work quickly and roughly, and keep the bookkeeping exact.",
+   "technical": "`keras.config.set_dtype_policy(\"mixed_float16\")`: compute_dtype=float16, variable_dtype=float32; gradients are cast to float32 before the update.",
+   "significance": "Most of the 16-bit speedup without meaningful quality loss; the standard for modern training.",
+   "example": "The mini-GPT in chapter 16 (p.499).",
+   "misconception": "It does not store weights in float16; the stored variables remain float32.",
+   "related": ["float16", "bfloat16", "loss_scaling", "dtype_policy"],
+   "source": "book"
+  },
+  {
+   "id": "variable_vs_compute_dtype",
+   "name": "variable_dtype vs compute_dtype",
+   "definition": "A Keras layer's storage dtype for weights and its dtype for computation, which can differ.",
+   "intuition": "The safe keeps the exact amounts, and the cashier works with rounded copies.",
+   "technical": "Both float32 by default. Under mixed_float16, compute becomes float16 and the layer casts inputs and weight copies to float16.",
+   "significance": "This split is what makes mixed precision possible.",
+   "example": "`Dense(10, activation=\"softmax\", dtype=\"float32\")` opts out of float16 compute.",
+   "misconception": "Under mixed precision, not every layer computes in float16. Layers given dtype=\"float32\" do not.",
+   "related": ["mixed_precision", "keras_layer"],
+   "source": "book"
+  },
+  {
+   "id": "loss_scaling",
+   "name": "Loss scaling (introduced)",
+   "definition": "Multiplying the loss by a large factor so float16 gradients don't underflow, then dividing the gradients by the same factor before the update.",
+   "intuition": "Magnify a faint signal before it passes through a coarse filter, then shrink it back.",
+   "technical": "Gradients are proportional to the loss, so scaling the loss scales every gradient (p.584).",
+   "significance": "Required for robust float16 mixed-precision training.",
+   "example": "Covered with loss_scale_factor and LossScaleOptimizer on p.584.",
+   "misconception": "Loss scaling does not change the optimization problem. The gradients are unscaled before the update.",
+   "related": ["mixed_precision", "float16"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Mixed-precision update step",
+   "latex": "\\begin{aligned} \\hat W &= \\operatorname{cast}_{16}(W_{32}) \\\\ g_{16} &= \\nabla_{\\hat W}\\, L\\big(f(x_{16}; \\hat W)\\big) \\\\ W_{32} &\\leftarrow W_{32} - \\eta\\, \\operatorname{cast}_{32}(g_{16}) \\end{aligned}",
+   "source_text": "most of the forward pass of the model will be done in float16 ... while the weights of the model will be stored and updated in float32. Your float16 gradients will be cast to float32 before updating the float32 variables.",
+   "variables": [
+    {"symbol": "W_{32}", "meaning": "Weights stored in float32 (variable_dtype)."},
+    {"symbol": "\\hat W", "meaning": "Half-precision copy used for computation (compute_dtype)."},
+    {"symbol": "x_{16}", "meaning": "Layer inputs cast to float16."},
+    {"symbol": "g_{16}", "meaning": "Gradient computed in float16."},
+    {"symbol": "\\eta", "meaning": "Learning rate."}
+   ],
+   "operations": "Casting, forward pass, gradient, SGD-style update (the optimizer may be Adam etc.).",
+   "purpose": "Shows exactly which steps are 16-bit and which 32-bit.",
+   "interpretation": "Only the cheap, sensitive final update happens in float32, and that is enough to keep tiny updates.",
+   "intuition": "Compute roughly, accumulate exactly.",
+   "numerical_example": "$W_{32} = 0.5$, $\\eta g = 10^{-6}$: in float32 the result is $0.499999$ (spacing near 0.5 is ~6e-8), so the update is kept. In float16 the spacing near 0.5 is ~4.9e-4, so it would stay 0.5.",
+   "source": "book",
+   "book_ref": "p.583"
+  },
+  {
+   "id": "m2",
+   "title": "Why loss scaling preserves the gradient direction",
+   "latex": "\\nabla_W (s\\,L) = s\\,\\nabla_W L \\quad\\Rightarrow\\quad g = \\frac{1}{s}\\,\\nabla_W (s\\,L)",
+   "source_text": "Gradient values are proportional to the loss value, so to encourage gradients to be larger, a simple trick is to multiply the loss by a large scalar factor. (p.584)",
+   "variables": [
+    {"symbol": "s", "meaning": "Loss scale factor (e.g. 1024)."},
+    {"symbol": "L", "meaning": "Loss."},
+    {"symbol": "g", "meaning": "True gradient recovered after unscaling (in float32)."}
+   ],
+   "operations": "Linearity of differentiation.",
+   "purpose": "Previews the fix for the float16 gradient-underflow problem introduced at the bottom of this page.",
+   "interpretation": "Scaling shifts gradients up into float16's representable range, and dividing afterwards (in float32) restores their true values.",
+   "intuition": "Turn up the volume before a lossy channel, turn it down after.",
+   "numerical_example": "A gradient of $10^{-8}$ underflows to 0 in float16. With $s = 1024$ it becomes $\\approx 1.0\\times10^{-5}$, which is representable, and dividing by 1024 in float32 recovers $\\approx10^{-8}$.",
+   "source": "book",
+   "book_ref": "p.584"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Table 18.1 column headers",
+   "original_code": "float16\nbfloat16",
+   "language": "text",
+   "what_it_does": "These are the column labels of table 18.1, set in code font. They were extracted as a code element.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "The two 16-bit dtypes compared: float16 (1/5/10 bits) and bfloat16 (1/8/7 bits)."}
+   ],
+   "inputs_outputs": "n/a",
+   "algorithm": "n/a",
+   "theory_link": "Range vs. resolution trade-off between the two 16-bit formats.",
+   "parameters": [],
+   "pitfalls": ["Not executable code; part of a table."]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Enabling mixed precision",
+   "original_code": "import keras\nkeras.config.set_dtype_policy(\"mixed_float16\")",
+   "language": "python",
+   "what_it_does": "Sets the global dtype policy so newly created layers compute in float16 but store variables in float32.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Import Keras."},
+    {"lines": "2", "explanation": "mixed_float16: compute_dtype=float16, variable_dtype=float32 for subsequently built layers."}
+   ],
+   "inputs_outputs": "Global configuration; affects later model construction.",
+   "algorithm": "See math m1.",
+   "theory_link": "Combines 16-bit speed with 32-bit update accuracy.",
+   "parameters": [
+    {"name": "\"mixed_float16\"", "role": "Policy name; \"mixed_bfloat16\" is the bfloat16 counterpart (not on this page)."}
+   ],
+   "pitfalls": [
+    "Set it before building the model.",
+    "Keep softmax/crossentropy output layers in float32 via dtype=\"float32\".",
+    "With float16, use loss scaling (p.584) to avoid gradient underflow."
+   ],
+   "illustrative_code": "# AI-written: mixed precision with a float32 output layer\nimport keras\nfrom keras import layers\nkeras.config.set_dtype_policy(\"mixed_float16\")\ninputs = keras.Input(shape=(784,))\nx = layers.Dense(512, activation=\"relu\")(inputs)   # float16 compute\noutputs = layers.Dense(10, activation=\"softmax\", dtype=\"float32\")(x)\nmodel = keras.Model(inputs, outputs)\nprint(model.layers[1].compute_dtype, model.layers[1].variable_dtype)  # float16 float32"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Where the precision lives in one training step",
+   "kind": "step_by_step",
+   "body": "1. **Variables**: float32 (variable_dtype).\n2. **Layer call**: inputs and a copy of the weights are cast to float16 (compute_dtype), and matmuls/convs run on fast 16-bit hardware.\n3. **Sensitive ops**: softmax / crossentropy layers created with `dtype=\"float32\"` cast their inputs back up to float32.\n4. **Backward pass**: gradients flow in float16 through the float16 parts. Small values risk underflow, which is the subject of 18.3.4.\n5. **Update**: gradients are cast to float32 and the optimizer updates the float32 variables, so 1e-6 steps survive.\n\n(Steps 1, 2, 3 and 5 are from the book; the step framing is AI-organized.)",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Two separate failure modes of 16-bit training",
+   "kind": "breakdown",
+   "body": "- **Update stagnation** (18.3.3): `w + Δw == w` because Δw is tiny *relative to w*. This affects both float16 and bfloat16. **Fix:** float32 master weights (mixed precision).\n- **Gradient underflow** (18.3.4): a gradient value is tiny in *absolute* terms (below ~6e-8, or imprecise below ~6e-5) and becomes 0. This mainly affects float16 because of its 5-bit exponent. **Fix:** loss scaling.\n\nThe book's first paragraph merges these two. Keeping them apart explains why bfloat16 mixed precision usually works without loss scaling. (AI analysis.)",
+   "source": "inference"
+  },
+  {
+   "title": "Analogy: draft and ledger",
+   "kind": "analogy",
+   "body": "An accountant runs quick calculations on a pocket calculator that shows only three digits (float16 compute), but records every final transaction in a ledger to the cent (float32 variables). Small amounts, like a 0.01 interest payment, would vanish on the calculator but are preserved in the ledger.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Mixed-precision data flow (mixed_float16)",
+   "why": "The page describes float32 variables, float16 compute, float32-kept softmax, and float16 gradients cast to float32 for the update.",
+   "mermaid": "flowchart LR\n  W32[(weights float32\\nvariable_dtype)] -->|cast| W16[weights float16 copy]\n  X[inputs] -->|cast| X16[inputs float16]\n  W16 --> F[forward pass float16\\ncompute_dtype]\n  X16 --> F\n  F --> S[softmax / loss\\ndtype=float32]\n  S --> G16[gradients float16]\n  G16 -->|cast| G32[gradients float32]\n  G32 --> U[optimizer update float32]\n  U --> W32"
+  },
+  {
+   "id": "v2",
+   "type": "chart",
+   "title": "Table 18.1 as bars: how 16 bits are split",
+   "why": "Table 18.1 compares the bit allocation of float16 and bfloat16.",
+   "chart": {
+    "type": "bar",
+    "data": {
+     "labels": ["float16", "bfloat16"],
+     "datasets": [
+      {"label": "Sign bits", "data": [1, 1]},
+      {"label": "Exponent bits", "data": [5, 8]},
+      {"label": "Mantissa bits", "data": [10, 7]}
+     ]
+    },
+    "options": {"indexAxis": "y", "scales": {"x": {"stacked": true, "max": 16, "title": {"display": true, "text": "bits"}}, "y": {"stacked": true}}}
+   }
+  }
+ ],
+ "misconceptions": [
+  {"claim": "Mixed precision stores the model's weights in float16.", "correction": "variable_dtype stays float32. Only computation uses float16 copies."},
+  {"claim": "float16 cannot represent a number like 1e-6.", "correction": "It can (as a subnormal). The problem is that adding 1e-6 to a weight of order 1 changes nothing at float16 resolution, and that gradients below ~6e-8 underflow."},
+  {"claim": "Under mixed_float16, every layer computes in float16.", "correction": "Layers given dtype=\"float32\" (recommended for softmax/crossentropy) compute in float32."},
+  {"claim": "bfloat16 has more precision than float16 because it has more exponent bits.", "correction": "Exponent bits give range. bfloat16 has fewer mantissa bits (7 vs 10), hence lower precision."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 582, "note": "float16 inference, the bfloat16 description, and the 1e-3 resolution of float16."},
+   {"page": 581, "note": "Floating-point encoding: exponent vs mantissa bits."},
+   {"page": 499, "note": "Mini-GPT turned on mixed precision, with the explanation promised for chapter 18."},
+   {"page": 64, "note": "Gradient-based optimization."}
+  ],
+  "later": [
+   {"page": 584, "note": "Loss scaling (loss_scale_factor, LossScaleOptimizer) and float8 training."},
+   {"page": 585, "note": "int8 quantization for inference."},
+   {"page": 586, "note": "Quantization continued."},
+   {"page": 587, "note": "Chapter summary."}
+  ],
+  "prerequisites": [
+   {"page": 582, "note": "dtype policies and 16-bit formats."}
+  ],
+  "related_math": [
+   {"page": 582, "note": "Resolution of each precision vs. update size."}
+  ],
+  "related_code": [
+   {"page": 521, "note": "Loading an LLM in bfloat16 for inference."},
+   {"page": 239, "note": "Custom training loops, where you'd handle casting/scaling yourself."}
+  ],
+  "related_figures": [
+   {"page": 581, "note": "Figure 18.3: float32 bit layout."}
+  ]
+ },
+ "takeaways": [
+  "Table 18.1: float16 = 1 sign / 5 exponent / 10 mantissa bits; bfloat16 = 1 / 8 / 7.",
+  "Pure 16-bit training fails because tiny weight updates are rounded away.",
+  "Mixed precision keeps variables and updates in float32 and computes most of the forward pass in float16: `set_dtype_policy(\"mixed_float16\")`.",
+  "Layers have variable_dtype (float32) and compute_dtype (float16 under mixed precision).",
+  "Opt unstable layers (softmax, crossentropy) out with dtype=\"float32\".",
+  "float16 gradients can underflow to zero, which is why loss scaling is introduced."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "Under the \"mixed_float16\" policy, what are a typical layer's variable_dtype and compute_dtype?", "options": ["float16 and float16", "float32 and float16", "float16 and float32", "float32 and float32"], "answer": "float32 and float16", "explanation": "Variables stay float32 for accurate updates, and computation switches to float16 for speed. Pure float16 is the inference policy; float32/float32 is the default; the reversed pair makes no sense for speed.", "page_refs": [583]},
+  {"id": "q2", "type": "short", "question": "How do you keep a specific layer (e.g. the softmax output) in full precision under mixed precision?", "options": [], "answer": "Pass dtype=\"float32\" to the layer's constructor.", "explanation": "Stated at the end of 18.3.3.", "page_refs": [583]},
+  {"id": "q3", "type": "conceptual", "question": "Why are float16 gradients cast to float32 before the optimizer update?", "options": [], "answer": "So the update is applied to float32 variables with float32 resolution, where small steps (~1e-6) aren't rounded away as they would be at float16's ~1e-3 resolution.", "explanation": "This is the core idea of mixed precision on this page.", "page_refs": [583, 582]},
+  {"id": "q4", "type": "mcq", "question": "According to table 18.1, how many mantissa bits does bfloat16 have?", "options": ["5", "7", "8", "10"], "answer": "7", "explanation": "bfloat16 has 8 exponent and 7 mantissa bits. 5 and 10 are float16's exponent and mantissa counts; 8 is bfloat16's exponent count.", "page_refs": [583]},
+  {"id": "q5", "type": "math", "question": "In float16 the spacing between numbers near 1 is about 9.8e-4. With a weight of 1.0 and an update of 1e-5, what is the result if the update is applied in float16 versus in float32?", "options": [], "answer": "float16: 1.0 (unchanged, since 1e-5 < half the spacing); float32: 0.99999 (the spacing near 1 is ~1.2e-7, so the update is kept).", "explanation": "This shows why mixed precision keeps variables in float32.", "page_refs": [583, 582]},
+  {"id": "q6", "type": "conceptual", "question": "What new problem does section 18.3.4 point out, even with float32 variables?", "options": [], "answer": "Gradients themselves are still float16, so very small gradients can fall outside float16's representable range and be rounded to zero, preventing learning. Loss scaling addresses this.", "explanation": "The page ends by stating the gradients remain in float16 and the limited range can round them to zero (continued on p.584).", "page_refs": [583, 584]},
+  {"id": "q7", "type": "self", "question": "Can you draw the flow of dtypes through one mixed-precision training step, from stored weight to updated weight?", "options": [], "answer": "float32 weight → float16 copy → float16 forward (softmax in float32) → float16 gradient → cast to float32 → float32 update of the float32 weight.", "explanation": "Compare your sketch with the mermaid diagram on this page.", "page_refs": [583]}
+ ]
+}

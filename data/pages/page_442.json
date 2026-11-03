@@ -1,0 +1,515 @@
+{
+ "page_id": "page_442",
+ "pdf_page": 442,
+ "printed_page": "418",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T10:00:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. Four short listings (14.30-14.33) and four body lines; code checked against the page image."
+ },
+ "overview": {
+  "title": "Priming the LSTM with the pretrained CBOW embedding",
+  "chapter": "14 Text classification",
+  "section": "14.5 Sequence models",
+  "subsection": "14.5.5 Using the pretrained embedding for classification",
+  "main_topic": "Rebuilding the bidirectional LSTM classifier, copying the CBOW-pretrained embedding matrix into its Embedding layer with assign(), then training and evaluating it (test accuracy 0.89139)",
+  "central_idea": "Transfer learning at its simplest: the 30,000 x 64 embedding matrix learned by the CBOW word-prediction task (p.438-441) is copied into the LSTM's Embedding layer as a better initializer, and the whole model is then trained on the labeled IMDb reviews as usual. Test accuracy rises from about 84% (p.437) to about 89%.",
+  "importance": "It is the payoff of the whole pretraining detour: the same architecture, data and training recipe as p.435-437, with only the initial embedding weights changed, gains about 5 points of accuracy. It demonstrates concretely why pretraining matters for data-hungry sequence models, the theme that drives chapters 15 and 16.",
+  "learning_objectives": [
+   "Rebuild the LSTM classifier while keeping a Python reference to its Embedding layer",
+   "Explain what lstm_embedding.embeddings.assign(cbow_embedding.embeddings) does and why the shapes must match",
+   "Explain why a pretrained embedding is a 'better initializer' rather than a frozen feature extractor here",
+   "Count the roughly 2 million embedding parameters (30,000 x 64)",
+   "Compare the 0.89139 test accuracy with the earlier LSTM runs and the set-based models"
+  ],
+  "prerequisites": [
+   "The Embedding-based LSTM of Listing 14.24 (p.435-437)",
+   "The CBOW pretraining task and cbow_embedding (p.438-441)",
+   "Bidirectional LSTMs and masking (chapter 13 and p.430-436)",
+   "EarlyStopping callback (p.424)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "Section 14.5.5 cashes in the word embedding pretrained with CBOW on p.438-441.\n\n**Listing 14.30** rebuilds the LSTM classifier *exactly as before* (compare Listing 14.24, p.435): an integer input of length `max_length`, an `Embedding(input_dim=max_tokens, output_dim=hidden_dim, mask_zero=True)`, a `Bidirectional(LSTM(hidden_dim))`, `Dropout(0.5)` and a `Dense(1, activation=\"sigmoid\")` output. The one change in style is that the Embedding layer is created and stored in a variable, `lstm_embedding`, before being called on the inputs, so that we can reach its weights later. The model is named `\"lstm_with_cbow\"`.\n\n**Listing 14.31** is a single line: `lstm_embedding.embeddings.assign(cbow_embedding.embeddings)`. It overwrites the randomly initialized embedding matrix of the LSTM with the matrix learned by CBOW. The authors describe this as \"a new and better initializer for the roughly 2 million embedding parameters\" ($30{,}000 \\times 64 = 1{,}920{,}000$). This works because both layers use the same vocabulary (the CBOW tokenizer reused the IMDb `TextVectorization` vocabulary, p.439) and the same dimension (64).\n\n**Listing 14.32** compiles (`adam`, `binary_crossentropy`, `accuracy`) and fits for up to 10 epochs with the `early_stopping` callback, exactly as for the earlier LSTMs. The embedding is **not frozen**: it keeps being trained (fine-tuned) together with the LSTM.\n\n**Listing 14.33** evaluates on the test set: **`test_acc = 0.89139`**. For comparison, the one-hot LSTM reached 0.84811 (p.432) and the randomly initialized Embedding LSTM 0.84436 (p.437). The next page (p.443) puts this in context: slightly better than the unigram bag-of-words model (0.88388, p.426) and slightly worse than the bigram model (0.90116, p.428).",
+ "paragraphs": [
+  {
+   "ref": "p442_e04",
+   "excerpt": "Now that we have trained a new word embedding, applying it to our LSTM model is simple.",
+   "what_it_says": "Applying the new word embedding to the LSTM is simple. The first step is to create the model precisely as before (Listing 14.30).",
+   "what_it_means": "The architecture is deliberately unchanged from Listing 14.24 so that any change in accuracy can be attributed to the initialization of the embedding alone. Listing 14.30 differs from 14.24 only in that the Embedding layer is held in a variable (`lstm_embedding`) and the model has a new name; the input no longer specifies `dtype=\"int32\"`, which does not matter since Embedding casts its input to integers.",
+   "why_it_matters": "It is a controlled experiment: same data, same architecture, same optimizer and epochs. Only the starting point of 1.92 million parameters changes.",
+   "technical_idea": "To copy weights into a layer you need a handle on that layer object. In the functional API you can instantiate a layer, keep the reference, and then call it on a tensor. Alternatively, you could find it later with `model.get_layer(...)`.",
+   "terminology": [
+    {
+     "term": "mask_zero=True",
+     "meaning": "Token ID 0 is treated as padding; the Embedding layer produces a mask so the LSTM skips padded time steps."
+    },
+    {
+     "term": "Bidirectional",
+     "meaning": "Wrapper that runs one LSTM forward and a copy backward over the sequence and concatenates their final states (2 x 64 = 128 features)."
+    }
+   ],
+   "connections": [
+    "p.435: Listing 14.24, the identical architecture with a random embedding",
+    "p.437: that model plateaued at about 84% accuracy"
+   ]
+  },
+  {
+   "ref": "p442_e07",
+   "excerpt": "Then, we apply our embedding weights from the CBOW embedding layer to the LSTM",
+   "what_it_says": "The embedding weights from the CBOW embedding layer are applied to the LSTM embedding layer. This acts as a new and better initializer for the roughly 2 million embedding parameters of the LSTM model.",
+   "what_it_means": "Normally an Embedding layer starts from small random values. Here it starts from vectors already organized by CBOW so that words used in similar contexts (\"terrible\" and \"awful\", say) are near each other. The LSTM then begins training with input features that already carry meaning, instead of having to discover them from only 20,000 labeled reviews. The count is $30{,}000 \\times 64 = 1{,}920{,}000$, which matches the Embedding row of the CBOW summary on p.441.",
+   "why_it_matters": "On p.437 the authors diagnosed the problem: the LSTM overfits the 20,000 training reviews (99% train accuracy) before it learns a good embedding. Pretraining on more text, the training reviews plus the 25,000 unlabeled reviews of the unsup/ directory (p.438), gives the embedding a head start that labeled data alone could not.",
+   "technical_idea": "The word 'initializer' is precise: nothing prevents the classifier's gradients from changing these vectors during fine-tuning. A different design would freeze the layer (`lstm_embedding.trainable = False`) and use the vectors as fixed features; the book does not do that here.",
+   "terminology": [
+    {
+     "term": "Initializer",
+     "meaning": "The rule or values used to set a layer's weights before training starts."
+    },
+    {
+     "term": "Pretraining",
+     "meaning": "Training parameters on an auxiliary, usually unsupervised task before training on the target task."
+    }
+   ],
+   "connections": [
+    "p.441: the CBOW summary shows the 1,920,000-parameter Embedding",
+    "p.439: the CBOW tokenizer reuses the IMDb vocabulary, so token IDs line up"
+   ]
+  },
+  {
+   "ref": "p442_e10",
+   "excerpt": "With that, we can compile and train our LSTM model as normal.",
+   "what_it_says": "After the weights are copied, the model is compiled and trained as normal (Listing 14.32), then evaluated (Listing 14.33), reaching 0.89139 test accuracy.",
+   "what_it_means": "\"As normal\" means the same settings as the earlier LSTMs: Adam, binary cross-entropy for the single sigmoid output, at most 10 epochs, and early stopping on validation loss with best weights restored. The test accuracy of 89.1% is about 5 points better than the same architecture with a random embedding (84.4%, p.437).",
+   "why_it_matters": "This is the measured benefit of pretraining. The interpretation (it now roughly matches the set models, and the LSTM is still data-constrained) follows on p.443.",
+   "terminology": [
+    {
+     "term": "early_stopping",
+     "meaning": "The EarlyStopping callback defined on p.424; it stops when validation loss stops improving and restores the best weights."
+    }
+   ],
+   "connections": [
+    "p.424: early_stopping callback",
+    "p.443: comparison with unigram and bigram models"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "transfer_learning",
+   "name": "Transfer of pretrained embedding weights",
+   "definition": "Reusing parameters learned on one task (CBOW word prediction) as the starting point for another task (sentiment classification).",
+   "intuition": "Instead of learning the meaning of 30,000 words from 20,000 labeled reviews, the model starts with word vectors that already know which words behave alike.",
+   "technical": "The CBOW Embedding matrix $E \\in \\mathbb{R}^{30000 \\times 64}$ is copied into the LSTM's Embedding variable before `fit()`. All weights, including $E$, are then updated by the classification loss.",
+   "significance": "It raises test accuracy from ~84% to ~89% with no change in architecture.",
+   "example": "Listing 14.31: `lstm_embedding.embeddings.assign(cbow_embedding.embeddings)`.",
+   "misconception": "Transfer does not require freezing; here the transferred weights are only an initialization.",
+   "related": [
+    "embedding",
+    "pretraining",
+    "word_embedding"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "pretraining",
+   "name": "Pretraining",
+   "definition": "Training on an unsupervised task with plentiful data before the supervised task.",
+   "intuition": "Learn general language patterns first, specialize later.",
+   "technical": "CBOW predicts the middle token of a 9-token window from the 8 surrounding ones; its embedding is the pretrained artifact.",
+   "significance": "Sequence models are data hungry; pretraining is the standard way around limited labeled data (p.438, p.444).",
+   "example": "CBOW on all IMDb text, then the LSTM classifier on labeled reviews.",
+   "misconception": "Pretraining is not the same as training longer: it uses a different objective and usually more (unlabeled) data.",
+   "related": [
+    "transfer_learning",
+    "embedding"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "embedding",
+   "name": "Embedding layer weights",
+   "definition": "The `embeddings` variable of a Keras Embedding layer: a (input_dim, output_dim) matrix whose row i is the vector for token i.",
+   "intuition": "A lookup table that can be read, written or copied like any other variable.",
+   "technical": "Here shape (30000, 64). `Variable.assign(value)` replaces its contents in place; shapes must match exactly.",
+   "significance": "Because the table is just a variable, transferring it is one line of code.",
+   "example": "`lstm_embedding.embeddings.shape == (30000, 64)`.",
+   "misconception": "Assigning weights does not link the two layers; later training of the LSTM does not change cbow_embedding.",
+   "related": [
+    "transfer_learning",
+    "keras_layer"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Size of the transferred embedding",
+   "latex": "|E| = V \\times d = 30{,}000 \\times 64 = 1{,}920{,}000",
+   "source_text": "roughly 2 million embedding parameters",
+   "variables": [
+    {
+     "symbol": "V",
+     "meaning": "vocabulary size, max_tokens = 30,000"
+    },
+    {
+     "symbol": "d",
+     "meaning": "embedding dimension, hidden_dim = 64"
+    },
+    {
+     "symbol": "E",
+     "meaning": "the embedding matrix"
+    }
+   ],
+   "operations": "One 64-dimensional vector per vocabulary entry.",
+   "purpose": "Explains the book's \"roughly 2 million\".",
+   "interpretation": "Nearly all of the LSTM model's parameters are in the embedding. The bidirectional LSTM adds $2\\times 4\\times(64\\cdot 64 + 64\\cdot 64 + 64) = 66{,}048$ and the output Dense 129 (AI calculation, not printed on this page).",
+   "intuition": "The part of the model that most needs data is the part we pretrain.",
+   "numerical_example": "Total model size is about 1,920,000 + 66,048 + 129 = 1,986,177 parameters, which is the 'about 2 million' quoted on p.437.",
+   "source": "book",
+   "book_ref": "p.442"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "14.30",
+   "title": "Building another LSTM sequence model with an Embedding layer",
+   "original_code": "inputs = keras.Input(shape=(max_length,))\nlstm_embedding = layers.Embedding(\n    input_dim=max_tokens,\n    output_dim=hidden_dim,\n    mask_zero=True,\n)\nx = lstm_embedding(inputs)\nx = layers.Bidirectional(layers.LSTM(hidden_dim))(x)\nx = layers.Dropout(0.5)(x)\noutputs = layers.Dense(1, activation=\"sigmoid\")(x)\nmodel = keras.Model(inputs, outputs, name=\"lstm_with_cbow\")",
+   "language": "python",
+   "what_it_does": "Rebuilds the bidirectional LSTM classifier of Listing 14.24, keeping a reference to its Embedding layer.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Sequences of `max_length` (600) token IDs."
+    },
+    {
+     "lines": "2-6",
+     "explanation": "Creates the Embedding layer (30,000 x 64) and stores it as `lstm_embedding`; `mask_zero=True` marks ID 0 as padding."
+    },
+    {
+     "lines": "7",
+     "explanation": "Calls the layer: shape (batch, 600, 64) plus a mask."
+    },
+    {
+     "lines": "8",
+     "explanation": "Forward and backward LSTMs with 64 units each; final states concatenated to (batch, 128). The mask makes them ignore padding."
+    },
+    {
+     "lines": "9-10",
+     "explanation": "Dropout for regularization, then one sigmoid unit giving P(positive review)."
+    },
+    {
+     "lines": "11",
+     "explanation": "Wraps everything in a functional Model named lstm_with_cbow."
+    }
+   ],
+   "inputs_outputs": "Input: integer tensor (batch, 600). Output: (batch, 1) probability.",
+   "algorithm": "Embedding lookup, bidirectional recurrence, dropout, logistic output.",
+   "theory_link": "Same model as p.435, so the experiment isolates the effect of the initial embedding.",
+   "parameters": [
+    {
+     "name": "max_tokens",
+     "role": "Vocabulary size (30,000); must equal the CBOW vocabulary size."
+    },
+    {
+     "name": "hidden_dim",
+     "role": "64; both embedding width and LSTM units; must equal the CBOW embedding width."
+    },
+    {
+     "name": "mask_zero",
+     "role": "Enables padding masks."
+    }
+   ],
+   "pitfalls": [
+    "If max_tokens or hidden_dim differed from the CBOW layer, the assign in Listing 14.31 would fail with a shape error.",
+    "Calling `layers.Embedding(...)(inputs)` inline (as in 14.24) would leave no handle for copying weights."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": "14.31",
+   "title": "Reusing the CBOW embedding to prime the LSTM model",
+   "original_code": "lstm_embedding.embeddings.assign(cbow_embedding.embeddings)",
+   "language": "python",
+   "what_it_does": "Copies the CBOW-trained embedding matrix into the LSTM model's embedding variable.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "`embeddings` is the layer's weight variable; `assign` overwrites its values in place with the values of the CBOW layer's variable."
+    }
+   ],
+   "inputs_outputs": "No return value of interest; side effect on the LSTM model's weights.",
+   "algorithm": "Weight copy (value copy, not shared variable).",
+   "theory_link": "Transfer learning / initialization from pretraining.",
+   "parameters": [],
+   "pitfalls": [
+    "Shapes must match exactly: (30000, 64).",
+    "The vocabularies must index words identically; that is why p.439 reuses the IMDb TextVectorization vocabulary.",
+    "Copy before training, otherwise the trained values are overwritten."
+   ],
+   "illustrative_code": "# AI-written equivalents (not in the book)\nlstm_embedding.set_weights(cbow_embedding.get_weights())\n# or freeze it to use the vectors as fixed features:\n# lstm_embedding.trainable = False"
+  },
+  {
+   "id": "c3",
+   "listing": "14.32",
+   "title": "Training the LSTM model with a pretrained embedding",
+   "original_code": "model.compile(\n    optimizer=\"adam\",\n    loss=\"binary_crossentropy\",\n    metrics=[\"accuracy\"],\n)\nmodel.fit(\n    sequence_train_ds,\n    validation_data=sequence_val_ds,\n    epochs=10,\n    callbacks=[early_stopping],\n)",
+   "language": "python",
+   "what_it_does": "Compiles and trains the primed model with the same recipe as the earlier LSTMs.",
+   "line_explanations": [
+    {
+     "lines": "1-5",
+     "explanation": "Adam optimizer, binary cross-entropy for a sigmoid output, accuracy metric."
+    },
+    {
+     "lines": "6-11",
+     "explanation": "Up to 10 epochs on the padded sequence datasets; early stopping on validation loss restores the best epoch."
+    }
+   ],
+   "inputs_outputs": "Input: batches of (token IDs, 0/1 label). Output: a History object; weights updated in place.",
+   "algorithm": "Mini-batch gradient descent with Adam; all layers including the embedding are trainable.",
+   "theory_link": "Fine-tuning a pretrained component on the target task.",
+   "parameters": [
+    {
+     "name": "epochs",
+     "role": "Upper bound of 10; early stopping may end sooner."
+    },
+    {
+     "name": "callbacks",
+     "role": "early_stopping from p.424."
+    }
+   ],
+   "pitfalls": [
+    "Calling compile after assign is fine; compile does not reinitialize weights. Rebuilding the model would."
+   ]
+  },
+  {
+   "id": "c4",
+   "listing": "14.33",
+   "title": "Evaluating the LSTM model with a pretrained embedding",
+   "original_code": ">>> test_loss, test_acc = model.evaluate(sequence_test_ds)\n>>> test_acc\n0.89139",
+   "language": "python",
+   "what_it_does": "Evaluates on the held-out test reviews: 89.1% accuracy.",
+   "line_explanations": [
+    {
+     "lines": "1-3",
+     "explanation": "evaluate returns [loss, accuracy]; accuracy is 0.89139."
+    }
+   ],
+   "inputs_outputs": "Input: test dataset. Output: loss and accuracy scalars.",
+   "algorithm": "Forward pass over the test set.",
+   "theory_link": "Compare 0.84436 (random embedding, p.437), 0.88388 (unigram, p.426), 0.90116 (bigram, p.428).",
+   "parameters": [],
+   "pitfalls": [
+    "Small differences (around 1 point) can vary between runs because of random initialization of the LSTM and dropout."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why the copy works only because the vocabularies match",
+   "kind": "breakdown",
+   "body": "Row $i$ of the embedding matrix is the vector for token ID $i$. CBOW used `tokenize_no_padding`, built from `imdb_vocabulary = text_vectorization.get_vocabulary()` (p.439), so ID $i$ means the same word in both models. If the CBOW tokenizer had built its own vocabulary, row 512 might be \"boring\" in one model and \"brilliant\" in the other, and the copy would be harmful noise. Row 0 (padding) was never seen by CBOW since that tokenizer does not pad, but it is masked in the LSTM anyway.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Initialize vs. freeze",
+   "kind": "alternative",
+   "body": "The book uses the pretrained vectors as an initializer and lets them be fine-tuned. Freezing (`trainable = False`) would reduce trainable parameters to about 66,000 and lower overfitting risk, but stops the vectors adapting to sentiment (CBOW vectors put \"good\" and \"bad\" close together, since they appear in similar contexts). A common compromise is freezing for a few epochs, then unfreezing with a low learning rate, as was done for convnets in chapter 8. Not in the book here.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Analogy: a dictionary before the exam",
+   "kind": "analogy",
+   "body": "The random-embedding LSTM is like a student who must learn vocabulary and the grading rubric from the same 20,000 graded essays. The pretrained version first read many more essays without grades and learned which words go together; then the graded essays only need to teach what counts as positive.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "From CBOW pretraining to the primed LSTM",
+   "why": "Shows the flow implemented across Listings 14.28-14.33: the CBOW embedding is copied (Listing 14.31) into the LSTM's Embedding layer before fine-tuning.",
+   "mermaid": "flowchart LR\n  U[All IMDb text, no labels] --> C[CBOW model: Embedding 30000x64, average, Dense 30000]\n  C -->|cbow_embedding.embeddings| A[assign, Listing 14.31]\n  A --> E[lstm_embedding 30000x64]\n  E --> B[Bidirectional LSTM 64] --> D[Dropout 0.5] --> O[Dense 1 sigmoid]\n  L[20,000 labeled reviews] --> F[fit, Listing 14.32]\n  O --> F --> T[test acc 0.89139]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "After assign, the LSTM's embedding is frozen at the CBOW values.",
+   "correction": "It is only initialized with them; all weights are trained by model.fit."
+  },
+  {
+   "claim": "assign makes the two layers share weights.",
+   "correction": "It copies values. Training the LSTM changes lstm_embedding but not cbow_embedding."
+  },
+  {
+   "claim": "The improvement comes from a better architecture.",
+   "correction": "The architecture is identical to Listing 14.24; only the starting embedding changed."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 435,
+    "note": "Listing 14.24: the same LSTM with a randomly initialized Embedding."
+   },
+   {
+    "page": 437,
+    "note": "That model stalled near 84% because it overfit before learning a good embedding."
+   },
+   {
+    "page": 441,
+    "note": "CBOW training and its 1,920,000-parameter embedding."
+   },
+   {
+    "page": 439,
+    "note": "The CBOW tokenizer reuses the IMDb vocabulary."
+   }
+  ],
+  "later": [
+   {
+    "page": 443,
+    "note": "Interpretation: on par with set models; still data-constrained."
+   },
+   {
+    "page": 444,
+    "note": "Chapter summary: pretraining is critical for sequence models."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 424,
+    "note": "The early_stopping callback."
+   },
+   {
+    "page": 438,
+    "note": "Why pretraining."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 435,
+    "note": "Listing 14.24 for a line-by-line comparison."
+   },
+   {
+    "page": 440,
+    "note": "Listing 14.28 defines cbow_embedding."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 439,
+    "note": "Figure 14.6: CBOW."
+   }
+  ]
+ },
+ "takeaways": [
+  "The LSTM is rebuilt unchanged, keeping a handle (lstm_embedding) on its Embedding layer.",
+  "One line, embeddings.assign(...), transfers 1.92 million pretrained parameters.",
+  "The pretrained embedding is an initializer; it is fine-tuned with the rest of the model.",
+  "Test accuracy rises from about 84% to 0.89139 with no architectural change.",
+  "Weight transfer requires identical vocabularies and embedding sizes."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What does Listing 14.31 do?",
+   "options": [
+    "Shares the CBOW layer between both models",
+    "Copies the CBOW embedding values into the LSTM's embedding variable",
+    "Freezes the LSTM's embedding",
+    "Averages the two embedding matrices"
+   ],
+   "answer": "Copies the CBOW embedding values into the LSTM's embedding variable",
+   "explanation": "assign overwrites the variable's values. It does not share the layer, freeze anything (no trainable=False), or average.",
+   "page_refs": [
+    442
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "math",
+   "question": "Why does the book say 'roughly 2 million' embedding parameters?",
+   "options": [],
+   "answer": "max_tokens x hidden_dim = 30,000 x 64 = 1,920,000.",
+   "explanation": "One 64-d vector per vocabulary entry; matches the CBOW summary on p.441.",
+   "page_refs": [
+    442,
+    441
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why is Listing 14.30 kept identical to Listing 14.24?",
+   "options": [],
+   "answer": "So the accuracy change can be attributed to the pretrained initialization alone.",
+   "explanation": "It is a controlled comparison: 0.84436 (p.437) vs 0.89139 with the same architecture and training recipe.",
+   "page_refs": [
+    442,
+    435,
+    437
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "short",
+   "question": "What two things must match between cbow_embedding and lstm_embedding for the transfer to make sense?",
+   "options": [],
+   "answer": "The shape (30,000 x 64) and the vocabulary/token-ID mapping.",
+   "explanation": "Shape mismatch raises an error; a vocabulary mismatch would silently assign vectors to the wrong words. p.439 reuses the IMDb vocabulary for CBOW.",
+   "page_refs": [
+    442,
+    439
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Is the embedding trained during Listing 14.32?",
+   "options": [
+    "No, assign makes it constant",
+    "Yes, it is fine-tuned with the rest of the model",
+    "Only its first row",
+    "Only if early stopping triggers"
+   ],
+   "answer": "Yes, it is fine-tuned with the rest of the model",
+   "explanation": "Nothing sets trainable=False; the book calls the CBOW weights an initializer. The other options have no basis in the code.",
+   "page_refs": [
+    442
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "short",
+   "question": "Where does 0.89139 sit among the chapter's results?",
+   "options": [],
+   "answer": "Above both earlier LSTMs (~0.848 and ~0.844) and the unigram model (0.884), below the bigram model (0.901).",
+   "explanation": "See p.432, p.437, p.426, p.428 and the discussion on p.443.",
+   "page_refs": [
+    442,
+    443
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you rewrite Listing 14.31 with get_weights/set_weights and explain the difference from freezing?",
+   "options": [],
+   "answer": "lstm_embedding.set_weights(cbow_embedding.get_weights()); freezing would additionally set lstm_embedding.trainable = False.",
+   "explanation": "Both copy values; freezing is a separate decision about training.",
+   "page_refs": [
+    442
+   ]
+  }
+ ]
+}

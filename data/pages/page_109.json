@@ -1,0 +1,384 @@
+{
+  "page_id": "page_109",
+  "pdf_page": 109,
+  "printed_page": "85",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:22:00Z",
+    "confidence": "high",
+    "review_flags": [],
+    "extraction_quality": "Clean; code, body text, two listings and the printed callouts (split annotation, Listing 3.32 annotations) all match the page image."
+  },
+  "overview": {
+    "title": "Key splitting, immutable arrays and NumPy-style math in JAX",
+    "chapter": "3 Introduction to TensorFlow, PyTorch, JAX, and Keras",
+    "section": "3.5 Introduction to JAX",
+    "subsection": "3.5.3 Random number generation in JAX",
+    "main_topic": "Finishing JAX's PRNG story with `jax.random.split()`, explaining why statelessness pays off, then covering the second NumPy difference (no in-place assignment, use `.at[].set()`) and showing that ordinary math is identical to NumPy.",
+    "central_idea": "Explicit keys are more work than `np.random`, but they make JAX code vectorizable and deterministic. The same stateless principle forbids in-place array updates: you build a new array with `x.at[i].set(v)`. Everything else, the math, is just NumPy.",
+    "importance": "These are the last two 'gotchas' separating `jax.numpy` from NumPy (p.107). Once you know them, you can write JAX numerical code; the rest of section 3.5 builds gradients and a linear classifier on top of it.",
+    "learning_objectives": [
+      "Derive a new key with `jax.random.split(seed_key, num=1)[0]` and see that it yields different random values.",
+      "Explain the two benefits the authors give for statelessness: vectorization and determinism.",
+      "Explain why JAX arrays cannot be modified in place and use `x.at[0].set(10)` to produce an updated copy.",
+      "Read Listing 3.32 and identify the element-wise vs matrix operations, computing its result by hand."
+    ],
+    "prerequisites": [
+      "JAX keys and `jax.random.normal` (p.108)",
+      "NumPy array operations and broadcasting (chapter 2)",
+      "Matrix product vs element-wise product (chapter 2)"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page opens with the code that completes p.108's description of `jax.random.split()`. Starting from `jax.random.key(123)`, which gives `[-0.1470326, 0.5524756, 1.648498]` (as in Listing 3.30), the code derives `new_seed_key = jax.random.split(seed_key, num=1)[0]`; sampling with the new key gives different values, `[0.5362355, -1.1920372, 2.450225]`. A callout notes that you could split a key into multiple new keys at once.\n\nThe authors admit this is \"definitely more work than `np.random`\", but argue that the benefits of statelessness far outweigh the costs: it makes code **vectorizable** (the JAX compiler can automatically turn it into highly parallel code) while keeping it **deterministic** (the same code run twice gives the same results). Both together are impossible with a global PRNG state.\n\n**Tensor assignment** is the second difference from NumPy. As in TensorFlow, JAX arrays are not assignable in place, because in-place modification would go against JAX's stateless design. To \"update\" a tensor you create a new one, using the `at()`/`set()` API. Listing 3.31 creates `x = jnp.array([1, 2, 3], dtype=\"float32\")` and then `new_x = x.at[0].set(10)`, a new array whose first element is 10. `x` itself is unchanged.\n\n**Tensor operations** look exactly as in NumPy. Listing 3.32 builds `a = jnp.ones((2, 2))`, then takes the element-wise square (`jnp.square`) and square root (`jnp.sqrt`), adds tensors element-wise, computes a matrix product with `jnp.matmul` (see chapter 2), and multiplies element-wise with `e *= d`.",
+  "paragraphs": [
+    {
+      "ref": "p109_e04",
+      "excerpt": "This is definitely more work than `np.random`! But the benefits of statelessness",
+      "what_it_says": "Managing keys is more work than NumPy's global generator, but statelessness is worth it: code becomes vectorizable (the compiler can automatically parallelize it) while remaining deterministic (same code, same results). A global PRNG state cannot give you both.",
+      "what_it_means": "With a global generator, the numbers a call receives depend on how many random calls happened before it, so running calls in parallel or in a different order changes results. With keys, each call's randomness is fixed by its own input, so the compiler is free to reorder, batch or parallelize, and the results stay identical.",
+      "why_it_matters": "This is the core justification for JAX's design and the reason JAX scales so well (p.106, p.114). It also explains why JAX random code looks verbose.",
+      "technical_idea": "Beyond the book: `jax.vmap` can map a function over a batch of keys (e.g. from `jax.random.split(key, 8)`) to produce eight independent samples in one vectorized call; this only works because the randomness is an explicit array input.",
+      "terminology": [
+        {"term": "vectorizable", "meaning": "Code that the JAX compiler can automatically turn into highly parallel code (book's definition)."},
+        {"term": "determinism", "meaning": "Running the same code twice gives the same results."}
+      ],
+      "connections": ["p.106: statelessness enables automatic parallelization and distributed computation without synchronization."]
+    },
+    {
+      "ref": "p109_e06",
+      "excerpt": "The second difference between JAX and NumPy is tensor assignment. Like in",
+      "what_it_says": "JAX arrays, like TensorFlow tensors, cannot be assigned in place, because in-place modification contradicts JAX's stateless design. To update a tensor you create a new one with the desired value, which the `at()`/`set()` API makes easy: it produces a new tensor with an element changed at a given index.",
+      "what_it_means": "`x[0] = 10` raises an error in JAX. Instead, `x.at[0].set(10)` returns a copy of `x` with index 0 replaced. Conceptually the old array still exists and is unchanged, which is what 'no state is mutated' means.",
+      "why_it_matters": "Code that builds arrays element by element (common in NumPy) has to be rewritten, and you must remember to keep the returned value: `x.at[0].set(10)` on its own line does nothing useful.",
+      "technical_idea": "Beyond the book: `.at[]` also supports `.add()`, `.multiply()`, `.min()`, `.max()` and slice/fancy indices. Inside `jax.jit`, XLA can often perform the update in place under the hood when the old array is no longer needed, so the copy semantics need not cost a real copy.",
+      "terminology": [
+        {"term": "in-place assignment", "meaning": "Modifying an existing array's memory directly, e.g. `x[0] = 10` in NumPy."},
+        {"term": "at()/set() API", "meaning": "JAX's functional indexed update: `x.at[index].set(value)` returns a new array."}
+      ],
+      "connections": ["p.88: TensorFlow (section 3.3.1) also has non-assignable tensors.", "p.107: assignment was announced as one of two differences between jax.numpy and NumPy."]
+    },
+    {
+      "ref": "p109_e11",
+      "excerpt": "Doing math in JAX looks exactly the same as it does in NumPy.",
+      "what_it_says": "Math in JAX is written exactly as in NumPy; nothing new to learn. Listing 3.32 shows a few basic operations.",
+      "what_it_means": "`jnp` mirrors NumPy function names and semantics (square, sqrt, matmul, broadcasting operators), so knowledge from chapter 2 transfers directly.",
+      "why_it_matters": "It lowers the barrier to JAX: only randomness and assignment differ; the numerical API does not (p.107, p.114).",
+      "technical_idea": "Short paragraph (under 25 words) noted because it introduces Listing 3.32.",
+      "terminology": [
+        {"term": "jnp", "meaning": "Conventional alias for `jax.numpy`."}
+      ],
+      "connections": ["p.114: the authors list NumPy consistency as one of JAX's strengths."]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "key_splitting",
+      "name": "Key splitting",
+      "definition": "Deriving new PRNG keys from an existing key with `jax.random.split()`.",
+      "intuition": "Tear a ticket into pieces; each piece is a new ticket with its own fixed prize.",
+      "technical": "`jax.random.split(seed_key, num=1)` returns an array of one new key; `[0]` extracts it. With larger `num` you get several keys at once (callout on the page). Deterministic: same parent, same children.",
+      "significance": "The standard way to obtain fresh randomness in stateless JAX code.",
+      "example": "From `key(123)`, the split key gives `[0.5362355, -1.1920372, 2.450225]` instead of `[-0.1470326, 0.5524756, 1.648498]`.",
+      "misconception": "That `split(key, num=1)` returns a key directly; it returns an array of keys, hence the `[0]`.",
+      "related": ["prng_key", "stateless_computation"],
+      "source": "book"
+    },
+    {
+      "id": "stateless_computation",
+      "name": "Stateless computation",
+      "definition": "Functions keep no hidden persistent state; outputs depend only on inputs.",
+      "intuition": "Pure recipes: same ingredients, same dish, and the kitchen is left exactly as you found it.",
+      "technical": "On this page it justifies both explicit keys (vectorization + determinism) and immutable arrays (no in-place updates).",
+      "significance": "Unlocks compilation and scaling (p.106, p.114).",
+      "example": "`new_x = x.at[0].set(10)` leaves `x` untouched.",
+      "misconception": "That statelessness is just a stylistic preference; the authors present it as what makes automatic parallelization possible.",
+      "related": ["prng_key", "immutable_arrays"],
+      "source": "book"
+    },
+    {
+      "id": "immutable_arrays",
+      "name": "Immutable arrays and functional updates",
+      "definition": "JAX arrays cannot be changed after creation; updates create new arrays via `x.at[idx].set(val)`.",
+      "intuition": "Instead of erasing a word in a printed page, you print a new page with the word changed.",
+      "technical": "`x.at[0].set(10)` returns a new array equal to `x` except at index 0. Beyond the book: XLA may reuse buffers inside jitted code, so performance is usually fine.",
+      "significance": "Required by JAX's stateless design; also how JAX can safely trace and differentiate functions.",
+      "example": "`x = jnp.array([1, 2, 3], dtype=\"float32\")`; `x.at[0].set(10)` gives `[10., 2., 3.]`, `x` stays `[1., 2., 3.]`.",
+      "misconception": "That `x.at[0].set(10)` changes `x`. It does not; you must use the return value.",
+      "related": ["stateless_computation", "tensor"],
+      "source": "book"
+    },
+    {
+      "id": "element_wise_operation",
+      "name": "Element-wise vs matrix operations",
+      "definition": "Element-wise operations (`square`, `sqrt`, `+`, `*`) act on each entry independently; `matmul` computes dot products of rows and columns.",
+      "intuition": "Element-wise is applying the same recipe to every cell; matmul mixes rows of one matrix with columns of another.",
+      "technical": "In Listing 3.32 `b`, `c`, `d` and `e *= d` are element-wise; `e = jnp.matmul(a, b)` is the tensor product from chapter 2.",
+      "significance": "Distinguishing `*` from `matmul` is essential to reading any model code.",
+      "example": "For 2x2 all-ones `a` and `b`, `a * b` is all ones but `matmul(a, b)` is all twos.",
+      "misconception": "That `*` multiplies matrices; it multiplies entries.",
+      "related": ["tensor", "dot_product"],
+      "source": "book"
+    }
+  ],
+  "math": [
+    {
+      "id": "m1",
+      "title": "The computation in Listing 3.32",
+      "latex": "\\begin{aligned} a &= \\mathbf{1}_{2\\times 2}, \\quad b = a \\odot a, \\quad c = \\sqrt{a} \\\\ d &= b + c, \\quad e = (a\\,b) \\odot d \\end{aligned}",
+      "source_text": "a = jnp.ones((2, 2)); b = jnp.square(a); c = jnp.sqrt(a); d = b + c; e = jnp.matmul(a, b); e *= d",
+      "variables": [
+        {"symbol": "\\mathbf{1}_{2\\times 2}", "meaning": "2x2 matrix of ones (`jnp.ones((2, 2))`)."},
+        {"symbol": "\\odot", "meaning": "Element-wise (Hadamard) product."},
+        {"symbol": "\\sqrt{a}", "meaning": "Element-wise square root."},
+        {"symbol": "a\\,b", "meaning": "Matrix product `jnp.matmul(a, b)`."}
+      ],
+      "operations": "Element-wise square, element-wise square root, element-wise addition, matrix multiplication, element-wise multiplication.",
+      "purpose": "Shows that JAX math is written exactly like NumPy math.",
+      "interpretation": "Only `matmul` mixes entries; all other steps act cell by cell.",
+      "intuition": "With all-ones inputs, every element-wise op is trivial, so you can focus on what matmul does: each output entry sums a row times a column.",
+      "numerical_example": "$b = [[1,1],[1,1]]$, $c = [[1,1],[1,1]]$, $d = [[2,2],[2,2]]$. $a\\,b$: each entry $=1\\cdot1+1\\cdot1=2$, so $[[2,2],[2,2]]$. Then $e = [[2,2],[2,2]] \\odot [[2,2],[2,2]] = [[4,4],[4,4]]$ (computed by hand, not printed in the book).",
+      "source": "book",
+      "book_ref": "p.109"
+    }
+  ],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Deriving a new key with jax.random.split",
+      "original_code": ">>> seed_key = jax.random.key(123)\n>>> jax.random.normal(seed_key, shape=(3,))\nArray([-0.1470326,  0.5524756,  1.648498 ], dtype=float32)\n>>> new_seed_key = jax.random.split(seed_key, num=1)[0]\n>>> jax.random.normal(new_seed_key, shape=(3,))\nArray([ 0.5362355, -1.1920372,  2.450225 ], dtype=float32)",
+      "language": "python",
+      "what_it_does": "Samples with a key, derives a new key by splitting, and samples again to get different values. Completes the split example announced at the bottom of p.108.",
+      "line_explanations": [
+        {"lines": "1-3", "explanation": "Same as Listing 3.30 (p.108): key(123) yields `[-0.1470326, 0.5524756, 1.648498]`."},
+        {"lines": "4", "explanation": "`split(seed_key, num=1)` returns an array containing one new key; `[0]` picks it out. The printed callout notes that you could split into multiple new keys at once (larger `num`)."},
+        {"lines": "5-6", "explanation": "Sampling with the derived key gives a different array, `[0.5362355, -1.1920372, 2.450225]`. Because split is deterministic, rerunning gives these same values."}
+      ],
+      "inputs_outputs": "Input: key(123). Output: two different float32 arrays of shape (3,), each reproducible.",
+      "algorithm": "Parent key -> split -> child key -> sample.",
+      "theory_link": "Replaces `seed += 1` from the NumPy `apply_noise` example on p.108.",
+      "parameters": [
+        {"name": "num", "role": "Number of new keys to produce from the parent key."}
+      ],
+      "pitfalls": [
+        "Forgetting `[0]`: the result of `split` is an array of keys, not a single key.",
+        "Beyond the book: after splitting, avoid using the parent key again for sampling; idiomatic code is `key, subkey = jax.random.split(key)` (default `num=2`)."
+      ],
+      "illustrative_code": "# AI-written: several keys at once, plus vectorized sampling\nimport jax\nkeys = jax.random.split(jax.random.key(123), num=4)   # 4 keys\nsamples = jax.vmap(lambda k: jax.random.normal(k, shape=(3,)))(keys)\nprint(samples.shape)  # (4, 3), each row different"
+    },
+    {
+      "id": "c2",
+      "listing": "3.31",
+      "title": "Modifying values in a JAX array",
+      "original_code": ">>> x = jnp.array([1, 2, 3], dtype=\"float32\")\n>>> new_x = x.at[0].set(10)",
+      "language": "python",
+      "what_it_does": "Creates a float32 array and produces a new array whose first element is 10.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "A JAX array `[1., 2., 3.]` with dtype float32."},
+        {"lines": "2", "explanation": "`x.at[0]` selects index 0 for a functional update; `.set(10)` returns a new array `[10., 2., 3.]`. `x` is unchanged."}
+      ],
+      "inputs_outputs": "Input: `x = [1., 2., 3.]`. Output: `new_x = [10., 2., 3.]`; `x` still `[1., 2., 3.]`.",
+      "algorithm": "Copy-with-modification (functional update).",
+      "theory_link": "In-place modification would violate JAX's stateless design.",
+      "parameters": [
+        {"name": "index (0)", "role": "Position to update."},
+        {"name": "value (10)", "role": "New value at that position."}
+      ],
+      "pitfalls": [
+        "`x[0] = 10` raises a TypeError in JAX.",
+        "Discarding the return value: `x.at[0].set(10)` without assignment has no lasting effect."
+      ],
+      "illustrative_code": "# AI-written\nx = jnp.array([1, 2, 3], dtype=\"float32\")\nx = x.at[1:].add(5)     # [1., 7., 8.] -- rebinding the name, not mutating"
+    },
+    {
+      "id": "c3",
+      "listing": "3.32",
+      "title": "A few basic math operations in JAX",
+      "original_code": "a = jnp.ones((2, 2))\nb = jnp.square(a)\nc = jnp.sqrt(a)\nd = b + c\ne = jnp.matmul(a, b)\ne *= d",
+      "language": "python",
+      "what_it_does": "Performs element-wise square, square root, addition, a matrix product and an element-wise multiplication, all with NumPy syntax.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "2x2 array of ones."},
+        {"lines": "2", "explanation": "Takes the square (element-wise), per the callout."},
+        {"lines": "3", "explanation": "Takes the square root (element-wise)."},
+        {"lines": "4", "explanation": "Adds two tensors element-wise."},
+        {"lines": "5", "explanation": "Takes the product of two tensors (matrix product, see chapter 2)."},
+        {"lines": "6", "explanation": "Multiplies two tensors element-wise. Note (not in the book): for immutable JAX arrays, `e *= d` is shorthand for `e = e * d`; it creates a new array and rebinds `e` rather than mutating it, so it is allowed."}
+      ],
+      "inputs_outputs": "Final `e` is `[[4., 4.], [4., 4.]]` (hand-computed).",
+      "algorithm": "A sequence of standard tensor operations.",
+      "theory_link": "Same API as NumPy (p.107); the tensor product was covered in chapter 2.",
+      "parameters": [],
+      "pitfalls": [
+        "Confusing `jnp.matmul(a, b)` (or `a @ b`) with `a * b` (element-wise)."
+      ],
+      "illustrative_code": null
+    }
+  ],
+  "deeper": [
+    {
+      "title": "Why `e *= d` works but `x[0] = 10` does not",
+      "kind": "breakdown",
+      "body": "Beyond the book: Python implements `e *= d` by calling `e.__imul__(d)` if it exists, otherwise it falls back to `e = e * d`. JAX arrays do not mutate in place, so the fallback computes a new array and rebinds the name `e`. Any other variable pointing to the old array still sees the old values. `x[0] = 10`, by contrast, calls `__setitem__`, which JAX arrays deliberately refuse, telling you to use `x.at[0].set(10)`.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Determinism + vectorization, concretely",
+      "kind": "step_by_step",
+      "body": "1. Split one key into 1,000 keys: `keys = jax.random.split(key, 1000)`.\n2. Map a sampling function over them with `jax.vmap`.\n3. The compiler runs all 1,000 samples in parallel, in any order.\n4. Each output depends only on its own key, so the result is identical on every run and on any hardware schedule.\n\nWith NumPy's global generator, step 3 would require the samples to be drawn sequentially to keep the same results. This illustrates the authors' claim that vectorization with determinism is impossible under a global PRNG state (book); the vmap mechanics are beyond the book.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "A printed-page analogy for .at[].set()",
+      "kind": "analogy",
+      "body": "NumPy arrays are like a whiteboard: anyone can erase and rewrite a cell, and everyone looking at it sees the change. JAX arrays are like printed pages: to change a word you print a new page (`new_x`), and anyone holding the old page still has the old text. This is safer for a compiler that wants to reason about which values exist when.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "widget",
+      "title": "jnp.matmul(a, b) from Listing 3.32",
+      "why": "Listing 3.32 contrasts element-wise ops with `jnp.matmul(a, b)` on 2x2 ones; step through the dot products to see why each entry is 2 (before `e *= d` doubles it to 4).",
+      "widget": "matrix_product",
+      "params": {"A": [[1, 1], [1, 1]], "B": [[1, 1], [1, 1]]}
+    },
+    {
+      "id": "v2",
+      "type": "mermaid",
+      "title": "Functional update with .at[].set()",
+      "why": "Listing 3.31 creates a new array instead of modifying x.",
+      "mermaid": "flowchart LR\n  X[\"x = [1., 2., 3.]\"] -->|\"x.at[0].set(10)\"| NX[\"new_x = [10., 2., 3.]\"]\n  X --> X2[\"x is unchanged: [1., 2., 3.]\"]"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "`x.at[0].set(10)` updates `x` in place, like `x[0] = 10` in NumPy.",
+      "correction": "It returns a new array; `x` keeps its values. JAX arrays are not assignable in place."
+    },
+    {
+      "claim": "The explicit key system is pure overhead with no benefit.",
+      "correction": "The authors argue it makes code vectorizable while maintaining determinism, which a global PRNG state cannot achieve."
+    },
+    {
+      "claim": "Because JAX arrays are immutable, `e *= d` must fail.",
+      "correction": "It works because it rebinds `e` to a new array (`e = e * d`); only true in-place mutation like `x[0] = ...` is disallowed (explanation beyond the book)."
+    },
+    {
+      "claim": "You need a new math API to compute with JAX.",
+      "correction": "Math in JAX looks exactly like NumPy: `jnp.square`, `jnp.sqrt`, `jnp.matmul`, `+`, `*`."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 108, "note": "Keys, `jax.random.normal`, Listing 3.30 and the introduction of `jax.random.split()`."},
+      {"page": 107, "note": "The two differences between jax.numpy and NumPy were announced: random numbers and array assignment."},
+      {"page": 106, "note": "JAX's stateless approach and its benefits for parallelization."},
+      {"page": 88, "note": "TensorFlow's first steps, where tensors are likewise not assignable in place."}
+    ],
+    "later": [
+      {"page": 110, "note": "Computing gradients in JAX with `jax.grad`, a metaprogramming approach."},
+      {"page": 112, "note": "The pure-JAX linear classifier, where all state is passed as arguments and returned."},
+      {"page": 114, "note": "What makes the JAX approach unique: its functional, stateless philosophy."}
+    ],
+    "prerequisites": [
+      {"page": 108, "note": "PRNG keys."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 108, "note": "Listing 3.30, whose key(123) values reappear at the top of this page."}
+    ],
+    "related_figures": []
+  },
+  "takeaways": [
+    "`jax.random.split(key, num=1)[0]` derives a new key that gives different but reproducible random values.",
+    "Statelessness costs some convenience but gives vectorization and determinism together.",
+    "JAX arrays cannot be modified in place; use `new_x = x.at[i].set(v)` to get an updated copy.",
+    "JAX math is identical to NumPy math: `jnp.square`, `jnp.sqrt`, `+`, `jnp.matmul`, `*`.",
+    "Randomness and assignment are the only two differences between `jax.numpy` and NumPy that the book highlights."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "What does `jax.random.split(seed_key, num=1)[0]` produce?",
+      "options": [
+        "The same key as `seed_key`",
+        "A single new key derived deterministically from `seed_key`",
+        "A random float",
+        "A new key that differs on every run of the program"
+      ],
+      "answer": "A single new key derived deterministically from `seed_key`",
+      "explanation": "`split` returns an array of `num` new keys; `[0]` takes the one key. It differs from the parent (sampling gives new values) but is deterministic, so it is the same on every run. It is a key, not a float.",
+      "page_refs": [108, 109]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "Which two benefits of statelessness do the authors give to justify the extra work of managing keys?",
+      "options": [],
+      "answer": "Vectorizability (the compiler can automatically turn the code into highly parallel code) and determinism (running the same code twice gives the same results).",
+      "explanation": "Stated directly on the page, which adds that achieving both is impossible with a global PRNG state.",
+      "page_refs": [109]
+    },
+    {
+      "id": "q3",
+      "type": "mcq",
+      "question": "After `x = jnp.array([1, 2, 3], dtype=\"float32\")` and `new_x = x.at[0].set(10)`, what is `x`?",
+      "options": [
+        "[10., 2., 3.]",
+        "[1., 2., 3.]",
+        "[10., 10., 10.]",
+        "An error is raised at the second line"
+      ],
+      "answer": "[1., 2., 3.]",
+      "explanation": "`.at[].set()` creates a new tensor; `x` is not modified because JAX arrays are not assignable in place. `[10., 2., 3.]` is `new_x`, not `x`. No error occurs since this is the sanctioned API.",
+      "page_refs": [109]
+    },
+    {
+      "id": "q4",
+      "type": "math",
+      "question": "Compute the final value of `e` in Listing 3.32.",
+      "options": [],
+      "answer": "[[4., 4.], [4., 4.]]",
+      "explanation": "`b = c = ones`, `d = 2`s; `matmul(a, b)` sums two products of 1, giving 2 in every entry; `e *= d` multiplies element-wise by 2, giving 4s.",
+      "page_refs": [109]
+    },
+    {
+      "id": "q5",
+      "type": "conceptual",
+      "question": "Why does JAX forbid in-place assignment such as `x[0] = 10`?",
+      "options": [],
+      "answer": "Because any in-place modification would go against JAX's stateless design: functions must not change existing values, only produce new ones.",
+      "explanation": "The page states this directly and compares it to TensorFlow, whose tensors are also not assignable.",
+      "page_refs": [109]
+    },
+    {
+      "id": "q6",
+      "type": "mcq",
+      "question": "In Listing 3.32, which line performs a matrix product rather than an element-wise operation?",
+      "options": [
+        "b = jnp.square(a)",
+        "d = b + c",
+        "e = jnp.matmul(a, b)",
+        "e *= d"
+      ],
+      "answer": "e = jnp.matmul(a, b)",
+      "explanation": "The callout says `matmul` 'takes the product of two tensors (see chapter 2)'. The others are annotated as element-wise: square, addition and multiplication.",
+      "page_refs": [109]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Can you rewrite the NumPy snippet `x = np.zeros(3); x[1] = 5; x[2] += 1` in JAX without in-place assignment?",
+      "options": [],
+      "answer": "`x = jnp.zeros(3); x = x.at[1].set(5); x = x.at[2].add(1)`",
+      "explanation": "Each step creates a new array and rebinds `x`. `.set` is on this page; `.add` is part of the same `.at[]` API (beyond the book).",
+      "page_refs": [109]
+    }
+  ]
+}

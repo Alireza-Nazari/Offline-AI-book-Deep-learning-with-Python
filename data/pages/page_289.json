@@ -1,0 +1,419 @@
+{
+  "page_id": "page_289",
+  "pdf_page": 289,
+  "printed_page": "265",
+  "book_id": "dlwp3",
+  "generation": {
+    "status": "complete",
+    "model": "claude-opus-5-5",
+    "generated_at": "2026-11-03T07:36:00Z",
+    "confidence": "high",
+    "review_flags": [
+      "The main text says 'Let's proceed with step 4: you'll unfreeze your conv_base', but the only unfreezing code on the page is inside the partial fine-tuning sidebar; Listing 8.31 itself does not contain conv_base.trainable = True. Notes point this out as a reader pitfall rather than assuming code that is not printed."
+    ],
+    "extraction_quality": "Clean. The sidebar was split by the extractor into sidebar/bullet fragments (e06-e10); the page image confirms they form one sidebar with two bullets and a closing sentence. Listing 8.31 continues on p.290 (model.fit call)."
+  },
+  "overview": {
+    "title": "Unfreezing the base, partial fine-tuning, low learning rate",
+    "chapter": "8 Image classification",
+    "section": "8.3 Using a pretrained model",
+    "subsection": "8.3.2 Fine-tuning a pretrained model",
+    "main_topic": "Carrying out step 4 of fine-tuning (unfreezing conv_base), the caveat about BatchNormalization layers, the partial fine-tuning alternative, and recompiling with a very low learning rate (Listing 8.31).",
+    "central_idea": "To fine-tune, unfreeze the pretrained base (but not its BatchNormalization layers), optionally only its top layers, and recompile with a very small learning rate (1e-5) so that updates to the pretrained representations stay small.",
+    "importance": "These are the practical knobs that decide whether fine-tuning helps or hurts: which layers to unfreeze, how to treat batch normalization, and how large the learning rate is. They apply to fine-tuning any pretrained network, including Transformers later in the book.",
+    "learning_objectives": [
+      "Know that BatchNormalization layers should stay frozen during fine-tuning.",
+      "Explain why one might fine-tune only the top layers of a convolutional base.",
+      "Relate the number of trainable parameters to the risk of overfitting on a small dataset.",
+      "Write Keras code that freezes all but the last four layers of a model.",
+      "Explain why fine-tuning uses a very low learning rate, and read Listing 8.31."
+    ],
+    "prerequisites": [
+      "The five-step fine-tuning recipe (p.288)",
+      "The trainable attribute and the need to recompile after changing it (pp.286-287)",
+      "Hierarchy of features in ConvNets: generic early, specialized later (section 8.1)",
+      "Overfitting and model capacity",
+      "Learning rate and the Adam optimizer",
+      "ModelCheckpoint callback"
+    ],
+    "page_kind": "content"
+  },
+  "summary": "The page continues the fine-tuning recipe from p.288.\n\n**BatchNormalization caveat.** You should *not* unfreeze batch normalization layers (`BatchNormalization`); the reason is explained in the next chapter (p.302: unfrozen BN layers keep updating their internal mean and variance, which interferes with the very small updates applied to the surrounding `Conv2D` layers).\n\n**Step 4.** Steps 1-3 (add head, freeze base, train head) were already completed during feature extraction (pp.286-287), so now you unfreeze `conv_base`.\n\n**Sidebar: Partial fine-tuning.** The authors unfreeze and fine-tune *all* of the Xception base here, but with large pretrained models you may unfreeze only the *top* layers and leave lower layers frozen, for two reasons:\n\n- Earlier layers encode more-generic, reusable features; higher layers encode more-specialized ones. The specialized ones are the ones that need repurposing, and there are fast-decreasing returns in fine-tuning lower layers.\n- The more parameters you train, the more you risk overfitting. The base has **15 million parameters**, risky to train on a small dataset (2,000 training images).\n\nSo a good strategy can be to fine-tune only the top three or four layers, e.g. set `conv_base.trainable = True` and then set `trainable = False` on every layer in `conv_base.layers[:-4]`.\n\n**Very low learning rate.** Fine-tuning starts with a very low learning rate to limit the magnitude of the modifications made to the representations being fine-tuned; updates that are too large may harm them.\n\n**Listing 8.31** recompiles the model with `binary_crossentropy`, `Adam(learning_rate=1e-5)` and accuracy, and defines a `ModelCheckpoint` callback saving the best model (by `val_loss`) to `fine_tuning.keras`. The `model.fit(...)` call that completes the listing is on p.290.",
+  "paragraphs": [
+    {
+      "ref": "p289_e03",
+      "excerpt": "Note that you should not unfreeze “batch normalization” layers (BatchNormalization).",
+      "what_it_says": "When fine-tuning, BatchNormalization layers should not be unfrozen. Batch normalization and its effect on fine-tuning are explained in chapter 9.",
+      "what_it_means": "Batch normalization layers keep running statistics (mean and variance) of their inputs. If they are trainable during fine-tuning on a small new dataset, those statistics shift, changing what every downstream layer sees, at the very moment you are trying to make only small changes. Keeping them frozen keeps the normalization the base was trained with.",
+      "why_it_matters": "Xception contains many BatchNormalization layers, so this detail directly affects this model. It is a classic source of fine-tuning failures.",
+      "technical_idea": "Beyond the book: in Keras 3, a BatchNormalization layer with trainable = False also runs in inference mode (it uses its stored moving statistics instead of batch statistics), so freezing it both stops weight updates and stops statistic updates.",
+      "terminology": [
+        {"term": "BatchNormalization", "meaning": "A layer that normalizes activations using batch statistics during training and stored moving averages at inference (chapter 9)."}
+      ],
+      "connections": [
+        "p.302: the note recommending to leave BatchNormalization layers frozen when fine-tuning, because their moving mean/variance updates interfere with the small Conv2D updates."
+      ]
+    },
+    {
+      "ref": "p289_e04",
+      "excerpt": "You already completed the first three steps when doing feature extraction.",
+      "what_it_says": "Steps 1-3 of the recipe were already done in feature extraction; the next step is step 4, unfreezing conv_base.",
+      "what_it_means": "The model with the frozen base and trained Dense head from pp.286-287 is the starting point. Unfreezing means setting conv_base.trainable = True (the line shown in the sidebar) before recompiling.",
+      "why_it_matters": "It makes explicit that fine-tuning reuses the trained head rather than starting over with a new one.",
+      "technical_idea": "Note (not in the book): Listing 8.31 does not show the unfreezing line itself; it is shown only in the sidebar code (conv_base.trainable = True). You need it, then recompile, for the change to take effect (p.287).",
+      "terminology": [
+        {"term": "conv_base", "meaning": "The pretrained Xception convolutional base created with KerasHub (p.282) and frozen in Listing 8.28 (p.286)."}
+      ],
+      "connections": [
+        "p.288: the five-step fine-tuning recipe.",
+        "p.287: changes to trainability need a recompile."
+      ]
+    },
+    {
+      "ref": "p289_e06",
+      "excerpt": "In this case, we chose to unfreeze and fine-tune all of the",
+      "what_it_says": "The authors fine-tune the whole Xception base, but with large pretrained models you may sometimes unfreeze only some top layers and leave lower ones frozen. The sidebar then asks why only some layers, and why the top ones.",
+      "what_it_means": "Fine-tuning is not all-or-nothing: the boundary between frozen and trainable layers is a design choice, a hyperparameter trading adaptability against overfitting and compute.",
+      "why_it_matters": "Partial fine-tuning is common in practice for large models and small datasets, and also lowers memory and compute because fewer gradients have to be stored and applied.",
+      "terminology": [
+        {"term": "Partial fine-tuning", "meaning": "Unfreezing only the top layers of a pretrained base while keeping lower layers frozen."},
+        {"term": "Xception", "meaning": "The pretrained ImageNet ConvNet used as conv_base in this section (p.282)."}
+      ],
+      "connections": [
+        "p.282: Xception instantiated via KerasHub."
+      ]
+    },
+    {
+      "ref": "p289_e07",
+      "excerpt": "Earlier layers in the convolutional base encode more-generic, reusable features,",
+      "what_it_says": "First reason: earlier layers encode more-generic, reusable features, higher layers more-specialized ones. Fine-tuning the specialized features is more useful because they are the ones that need repurposing; fine-tuning lower layers has fast-decreasing returns.",
+      "what_it_means": "Low layers detect edges, colors and textures that are useful for almost any image task; they need little change. High layers detect object parts specific to ImageNet classes; these are where a new task differs, so that is where adaptation pays off.",
+      "why_it_matters": "It tells you where to spend your training budget: from the top of the network downwards.",
+      "technical_idea": "This follows from the spatial hierarchy of features learned by ConvNets (section 8.1) and the observation on p.282 that the generality of representations depends on depth.",
+      "terminology": [
+        {"term": "Generic vs specialized features", "meaning": "Features useful across many tasks (edges, textures) versus features tied to the original training classes (object parts)."}
+      ],
+      "connections": [
+        "p.282: using only the first few layers for feature extraction when the new dataset differs a lot.",
+        "p.280: the spatial hierarchy of features as a generic model of the visual world."
+      ]
+    },
+    {
+      "ref": "p289_e09",
+      "excerpt": "The more parameters you’re training, the more you’re at risk of overfitting.",
+      "what_it_says": "Second reason: more trainable parameters means more overfitting risk. The convolutional base has 15 million parameters, risky to train on a small dataset. So it can be a good strategy to fine-tune only the top three or four layers, with code like the snippet shown.",
+      "what_it_means": "With 2,000 training images, 15 million free parameters can easily memorize the training set. Freezing most of the base reduces effective capacity, acting as a form of regularization.",
+      "why_it_matters": "Gives a concrete heuristic (top three or four layers) and concrete code. In this case the authors still fine-tune the whole base and rely on the low learning rate and augmentation to control overfitting.",
+      "technical_idea": "conv_base.layers[:-4] is a Python slice of all layers except the last four. Setting trainable = True on the model and then False on those layers leaves only the last four trainable.",
+      "terminology": [
+        {"term": "Trainable parameters", "meaning": "Weights the optimizer is allowed to update; frozen weights are excluded."}
+      ],
+      "connections": [
+        "p.266: the dataset uses 2,000 training samples."
+      ]
+    },
+    {
+      "ref": "p289_e12",
+      "excerpt": "Let’s start fine-tuning the model using a very low learning rate.",
+      "what_it_says": "Fine-tuning uses a very low learning rate to limit the magnitude of modifications to the representations being fine-tuned; updates that are too large may harm them.",
+      "what_it_means": "The pretrained weights are already near a good solution. A small learning rate keeps each step small, so the model explores the neighborhood of the pretrained solution instead of jumping away from it.",
+      "why_it_matters": "Together with training the head first, this is the second safeguard against destroying pretrained features. Listing 8.31 uses 1e-5, far below Adam's default of 1e-3.",
+      "technical_idea": "Beyond the book: for Adam, the per-step change of each weight is roughly bounded by the learning rate, so with 1e-5 a weight moves about 1e-5 per step at most; over an epoch of ~32 steps (2,000 images in batches of 64, the batch size set in section 8.2), that is at most about 3e-4 per weight.",
+      "terminology": [
+        {"term": "Learning rate", "meaning": "The scale factor on optimizer updates; it controls how far weights move per step."}
+      ],
+      "connections": [
+        "p.288: large error signals destroy pretrained representations."
+      ]
+    },
+    {
+      "ref": "p289_e14",
+      "excerpt": "model.compile( loss=\"binary_crossentropy\",",
+      "what_it_says": "Listing 8.31 recompiles the model with binary cross-entropy, Adam at learning rate 1e-5, and accuracy, and creates a ModelCheckpoint callback that saves the best model by validation loss to fine_tuning.keras.",
+      "what_it_means": "Recompiling makes the new trainable settings take effect and installs a fresh optimizer with the small learning rate. Checkpointing on val_loss keeps the best epoch, which protects against later overfitting.",
+      "why_it_matters": "This is step 5 in code. The fit call that runs it is on p.290.",
+      "terminology": [
+        {"term": "ModelCheckpoint", "meaning": "A Keras callback that saves the model during training; with save_best_only=True it only overwrites when the monitored metric improves."}
+      ],
+      "connections": [
+        "p.290: the model.fit(...) call with augmented_train_dataset for 30 epochs."
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "fine_tuning",
+      "name": "Fine-tuning",
+      "definition": "Unfreezing a pretrained base and training it jointly with a previously trained head, with a very low learning rate.",
+      "intuition": "Small, careful adjustments to an already good model.",
+      "technical": "conv_base.trainable = True (keeping BatchNormalization frozen), recompile with Adam(1e-5), fit with checkpointing.",
+      "significance": "Reaches 98.6% test accuracy on dogs vs. cats (p.290).",
+      "example": "Listing 8.31.",
+      "misconception": "Fine-tuning does not require a high learning rate to have an effect; a low one is deliberate.",
+      "related": ["partial_fine_tuning", "learning_rate", "batch_normalization", "freezing_layers"],
+      "source": "book"
+    },
+    {
+      "id": "partial_fine_tuning",
+      "name": "Partial fine-tuning",
+      "definition": "Unfreezing only the top layers of a pretrained base, keeping the lower layers frozen.",
+      "intuition": "Adjust the specialized parts, leave the general-purpose parts alone.",
+      "technical": "Set base.trainable = True, then trainable = False for base.layers[:-k]; the book suggests k = 3 or 4.",
+      "significance": "Fewer trainable parameters reduces overfitting risk on small datasets and concentrates adaptation where it helps most.",
+      "example": "for layer in conv_base.layers[:-4]: layer.trainable = False",
+      "misconception": "Fine-tuning the lower layers gives as much benefit as the top layers; the book says returns fall off quickly.",
+      "related": ["fine_tuning", "overfitting", "freezing_layers"],
+      "source": "book"
+    },
+    {
+      "id": "batch_normalization",
+      "name": "Batch normalization (in fine-tuning)",
+      "definition": "A normalization layer covered in chapter 9; during fine-tuning its layers should stay frozen.",
+      "intuition": "Its stored statistics are part of what the pretrained model expects; changing them shifts everything downstream.",
+      "technical": "Unfrozen BN layers keep updating their moving mean and variance, which interferes with the very small updates applied to surrounding Conv2D layers (p.302).",
+      "significance": "Xception uses BN heavily, so this matters for this example.",
+      "example": "Leave BatchNormalization layers with trainable = False.",
+      "misconception": "Setting the whole base trainable is harmless for BN layers.",
+      "related": ["fine_tuning"],
+      "source": "book"
+    },
+    {
+      "id": "learning_rate",
+      "name": "Learning rate (for fine-tuning)",
+      "definition": "The step-size multiplier for weight updates.",
+      "intuition": "A low learning rate means small nudges rather than big jumps.",
+      "technical": "Listing 8.31 uses Adam(learning_rate=1e-5), 100 times smaller than Adam's default 1e-3 (default value: beyond the book).",
+      "significance": "Limits the magnitude of changes to pretrained representations.",
+      "example": "1e-5 in Listing 8.31.",
+      "misconception": "A low learning rate is only about stability; here it is specifically about preserving learned features.",
+      "related": ["fine_tuning", "adam", "optimizer"],
+      "source": "book"
+    },
+    {
+      "id": "overfitting",
+      "name": "Overfitting and trainable capacity",
+      "definition": "Fitting the training data so closely that performance on new data degrades.",
+      "intuition": "15 million knobs, 2,000 examples: easy to memorize.",
+      "technical": "Freezing layers lowers the number of trainable parameters and thus the effective capacity.",
+      "significance": "One of the two reasons for partial fine-tuning.",
+      "example": "The 15-million-parameter base vs a small dataset.",
+      "misconception": "Frozen parameters contribute to overfitting the same way trainable ones do.",
+      "related": ["partial_fine_tuning", "regularization"],
+      "source": "book"
+    }
+  ],
+  "math": [],
+  "code": [
+    {
+      "id": "c1",
+      "listing": null,
+      "title": "Partial fine-tuning: freeze all layers but the last four",
+      "original_code": "conv_base.trainable = True\nfor layer in conv_base.layers[:-4]:\n    layer.trainable = False",
+      "language": "python",
+      "what_it_does": "Makes the whole convolutional base trainable, then re-freezes every layer except the last four, so only the top four layers will be fine-tuned.",
+      "line_explanations": [
+        {"lines": "1", "explanation": "Unfreeze the base. Setting trainable on a model propagates to all its layers."},
+        {"lines": "2", "explanation": "conv_base.layers[:-4] selects all layers except the last four (Python negative slicing)."},
+        {"lines": "3", "explanation": "Freeze each of those lower layers again."}
+      ],
+      "inputs_outputs": "No output; it changes the trainable flags of conv_base's layers in place.",
+      "algorithm": "Unfreeze all, then freeze a prefix of the layer list.",
+      "theory_link": "Lower layers encode generic features worth keeping; top layers encode specialized ones worth adapting; fewer trainable parameters means less overfitting risk.",
+      "parameters": [
+        {"name": "-4", "role": "How many top layers stay trainable; the book suggests three or four."}
+      ],
+      "pitfalls": [
+        "Must be done before compile(), or followed by recompiling; otherwise the changes are ignored (p.287).",
+        "'Layers' counts Keras layers, including BatchNormalization and activation layers, so the last four layers may be fewer conv blocks than you expect.",
+        "If one of the last four layers is a BatchNormalization layer, the book's advice is to keep it frozen."
+      ],
+      "illustrative_code": "# AI-written: inspect which layers are trainable and how many parameters will be trained\nfor layer in conv_base.layers[-6:]:\n    print(layer.name, layer.trainable)\nprint(sum(w.numpy().size for w in model.trainable_weights))"
+    },
+    {
+      "id": "c2",
+      "listing": "8.31",
+      "title": "Fine-tuning the model (compile and callbacks; continues on p.290)",
+      "original_code": "model.compile(\n    loss=\"binary_crossentropy\",\n    optimizer=keras.optimizers.Adam(learning_rate=1e-5),\n    metrics=[\"accuracy\"],\n)\n\ncallbacks = [\n    keras.callbacks.ModelCheckpoint(\n        filepath=\"fine_tuning.keras\",\n        save_best_only=True,\n        monitor=\"val_loss\",\n    )\n]",
+      "language": "python",
+      "what_it_does": "Recompiles the model (pretrained base + trained head) for fine-tuning with a very low learning rate and sets up a checkpoint callback that keeps the best model by validation loss. The listing continues on p.290 with the model.fit(...) call.",
+      "line_explanations": [
+        {"lines": "1-5", "explanation": "Recompile so the new trainable settings take effect. Binary cross-entropy matches the single sigmoid output for cats vs dogs; Adam with learning_rate=1e-5 keeps updates tiny; accuracy is tracked."},
+        {"lines": "7-13", "explanation": "A list with one ModelCheckpoint callback: after each epoch, save the model to fine_tuning.keras only if val_loss improved."}
+      ],
+      "inputs_outputs": "No direct output; prepares the model and callbacks for model.fit on p.290, which writes fine_tuning.keras.",
+      "algorithm": "Gradient-based training of all trainable weights with Adam at a small step size, with best-epoch model selection on validation loss.",
+      "theory_link": "Low learning rate limits changes to pretrained representations; checkpointing on val_loss is early stopping by model selection.",
+      "parameters": [
+        {"name": "loss=\"binary_crossentropy\"", "role": "Loss for the two-class problem with a sigmoid output."},
+        {"name": "learning_rate=1e-5", "role": "Very low step size to protect pretrained features."},
+        {"name": "metrics=[\"accuracy\"]", "role": "Reports accuracy during training and validation."},
+        {"name": "filepath=\"fine_tuning.keras\"", "role": "Where the best model is saved; loaded back for testing on p.290."},
+        {"name": "save_best_only=True", "role": "Only overwrite the file when the monitored metric improves."},
+        {"name": "monitor=\"val_loss\"", "role": "The metric used to decide which epoch is best."}
+      ],
+      "pitfalls": [
+        "The listing does not itself unfreeze the base; conv_base.trainable = True must have been set before this compile call.",
+        "Using the default Adam learning rate (1e-3) for fine-tuning can wreck the pretrained features.",
+        "Monitoring val_loss and val_accuracy can pick different best epochs."
+      ],
+      "illustrative_code": "# AI-written: the full step 4 + step 5 sequence in order\nconv_base.trainable = True\nfor layer in conv_base.layers:\n    if isinstance(layer, keras.layers.BatchNormalization):\n        layer.trainable = False  # book: don't unfreeze BN layers\nmodel.compile(loss=\"binary_crossentropy\",\n              optimizer=keras.optimizers.Adam(learning_rate=1e-5),\n              metrics=[\"accuracy\"])"
+    }
+  ],
+  "deeper": [
+    {
+      "title": "How small is a 1e-5 learning rate, concretely?",
+      "kind": "numerical",
+      "body": "A plain gradient step is $w \\leftarrow w - \\eta\\, g$. Adam rescales the gradient by a running estimate of its magnitude, so each weight's step is roughly at most $\\eta$ in size.\n\n- With $\\eta = 10^{-3}$ (Adam's default), a weight can move about $0.001$ per step.\n- With $\\eta = 10^{-5}$ (Listing 8.31), about $0.00001$ per step.\n\nWith 2,000 training images and the batch size of 64 used in this chapter, one epoch is about 32 steps, so even if every step pushed a weight in the same direction it would move at most about $3\\times10^{-4}$ per epoch and about $0.01$ over 30 epochs. Typical convolution weights are of order $10^{-2}$ to $10^{-1}$, so the pretrained filters are nudged, not rewritten. This calculation is AI-written; the book just says 'very low learning rate'.",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Choosing how many layers to unfreeze",
+      "kind": "application",
+      "body": "A practical rule of thumb consistent with the sidebar:\n\n- **Tiny dataset, similar to the pretraining data** (like dogs vs. cats vs. ImageNet): feature extraction or fine-tune only the top few layers.\n- **Small dataset, different domain** (e.g. medical images): unfreeze more of the top, possibly use only lower layers as features (p.282).\n- **Larger dataset**: fine-tuning the whole base, as the authors do here, becomes safer.\n\nIn all cases keep BatchNormalization frozen and use a low learning rate. This guidance is an AI summary built on the book's two reasons (feature generality and overfitting).",
+      "source": "ai_explanation"
+    },
+    {
+      "title": "Analogy: renovating a house",
+      "kind": "analogy",
+      "body": "The foundation and walls (low layers) are sound and fit almost any use. The interior layout (top layers) was designed for the previous owner. When you move in, you rearrange the rooms, not the foundation; and you make changes gradually (low learning rate) so you don't knock down a load-bearing wall by accident.",
+      "source": "analogy"
+    }
+  ],
+  "visualizations": [
+    {
+      "id": "v1",
+      "type": "mermaid",
+      "title": "Partial fine-tuning: which layers train",
+      "why": "The sidebar suggests fine-tuning only the top three or four layers of the convolutional base; this diagram shows the frozen/trainable split produced by the snippet conv_base.layers[:-4].",
+      "mermaid": "flowchart BT\n  IN[Input images 180x180] --> L1[Lower conv layers: generic features - frozen]\n  L1 --> L2[Middle conv layers - frozen]\n  L2 --> L3[Last 4 layers of conv_base: specialized features - trainable]\n  L3 --> H[Dense classifier head - trainable, already trained]\n  H --> OUT[Sigmoid output: cat or dog]\n  BN[BatchNormalization layers stay frozen everywhere] -.-> L3"
+    }
+  ],
+  "misconceptions": [
+    {
+      "claim": "When fine-tuning, every layer in the base, including BatchNormalization, should be made trainable.",
+      "correction": "The book says not to unfreeze BatchNormalization layers; chapter 9 (p.302) explains they would keep updating their statistics and interfere with the small Conv2D updates."
+    },
+    {
+      "claim": "Fine-tuning the lowest layers is the most valuable because they are the foundation.",
+      "correction": "Lower layers are generic and reusable; there are fast-decreasing returns in fine-tuning them. The top, specialized layers benefit most."
+    },
+    {
+      "claim": "A normal learning rate is fine because the head is already trained.",
+      "correction": "The book uses a very low rate (1e-5) specifically to limit the magnitude of modifications to pretrained representations."
+    },
+    {
+      "claim": "Listing 8.31 unfreezes the base.",
+      "correction": "It only recompiles and sets up callbacks; the unfreezing (conv_base.trainable = True) must happen before it."
+    }
+  ],
+  "connections": {
+    "earlier": [
+      {"page": 288, "note": "Definition of fine-tuning and the five-step recipe."},
+      {"page": 286, "note": "Freezing the base with trainable = False (Listing 8.28)."},
+      {"page": 287, "note": "Recompile after changing trainability."},
+      {"page": 282, "note": "Xception base from KerasHub; generality of features depends on depth."}
+    ],
+    "later": [
+      {"page": 290, "note": "model.fit for 30 epochs, evaluation, 98.6% test accuracy."},
+      {"page": 302, "note": "Why BatchNormalization layers should stay frozen during fine-tuning."},
+      {"page": 484, "note": "Fine-tuning a pretrained Transformer backbone for classification."},
+      {"page": 512, "note": "Instruction fine-tuning of an LLM."},
+      {"page": 531, "note": "LoRA: freezing most Transformer parameters and training a low-rank update."}
+    ],
+    "prerequisites": [
+      {"page": 288, "note": "The fine-tuning recipe."},
+      {"page": 286, "note": "Freezing layers."}
+    ],
+    "related_math": [],
+    "related_code": [
+      {"page": 286, "note": "Listing 8.28 freezes the base."},
+      {"page": 290, "note": "Continuation of Listing 8.31: model.fit and evaluation."}
+    ],
+    "related_figures": [
+      {"page": 290, "note": "Figure 8.15: training and validation metrics for fine-tuning."}
+    ]
+  },
+  "takeaways": [
+    "Don't unfreeze BatchNormalization layers when fine-tuning.",
+    "Steps 1-3 were feature extraction; step 4 is unfreezing conv_base.",
+    "Partial fine-tuning (top 3-4 layers) is often wise: top layers are specialized, and fewer trainable parameters means less overfitting.",
+    "The Xception base has 15 million parameters, a lot for a 2,000-image dataset.",
+    "Fine-tune with a very low learning rate (Adam 1e-5) to keep changes to pretrained features small.",
+    "Recompile after changing trainable flags, and checkpoint the best model by val_loss."
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "mcq",
+      "question": "What does `for layer in conv_base.layers[:-4]: layer.trainable = False` do after `conv_base.trainable = True`?",
+      "options": [
+        "Freezes the last four layers and trains the rest.",
+        "Leaves only the last four layers of the base trainable.",
+        "Removes the last four layers from the model.",
+        "Freezes every fourth layer of the base."
+      ],
+      "answer": "Leaves only the last four layers of the base trainable.",
+      "explanation": "layers[:-4] is every layer except the last four; those get frozen, so only the top four remain trainable. It doesn't remove layers, doesn't freeze the last four (that would be layers[-4:]), and isn't a stride (that would be layers[::4]).",
+      "page_refs": [289]
+    },
+    {
+      "id": "q2",
+      "type": "short",
+      "question": "Give the two reasons from the sidebar for fine-tuning only the top layers of a convolutional base.",
+      "options": [],
+      "answer": "(1) Lower layers encode generic, reusable features while higher layers encode specialized ones that need repurposing, so fine-tuning lower layers gives fast-decreasing returns. (2) More trainable parameters means more overfitting risk; the base has 15 million parameters, too many for a small dataset.",
+      "explanation": "Both bullets in the 'Partial fine-tuning' sidebar.",
+      "page_refs": [289]
+    },
+    {
+      "id": "q3",
+      "type": "conceptual",
+      "question": "Why does fine-tuning use a very low learning rate such as 1e-5?",
+      "options": [],
+      "answer": "To limit the magnitude of the modifications made to the representations being fine-tuned; large updates may harm those pretrained representations.",
+      "explanation": "Stated directly before Listing 8.31. The pretrained weights are already good, so you only want small adjustments.",
+      "page_refs": [289]
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "question": "Which layers does the book say you should NOT unfreeze when fine-tuning?",
+      "options": [
+        "Dense layers",
+        "Conv2D layers in the top block",
+        "BatchNormalization layers",
+        "Dropout layers"
+      ],
+      "answer": "BatchNormalization layers",
+      "explanation": "The page says explicitly not to unfreeze BatchNormalization layers; chapter 9 explains why (p.302). Dense and top Conv2D layers are exactly what you train; Dropout has no weights.",
+      "page_refs": [289, 302]
+    },
+    {
+      "id": "q5",
+      "type": "conceptual",
+      "question": "Listing 8.31 calls model.compile again. Why is recompiling necessary at this point?",
+      "options": [],
+      "answer": "Because trainability was changed (the base was unfrozen); in Keras such changes only take effect after recompiling. Recompiling also creates the optimizer with the new, low learning rate.",
+      "explanation": "p.287 states that if you modify weight trainability after compilation you must recompile, or the changes are ignored.",
+      "page_refs": [289, 287]
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "question": "What does the ModelCheckpoint callback in Listing 8.31 save, and when?",
+      "options": [],
+      "answer": "It saves the model to fine_tuning.keras at the end of an epoch only when val_loss improves (save_best_only=True, monitor=\"val_loss\"), so the file holds the best epoch.",
+      "explanation": "The file is loaded back for test evaluation on p.290.",
+      "page_refs": [289, 290]
+    },
+    {
+      "id": "q7",
+      "type": "self",
+      "question": "Could you write, from memory, the code to unfreeze a pretrained base, keep its BatchNormalization layers frozen, and recompile with a learning rate of 1e-5?",
+      "options": [],
+      "answer": "Set conv_base.trainable = True, loop over conv_base.layers and set trainable = False for BatchNormalization instances, then model.compile(..., optimizer=keras.optimizers.Adam(learning_rate=1e-5), ...).",
+      "explanation": "Compare with the sidebar snippet and Listing 8.31; the BN loop is an AI-written combination of the book's advice.",
+      "page_refs": [289]
+    }
+  ]
+}

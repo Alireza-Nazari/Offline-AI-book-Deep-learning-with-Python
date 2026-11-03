@@ -1,0 +1,190 @@
+# Generation bundle for page_229  (PDF page 229, printed page 205)
+
+Page kind: content
+Chapter: 7 A deep dive on Keras
+Section: 7.2 Different ways to build Keras models
+Subsection: 7.2.5 Remember: Use the right tool for the job
+Rendered page image (LOOK AT IT for formulas, figures, tables, layout): /Users/alireza/Coding/book_rag/book_companion/work/page_images/page_229.png
+Output file to write: /Users/alireza/Coding/book_rag/book_companion/data/pages/page_229.json
+
+## Extracted elements on this page (reading order; ids are used in `paragraphs[].ref`)
+
+[p229_e03] (code)
+```
+        if num_classes == 2:
+            num_units = 1
+            activation = "sigmoid"
+        else:
+            num_units = num_classes
+            activation = "softmax"
+        self.dense = layers.Dense(num_units, activation=activation)
+    def call(self, inputs):
+        return self.dense(inputs)
+inputs = keras.Input(shape=(3,))
+features = layers.Dense(64, activation="relu")(inputs)
+outputs = Classifier(num_classes=10)(features)
+model = keras.Model(inputs=inputs, outputs=outputs)
+```
+[p229_e04] (body) Inversely, you can use a Functional model as part of a subclassed layer or model.
+[p229_e05] (listing_caption) Listing 7.16 Creating a subclassed model that includes a Functional model
+[p229_e06] (code)
+```
+inputs = keras.Input(shape=(64,))
+outputs = layers.Dense(1, activation="sigmoid")(inputs)
+binary_classifier = keras.Model(inputs=inputs, outputs=outputs)
+class MyModel(keras.Model):
+    def __init__(self, num_classes=2):
+        super().__init__()
+        self.dense = layers.Dense(64, activation="relu")
+        self.classifier = binary_classifier
+    def call(self, inputs):
+        features = self.dense(inputs)
+        return self.classifier(features)
+model = MyModel()
+```
+[p229_e07] (heading_subsection) 7.2.5
+[p229_e08] (heading_subsection) Remember: Use the right tool for the job
+[p229_e09] (body) You’ve learned about the spectrum of workflows for building Keras models, from the simplest workflow—the Sequential model—to the most advanced one, model subclassing. When should you use one over the other? Each one has its pros and cons—pick the one most suitable for the job at hand.
+[p229_e10] (body) In general, the Functional API provides you with a pretty good tradeoff between ease of use and flexibility. It also gives you direct access to layer connectivity, which is very powerful for use cases such as model plotting or feature extraction. If you can use the Functional API—that is, if your model can be expressed as a directed acyclic graph of layers—we recommend using it over model subclassing.
+
+## Listings
+- Listing 7.16: Creating a subclassed model that includes a Functional model (code elements p229_e06)
+
+## Chapter outline
+Chapter: 7 A deep dive on Keras (PDF pages 214-254)
+  - 7.1 A spectrum of workflows (p.215)
+  - 7.2 Different ways to build Keras models (p.216)
+      - 7.2.1 The Sequential model (p.216)
+      - 7.2.2 The Functional API (p.219)
+      - 7.2.3 Subclassing the Model class (p.226)
+      - 7.2.4 Mixing and matching different components (p.228)
+      - 7.2.5 Remember: Use the right tool for the job (p.229)
+  - 7.3 Using built-in training and evaluation loops (p.230)
+      - 7.3.1 Writing your own metrics (p.231)
+      - 7.3.2 Using callbacks (p.232)
+      - 7.3.3 Writing your own callbacks (p.234)
+      - 7.3.4 Monitoring and visualization with TensorBoard (p.236)
+  - 7.4 Writing your own training and evaluation loops (p.238)
+      - 7.4.1 Training vs. inference (p.239)
+      - 7.4.2 Writing custom training step functions (p.240)
+      - 7.4.3 Low-level usage of metrics (p.245)
+      - 7.4.4 Using fit() with a custom training loop (p.246)
+      - 7.4.5 Handling metrics in a custom train_step() (p.250)
+
+## Previous page (PDF 228) text, for continuity
+The `Model` subclassing workflow is the most flexible way to build a model: it enables you to build models that cannot be expressed as directed acyclic graphs of layers— imagine, for instance, a model where the `call()` method uses layers inside a `for` loop, or even calls them recursively. Anything is possible—you’re in charge.
+
+Beware: What subclassed models don’t support
+
+This freedom comes at a cost: with subclassed models, you are responsible for more of the model logic, which means your potential error surface is much larger. As a result, you will have more debugging work to do. You are developing a new Python object, not just snapping together LEGO bricks.
+
+Functional and subclassed models are also substantially different in nature: a Functional model is an explicit data structure—a graph of layers, which you can view, inspect, and modify. Meanwhile, a subclassed model is a piece of bytecode—a Python class with a `call()` method that contains raw code. This is the source of the subclassing workflow’s flexibility—you can just code up whatever functionality you like—but it introduces new limitations. For instance, because the way layers are connected to each other is hidden inside the body of the `call()` method, you cannot access that information. Calling `summary()` will not display layer connectivity, and you cannot plot the model topology via `plot_` `model()`. Likewise, if you have a subclassed model, you cannot access the nodes of the graph of layers to do feature extraction—because there is simply no graph. Once the model is instantiated, its forward pass becomes a complete black box.
+
+7.2.4
+
+Mixing and matching different components
+
+Crucially, choosing one of these patterns—the Sequential model, the Functional API, `Model` subclassing—does not lock you out  …
+
+## Next page (PDF 230) text, for continuity
+Going forward, all examples in this book will use the Functional API—simply because all of the models we will work with are expressible as graphs of layers. We will, however, make frequent use of subclassed layers. In general, using Functional models that include subclassed layers provides the best of both worlds: high development flexibility while retaining the advantages of the Functional API.
+
+7.3
+
+Using built-in training and evaluation loops
+
+The principle of progressive disclosure of complexity—access to a spectrum of workflows that go from dead easy to arbitrarily flexible, one step at a time—also applies to model training. Keras provides you with different workflows for training models—it can be as simple as calling `fit()` on your data or as advanced as writing a new training algorithm from scratch.
+
+You are already familiar with the `compile()`, `fit()`, `evaluate()`, `predict()` workflow. As a reminder, it looks like the following listing.
+
+Listing 7.17 The standard workflow: `compile()`, `fit()`, `evaluate()`, `predict()`
+
+## Related pages elsewhere in the book (hybrid retrieval; use for the `connections` section)
+- PDF p.219 — 7 A deep dive on Keras › 7.2 Different ways to build Keras models
+- PDF p.226 — 7 A deep dive on Keras › 7.2 Different ways to build Keras models
+- PDF p.220 — 7 A deep dive on Keras › 7.2 Different ways to build Keras models
+- PDF p.625 — 20 Conclusions › 20.1 Key concepts in review
+- PDF p.248 — 7 A deep dive on Keras › 7.4 Writing your own training and evaluation loops
+- PDF p.251 — 7 A deep dive on Keras › 7.4 Writing your own training and evaluation loops
+- PDF p.628 — 20 Conclusions › 20.1 Key concepts in review
+- PDF p.252 — 7 A deep dive on Keras › 7.4 Writing your own training and evaluation loops
+
+## Retrieved passages from elsewhere in the book (cite the PDF page when you use them)
+
+### PDF p.219 (printed 195) — 7 A deep dive on Keras › 7.2 Different ways to build Keras models › The Functional API
+The Sequential model is easy to use, but its applicability is extremely limited: it can only express models with a single input and a single output, applying one layer after the other in a sequential fashion. In practice, it’s pretty common to encounter models with multiple inputs (say, an image and its metadata), multiple outputs (different things you want to predict about the data), or a nonlinear topology.
+
+In such cases, you’d build your model using the Functional API. This is what most Keras models you’ll encounter in the wild use. It’s fun and powerful—it feels like playing with LEGO bricks.
+
+### PDF p.216 (printed 192) — 7 A deep dive on Keras › 7.2 Different ways to build Keras models › Different ways to build Keras models
+There are three APIs for building models in Keras, as shown in figure 7.1:
+
+The Sequential model is the most approachable API—it’s basically a Python list. As such, it’s limited to simple stacks of layers.
+
+The Functional API, which focuses on graph-like model architectures. It represents a nice mid-point between usability and flexibility, and as such, it’s the most commonly used model-building API.
+
+Model subclassing, a low-level option where you write everything yourself from scratch. This is ideal if you want full control over every little thing. However, you won’t get access to many built-in Keras features, and you will be more at risk of making mistakes.
+
+Figure 7.1 Progressive disclosure of complexity for model building
+
+### PDF p.223 (printed 199) — 7 A deep dive on Keras › 7.2 Different ways to build Keras models › The power of the Functional API: Access to layer connectivity
+A Functional model is an explicit graph data structure. This makes it possible to inspect how layers are connected and reuse previous graph nodes (which are layer outputs) as part of new models. It also nicely fits the “mental model” that most researchers use when thinking about a deep neural network: a graph of layers.
+
+This enables two important use cases: model visualization and feature extraction. Let’s take a look.
+
+### PDF p.227 (printed 203) — 7 A deep dive on Keras › 7.2 Different ways to build Keras models › 
+So far, everything looks very similar to `Layer` subclassing, a workflow you’ve already encountered in chapter 3. What, then, is the difference between a `Layer` subclass and a `Model` subclass? It’s simple: a layer is a building block you use to create models, and a model is the top-level object that you will actually train, export for inference, etc. In short, a `Model` has a `fit()`, `evaluate()`, and `predict()` method. Layers don’t. Other than that, the two classes are virtually identical (another difference is that you can save a model to a file on disk—which we will cover in a few sections).
+
+You can compile and train a `Model` subclass just like a Sequential or Functional model:
+
+### PDF p.226 (printed 202) — 7 A deep dive on Keras › 7.2 Different ways to build Keras models › Subclassing the Model class
+The last model-building pattern you should know about is the most advanced one: `Model` subclassing. You’ve already learned in chapter 3 how to subclass the `Layer` class to create custom layers. Subclassing `Model` is pretty similar:
+
+In the `__init__()` method, define the layers the model will use.
+
+In the `call` method, define the forward pass of the model, reusing the layers previously created.
+
+Instantiate your subclass and call it on data to create its weights.
+
+### PDF p.214 (printed 190) — 7 A deep dive on Keras ›  › This chapter covers
+The different ways to create Keras models: the
+
+`Sequential` class, the Functional API, and model
+
+subclassing
+
+How to use the built-in Keras training and
+
+evaluation loops, including how to use custom
+
+metrics and custom losses
+
+Using Keras callbacks to further customize how
+
+training proceeds
+
+Using TensorBoard for monitoring your training
+
+and evaluation metrics over time
+
+How to write your own training and evaluation
+
+loops from scratch
+
+You’re starting to have some amount of experience with Keras. You’re familiar with the Sequential model, `Dense` layers, and built-in APIs for training, evaluation, and inference—`compile()`, `fit()`, `evaluate()`, and `predict()`. You’ve even learned in chapter 3 how to inherit from the `Layer` class to create custom layers, and how to
+
+### PDF p.215 (printed 191) — 7 A deep dive on Keras › 7.1 A spectrum of workflows › A spectrum of workflows
+As such, there’s not a single “true” way of using Keras. Rather, Keras offers a spectrum of workflows, from the very simple to the very flexible. There are different ways to build Keras models, and different ways to train them, answering different needs. For instance, you have a range of ways to build models and an array of ways to train them, each representing a certain tradeoff between usability and flexibility. You could be using Keras like you would use scikit-learn—just calling `fit()` and letting the framework do its thing—or you could be using it like NumPy—taking full control of every little detail. Because all these workflows are based on shared APIs, such as `Layer` and `Model`, components from any workflow can be used in any other workflow: they can all talk to each other. This means that everything you’re learning now as you’re getting started will still be relevant once you’ve become an expert. You can get started easily and then gradually dive into workflows where you’re writing more and more logic from scratch. You won’t have to switch to an entirely different framework as you go from student to researcher, or from data scientist to deep learning engineer. This philo
+
+### PDF p.254 (printed 230) — 7 A deep dive on Keras › 7.4 Writing your own training and evaluation loops › Summary
+Keras offers a spectrum of different workflows, based on the principle of progressive disclosure of complexity. They all smoothly interoperate.
+
+You can build models via the `Sequential` class, via the Functional API, or by subclassing the `Model` class. Most of the time, you’ll be using the Functional API.
+
+The simplest way to train and evaluate a model is via the default `fit()` and `evaluate()` methods.
+
+Keras callbacks provide a simple way to monitor models during your call to `fit()` and automatically take action based on the state of the model.
+
+You can also fully control what `fit()` does by overriding the `train_step()` method, using APIs from your backend of choice—JAX, TensorFlow, or PyTorch.
+
+Beyond `fit()`, you can also write your own training loops entirely from scratch, in a backend-native way. This is useful for researchers implementing brand-new training algorithms.

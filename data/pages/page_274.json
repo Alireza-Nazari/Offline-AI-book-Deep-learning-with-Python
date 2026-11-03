@@ -1,0 +1,164 @@
+{
+ "page_id": "page_274", "pdf_page": 274, "printed_page": "250", "book_id": "dlwp3",
+ "generation": {"status": "complete", "model": "claude-opus-5-5", "generated_at": "2026-11-03T07:51:00Z",
+   "confidence": "high",
+   "review_flags": ["Book inconsistency: listing 8.14 prints a batch shape of (32, 180, 180, 3) and the text says 32 samples per batch, but listing 8.9 (p.271) sets batch_size = 64. With the code as printed, the batch would be (64, 180, 180, 3). Notes point this out."],
+   "extraction_quality": "Clean; all body paragraphs and listings 8.14-8.15 match the page image."},
+ "overview": {
+   "title": "Inspecting batches and fitting with ModelCheckpoint",
+   "chapter": "8 Image classification",
+   "section": "8.2 Training a convnet from scratch on a small dataset",
+   "subsection": "8.2.4 Data preprocessing",
+   "main_topic": "Checking the shapes yielded by the image Dataset, then training the ConvNet for 50 epochs with validation monitoring and a ModelCheckpoint callback that keeps the best model by validation loss",
+   "central_idea": "The training Dataset yields (images, labels) batches of shape (batch, 180, 180, 3) and (batch,); fit() takes the training and validation Datasets directly, and ModelCheckpoint(save_best_only=True, monitor=\"val_loss\") ensures the saved file always holds the epoch with the lowest validation loss, so overfitting later in training does not require retraining.",
+   "importance": "This is the first actual training run of the chapter and establishes the baseline (about 80% accuracy, p.265). The checkpoint-the-best-epoch pattern is a practical alternative to rerunning training with fewer epochs, which the book did in earlier chapters.",
+   "learning_objectives": [
+     "Inspect the shapes of a Dataset batch with a for loop and break",
+     "Pass Dataset objects to fit() for training and validation",
+     "Configure ModelCheckpoint with filepath, save_best_only and monitor",
+     "Explain why saving the best epoch by val_loss protects against overfitting"
+   ],
+   "prerequisites": [
+     "The datasets built in listing 8.9 (p.271-272)",
+     "The compiled model from listings 8.7-8.8",
+     "Overfitting and validation monitoring (chapters 5-7)",
+     "Keras callbacks (chapter 7)"
+   ],
+   "page_kind": "content"
+ },
+ "summary": "The page closes the tf.data detour (\"You're about to see more `map()` action over the next chapters\") and begins **Fitting the model**.\n\nFirst, the authors inspect one batch of `train_dataset` (**listing 8.14**): iterating with `for data_batch, labels_batch in train_dataset:` and breaking after one step prints `data batch shape: (32, 180, 180, 3)` and `labels batch shape: (32,)` — 180×180 RGB images and integer labels. The text says there are 32 samples per batch, the batch size; note, however, that listing 8.9 set `batch_size = 64`, so running the code as printed would show 64 (see the review flag).\n\nNext, **listing 8.15** trains the model. `fit()` receives `train_dataset` directly (labels come from the dataset), runs for `epochs=50`, and uses `validation_data=validation_dataset` to compute validation metrics on a separate `Dataset` at the end of each epoch.\n\nThe key addition is a **`ModelCheckpoint` callback**, configured with `filepath=\"convnet_from_scratch.keras\"`, `save_best_only=True` and `monitor=\"val_loss\"`. It saves the model after an epoch only if `val_loss` is lower than at any previous time, overwriting the previous file. Consequently the saved file always contains the model state from the best-performing epoch on validation data. The payoff, as the authors put it: if the model starts overfitting, we don't need to retrain it for fewer epochs — we just reload the saved file. (Earlier in the book, the approach was to note the best epoch and retrain from scratch.)\n\nThe returned `history` object records per-epoch metrics; the page ends by announcing plots of training/validation loss and accuracy in **figure 8.9** (p.275), which will show clear overfitting.",
+ "paragraphs": [
+   {"ref": "p274_e03", "excerpt": "You’re about to see more map() action over the next chapters.",
+    "what_it_says": "Closes the tf.data discussion with the promise that map() will be used a lot later.",
+    "what_it_means": "map() will carry real preprocessing (augmentation, tokenization) in later chapters.",
+    "why_it_matters": "Signals that the toy listings are foundations, not detours.",
+    "terminology": [],
+    "connections": ["p.273: map(function, num_parallel_calls) was introduced"]},
+   {"ref": "p274_e05", "excerpt": "Let’s look at the output of one of these Dataset objects:",
+    "what_it_says": "A Dataset yields batches of 180x180 RGB images with shape (32, 180, 180, 3) and integer labels of shape (32,), 32 being the batch size.",
+    "what_it_means": "Axis order is (batch, height, width, channels) — channels-last. Each label is a single integer (0 or 1) per image, matching the single sigmoid output with binary crossentropy.",
+    "why_it_matters": "Verifying shapes before fit() catches pipeline mistakes early. The printed 32, though, disagrees with batch_size = 64 in listing 8.9.",
+    "technical_idea": "Note (not in the book): the image values are float32 in [0, 255]; the model's Rescaling layer maps them to [0, 1].",
+    "terminology": [{"term": "channels-last", "meaning": "Tensor layout with the color channels as the final axis."}],
+    "connections": ["p.271: batch_size = 64 in listing 8.9 (inconsistent with the 32 shown here)", "p.269: model Input shape (180, 180, 3)"]},
+   {"ref": "p274_e08", "excerpt": "Let’s fit the model on our dataset. We use the validation_data argument",
+    "what_it_says": "The model is fit on the dataset, with validation_data used to monitor validation metrics on a separate Dataset.",
+    "what_it_means": "At the end of each epoch Keras evaluates the model on validation_dataset, producing val_loss and val_accuracy in the logs and history.",
+    "why_it_matters": "Without validation metrics you cannot detect overfitting or pick the best epoch.",
+    "terminology": [{"term": "validation_data", "meaning": "fit() argument giving data evaluated after each epoch but never used for weight updates."}],
+    "connections": []},
+   {"ref": "p274_e09", "excerpt": "Note that we also use a ModelCheckpoint callback to save the model",
+    "what_it_says": "A ModelCheckpoint callback saves the model after each epoch, but with save_best_only=True and monitor=\"val_loss\" it writes a new file only when val_loss improves on all previous values, overwriting the old one. The file thus always holds the best epoch by validation performance, so after overfitting you can reload it instead of retraining for fewer epochs.",
+    "what_it_means": "Training runs for the full 50 epochs, but the best snapshot is retained automatically. It works like keeping a running minimum: best = min(best, val_loss_t), saving whenever a new minimum is found.",
+    "why_it_matters": "Saves a full second training run and guarantees the evaluated model (p.275) is the pre-overfitting one.",
+    "technical_idea": "Selecting the epoch by validation loss slightly overfits to the validation set, which is why the final measurement is on the separate test set.",
+    "terminology": [
+      {"term": "callback", "meaning": "An object whose methods Keras calls at points during training, e.g. at the end of each epoch."},
+      {"term": "save_best_only", "meaning": "Only save when the monitored quantity improves."},
+      {"term": "monitor", "meaning": "Name of the logged metric to watch, here val_loss (lower is better)."}
+    ],
+    "connections": ["p.275: the model is reloaded from the saved file to evaluate test accuracy"]},
+   {"ref": "p274_e12", "excerpt": "Let’s plot the loss and accuracy of the model over the training",
+    "what_it_says": "Announces plotting training and validation loss and accuracy (figure 8.9).",
+    "what_it_means": "The history.history dictionary contains per-epoch loss, accuracy, val_loss, val_accuracy.",
+    "why_it_matters": "The curves will reveal overfitting after about 10 epochs (p.275).",
+    "terminology": [],
+    "connections": ["p.275: listing 8.16 and figure 8.9"]}
+ ],
+ "concepts": [
+   {"id": "model_checkpoint", "name": "ModelCheckpoint callback", "definition": "A Keras callback that saves the model during training, optionally only when a monitored metric improves.", "intuition": "An automatic 'save game' that only overwrites your save when you've done better.", "technical": "filepath=\"convnet_from_scratch.keras\", save_best_only=True, monitor=\"val_loss\" → file updated whenever val_loss reaches a new minimum.", "significance": "Keeps the best-epoch model so overfitting later in training costs nothing.", "example": "val_loss: 0.69, 0.62, 0.55, 0.58, 0.53 → saves after epochs 1, 2, 3 and 5.", "misconception": "The final model object in memory after fit() is the last-epoch model, not the best one; you must reload the file.", "related": ["callbacks", "overfitting", "validation_set"], "source": "book"},
+   {"id": "validation_set", "name": "Validation monitoring", "definition": "Evaluating on held-out data after each epoch via validation_data.", "intuition": "A practice exam taken after each study session.", "technical": "Produces val_loss/val_accuracy logs, used here by ModelCheckpoint.", "significance": "Enables detection of overfitting and best-epoch selection.", "example": "validation_data=validation_dataset (1,000 images).", "misconception": "Validation data never update the weights, but decisions based on them can still leak information.", "related": ["overfitting", "model_checkpoint"], "source": "book"},
+   {"id": "overfitting", "name": "Overfitting", "definition": "When performance on training data keeps improving while validation performance stalls or worsens.", "intuition": "Memorizing the training examples instead of learning general features.", "technical": "Detected by val_loss reaching a minimum and rising/stalling while training loss falls.", "significance": "Expected with 2,000 training images and no regularization; the checkpoint guards against it.", "example": "See figure 8.9 on p.275: validation loss minimal after ~10 epochs.", "misconception": "Training longer always gives a better model.", "related": ["validation_set", "data_augmentation"], "source": "book"},
+   {"id": "tf_data_dataset", "name": "Dataset as fit() input", "definition": "Passing a tf.data.Dataset that yields (inputs, labels) to fit().", "intuition": "The dataset supplies both x and y.", "technical": "No y or batch_size arguments needed; batching is the dataset's job.", "significance": "Used in listing 8.15.", "example": "model.fit(train_dataset, epochs=50, validation_data=validation_dataset)", "misconception": "Passing batch_size to fit() with a Dataset has no effect on the batching.", "related": ["image_dataset_from_directory"], "source": "book"}
+ ],
+ "math": [
+   {"id": "m1", "title": "save_best_only rule", "latex": "\\text{save at epoch } t \\iff \\text{val\\_loss}_t < \\min_{s < t} \\text{val\\_loss}_s", "source_text": "only save a new file ... when the current value of the val_loss metric is lower than at any previous time during training",
+    "variables": [{"symbol": "\\text{val\\_loss}_t", "meaning": "validation loss at the end of epoch t"}, {"symbol": "t", "meaning": "epoch index, 1 to 50"}],
+    "operations": "Compare current validation loss with the running minimum.", "purpose": "Formalizes the checkpoint condition described in the text.", "interpretation": "The saved file corresponds to \\(\\arg\\min_t \\text{val\\_loss}_t\\) at the end of training.", "intuition": "Keep a running record; only replace it when beaten.",
+    "numerical_example": "val_loss = [0.69, 0.64, 0.60, 0.61, 0.57, 0.59, …]: saves at epochs 1, 2, 3, 5; epochs 4 and 6 are not saved.", "source": "book", "book_ref": "p.274"}
+ ],
+ "code": [
+   {"id": "c1", "listing": "8.14", "title": "Displaying the shapes yielded by the Dataset",
+    "original_code": ">>> for data_batch, labels_batch in train_dataset:\n>>>     print(\"data batch shape:\", data_batch.shape)\n>>>     print(\"labels batch shape:\", labels_batch.shape)\n>>>     break\ndata batch shape: (32, 180, 180, 3)\nlabels batch shape: (32,)",
+    "language": "python",
+    "what_it_does": "Takes the first batch from train_dataset and prints the shapes of images and labels.",
+    "line_explanations": [
+      {"lines": "1", "explanation": "Each element is a tuple (images, labels), unpacked into two variables."},
+      {"lines": "2-3", "explanation": "Print the shapes."},
+      {"lines": "4", "explanation": "Stop after one batch."},
+      {"lines": "5-6", "explanation": "Printed output: (32, 180, 180, 3) and (32,). With batch_size = 64 from listing 8.9 you would see 64 instead."}
+    ],
+    "inputs_outputs": "Input: train_dataset. Output: two shape lines.",
+    "algorithm": "Iteration with early break.",
+    "theory_link": "Confirms the five preprocessing steps produced uniform batched tensors.",
+    "parameters": [],
+    "pitfalls": ["Because shuffling is on, the first batch differs between runs, but shapes don't.", "Equivalent idiom: next(iter(train_dataset)) or train_dataset.take(1)."]},
+   {"id": "c2", "listing": "8.15", "title": "Fitting the model using a Dataset",
+    "original_code": "callbacks = [\n    keras.callbacks.ModelCheckpoint(\n        filepath=\"convnet_from_scratch.keras\",\n        save_best_only=True,\n        monitor=\"val_loss\",\n    )\n]\nhistory = model.fit(\n    train_dataset,\n    epochs=50,\n    validation_data=validation_dataset,\n    callbacks=callbacks,\n)",
+    "language": "python",
+    "what_it_does": "Trains the ConvNet for 50 epochs on the training dataset, evaluates on the validation dataset after each epoch, and saves the model whenever val_loss reaches a new minimum.",
+    "line_explanations": [
+      {"lines": "1-7", "explanation": "A list with one ModelCheckpoint callback: save to convnet_from_scratch.keras, only when val_loss improves."},
+      {"lines": "8-9", "explanation": "fit() takes the Dataset directly; it supplies both images and labels."},
+      {"lines": "10", "explanation": "50 passes over the 2,000 training images."},
+      {"lines": "11", "explanation": "Validation metrics computed each epoch on validation_dataset."},
+      {"lines": "12", "explanation": "Register the callback."},
+      {"lines": "8, 13", "explanation": "history.history stores per-epoch loss, accuracy, val_loss, val_accuracy for plotting (p.275)."}
+    ],
+    "inputs_outputs": "Inputs: compiled model, two datasets. Outputs: trained model in memory (last epoch), best model on disk, History object.",
+    "algorithm": "Mini-batch training with adam; end-of-epoch validation; conditional checkpointing.",
+    "theory_link": "Early-stopping-like model selection by validation loss.",
+    "parameters": [
+      {"name": "filepath", "role": "Where to save; the .keras extension selects the native Keras format."},
+      {"name": "save_best_only", "role": "Overwrite only on improvement."},
+      {"name": "monitor", "role": "Metric to watch; val_loss is minimized (mode inferred)."},
+      {"name": "epochs", "role": "Number of passes over the training data."},
+      {"name": "validation_data", "role": "Separate Dataset for validation metrics."}
+    ],
+    "pitfalls": [
+      "After fit(), `model` holds the epoch-50 weights, which are overfit; reload convnet_from_scratch.keras for evaluation (done on p.275).",
+      "Monitoring val_loss requires validation_data; otherwise the callback warns and never saves.",
+      "Steps per epoch depend on the batch size: 2,000/64 → 32 steps (or 63 with 32)."
+    ],
+    "illustrative_code": "# AI-written: an alternative that also stops early\ncallbacks = [\n    keras.callbacks.ModelCheckpoint(\"convnet_from_scratch.keras\", save_best_only=True, monitor=\"val_loss\"),\n    keras.callbacks.EarlyStopping(monitor=\"val_loss\", patience=10),\n]"}
+ ],
+ "deeper": [
+   {"title": "Checkpointing vs. retraining", "kind": "alternative", "body": "Beyond the book: before callbacks, the workflow was (1) train long, (2) read the best epoch off the validation curve, (3) retrain from scratch for that many epochs. That doubles the cost and, because of random initialization and shuffling, the retrained model isn't even the same one. ModelCheckpoint with save_best_only keeps the actual best weights from the single run. EarlyStopping can additionally stop wasting epochs once val_loss has not improved for a while.", "source": "ai_explanation"},
+   {"title": "Why monitor val_loss and not val_accuracy?", "kind": "breakdown", "body": "Inference: val_loss is a smooth, continuous measure of how well-calibrated the predicted probabilities are, while val_accuracy on 1,000 images moves in steps of 0.1% and can plateau while the loss is changing. The loss is what the model optimizes, so it is the more sensitive indicator of overfitting. Monitoring val_accuracy is also valid but would select a possibly different epoch.", "source": "inference"}
+ ],
+ "visualizations": [
+   {"id": "v1", "type": "widget", "title": "Where the checkpoint lands", "why": "ModelCheckpoint keeps the epoch with the lowest validation loss; p.275 reports the minimum around epoch 10 of the 50 epochs set here. Move the marker to see which epoch would be saved.", "widget": "training_curves", "params": {"epochs": 50, "overfit_from": 10, "noise": 0.03}},
+   {"id": "v2", "type": "mermaid", "title": "One epoch of fit() with ModelCheckpoint", "why": "Shows the per-epoch loop described in listing 8.15 and the save condition.",
+    "mermaid": "flowchart TD\n  A[\"Train on all batches\\nof train_dataset\"] --> B[\"Evaluate on\\nvalidation_dataset\"]\n  B --> C{\"val_loss < best so far?\"}\n  C -- yes --> D[\"Save convnet_from_scratch.keras\\n(overwrite)\"]\n  C -- no --> E[\"Keep previous file\"]\n  D --> F{\"epoch < 50?\"}\n  E --> F\n  F -- yes --> A\n  F -- no --> G[\"Return history\"]"}
+ ],
+ "misconceptions": [
+   {"claim": "After fit() with save_best_only=True, the model variable holds the best weights.", "correction": "It holds the last-epoch weights; the best ones are in the saved file, which must be reloaded (p.275)."},
+   {"claim": "ModelCheckpoint stops training when val_loss stops improving.", "correction": "It only saves; training continues for all 50 epochs. EarlyStopping is the callback that stops training."},
+   {"claim": "The batch size here is necessarily 32.", "correction": "The printed output says 32, but listing 8.9 sets batch_size = 64; the actual shape depends on that setting."}
+ ],
+ "connections": {
+   "earlier": [{"page": 271, "note": "Compilation (listing 8.8) and batch_size = 64 in listing 8.9."},
+               {"page": 272, "note": "The three datasets built by image_dataset_from_directory."},
+               {"page": 273, "note": "map() and other Dataset methods."}],
+   "later": [{"page": 275, "note": "Listing 8.16 and figure 8.9: overfitting curves; reloading the checkpoint for test evaluation."},
+             {"page": 278, "note": "Data augmentation to fight the overfitting observed here."}],
+   "prerequisites": [{"page": 265, "note": "Baseline goal: about 80% accuracy without regularization."}],
+   "related_math": [], "related_code": [{"page": 272, "note": "Listing 8.9 datasets used in fit()."}], "related_figures": [{"page": 275, "note": "Figure 8.9, training and validation metrics."}]
+ },
+ "takeaways": [
+   "A batch from train_dataset is (batch, 180, 180, 3) images with (batch,) integer labels; the page prints 32, though listing 8.9 sets 64.",
+   "fit() accepts Dataset objects directly for both training and validation_data.",
+   "ModelCheckpoint(save_best_only=True, monitor=\"val_loss\") saves only when validation loss reaches a new minimum.",
+   "The saved file is the best epoch, so overfitting does not require retraining — just reload.",
+   "history records per-epoch metrics for the plots in figure 8.9."
+ ],
+ "questions": [
+   {"id": "q1", "type": "mcq", "question": "With save_best_only=True and monitor=\"val_loss\", when does ModelCheckpoint write the file?", "options": ["Only when val_loss is lower than at any previous epoch", "After every epoch regardless of performance", "Only at the end of training", "When training accuracy reaches 100%"], "answer": "Only when val_loss is lower than at any previous epoch", "explanation": "That is the condition stated on the page. Saving every epoch is the behavior without save_best_only; it doesn't wait for the end, and training accuracy isn't monitored.", "page_refs": [274]},
+   {"id": "q2", "type": "short", "question": "What are the shapes printed by listing 8.14, and what does each axis mean?", "options": [], "answer": "(32, 180, 180, 3): batch, height, width, RGB channels; (32,): one integer label per image.", "explanation": "As printed; note listing 8.9 set batch_size = 64, which would give 64 in the first axis.", "page_refs": [274, 271]},
+   {"id": "q3", "type": "conceptual", "question": "Why does the checkpoint mean 'we won't have to retrain a new model for a lower number of epochs if we start overfitting'?", "options": [], "answer": "The file already contains the weights from the epoch with the best validation loss, i.e. the state before overfitting, so we can reload it instead of rerunning training with fewer epochs.", "explanation": "Paraphrase of the page's reasoning.", "page_refs": [274]},
+   {"id": "q4", "type": "mcq", "question": "What role does validation_data=validation_dataset play in fit()?", "options": ["It computes validation metrics at the end of each epoch", "It is merged with the training data", "It sets the learning rate", "It shuffles the training data"], "answer": "It computes validation metrics at the end of each epoch", "explanation": "The page: it monitors validation metrics on a separate Dataset. It is never used for training, and has nothing to do with the learning rate or shuffling.", "page_refs": [274]},
+   {"id": "q5", "type": "math", "question": "Given val_loss per epoch [0.70, 0.63, 0.65, 0.58, 0.60, 0.59], at which epochs does the callback save, and which epoch's model is in the file at the end?", "options": [], "answer": "Saves at epochs 1, 2 and 4; the file holds epoch 4 (val_loss 0.58).", "explanation": "A save happens only when val_loss is a new minimum.", "page_refs": [274]},
+   {"id": "q6", "type": "conceptual", "question": "After listing 8.15 finishes, which weights does the variable model contain, and what should you evaluate on the test set?", "options": [], "answer": "model contains the epoch-50 (likely overfit) weights; you should reload convnet_from_scratch.keras and evaluate that.", "explanation": "The checkpoint is on disk; p.275 reloads it before evaluation.", "page_refs": [274, 275]},
+   {"id": "q7", "type": "self", "question": "Can you explain why monitoring val_loss rather than training loss is necessary for picking the best model?", "options": [], "answer": "Training loss keeps decreasing even while the model overfits; only validation loss reflects generalization.", "explanation": "Self-check linking this page to the overfitting curves on p.275.", "page_refs": [274, 275]}
+ ]
+}

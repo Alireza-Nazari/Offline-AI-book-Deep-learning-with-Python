@@ -1,0 +1,268 @@
+{
+ "page_id": "page_524",
+ "pdf_page": 524,
+ "printed_page": "500",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T12:10:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. The extracted code block drops the blank lines that surround <start_of_image> in the printed output; original_code below restores them from the page image. The last two printed paragraphs ('Training for a multimodal model...' and 'It might seem almost magical...') were merged into one element, p524_e06, so they get two notes with the same ref. The callout 'Limits the maximum input size of the model' points at the two preprocessor settings."
+ },
+ "overview": {
+  "title": "Asking Gemma about an image; how multimodal LLMs are trained",
+  "chapter": "16 Text generation",
+  "section": "16.4 Going further with LLMs",
+  "subsection": "16.4.2 Multimodal LLMs",
+  "main_topic": "Running the multimodal Gemma on the test image and the training recipe for vision-language models",
+  "central_idea": "A `<start_of_image>` marker in the prompt expands to 256 placeholder positions, which are filled with the image encoder's soft tokens. Training such a model is ordinary next-token pretraining and fine-tuning on mixed image-text sequences, with the loss zeroed at image positions.",
+  "importance": "This makes the 'soft token' idea from pp.522-523 concrete and shows that adding a modality needs no new learning objective, only a way to turn the new data into a sequence. It is the conceptual bridge to the 'foundation model' discussion on p.525.",
+  "learning_objectives": [
+   "Use gemma_lm.generate with a dict of prompts and images, and explain the preprocessor settings max_images_per_prompt and sequence_length.",
+   "Explain what happens to the <start_of_image> token inside the model's input sequence.",
+   "Describe the two-stage training recipe: pretrain an image encoder, then do next-token training on interleaved image/text sequences.",
+   "Explain why the loss is zeroed at image token positions.",
+   "Argue why it is 'expected' rather than magical that a Transformer can absorb a new modality."
+  ],
+  "prerequisites": [
+   "Soft vs hard tokens and the (256, 2560) image representation (p.522, Figure 16.6 on p.523)",
+   "PROMPT_TEMPLATE for the instruction-tuned Gemma (p.521)",
+   "Next-token ('guess the next word') pretraining (section 16.2.2)",
+   "Image encoders / ConvNets (chapter 8)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**Querying the image.** Using the test image loaded on p.523 (Figure 16.7, a snake in glasses reading in an armchair), the authors first set two preprocessor options. `max_images_per_prompt = 1` and `sequence_length = 512` **limit the maximum input size of the model**: at most one image and 512 total tokens per prompt. Each prompt ends with the special token `<start_of_image>`. It is formatted with the chat `PROMPT_TEMPLATE` from p.521 and passed to `generate()` as a dict, `{\"prompts\": ..., \"images\": [image]}`.\n\nAsked \"What is going on in this image? Be concise!\", Gemma answers that a snake wearing glasses is sitting in a leather armchair surrounded by a large bookshelf, reading a book, and calls the image \"whimsical, slightly surreal\". Asked \"What is the snake wearing?\", it says a pair of red-framed glasses \"perched on its head\". The model has clearly grounded its text in the picture.\n\n**What `<start_of_image>` does.** Inside the model the token is expanded into **256 placeholder values** in the input sequence. These are then **replaced by the 256 soft tokens** that the image encoder produced (p.522: a `(256, 2560)` array matching Gemma's hidden size).\n\n**How such a model is trained.** It is very similar to ordinary LLM pretraining and fine-tuning:\n1. Usually **pretrain the image encoder separately** first, as the book first did with image models in chapter 8.\n2. Then run the same **\"guess the next word\" pretraining** on sequences that **mix image and text content**.\n3. The Transformer is **not trained to output image soft tokens**: the **loss is zeroed at the image token positions**.\n\n**Why it works.** It is \"quite an expected result\": a Transformer is a powerful general sequence model. Recast the image as sequence data and train a lot, and the model keeps its original ability to read and write text while also learning to embed images into its latent space.",
+ "paragraphs": [
+  {
+   "ref": "p524_e03",
+   "excerpt": "We can use Gemma to ask some questions about this image:",
+   "what_it_says": "This introduces the code that sends questions about the loaded image to Gemma.",
+   "what_it_means": "The same gemma_lm object loaded on p.520 handles both text-only and image+text prompts. KerasHub's Gemma 3 preprocessor accepts images directly.",
+   "why_it_matters": "It shows that multimodality is built into this checkpoint: no extra model needs to be loaded by the user.",
+   "connections": ["p.523: the image array passed here was created with keras.utils.load_img."]
+  },
+  {
+   "ref": "p524_e05",
+   "excerpt": "Each of our input prompts contains the special token <start_of_image>. This is turned",
+   "what_it_says": "Each prompt contains <start_of_image>. It is turned into 256 placeholder values in the input sequence, which are then replaced by the soft tokens representing the image.",
+   "what_it_means": "The tokenizer handles text as usual. Where the image marker appears, the preprocessor reserves 256 positions, so the sequence length budget (512 here) must accommodate them. After the token embedding layer, the embedding vectors at those 256 positions are overwritten by the image encoder's 256 output vectors, each of dimension 2560. From the first Transformer block onward, image positions and text positions are processed identically by self-attention.",
+   "why_it_matters": "This is the precise mechanism behind Figure 16.6 (p.523). It explains why a single image costs about 256 tokens of context.",
+   "technical_idea": "Sequence = [text embeddings | 256 soft tokens | text embeddings], shape (sequence_length, 2560); attention mixes them freely.",
+   "terminology": [
+    {"term": "placeholder token", "meaning": "A reserved position in the token sequence whose embedding is later replaced by an externally computed vector."},
+    {"term": "soft token", "meaning": "An input vector produced by an encoder rather than looked up in the token embedding table (p.522)."}
+   ],
+   "connections": [
+    "p.522: the image encoder outputs a (256, 2560) sequence; 2560 is Gemma's hidden size.",
+    "p.523: Figure 16.6 shows the splicing of hard and soft tokens."
+   ]
+  },
+  {
+   "ref": "p524_e06",
+   "excerpt": "Training for a multimodal model like this is quite similar to regular LLM pretraining",
+   "what_it_says": "Training a multimodal model is similar to regular LLM training. First pretrain the image encoder separately (as in chapter 8), then do the same next-word pretraining while also feeding sequences that mix image and text. The Transformer is not trained to output image soft tokens; the loss is simply zeroed at those positions.",
+   "what_it_means": "The objective stays next-token cross-entropy. The only change is a **loss mask**: at positions where the target would be an image soft token, there is no discrete token to predict (soft tokens are continuous vectors, not vocabulary entries), so those positions contribute nothing to the loss. Text after the image still has to be predicted, and doing that well requires using the image content through attention. That is where the image-understanding gradient signal comes from. It flows back into the Transformer and, if not frozen, into the image encoder or its projection layer.",
+   "why_it_matters": "It shows that multimodality is a data-formatting problem more than a new learning paradigm, which explains how quickly vision-language models appeared once LLMs existed.",
+   "technical_idea": "Masked loss: L = sum over t of m_t * CE(y_t, p_t) divided by sum over t of m_t, with m_t = 0 at image positions.",
+   "terminology": [
+    {"term": "loss masking", "meaning": "Multiplying the per-position loss by 0 at positions that should not be trained on (padding, prompt or image tokens)."},
+    {"term": "interleaved image-text data", "meaning": "Training sequences in which images and text alternate, like web pages with pictures."}
+   ],
+   "connections": [
+    "Chapter 8: training image classifiers (ConvNets) from scratch.",
+    "p.512: instruction fine-tuning also reuses the plain next-token loss on reformatted data."
+   ]
+  },
+  {
+   "ref": "p524_e06",
+   "excerpt": "It might seem almost magical that we can simply add image data to an LLM",
+   "what_it_says": "Adding images to an LLM may look magical, but given the power of the sequence model it is quite expected. We took a Transformer, recast image input as sequence data and did a lot of extra training. The model keeps its ability to ingest and produce text while learning to embed images in the Transformer's latent space.",
+   "what_it_means": "The Transformer's self-attention makes no assumption that its inputs are words: it only sees a set of vectors with positions. Anything that can be turned into such vectors (image patches, audio frames, actions) can be modelled. Extra training aligns the image encoder's outputs with the same latent space that text tokens occupy, so 'a snake in glasses' in pixels and the words 'snake' and 'glasses' end up related inside the model.",
+   "why_it_matters": "It is the key argument for the 'foundation model' view on the next page: one architecture, many modalities, trained at scale.",
+   "terminology": [
+    {"term": "latent space", "meaning": "The internal vector space of the model's hidden representations."}
+   ],
+   "connections": [
+    "p.522: 'The Transformer is not a text-specific model'.",
+    "p.525: foundation models extend the idea across modalities."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "multimodal_llm",
+   "name": "Multimodal LLM",
+   "definition": "A language model that accepts (and possibly produces) data of several modalities, such as text and images, by representing all of them as one sequence of vectors.",
+   "intuition": "Translate the picture into 'words' (vectors) the Transformer can read, then let it read everything together.",
+   "technical": "An image encoder maps the image to N soft tokens of the LLM's hidden size (N=256, d=2560 for Gemma 4B). These are spliced into the token-embedding sequence at the placeholder positions.",
+   "significance": "It lets a chatbot answer questions about images using the same generation machinery.",
+   "example": "'What is the snake wearing?' gives 'a pair of glasses! They are red-framed...'",
+   "misconception": "The LLM does not generate images here. It only consumes them; image positions are excluded from the loss.",
+   "related": ["soft_token", "transformer", "embedding", "foundation_model"],
+   "source": "book"
+  },
+  {
+   "id": "soft_token",
+   "name": "Soft token",
+   "definition": "An input vector placed in the Transformer's sequence that comes from an encoder, not from the token embedding table.",
+   "intuition": "A 'word' with no spelling, just a meaning vector.",
+   "technical": "Hard tokens are restricted to the rows of the embedding matrix; soft tokens can be any vector in R^2560.",
+   "significance": "It is the interface between the image encoder and the LLM.",
+   "example": "<start_of_image> becomes 256 placeholders, which become 256 soft tokens.",
+   "misconception": "Soft tokens are not entries in the vocabulary and cannot be 'predicted' with the softmax output layer.",
+   "related": ["multimodal_llm", "embedding"],
+   "source": "book"
+  },
+  {
+   "id": "loss_masking",
+   "name": "Loss masking",
+   "definition": "Excluding some sequence positions from the training loss by giving them zero weight.",
+   "intuition": "You only grade the answers you want the model to learn to write.",
+   "technical": "The per-token cross-entropy is multiplied by a 0/1 mask and averaged over the unmasked positions.",
+   "significance": "It allows image positions to be mixed into the sequence without asking the model to produce them.",
+   "example": "Mask = 0 for the 256 image positions; 1 for the text tokens that follow.",
+   "misconception": "Masking the loss at image positions does not stop the model from learning about images: later text tokens attend to them, so gradients reach the image representations.",
+   "related": ["cross_entropy", "language_model"],
+   "source": "book"
+  },
+  {
+   "id": "transfer_learning",
+   "name": "Pretrained image encoder (transfer learning)",
+   "definition": "Training the vision encoder separately first, then reusing it inside the multimodal LLM.",
+   "intuition": "Teach the 'eyes' to see before teaching the model to describe what it sees.",
+   "technical": "The encoder is pretrained on image data (classification or contrastive image-text objectives), then plugged into the LLM and trained further jointly or partially frozen.",
+   "significance": "It makes multimodal training far more data-efficient.",
+   "example": "The book points back to pretraining image models in chapter 8.",
+   "misconception": "The encoder does not have to be trained jointly from scratch with the LLM.",
+   "related": ["multimodal_llm", "convolution"],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Asking Gemma questions about an image",
+   "original_code": ">>> gemma_lm.preprocessor.max_images_per_prompt = 1\n>>> gemma_lm.preprocessor.sequence_length = 512\n>>> prompt = \"What is going on in this image? Be concise!<start_of_image>\"\n>>> gemma_lm.generate({\n...     \"prompts\": PROMPT_TEMPLATE.format(prompt),\n...     \"images\": [image],\n... })\n<start_of_turn>user\nWhat is going on in this image? Be concise!\n\n<start_of_image>\n\n<end_of_turn>\n<start_of_turn>model\nA snake wearing glasses is sitting in a leather armchair, surrounded by a large\nbookshelf, and reading a book. It's a whimsical, slightly surreal image.\n<end_of_turn>\n>>> prompt = \"What is the snake wearing?<start_of_image>\"\n>>> gemma_lm.generate({\n...     \"prompts\": PROMPT_TEMPLATE.format(prompt),\n...     \"images\": [image],\n... })\n<start_of_turn>user\nWhat is the snake wearing?\n\n<start_of_image>\n\n<end_of_turn>\n<start_of_turn>model\nThe snake is wearing a pair of glasses! They are red-framed and perched on its\nhead.<end_of_turn>",
+   "language": "python",
+   "what_it_does": "Configures the preprocessor for one image and 512 tokens, then asks two questions about the image, each prompt containing an image marker. It prints the echoed prompt and the model's answer.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Callout 'Limits the maximum input size of the model': at most one image per prompt and 512 tokens in total (text + 256 image placeholders + generated tokens)."},
+    {"lines": "3", "explanation": "The question ends with <start_of_image>, marking where the image goes in the sequence."},
+    {"lines": "4-7", "explanation": "generate() receives a dict: the templated prompt string and a list of images (the NumPy array from p.523)."},
+    {"lines": "8-17", "explanation": "Output: the prompt is echoed (the image marker is shown on its own line, surrounded by blank lines added by the preprocessor), followed by the model's concise description."},
+    {"lines": "18-22", "explanation": "A second, more specific question about the same image."},
+    {"lines": "23-30", "explanation": "The model answers that the snake wears red-framed glasses."}
+   ],
+   "inputs_outputs": "Inputs: prompt string containing <start_of_image>; list with one (H, W, 3) image array. Output: string of prompt + reply.",
+   "algorithm": "Preprocess: tokenize text, expand the image marker to 256 placeholders, run the image encoder, splice the soft tokens in. Then decode autoregressively until <end_of_turn>.",
+   "theory_link": "This is the soft-token splicing of Figure 16.6 (p.523) in action.",
+   "parameters": [
+    {"name": "max_images_per_prompt", "role": "Maximum number of images the preprocessor accepts per prompt; it sizes the image tensors."},
+    {"name": "sequence_length", "role": "Maximum total token length, including the 256 image positions."},
+    {"name": "\"prompts\" / \"images\"", "role": "Dict keys the Gemma 3 preprocessor expects for multimodal input."}
+   ],
+   "pitfalls": [
+    "Each image uses 256 positions, so a short sequence_length leaves little room for text and answer.",
+    "Forgetting <start_of_image> in the prompt means the image has no place in the sequence.",
+    "Vision-language models can still hallucinate visual details. Whether 'perched on its head' matches the picture should be checked against Figure 16.7 (p.523)."
+   ],
+   "illustrative_code": "# AI-written: rough context budget for this call\nseq_len = 512\nimage_tokens = 256\ntemplate_and_question = 25   # approximate\nprint('tokens left for the answer:', seq_len - image_tokens - template_and_question)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Where does the gradient for 'seeing' come from if image positions have zero loss?",
+   "kind": "step_by_step",
+   "body": "1. A sequence is `[text…][256 soft tokens][caption text…]`.\n2. The loss is computed only on text targets, for example predicting \"glasses\" in the caption.\n3. Under causal attention, the caption tokens attend to all 256 image positions earlier in the sequence.\n4. Backpropagation sends the gradient of the caption loss through the attention weights and values into the image soft tokens, and from there into the image encoder (or the projection that maps its features into the 2560-dimensional space).\n5. So the image encoder learns to produce vectors that help predict the words about the image, even though the image itself is never a prediction target.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Analogy: a photo pasted into a letter",
+   "kind": "analogy",
+   "body": "Think of the prompt as a letter. `<start_of_image>` is a blank rectangle with room for 256 words; the image encoder pastes a 'photo' into it, written in a language of vectors the reader (the Transformer) has learned to read. The reader is graded only on the words it writes back, never on redrawing the photo.",
+   "source": "analogy"
+  },
+  {
+   "title": "Beyond the book: how Gemma 3 gets exactly 256 tokens",
+   "kind": "breakdown",
+   "body": "Not in the book: according to Google's Gemma 3 report, the vision encoder is a SigLIP Vision Transformer, about 400M parameters (the book says 420M on p.522). It works on 896x896 images. Its patch embeddings are average-pooled down to a fixed 256 vectors and then linearly projected to the LLM's hidden size. A fixed token count per image keeps the cost predictable; higher-resolution or non-square images are handled by cropping strategies at inference time.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "From prompt + image to an answer, and what is trained",
+   "why": "It traces the page's description: <start_of_image> becomes 256 placeholders, soft tokens are spliced in, and the loss is zeroed at image positions during training.",
+   "mermaid": "flowchart LR\n  P[\"Prompt text with start_of_image\"] --> T[\"Tokenizer: marker expands to 256 placeholders\"]\n  T --> E[\"Token embedding layer (hard tokens, dim 2560)\"]\n  I[\"Image\"] --> V[\"Pretrained image encoder\"]\n  V --> S[\"256 soft tokens (256, 2560)\"]\n  E --> M[\"Splice: soft tokens replace placeholders\"]\n  S --> M\n  M --> X[\"Transformer decoder blocks\"]\n  X --> O[\"Next-token predictions\"]\n  O --> L[\"Loss on text positions only; zero at image positions\"]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Tensor shapes of the spliced sequence",
+   "why": "It shows the shapes stated on pp.522-524: a (256, 2560) image block inserted into a sequence of length 512 with hidden size 2560.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {"op": "token ids (seq_len 512)", "shape": [null, 512]},
+     {"op": "token embedding", "shape": [null, 512, 2560]},
+     {"op": "image soft tokens", "shape": [256, 2560]},
+     {"op": "splice into placeholders", "shape": [null, 512, 2560]},
+     {"op": "logits over vocab", "shape": [null, 512, 262144]}
+    ]
+   }
+  }
+ ],
+ "misconceptions": [
+  {"claim": "Multimodal LLMs need a completely different training objective.", "correction": "The book stresses that it is the same 'guess the next word' training on mixed image-text sequences, with the loss zeroed at image positions."},
+  {"claim": "Because the image positions have no loss, the model learns nothing about images.", "correction": "Text that comes after the image must be predicted using attention over the image tokens, so the gradients teach the model to use them."},
+  {"claim": "<start_of_image> is a single token that represents the whole image.", "correction": "It is expanded to 256 placeholder positions, each replaced by a soft token."},
+  {"claim": "Adding images destroys the model's text ability.", "correction": "The book says the model can preserve its original ability to ingest and produce text while learning to embed images."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 521, "note": "PROMPT_TEMPLATE for the instruction-tuned Gemma."},
+   {"page": 522, "note": "The 420M-parameter image encoder, 256 patches, (256, 2560) soft tokens."},
+   {"page": 523, "note": "Figure 16.6 (splicing) and Figure 16.7 (the test image)."},
+   {"page": 512, "note": "Instruction tuning reuses the next-token loss on reformatted data."}
+  ],
+  "later": [
+   {"page": 525, "note": "Foundation models: the LLM recipe generalized beyond text."},
+   {"page": 555, "note": "Text-to-image diffusion conditions image generation on text embeddings: the reverse direction."}
+  ],
+  "prerequisites": [
+   {"page": 522, "note": "Soft vs hard tokens."},
+   {"page": 497, "note": "Building the decoder-only Transformer (mini-GPT)."}
+  ],
+  "related_math": [],
+  "related_code": [
+   {"page": 523, "note": "Loading the image as a NumPy array."},
+   {"page": 520, "note": "Loading gemma3_instruct_4b."}
+  ],
+  "related_figures": [
+   {"page": 523, "note": "Figure 16.6 and Figure 16.7."}
+  ]
+ },
+ "takeaways": [
+  "<start_of_image> expands to 256 placeholder positions that are filled with the image encoder's soft tokens.",
+  "The preprocessor's max_images_per_prompt and sequence_length cap the model's input size; each image costs 256 positions.",
+  "Multimodal training = pretrained image encoder + ordinary next-token training on mixed image-text sequences.",
+  "The loss is zeroed at image token positions; the model reads images but is not trained to output them.",
+  "A Transformer is a general sequence model, so recasting images as sequences makes multimodality an 'expected' result."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "What happens to the <start_of_image> token inside the model's input?", "options": ["It is ignored by the model", "It is expanded to 256 placeholder positions that are replaced by the image's soft tokens", "It is replaced by a single vector summarising the whole image", "It is converted into a text caption of the image"], "answer": "It is expanded to 256 placeholder positions that are replaced by the image's soft tokens", "explanation": "p524_e05 states this directly. The image is not ignored, it is not compressed to one vector (there are 256), and the model never sees an intermediate text caption: it gets vectors.", "page_refs": [524, 522]},
+  {"id": "q2", "type": "conceptual", "question": "Why is the loss zeroed at image token positions during training?", "options": [], "answer": "Soft tokens are continuous vectors, not vocabulary entries, so there is nothing for the softmax output to predict there. The model is meant to read images, not generate them.", "explanation": "The book says the Transformer 'would not be trained to output image soft tokens'. The image-understanding signal comes from predicting the text that follows the image.", "page_refs": [524]},
+  {"id": "q3", "type": "short", "question": "Why does sequence_length = 512 matter more for image prompts than for text-only prompts?", "options": [], "answer": "Each image consumes 256 of the 512 positions, leaving about half the budget for the template, question and answer.", "explanation": "The callout says these settings limit the maximum input size. Combined with p524_e05's 256 placeholders, the budget is easy to compute.", "page_refs": [524]},
+  {"id": "q4", "type": "short", "question": "List the two training stages the book describes for a multimodal LLM.", "options": [], "answer": "(1) Pretrain the image encoder separately; (2) run next-token pretraining and fine-tuning on mixed image-text sequences with the loss masked at image positions.", "explanation": "This is the recipe in p524_e06.", "page_refs": [524]},
+  {"id": "q5", "type": "mcq", "question": "Why do the authors call the multimodal ability 'quite an expected result'?", "options": ["Because Gemma was designed only for images", "Because the Transformer is a powerful general sequence model, and the image was recast as sequence data", "Because images are converted to text before entering the model", "Because the image encoder does all of the reasoning"], "answer": "Because the Transformer is a powerful general sequence model, and the image was recast as sequence data", "explanation": "This is the authors' argument in the last paragraph. Gemma is primarily a language model. Images become vectors, not text. Reasoning happens in the Transformer over the combined sequence.", "page_refs": [524, 522]},
+  {"id": "q6", "type": "conceptual", "question": "If image positions get zero loss, how does the image encoder (or its projection) receive any training signal?", "options": [], "answer": "Text tokens after the image attend to the image soft tokens. The loss on those text tokens backpropagates through attention into the soft tokens and the encoder.", "explanation": "Masking the loss removes image positions as targets, not as inputs that influence other predictions.", "page_refs": [524]},
+  {"id": "q7", "type": "self", "question": "Could you sketch, from memory, how a prompt with one image becomes a (512, 2560) input sequence for Gemma?", "options": [], "answer": "Tokenize the text; expand <start_of_image> to 256 placeholders; embed the text tokens (2560-dim); encode the image to (256, 2560); overwrite the placeholder embeddings; pad or limit to 512.", "explanation": "Compare your sketch with Figure 16.6 (p.523).", "page_refs": [522, 523, 524]}
+ ]
+}

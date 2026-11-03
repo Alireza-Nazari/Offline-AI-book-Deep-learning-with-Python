@@ -1,0 +1,610 @@
+{
+ "page_id": "page_468",
+ "pdf_page": 468,
+ "printed_page": "444",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:48:17Z",
+  "confidence": "high",
+  "review_flags": [
+   "Possible book inconsistency: the snippet at the top of the page passes head_dim=head_dim to keras.layers.MultiHeadAttention, but the Keras layer's constructor argument is key_dim (listing 15.14 on p.469 itself uses layers.MultiHeadAttention(num_heads, key_dim)). As printed, the keyword head_dim would likely be rejected."
+  ],
+  "extraction_quality": "Clean. The extractor merged three printed paragraphs (\"Consider an example sentence…\", \"Self-attention gives the model…\", \"Almost! But not quite…\") into element p468_e09; they are annotated separately below. The last sentence runs onto p.469."
+ },
+ "overview": {
+  "title": "From cross-attention to self-attention",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.3 The Transformer architecture",
+  "subsection": "15.3.2 Transformer encoder block",
+  "main_topic": "Using Keras's MultiHeadAttention layer, then turning attention inward on a single sequence (self-attention), and noticing that attention alone is linear and needs a nonlinearity.",
+  "central_idea": "Attention need not only connect two sequences: passing the same sequence as query, key and value lets every token build a context-dependent representation of itself. But attention is essentially a learned, data-dependent weighted average of linear projections, so on its own it lacks the nonlinearity a deep network needs.",
+  "importance": "This page is the conceptual hinge of the chapter: it is where attention stops being an add-on to an RNN and becomes the core sequence-processing mechanism of the Transformer. It also sets up the motivation for the feedforward sublayer introduced on p.469.",
+  "learning_objectives": [
+   "Instantiate and call keras.layers.MultiHeadAttention with num_heads and head_dim, and know which argument is the query, key and value.",
+   "Explain how attention was first used with RNN encoder-decoders and what problem it solved (long-range dependencies).",
+   "Define self-attention as attention where query, key and value all come from the same sequence.",
+   "Explain, with the \"station\"/\"train\" example, how self-attention produces contextual word representations.",
+   "Argue why a stack of attention layers alone is (in the degenerate case) just a linear map, motivating the feedforward block."
+  ],
+  "prerequisites": [
+   "Dot-product attention: scoring, softmax, weighted sum (pp.463-466)",
+   "Multi-head attention (p.467)",
+   "The GRU-based seq2seq translation model (pp.456-460)",
+   "Why deep networks need nonlinear activations (composition of linear maps is linear)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the end of the multi-head-attention discussion from p.467: Keras packages the whole computation as `keras.layers.MultiHeadAttention(num_heads=..., head_dim=...)`, called with `query=target, key=source, value=source` so that each target position gathers information from the source sequence.\n\nSection **15.3.2 Transformer encoder block** then asks how to use this layer. The historical answer (mid-2010s) was to bolt attention onto an RNN encoder-decoder: feed the encoder and decoder outputs to an attention layer and use the result to update the target representation. This helps with long-range dependencies that a `GRU` handles poorly.\n\nThe key move of \"Attention is all you need\" was to use attention as the *general* mechanism for all sequence processing. In particular, a sequence can attend to **itself**: `multi_head_attention(key=source, value=source, query=source)`. This is **self-attention**. Every token can attend to every token of its own sequence, including itself, so the model learns a representation of each word *in context*.\n\nThe authors illustrate with \"The train left the station on time.\" The word \"station\" is ambiguous in isolation (radio station? space station?), but self-attention can learn a high score between \"station\" and \"train\" and mix the vector for \"train\" into the representation of \"station\". This sounds like the job an RNN does, so can we simply replace the RNN layers with `MultiHeadAttention`?\n\n\"Almost! But not quite.\" Attention only combines **linear projections** of the sequence elements; it is \"a very expressive pooling operation\" but contains no nonlinear activation. In the extreme case of a sequence of length one, the attention score matrix is the single value 1, and the layer reduces to a linear projection. Stacking 100 such layers could still be simplified (continued on p.469) to a single matrix multiplication, which motivates adding a feedforward network with an activation on the next page.",
+ "paragraphs": [
+  {
+   "ref": "p468_e05",
+   "excerpt": "One way to use the MultiHeadAttention layer would be to add it",
+   "what_it_says": "A first way to use attention is to add it to the existing RNN translation model: pass the encoder's and decoder's sequence outputs through an attention layer and use its output to update the target sequence before predicting. This helps with long-range dependencies that the GRU struggles with, and it is how attention was first used in the mid-2010s.",
+   "what_it_means": "Attention began life as an auxiliary module: the RNNs still did the sequence processing, and attention provided a shortcut that let each decoder step look directly at any encoder state instead of relying on information surviving through many recurrent steps. The decoder states act as queries; the encoder states act as keys and values.",
+   "why_it_matters": "It places the Transformer historically. The Transformer is not the invention of attention; it is the decision to remove the RNN and keep only attention (plus feedforward layers).",
+   "technical_idea": "In an RNN, information from token 1 reaches token 50 only after 49 state updates, each of which can dilute it. Attention creates a direct path of length one between any target position and any source position.",
+   "terminology": [
+    {
+     "term": "Long-range dependency",
+     "meaning": "A relationship between tokens far apart in a sequence (e.g., agreement between a subject and a verb many words later)."
+    },
+    {
+     "term": "GRU",
+     "meaning": "Gated Recurrent Unit, the recurrent layer used in the book's seq2seq RNN translator."
+    }
+   ],
+   "connections": [
+    "p.456: the GRU-based English-to-Spanish seq2seq model this paragraph proposes to augment",
+    "p.463: attention was introduced exactly as a way to score source vectors against the target token being predicted"
+   ]
+  },
+  {
+   "ref": "p468_e06",
+   "excerpt": "However, the authors of “Attention is all you need” realized you could",
+   "what_it_says": "The authors of \"Attention is all you need\" saw that attention could be a general mechanism for all sequence data. So far attention has passed information between two sequences, but a sequence can also attend to itself.",
+   "what_it_means": "Nothing in the attention computation requires the query sequence to differ from the key/value sequence. If you plug the same sequence into all three slots, each token queries all tokens of its own sentence. That gives a way to propagate information along a sequence without recurrence.",
+   "why_it_matters": "This is the step that makes RNNs dispensable: self-attention plays the role the recurrent layer used to play inside an encoder (and, with masking, inside a decoder).",
+   "terminology": [
+    {
+     "term": "Attention is all you need",
+     "meaning": "The 2017 paper by Vaswani et al. that introduced the Transformer (p.461)."
+    }
+   ],
+   "connections": [
+    "p.461: the book's introduction of the Vaswani et al. paper and its central claim"
+   ]
+  },
+  {
+   "ref": "p468_e08",
+   "excerpt": "This is called self-attention, and it is quite powerful. With self-attention,",
+   "what_it_says": "Calling attention with the same sequence as key, value and query is called self-attention. Each token can attend to every token in its sequence, including itself, which lets the model learn a representation of the word in context.",
+   "what_it_means": "The output for position i is a weighted mixture of (projected) vectors of all positions j in the same sequence, with weights determined by how well token i's query matches each token j's key. The output vector of a word therefore depends on its neighbours: the same word gets different vectors in different sentences.",
+   "why_it_matters": "Contextual representations are what make Transformers strong at language: word embeddings alone are context-free (p.457 era models used static embeddings), and self-attention makes them context-dependent.",
+   "technical_idea": "Note (not in the book): \"including itself\" matters; the diagonal of the score matrix lets a token keep its own information, and in Transformer blocks the residual connection (p.469) additionally preserves it.",
+   "terminology": [
+    {
+     "term": "Self-attention",
+     "meaning": "Attention where query, key and value are all derived from the same sequence."
+    },
+    {
+     "term": "Contextual representation",
+     "meaning": "A vector for a token that depends on the surrounding tokens, not only on the token's identity."
+    }
+   ],
+   "connections": [
+    "p.471: the decoder's self-attention will need a causal mask, because unrestricted self-attention is bidirectional"
+   ]
+  },
+  {
+   "ref": "p468_e09",
+   "excerpt": "Consider an example sentence: “The train left the station on time.” Now,",
+   "what_it_says": "In \"The train left the station on time.\", the word \"station\" is ambiguous on its own (radio station, International Space Station?). Self-attention can learn to give a high score to the pair \"station\"/\"train\", summing the vector for \"train\" into the representation of \"station\".",
+   "what_it_means": "Disambiguation happens by mixing: the output vector at \"station\" becomes roughly \"station + some of train\", which places it in the region of representation space associated with railway stations. The attention weights are learned from data; nobody hand-codes that \"train\" disambiguates \"station\".",
+   "why_it_matters": "This is the intuitive core of why self-attention works for language: meaning is resolved by the company a word keeps, and attention lets the model decide which company is relevant.",
+   "technical_idea": "Formally the new vector is $\\sum_j \\alpha_{\\text{station},j}\\, v_j$, with $\\alpha$ a softmax over query-key dot products; a large $\\alpha_{\\text{station},\\text{train}}$ means $v_{\\text{train}}$ contributes strongly.",
+   "terminology": [
+    {
+     "term": "Attention score",
+     "meaning": "The (pre-softmax or post-softmax) weight measuring how relevant one token is to another."
+    }
+   ],
+   "connections": [
+    "p.463: the score(target_vector, source_vector) function idea, now applied within one sequence"
+   ]
+  },
+  {
+   "ref": "p468_e09",
+   "excerpt": "Self-attention gives the model an effective way to go from representing a",
+   "what_it_says": "Self-attention takes the model from representing a word \"in a vacuum\" to representing it conditioned on all other tokens in the sequence. That sounds like what an RNN is supposed to do, which raises the question of whether we can replace the RNN layers with MultiHeadAttention.",
+   "what_it_means": "Both an RNN and self-attention produce, for each position, a vector that summarizes the context. The RNN does it sequentially (each state depends on the previous state); self-attention does it in parallel with direct connections between all pairs of positions.",
+   "why_it_matters": "It frames the design question that the rest of section 15.3 answers: what else, besides attention, must a block contain to fully replace a recurrent layer?",
+   "technical_idea": "Beyond the book: self-attention also has no built-in notion of order (it is permutation-equivariant), unlike an RNN; the book deals with this in 15.3.5 on positional information (p.475).",
+   "terminology": [],
+   "connections": [
+    "p.475: positional information has to be added explicitly because attention ignores order",
+    "p.489: the chapter summary notes that Transformers have no sequence-length loops at training time"
+   ]
+  },
+  {
+   "ref": "p468_e09",
+   "excerpt": "Almost! But not quite; we still need an essential ingredient for any",
+   "what_it_says": "We still need a nonlinear activation function. MultiHeadAttention combines linear projections of every element of the source sequence and nothing more; it is a very expressive pooling operation. With a token length of one, the attention score matrix is always a single 1, and the layer reduces to a linear projection. Stacking 100 attention layers could still be simplified (the sentence continues on p.469) to a single matrix multiplication.",
+   "what_it_means": "The softmax inside attention is nonlinear in the *scores*, but the output is always a convex combination of linearly projected value vectors. When there is only one token, the softmax over a single score is exactly 1, so all data-dependence of the weights disappears and output = (output projection)·(value projection)·x. A composition of linear maps is a linear map, so depth buys nothing.",
+   "why_it_matters": "This argument motivates the position-wise feedforward network (two Dense layers with an activation in between) added on p.469, which is half of every Transformer block.",
+   "technical_idea": "Note (not in the book): for longer sequences attention is not strictly linear in the input, because the weights depend on the input through the softmax. The length-one case is the book's clean extreme example showing that attention provides no per-token nonlinear transformation of features.",
+   "terminology": [
+    {
+     "term": "Pooling operation",
+     "meaning": "An operation that aggregates several vectors into one (e.g., average or max pooling); attention is a learned, input-dependent weighted average."
+    },
+    {
+     "term": "Linear projection",
+     "meaning": "Multiplication by a weight matrix (plus optional bias), as done to produce queries, keys and values."
+    }
+   ],
+   "connections": [
+    "p.469: the sentence finishes (\"to a single matrix multiplication!\") and the feedforward block is introduced"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "self_attention",
+   "name": "Self-attention",
+   "definition": "Attention in which the queries, keys and values all come from the same sequence, so each token attends to every token of its own sequence (including itself).",
+   "intuition": "Each word looks around its sentence, decides which other words are relevant to it, and blends their information into its own vector.",
+   "technical": "Given $X\\in\\mathbb{R}^{n\\times d}$, compute $Q=XW_Q$, $K=XW_K$, $V=XW_V$, weights $A=\\operatorname{softmax}(QK^\\top/\\sqrt{d_k})$ row-wise, output $AV$ (per head, then concatenated and projected). In Keras: `mha(query=x, key=x, value=x)`.",
+   "significance": "It replaces recurrence as the mechanism for passing information along a sequence, and it is the core of the Transformer encoder.",
+   "example": "In \"The train left the station on time.\", the representation of \"station\" absorbs part of the vector for \"train\".",
+   "misconception": "Self-attention is not a different layer type from cross-attention; it is the same MultiHeadAttention layer called with the same tensor in all three arguments.",
+   "related": [
+    "attention",
+    "multi_head_attention",
+    "transformer",
+    "contextual_embedding"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "multi_head_attention",
+   "name": "Multi-head attention (Keras layer)",
+   "definition": "Several attention computations (heads) run in parallel with different learned projections; their outputs are concatenated and projected. Keras provides it as keras.layers.MultiHeadAttention.",
+   "intuition": "Different heads can look for different relations, e.g., one head tracks the subject, another punctuation (p.467).",
+   "technical": "Constructor arguments on this page: num_heads (number of heads) and head_dim (size of each head's query/key projection; the real Keras argument name is key_dim, as used in listing 15.14 on p.469). Called as layer(query=..., key=..., value=...).",
+   "significance": "It is the reusable building block used in every Transformer block in chapters 15 and 16.",
+   "example": "multi_head_attention(query=target, key=source, value=source) is cross-attention from target to source.",
+   "misconception": "head_dim is not the model's embedding size; the output is projected back to the query's last dimension by default (beyond the book: Keras's output_shape defaults to the query feature size).",
+   "related": [
+    "attention",
+    "self_attention"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "attention",
+   "name": "Attention as learned pooling",
+   "definition": "A mechanism that scores every element of a sequence against a query, normalizes the scores with softmax, and returns the weighted sum of (projected) elements.",
+   "intuition": "A soft, data-dependent average: instead of averaging all tokens equally, average them according to relevance.",
+   "technical": "The book calls it \"a very expressive pooling operation\" that \"combines linear projections of every element in a source sequence, but that's it.\"",
+   "significance": "Seeing attention as pooling clarifies its limits: it moves information between positions but does not apply a nonlinear transformation to features.",
+   "example": "With one token, the weight is always 1, so the output is just a linear projection of that token.",
+   "misconception": "The softmax does not supply the kind of per-feature nonlinearity that ReLU provides in a Dense layer; it only shapes the mixing weights.",
+   "related": [
+    "self_attention",
+    "pooling",
+    "feedforward_network"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "nonlinear_activation_necessity",
+   "name": "Why depth needs nonlinearity",
+   "definition": "A stack of purely linear layers is equivalent to a single linear layer, so nonlinear activations are needed for depth to add expressive power.",
+   "intuition": "Multiplying by 100 matrices in a row is the same as multiplying by their product, one matrix.",
+   "technical": "$W_{100}\\cdots W_2 W_1 x = W' x$ with $W' = W_{100}\\cdots W_1$.",
+   "significance": "This is the reason the Transformer block includes a feedforward network with an activation after attention (p.469).",
+   "example": "100 stacked attention layers on a length-1 sequence collapse to one matrix multiplication.",
+   "misconception": "Adding more attention layers is not by itself enough to make the model more expressive in the per-token sense.",
+   "related": [
+    "relu",
+    "dense_layer",
+    "feedforward_network"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "contextual_embedding",
+   "name": "Contextual representation",
+   "definition": "A token vector that depends on the other tokens of the sequence, not only on the token itself.",
+   "intuition": "\"Station\" next to \"train\" and \"station\" next to \"radio\" get different vectors.",
+   "technical": "Produced by self-attention outputs (and later by full Transformer encoder stacks).",
+   "significance": "It is what lets the model resolve ambiguity and is the basis of pretrained encoders like the one used in section 15.4.",
+   "example": "Representing \"station\" \"conditioned on all other tokens that appear in the sequence\".",
+   "misconception": "An Embedding layer alone gives context-free vectors; context comes from the layers that follow.",
+   "related": [
+    "embedding",
+    "self_attention"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Self-attention for one head",
+   "latex": "\\operatorname{SelfAttn}(X) = \\operatorname{softmax}\\!\\left(\\frac{(XW_Q)(XW_K)^\\top}{\\sqrt{d_k}}\\right) XW_V",
+   "source_text": "multi_head_attention(key=source, value=source, query=source)",
+   "variables": [
+    {
+     "symbol": "X",
+     "meaning": "The sequence, shape (n, d): n tokens, each a d-dimensional vector (here, source)."
+    },
+    {
+     "symbol": "W_Q, W_K, W_V",
+     "meaning": "Learned projection matrices for queries, keys, values (shape d × d_k)."
+    },
+    {
+     "symbol": "d_k",
+     "meaning": "Per-head key dimension (head_dim in the Keras call)."
+    },
+    {
+     "symbol": "softmax",
+     "meaning": "Applied row-wise so each token's weights over the n tokens sum to 1."
+    }
+   ],
+   "operations": "Project X three ways, compute all pairwise query-key dot products (n × n), scale, softmax row-wise, then take weighted sums of value vectors.",
+   "purpose": "Formalizes the one-line Keras call on the page in which the same tensor fills query, key and value.",
+   "interpretation": "Row i of the result is the new representation of token i, a mixture of all tokens' value vectors weighted by relevance to token i.",
+   "intuition": "Every token asks a question (query), every token advertises what it contains (key), and the answer is a blend of contents (values).",
+   "numerical_example": "Beyond the book: with 7 tokens (\"The train left the station on time .\"), the score matrix is 7×7 (8×8 if the period is a token). If row \"station\" after softmax puts 0.6 on \"train\", 0.3 on \"station\" and 0.1 spread elsewhere, then the new station vector is $0.6\\,v_{train}+0.3\\,v_{station}+\\dots$",
+   "source": "ai_explanation",
+   "book_ref": "p.468"
+  },
+  {
+   "id": "m2",
+   "title": "The length-one collapse",
+   "latex": "n=1:\\quad \\operatorname{softmax}(s)=1 \\;\\Rightarrow\\; \\operatorname{SelfAttn}(x) = x\\,W_V W_O = x\\,W'",
+   "source_text": "In this case, the attention score matrix is always a single one, and the entire layer boils down to a linear projection of the source sequence",
+   "variables": [
+    {
+     "symbol": "x",
+     "meaning": "The single token vector (1 × d)."
+    },
+    {
+     "symbol": "s",
+     "meaning": "The single attention score q·k."
+    },
+    {
+     "symbol": "W_O",
+     "meaning": "The output projection of the multi-head layer."
+    },
+    {
+     "symbol": "W'",
+     "meaning": "The combined linear map W_V W_O."
+    }
+   ],
+   "operations": "Softmax over a single element is always 1, regardless of s, so the queries and keys have no effect; only the value and output projections remain.",
+   "purpose": "Makes precise the book's argument that attention alone has no nonlinearity.",
+   "interpretation": "Stacking L such layers gives $x\\,W'_1W'_2\\cdots W'_L$, still a single matrix (biases make it affine but still linear in structure).",
+   "intuition": "A weighted average over one item is that item; what remains is just matrix multiplication.",
+   "numerical_example": "If $W'_1=\\begin{pmatrix}2&0\\\\0&1\\end{pmatrix}$ and $W'_2=\\begin{pmatrix}1&1\\\\0&1\\end{pmatrix}$, then two stacked layers equal one layer with $W'_1W'_2=\\begin{pmatrix}2&2\\\\0&1\\end{pmatrix}$.",
+   "source": "inference",
+   "book_ref": "p.468"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Multi-head attention with the Keras layer (cross-attention)",
+   "original_code": "multi_head_attention = keras.layers.MultiHeadAttention(\n    num_heads=num_heads,\n    head_dim=head_dim,\n)\nmulti_head_attention(query=target, key=source, value=source)",
+   "language": "python",
+   "what_it_does": "Creates a multi-head attention layer and applies it so that each position of target attends over the source sequence. It replaces the hand-written multi-head code from p.467.",
+   "line_explanations": [
+    {
+     "lines": "1-4",
+     "explanation": "Instantiates keras.layers.MultiHeadAttention with num_heads parallel heads, each projecting queries and keys to head_dim dimensions."
+    },
+    {
+     "lines": "5",
+     "explanation": "Calls the layer: query=target (the sequence being updated), key=source and value=source (the sequence being looked at). The output has one vector per target position."
+    }
+   ],
+   "inputs_outputs": "Inputs: target of shape (batch, target_len, d) and source of shape (batch, source_len, d). Output: (batch, target_len, d) by default.",
+   "algorithm": "For each head: project query/key/value, score with scaled dot products, softmax over source positions, weighted-sum values; concatenate heads and project.",
+   "theory_link": "This is the cross-attention form, the original use of attention in RNN translation models (p.463).",
+   "parameters": [
+    {
+     "name": "num_heads",
+     "role": "Number of attention heads (independent attention computations)."
+    },
+    {
+     "name": "head_dim",
+     "role": "Dimension of each head's query/key projection. The actual Keras argument is named key_dim, which is what listing 15.14 (p.469) uses; see pitfalls."
+    },
+    {
+     "name": "query",
+     "role": "Sequence whose positions receive information."
+    },
+    {
+     "name": "key / value",
+     "role": "Sequence that is scored (keys) and summed (values)."
+    }
+   ],
+   "pitfalls": [
+    "The Keras constructor argument is key_dim (optionally value_dim); the book's own listing 15.14 on p.469 passes it as layers.MultiHeadAttention(num_heads, key_dim). Writing head_dim= as printed here will most likely raise an unexpected-keyword error, so use key_dim=head_dim.",
+    "Order of positional arguments in Keras's call is (query, value, key); using keywords as the book does avoids confusion.",
+    "num_heads and head_dim must already be defined as Python variables; the snippet assumes them from the preceding code on p.467."
+   ],
+   "illustrative_code": "# AI-written example, not from the book\nimport numpy as np, keras\nsource = np.random.rand(2, 10, 64).astype('float32')\ntarget = np.random.rand(2, 7, 64).astype('float32')\nmha = keras.layers.MultiHeadAttention(num_heads=4, key_dim=16)\nout = mha(query=target, key=source, value=source)\nprint(out.shape)  # (2, 7, 64)"
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Self-attention: a sequence attending to itself",
+   "original_code": "multi_head_attention(key=source, value=source, query=source)",
+   "language": "python",
+   "what_it_does": "Calls the same layer with the same tensor as key, value and query, so each source token attends over all source tokens.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Same layer object, but now the query is source too. The output has one contextualized vector per source token."
+    }
+   ],
+   "inputs_outputs": "Input source: (batch, source_len, d). Output: (batch, source_len, d); the attention matrix per head is source_len × source_len.",
+   "algorithm": "Self-attention: all-pairs scoring within the sequence, softmax, weighted sum.",
+   "theory_link": "This call is the information-passing step of the Transformer encoder block built in listing 15.14 (p.469).",
+   "parameters": [
+    {
+     "name": "key=value=query=source",
+     "role": "Making all three the same tensor is what defines self-attention."
+    }
+   ],
+   "pitfalls": [
+    "With padded batches you must pass an attention_mask so tokens do not attend to padding (done in the encoder/decoder listings, pp.469-471).",
+    "Cost grows with the square of the sequence length because the score matrix is n × n."
+   ],
+   "illustrative_code": "# AI-written: inspect the attention weights of self-attention\nimport numpy as np, keras\nx = np.random.rand(1, 8, 32).astype('float32')\nmha = keras.layers.MultiHeadAttention(num_heads=2, key_dim=16)\nout, scores = mha(query=x, value=x, key=x, return_attention_scores=True)\nprint(out.shape, scores.shape)  # (1, 8, 32) (1, 2, 8, 8)"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why the length-one argument works, and what it does not claim",
+   "kind": "step_by_step",
+   "body": "1. Attention output for token i: $\\sum_j \\alpha_{ij}\\, (x_j W_V)$, then multiplied by $W_O$.\n2. The weights $\\alpha_{ij}$ come from a softmax over $j$. With one token there is one $j$, so $\\alpha_{11}=1$ always.\n3. Hence output $= x_1 W_V W_O$: a pure matrix product. Queries and keys are irrelevant.\n4. Stacking layers multiplies matrices, which gives another matrix.\n\nWhat it does not claim (Beyond the book): for $n>1$ the weights depend on the input, so attention is a nonlinear function of the whole sequence. But it is still *linear in the values for fixed weights* and never applies a nonlinearity to individual feature dimensions. A Dense+ReLU layer applied per token adds exactly that missing capability.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Cocktail-party analogy",
+   "kind": "analogy",
+   "body": "Picture each word in the sentence as a guest at a party. Cross-attention is a guest listening to people at a *different* party through a window. Self-attention is every guest listening to the other guests in the *same* room, paying more attention to those who say something relevant to them. \"Station\" overhears \"train\" and realizes which kind of station it is. But listening only mixes what others said; to actually *think* about it (transform it nonlinearly), each guest needs some private processing time, which is the feedforward network on p.469.",
+   "source": "analogy"
+  },
+  {
+   "title": "RNN vs self-attention as context builders",
+   "kind": "alternative",
+   "body": "Beyond the book:\n\n| | RNN (GRU) | Self-attention |\n|---|---|---|\n| Path length between tokens i and j | \\|i−j\\| steps | 1 step |\n| Parallel over positions in training | No (sequential loop) | Yes |\n| Cost per layer | O(n·d²) | O(n²·d) |\n| Order information | Built in | Must be added (p.475) |\n| Per-token nonlinearity | Yes (activation in the cell) | No; needs a feedforward block |\n\nThe last row is exactly the gap the book identifies at the bottom of this page.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Self-attention over the book's example sentence",
+   "why": "The page explains self-attention with \"The train left the station on time.\" Click \"station\" to see how a query token scores every token in its own sequence, including itself, and forms a weighted sum. (Weights here come from random projections, not a trained model, so \"train\" will not necessarily get the top score.)",
+   "widget": "attention",
+   "params": {
+    "tokens": [
+     "The",
+     "train",
+     "left",
+     "the",
+     "station",
+     "on",
+     "time"
+    ],
+    "dim": 4,
+    "seed": 1
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "Cross-attention vs self-attention: same layer, different inputs",
+   "why": "The page shows two calls to the same MultiHeadAttention layer; this diagram shows where query, key and value come from in each case.",
+   "mermaid": "flowchart LR\n  subgraph Cross[\"Cross-attention (top of page)\"]\n    T[target] -->|query| M1[MultiHeadAttention]\n    S1[source] -->|key| M1\n    S1 -->|value| M1\n    M1 --> O1[one vector per target token]\n  end\n  subgraph Self[\"Self-attention\"]\n    S2[source] -->|query| M2[MultiHeadAttention]\n    S2 -->|key| M2\n    S2 -->|value| M2\n    M2 --> O2[one contextual vector per source token]\n  end"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Attention was invented by the Transformer paper.",
+   "correction": "The page says attention was first used with RNN models in the mid-2010s; the Transformer's novelty was using attention as the general mechanism and dropping recurrence."
+  },
+  {
+   "claim": "Self-attention needs a different Keras layer from cross-attention.",
+   "correction": "It is the same MultiHeadAttention layer; only the arguments change (query=key=value=source)."
+  },
+  {
+   "claim": "Because attention uses softmax, a stack of attention layers is a deep nonlinear network.",
+   "correction": "The book's length-one example shows attention reduces to a linear projection; per-token nonlinearity must be added by a feedforward network (p.469)."
+  },
+  {
+   "claim": "A token cannot attend to itself in self-attention.",
+   "correction": "The page explicitly says each token attends to every token in its sequence, including itself."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 467,
+    "note": "Multi-head attention motivated: multiple heads avoid washing out features in a single softmax sum; the code at the top of this page finishes that discussion."
+   },
+   {
+    "page": 463,
+    "note": "Dot-product attention introduced as scoring source vectors against a target vector in the RNN translator."
+   },
+   {
+    "page": 456,
+    "note": "The GRU seq2seq translation model that attention was originally added to."
+   },
+   {
+    "page": 461,
+    "note": "Introduction of \"Attention Is All You Need\" and the idea that attention could be the only sequence mechanism."
+   }
+  ],
+  "later": [
+   {
+    "page": 469,
+    "note": "The sentence finishes; the feedforward network, residual connections and LayerNormalization are added in listing 15.14, the Transformer encoder block."
+   },
+   {
+    "page": 470,
+    "note": "Decoder block: self-attention over the target plus cross-attention to the encoder output."
+   },
+   {
+    "page": 471,
+    "note": "Causal masking for the decoder's self-attention, since attention is inherently bidirectional."
+   },
+   {
+    "page": 475,
+    "note": "Positional information must be embedded because attention ignores token order."
+   },
+   {
+    "page": 489,
+    "note": "Chapter summary: Transformers stack blocks of alternating attention and two-layer feedforward networks."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 463,
+    "note": "How attention scores and weighted sums work."
+   },
+   {
+    "page": 467,
+    "note": "What multiple heads add."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 469,
+    "note": "Listing 15.14 uses the self-attention call from this page inside a TransformerEncoder layer."
+   },
+   {
+    "page": 471,
+    "note": "Listing 15.15 uses both self-attention and cross-attention calls."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 467,
+    "note": "Figure 15.7, multi-headed attention."
+   },
+   {
+    "page": 472,
+    "note": "Figure 15.8, the full encoder and decoder blocks."
+   }
+  ]
+ },
+ "takeaways": [
+  "keras.layers.MultiHeadAttention(num_heads, head_dim) packages multi-head attention; call it with query, key and value.",
+  "Attention was first used to augment RNN translators (mid-2010s), helping with long-range dependencies.",
+  "Self-attention = the same sequence as query, key and value; each token attends to all tokens including itself.",
+  "Self-attention builds contextual word representations, e.g., \"station\" absorbs information from \"train\".",
+  "Attention is a very expressive pooling of linear projections but has no nonlinear activation; with one token it is just a linear projection.",
+  "Therefore attention alone cannot replace an RNN layer; a feedforward network with an activation is needed (p.469)."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Which call performs self-attention with a Keras MultiHeadAttention layer `mha`?",
+   "options": [
+    "mha(query=target, key=source, value=source)",
+    "mha(query=source, key=source, value=source)",
+    "mha(query=source, key=target, value=target)",
+    "mha(query=target, key=target, value=source)"
+   ],
+   "answer": "mha(query=source, key=source, value=source)",
+   "explanation": "Self-attention means the sequence attends to itself, so all three arguments are the same tensor (the page writes it as key=source, value=source, query=source). Option 1 is the cross-attention call at the top of the page; option 3 is cross-attention in the other direction; option 4 mixes keys and values from different sequences, which is not meaningful because keys index the values.",
+   "page_refs": [
+    468
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "How was attention first used in the mid-2010s, according to the page, and what problem did it address?",
+   "options": [],
+   "answer": "It was added to RNN encoder-decoder translation models: the encoder and decoder sequence outputs were passed through an attention layer whose output updated the target sequence before prediction. It helped with long-range dependencies that the GRU struggles with.",
+   "explanation": "This is stated in the first paragraph of 15.3.2. Attention gave a direct path from each target position to all source positions.",
+   "page_refs": [
+    468
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Explain with the book's example how self-attention can resolve the meaning of \"station\".",
+   "options": [],
+   "answer": "In \"The train left the station on time.\", self-attention can learn a high score between \"station\" and \"train\", so the vector for \"train\" is summed into the representation of \"station\". The output vector for \"station\" is then conditioned on the context and points toward the railway sense rather than radio or space station.",
+   "explanation": "The weighted sum of value vectors mixes contextual information into each token; the weights are learned.",
+   "page_refs": [
+    468
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "math",
+   "question": "Show why a MultiHeadAttention layer applied to a sequence of length 1 is a linear projection, and what 100 such stacked layers reduce to.",
+   "options": [],
+   "answer": "With one token there is one score; softmax over one element equals 1, so the output is $x W_V W_O$, a linear map of x. Stacking 100 such layers gives $x W'_1 W'_2 \\cdots W'_{100}$, which equals a single matrix multiplication $x W'$.",
+   "explanation": "The page states the score matrix is \"always a single one\" and that 100 layers could be simplified; p.469 completes the sentence: \"to a single matrix multiplication!\"",
+   "page_refs": [
+    468,
+    469
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "mcq",
+   "question": "Why can't we simply replace the RNN layers with MultiHeadAttention layers, according to this page?",
+   "options": [
+    "Attention cannot handle long-range dependencies.",
+    "Attention lacks a nonlinear activation; it only combines linear projections of the sequence elements.",
+    "Attention can only connect two different sequences.",
+    "Attention is too slow to train on GPUs."
+   ],
+   "answer": "Attention lacks a nonlinear activation; it only combines linear projections of the sequence elements.",
+   "explanation": "The book says we \"still need an essential ingredient for any deep neural network—a nonlinear activation function.\" Option 1 is the opposite of what the page says (attention helps with long-range dependencies). Option 3 is contradicted by self-attention. Option 4 is not claimed; in fact Transformers parallelize well (p.489).",
+   "page_refs": [
+    468
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "In what sense is attention \"a very expressive pooling operation\"?",
+   "options": [],
+   "answer": "Like pooling, it aggregates many vectors into one per output position, but it uses learned, input-dependent weights (from query-key scores) instead of fixed equal weights or a max. It is expressive in how it chooses what to aggregate, yet the aggregated quantities are only linear projections.",
+   "explanation": "The phrase captures both the strength (flexible, context-dependent mixing) and the limitation (no per-token nonlinear transformation) that the page discusses.",
+   "page_refs": [
+    468
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you predict the shapes of the output and of the attention score matrix when you run self-attention on a batch of shape (32, 20, 256) with num_heads=8?",
+   "options": [],
+   "answer": "Output: (32, 20, 256). Scores: (32, 8, 20, 20), one 20×20 matrix per head per example.",
+   "explanation": "Self-attention produces one vector per input token (projected back to the query feature size by default), and each head scores every token against every token. Beyond the book: Keras returns these scores with return_attention_scores=True.",
+   "page_refs": [
+    468
+   ]
+  }
+ ]
+}

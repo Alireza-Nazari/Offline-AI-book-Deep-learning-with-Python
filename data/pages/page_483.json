@@ -1,0 +1,482 @@
+{
+ "page_id": "page_483",
+ "pdf_page": 483,
+ "printed_page": "459",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T09:40:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. Three code blocks (the packing example that completes the last sentence of p.482, Listing 15.21, and a printed batch) match the image. The packing example uses whole words for readability; RoBERTa's real byte-level BPE tokens would look different, which the notes point out. The batch size of 16 visible in the output comes from the dataset code on p.482."
+ },
+ "overview": {
+  "title": "Packing IMDb reviews for RoBERTa",
+  "chapter": "15 Language models and the Transformer",
+  "section": "15.4 Classification with a pretrained Transformer",
+  "subsection": "15.4.3 Preprocessing IMDb movie reviews",
+  "main_topic": "Converting raw IMDb review strings into the exact input format RoBERTa saw during pretraining, `<s> tokens </s> <pad>...`, using KerasHub's `StartEndPacker` inside a `tf.data` map, and inspecting a resulting batch.",
+  "central_idea": "A pretrained model works best when inputs mimic its pretraining format. Listing 15.21 tokenizes each batch of reviews, adds start/end tokens, truncates or pads to 512 tokens, and returns `token_ids` plus a boolean `padding_mask`, the two inputs the RoBERTa backbone expects.",
+  "importance": "This is the bridge between the raw datasets of p.482 and the fine-tuning on p.485. Getting the packing and the padding mask right determines whether the pretrained representations are usable.",
+  "learning_objectives": [
+   "Explain RoBERTa's sequence packing format and why matching it matters.",
+   "Describe what `StartEndPacker` does: add start/end tokens, truncate, pad, and optionally return a padding mask.",
+   "Trace the shapes in Listing 15.21 from a batch of 16 strings to two (16, 512) tensors.",
+   "Read the printed batch: identify `<s>`=0, `</s>`=2, `<pad>`=1 and tell truncated reviews from padded ones.",
+   "Explain why the padding mask is needed."
+  ],
+  "prerequisites": [
+   "RoBERTa tokenizer and backbone loaded with KerasHub (p.480)",
+   "Backbone inputs `token_ids` and `padding_mask` (p.481)",
+   "IMDb datasets `train_ds`, `val_ds`, `test_ds` (p.482)",
+   "`tf.data` `map` (chapter 14)",
+   "Masking in attention (section 15.3)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens with the example promised at the end of p.482. RoBERTa saw every pretraining sequence as `<s>`, the tokens, `</s>`, then `<pad>` tokens up to a fixed length. Two toy sequences of length 8 show this: \"the quick brown fox jumped .\" fills the length exactly, and \"the panda slept .\" is padded with two `<pad>` tokens.\n\nThe authors stress matching pretraining's token ordering as closely as possible; the model then trains faster and more accurately. KerasHub's **`StartEndPacker`** layer does this: it appends start, end and padding tokens and trims long sequences to a given length.\n\n**Listing 15.21** defines `preprocess(text, label)`. It creates a `StartEndPacker` with `sequence_length=512` and the tokenizer's own start, end and pad token ids, and asks it to also return a padding mask. It applies `packer(tokenizer(text))` and returns a dict `{\"token_ids\": ..., \"padding_mask\": ...}` plus the unchanged label. The dict keys match the backbone's two named inputs (p.481). The function is mapped over the train, validation and test datasets.\n\n**One preprocessed batch** has `token_ids` of shape **(16, 512)** (int32) and `padding_mask` of shape (16, 512) (bool), with labels of shape (16,). Every row begins with **0** (`<s>`). Rows ending in `1, 1, 1` are short reviews padded with `<pad>` = 1, and their mask ends in `False`. Rows ending in `..., 2` are long reviews truncated to 512 tokens and closed by `</s>` = 2, with an all-`True` mask. The page ends with the inputs ready for fine-tuning (p.484).",
+ "paragraphs": [
+  {
+   "ref": "p483_e04",
+   "excerpt": "It’s important to match the token ordering used for pretraining as closely as possible;",
+   "what_it_says": "Matching the token ordering used in pretraining helps the model train faster and more accurately. KerasHub's `StartEndPacker` layer does this packing: it adds start, end and padding tokens and truncates long sequences to a given length. The authors use it with the tokenizer.",
+   "what_it_means": "The pretrained weights have adapted to a specific input distribution. Position 0 always held `<s>`, a `</s>` always closed the text, and `<pad>` positions were masked out. RoBERTa's learned position embeddings and attention patterns expect this layout. Feeding the same structure means fine-tuning only has to learn the task, not also adapt to a new input format. In particular, the representation at position 0 (`<s>`) is later used as the pooled summary for classification (p.484), so it must really be the start token.",
+   "why_it_matters": "Small format mismatches (missing `<s>`, wrong pad id, no mask) rarely crash anything but quietly degrade accuracy. A library layer configured from the tokenizer's own ids removes that risk.",
+   "technical_idea": "Packing = tokenize → truncate to `sequence_length - 2` content tokens → prepend start id → append end id → right-pad with pad id → mask = (position is not padding). The exact truncation rule is a library detail; the printed batch shows truncated rows still end with `</s>` (id 2).",
+   "terminology": [
+    {
+     "term": "Token packing",
+     "meaning": "Arranging token ids into a fixed-length sequence with special tokens and padding, as the model expects."
+    },
+    {
+     "term": "StartEndPacker",
+     "meaning": "KerasHub preprocessing layer that adds start/end tokens, pads or truncates to `sequence_length`, and can return a padding mask."
+    }
+   ],
+   "connections": [
+    "p.482: the sentence this example completes, and the datasets being preprocessed",
+    "p.455: the same idea in the translation model, with `[start]`/`[end]` tokens",
+    "p.484: the first token's representation is used for classification"
+   ]
+  },
+  {
+   "ref": "p483_e07",
+   "excerpt": "Let’s take a look at a single preprocessed batch:",
+   "what_it_says": "This line introduces the printout of the first batch of `preprocessed_train_ds`.",
+   "what_it_means": "`next(iter(ds))` pulls one element of the `tf.data` pipeline: a tuple `(inputs_dict, labels)` for 16 reviews. The output confirms the shapes and the special-token ids.",
+   "why_it_matters": "Inspecting a batch before training is a cheap sanity check: right keys, right shapes, start tokens in place, padding masked.",
+   "technical_idea": "The tensors print as `tf.Tensor` because `tf.data` executes preprocessing with TensorFlow, regardless of the Keras backend used for the model.",
+   "terminology": [],
+   "connections": [
+    "p.481: the backbone's `token_ids` and `padding_mask` input layers"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "sequence_packing",
+   "name": "Sequence packing with special tokens",
+   "definition": "Formatting each tokenized text as `<s>` + tokens + `</s>`, then padding to a fixed length, exactly as during pretraining.",
+   "intuition": "Putting a letter in the envelope the post office's machines are built for.",
+   "technical": "For RoBERTa: start id 0, pad id 1, end id 2 (visible in the printed batch). Length fixed at 512.",
+   "significance": "Matching the pretraining format lets fine-tuning train faster and more accurately, as the book says.",
+   "example": "[\"<s>\", \"the\", \"panda\", \"slept\", \".\", \"</s>\", \"<pad>\", \"<pad>\"]",
+   "misconception": "That special tokens are cosmetic. The model's representations, especially at position 0, depend on them.",
+   "related": [
+    "tokenization",
+    "padding_mask",
+    "tokenizer_matching"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "padding_mask",
+   "name": "Padding mask",
+   "definition": "A boolean tensor, the same shape as `token_ids`, that is True for real tokens and False for padding.",
+   "intuition": "A sticky note marking which seats are empty so nobody tries to talk to them.",
+   "technical": "The backbone uses it so attention ignores `<pad>` positions as keys. Without it, real tokens would mix in information from hundreds of pad embeddings in short reviews.",
+   "significance": "Lets variable-length reviews share a fixed (16, 512) batch shape without corrupting the representations.",
+   "example": "Row 1 of the printed batch: `[True, True, True, ..., False, False, False]`, a short review.",
+   "misconception": "That pad id 1 alone is enough. The model needs the explicit mask (passed as an input here); it does not infer padding from the id.",
+   "related": [
+    "self_attention",
+    "sequence_packing",
+    "masking"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "truncation",
+   "name": "Truncation to the maximum sequence length",
+   "definition": "Cutting token sequences longer than `sequence_length` so they fit the model's fixed number of positions.",
+   "intuition": "Reading only the first two pages of a long review.",
+   "technical": "`sequence_length=512` matches RoBERTa base's maximum number of learned positions. Long reviews keep their first ~510 tokens, and `</s>` is still placed at the end.",
+   "significance": "Bounds memory and compute ($O(n^2)$ attention); some information from very long reviews is lost.",
+   "example": "Printed row 2 ends `..., 101, 24, 2`: a truncated review, all-True mask.",
+   "misconception": "That truncated reviews lose their end token. The printout shows they still end with id 2.",
+   "related": [
+    "sequence_packing",
+    "transformer"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "RoBERTa packing format (illustration)",
+   "original_code": "[\n    [\"<s>\", \"the\", \"quick\", \"brown\", \"fox\", \"jumped\", \".\", \"</s>\"],\n    [\"<s>\", \"the\", \"panda\", \"slept\", \".\", \"</s>\", \"<pad>\", \"<pad>\"],\n]",
+   "language": "python",
+   "what_it_does": "Shows two token sequences of length 8 packed as RoBERTa expects: start token, content, end token, then padding.",
+   "line_explanations": [
+    {
+     "lines": "2",
+     "explanation": "Six content tokens + `<s>` + `</s>` = 8, filling the length exactly; no padding."
+    },
+    {
+     "lines": "3",
+     "explanation": "Four content tokens + 2 special tokens = 6, so two `<pad>` tokens fill the remaining slots. The `</s>` comes before the padding, not at position 7."
+    }
+   ],
+   "inputs_outputs": "Illustrative strings; in practice these would be integer ids (0, ..., 2, 1, 1).",
+   "algorithm": "Prepend start, append end, right-pad to fixed length.",
+   "theory_link": "Matches the pretraining input layout so the pretrained weights see familiar inputs.",
+   "parameters": [
+    {
+     "name": "sequence length",
+     "role": "8 in this toy example; 512 in Listing 15.21."
+    }
+   ],
+   "pitfalls": [
+    "Real RoBERTa tokens are byte-level BPE pieces (often with a leading-space marker), not whole lowercase words; the example is simplified for readability."
+   ],
+   "illustrative_code": ""
+  },
+  {
+   "id": "c2",
+   "listing": "15.21",
+   "title": "Preprocessing IMDb movie reviews with RoBERTa's tokenizer",
+   "original_code": "def preprocess(text, label):\n    packer = keras_hub.layers.StartEndPacker(\n        sequence_length=512,\n        start_value=tokenizer.start_token_id,\n        end_value=tokenizer.end_token_id,\n        pad_value=tokenizer.pad_token_id,\n        return_padding_mask=True,\n    )\n    token_ids, padding_mask = packer(tokenizer(text))\n    return {\"token_ids\": token_ids, \"padding_mask\": padding_mask}, label\npreprocessed_train_ds = train_ds.map(preprocess)\npreprocessed_val_ds = val_ds.map(preprocess)\npreprocessed_test_ds = test_ds.map(preprocess)",
+   "language": "python",
+   "what_it_does": "Defines a `tf.data` mapping function that tokenizes a batch of reviews with RoBERTa's tokenizer, packs them to 512 tokens with start/end/pad tokens, and returns the backbone's input dict plus the label; applies it to the three datasets.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "`preprocess` receives one element of the batched dataset: `text` is a (16,) string tensor and `label` a (16,) int tensor (batch size 16 from p.482)."
+    },
+    {
+     "lines": "2-8",
+     "explanation": "Build the packer. `sequence_length=512` is the fixed output length. `start_value`, `end_value`, `pad_value` come from the tokenizer itself (0, 2, 1 for RoBERTa), so they always match pretraining. `return_padding_mask=True` makes the layer also return the boolean mask."
+    },
+    {
+     "lines": "9",
+     "explanation": "`tokenizer(text)` yields a ragged batch of token ids (each review has a different length); `packer(...)` turns it into dense (16, 512) `token_ids` and (16, 512) `padding_mask`."
+    },
+    {
+     "lines": "10",
+     "explanation": "Return `(inputs, label)`. The dict keys must exactly match the backbone's input names `token_ids` and `padding_mask` (p.481) so Keras routes them correctly."
+    },
+    {
+     "lines": "11-13",
+     "explanation": "Lazily map the function over train, validation and test sets. Preprocessing runs on the fly in the input pipeline (on CPU) during training and evaluation."
+    }
+   ],
+   "inputs_outputs": "In: (text: string[16], label: int[16]). Out: ({\"token_ids\": int32[16, 512], \"padding_mask\": bool[16, 512]}, label: int[16]).",
+   "algorithm": "Tokenize → pack (start + truncated tokens + end + pads) → mask = not pad.",
+   "theory_link": "Implements the 'matching tokenizer' requirement (pp.479-480) and the pretraining packing format; the padding mask lets attention ignore padding.",
+   "parameters": [
+    {
+     "name": "sequence_length=512",
+     "role": "Fixed length; RoBERTa base's maximum number of positions. Longer reviews are truncated."
+    },
+    {
+     "name": "start_value / end_value / pad_value",
+     "role": "Special-token ids taken from the tokenizer so they match pretraining."
+    },
+    {
+     "name": "return_padding_mask",
+     "role": "If True, also return the boolean mask the backbone needs."
+    }
+   ],
+   "pitfalls": [
+    "The packer is constructed inside `preprocess`. Under `ds.map` the function is traced once into a graph, so this is cheap; calling `preprocess` eagerly in a loop would rebuild the layer each time. Creating the packer once outside the function is the more conventional pattern.",
+    "512 tokens for every review is costly: attention is quadratic in length and many reviews are much shorter. Dynamic padding or a smaller length would be faster at some cost in accuracy on long reviews.",
+    "Without `.prefetch()` / `num_parallel_calls`, tokenization may bottleneck GPU training (beyond the book).",
+    "If the dict keys differ from the backbone input names, Keras raises an error or misroutes inputs."
+   ],
+   "illustrative_code": "# AI-written sketch, not from the book: same pipeline with the packer built once and parallel mapping\npacker = keras_hub.layers.StartEndPacker(\n    sequence_length=512,\n    start_value=tokenizer.start_token_id,\n    end_value=tokenizer.end_token_id,\n    pad_value=tokenizer.pad_token_id,\n    return_padding_mask=True,\n)\ndef preprocess(text, label):\n    token_ids, padding_mask = packer(tokenizer(text))\n    return {\"token_ids\": token_ids, \"padding_mask\": padding_mask}, label\npreprocessed_train_ds = train_ds.map(preprocess, num_parallel_calls=tf.data.AUTOTUNE).prefetch(tf.data.AUTOTUNE)"
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Inspecting one preprocessed batch",
+   "original_code": ">>> next(iter(preprocessed_train_ds))\n({\"token_ids\": <tf.Tensor: shape=(16, 512), dtype=int32, numpy=\n  array([[   0,  713,   56, ...,    1,    1,    1],\n         [   0, 1121,    5, ...,  101,   24,    2],\n         [   0,  713, 1569, ...,    1,    1,    1],\n         ...,\n         [   0,  100, 3996, ...,    1,    1,    1],\n         [   0,  100,   64, ..., 4655,  101,    2],\n         [   0,  734,    8, ...,    1,    1,    1]], dtype=int32)>,\n  \"padding_mask\": <tf.Tensor: shape=(16, 512), dtype=bool, numpy=\n  array([[ True,  True,  True, ..., False, False, False],\n         [ True,  True,  True, ...,  True,  True,  True],\n         [ True,  True,  True, ..., False, False, False],\n         ...,\n         [ True,  True,  True, ..., False, False, False],\n         [ True,  True,  True, ...,  True,  True,  True],\n         [ True,  True,  True, ..., False, False, False]])>},\n <tf.Tensor: shape=(16,), dtype=int32, numpy=array([0, 1, ...], dtype=int32)>)",
+   "language": "python",
+   "what_it_does": "Prints the first element of `preprocessed_train_ds`: the input dict with `token_ids` and `padding_mask` for 16 reviews, and the 16 labels.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Create an iterator over the dataset and fetch one batch."
+    },
+    {
+     "lines": "2-9",
+     "explanation": "`token_ids`, shape (16, 512), int32. Every row starts with 0 = `<s>`. The second token is a real word id, e.g. 713 or 100. Rows ending in `1, 1, 1` are padded (pad id 1). Rows ending in `..., 101, 24, 2` or `..., 4655, 101, 2` reached 512 tokens and close with `</s>` = 2, i.e. truncated long reviews."
+    },
+    {
+     "lines": "10-17",
+     "explanation": "`padding_mask`, shape (16, 512), bool. True on real tokens (including `<s>` and `</s>`), False on padding. The all-True rows correspond exactly to the rows ending in 2 above."
+    },
+    {
+     "lines": "18",
+     "explanation": "Labels, shape (16,): 0 = negative, 1 = positive review."
+    }
+   ],
+   "inputs_outputs": "Output only: one batch of model-ready inputs and labels.",
+   "algorithm": "",
+   "theory_link": "Confirms that the packing reproduces RoBERTa's pretraining format and that the mask marks padding.",
+   "parameters": [],
+   "pitfalls": [
+    "The ellipses (`...`) are NumPy's summarization of large arrays, not literal values.",
+    "The batch size 16 comes from the dataset construction on p.482."
+   ],
+   "illustrative_code": "# AI-written check, not from the book: decode the first few ids of row 0\nbatch_inputs, batch_labels = next(iter(preprocessed_train_ds))\nprint(tokenizer.detokenize(batch_inputs[\"token_ids\"][0, :12]))\nprint(batch_inputs[\"padding_mask\"][0].numpy().sum(), \"real tokens in review 0\")"
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Reading the special-token ids from the printout",
+   "kind": "breakdown",
+   "body": "The printed batch identifies RoBERTa's special-token ids without any documentation:\n\n- Column 0 is always **0**, so `<s>` = 0 (`start_token_id`).\n- Padded rows end in **1** wherever the mask is False, so `<pad>` = 1 (`pad_token_id`).\n- Rows with an all-True mask end in **2**, so `</s>` = 2 (`end_token_id`).\n\nThe all-True rows are reviews with at least ~510 subword tokens. Since many IMDb reviews are a few hundred words long, both cases appear in a batch of 16.",
+   "source": "inference"
+  },
+  {
+   "title": "Why the mask matters numerically",
+   "kind": "numerical",
+   "body": "Take a review of 120 tokens (122 with `<s>`/`</s>`) padded to 512: 390 of 512 positions (76%) are padding. Without a mask, each real token's softmax attention would spread over 512 keys, most of them identical pad embeddings, diluting the real context; the `<s>` vector used for classification (p.484) would be mostly an average of padding. With the mask, attention logits for pad keys are set to a very large negative number before the softmax, giving them weight effectively 0, so the 122 real tokens attend only to each other.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Analogy: a standard form",
+   "kind": "analogy",
+   "body": "RoBERTa was trained on forms that always start with a header box (`<s>`), contain text, end with a signature line (`</s>`), and leave unused lines blank and marked 'N/A' (pad + mask). Filling in your IMDb reviews on the same form lets the clerk (the pretrained network) process them at once, instead of first having to learn a new layout.",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "widget",
+   "title": "Shape flow of Listing 15.21",
+   "why": "Follows one batch through `preprocess`: 16 raw strings → ragged token ids → packed (16, 512) token_ids and padding_mask, as printed on this page.",
+   "widget": "tensor_shapes",
+   "params": {
+    "steps": [
+     {
+      "op": "input text batch",
+      "shape": [
+       16
+      ]
+     },
+     {
+      "op": "tokenizer (ragged)",
+      "shape": [
+       16,
+       null
+      ]
+     },
+     {
+      "op": "StartEndPacker → token_ids",
+      "shape": [
+       16,
+       512
+      ]
+     },
+     {
+      "op": "padding_mask",
+      "shape": [
+       16,
+       512
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "mermaid",
+   "title": "What StartEndPacker does to one review",
+   "why": "Illustrates the two cases visible in the printed batch: short reviews are padded (mask False at the end) and long reviews are truncated and closed with </s>.",
+   "mermaid": "flowchart TD\n  A[\"review text\"] --> B[\"tokenizer → ids (variable length L)\"]\n  B --> C{\"L + 2 ≤ 512?\"}\n  C -- yes --> D[\"0 · ids · 2 · 1 1 1 ... (pad to 512)\"]\n  C -- no --> E[\"0 · first ~510 ids · 2 (truncated)\"]\n  D --> F[\"mask: True ... True False ... False\"]\n  E --> G[\"mask: all True\"]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "The chapter 14 IMDb vectorizer can be reused to tokenize inputs for RoBERTa.",
+   "correction": "The ids must come from RoBERTa's own tokenizer and be packed in its pretraining format (`<s>` ... `</s>` `<pad>`), as in Listing 15.21."
+  },
+  {
+   "claim": "The padding mask is optional because padding uses a dedicated token id.",
+   "correction": "The backbone takes `padding_mask` as an explicit input (p.481); it is what tells attention to ignore pad positions."
+  },
+  {
+   "claim": "Truncated reviews lose their end token.",
+   "correction": "`StartEndPacker` still places `</s>` (id 2) at the end; see the rows ending in `..., 2` with all-True masks."
+  },
+  {
+   "claim": "`token_ids` row values like 713 are words in the chapter 14 vocabulary.",
+   "correction": "They are RoBERTa BPE subword ids from a vocabulary of about 50,000 (p.480)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 480,
+    "note": "Loading RoBERTa's tokenizer; subword vocabulary of ~50,000"
+   },
+   {
+    "page": 481,
+    "note": "Backbone inputs token_ids and padding_mask; 124M parameters"
+   },
+   {
+    "page": 482,
+    "note": "IMDb datasets (batch size 16) and the start of the packing explanation"
+   },
+   {
+    "page": 455,
+    "note": "Start/end tokens in the translation data"
+   }
+  ],
+  "later": [
+   {
+    "page": 484,
+    "note": "Fine-tuning: using the first token's representation"
+   },
+   {
+    "page": 485,
+    "note": "Training on preprocessed_train_ds and evaluating on preprocessed_test_ds"
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 479,
+    "note": "Why a matching tokenizer is required"
+   },
+   {
+    "page": 480,
+    "note": "Tokenizer.from_preset"
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 482,
+    "note": "Dataset loading code that produces train_ds/val_ds/test_ds"
+   },
+   {
+    "page": 485,
+    "note": "Listings 15.22-15.23 consume these datasets"
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "RoBERTa expects `<s>` tokens `</s>` followed by `<pad>`s; matching this makes fine-tuning faster and more accurate.",
+  "`StartEndPacker` adds start/end tokens, truncates or pads to 512, and can return a padding mask, using the tokenizer's own special ids.",
+  "`preprocess` returns a dict whose keys match the backbone's inputs: `token_ids` and `padding_mask`.",
+  "A batch has `token_ids` and `padding_mask` of shape (16, 512) and labels of shape (16,).",
+  "In the printout, 0 = `<s>`, 2 = `</s>`, 1 = `<pad>`; all-True mask rows are truncated long reviews."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "What does `StartEndPacker` NOT do in Listing 15.21?",
+   "options": [
+    "Prepend the start token",
+    "Append the end token",
+    "Pad or truncate to 512 tokens",
+    "Convert raw text into token ids"
+   ],
+   "answer": "Convert raw text into token ids",
+   "explanation": "Tokenization is done by `tokenizer(text)`; the packer receives the ids. The book says the packer appends start, end and padding tokens and trims long sequences to a given length.",
+   "page_refs": [
+    483
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "From the printed batch, what are the token ids of <s>, </s> and <pad> in RoBERTa?",
+   "options": [],
+   "answer": "<s> = 0, </s> = 2, <pad> = 1.",
+   "explanation": "Every row starts with 0; padded rows end with 1s where the mask is False; full rows end with 2.",
+   "page_refs": [
+    483
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why do the authors insist on matching the token ordering used during pretraining?",
+   "options": [],
+   "answer": "The pretrained weights (position embeddings, attention patterns, the meaning of position 0) were learned for that format; matching it means fine-tuning only has to learn the task, so the model trains more quickly and accurately.",
+   "explanation": "The book states the speed and accuracy benefit; the mechanism is that the inputs stay in the distribution the weights were trained on.",
+   "page_refs": [
+    483
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "A row of `padding_mask` is all True. What does that tell you about the review?",
+   "options": [
+    "It is empty",
+    "It had at least enough tokens to fill 512 positions and was truncated",
+    "It is a negative review",
+    "It contains only special tokens"
+   ],
+   "answer": "It had at least enough tokens to fill 512 positions and was truncated",
+   "explanation": "No padding means the packed sequence is full; the matching `token_ids` rows end with `</s>` = 2 after real content. Sentiment is unrelated, and an empty review would be mostly padding.",
+   "page_refs": [
+    483
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "Why must the keys of the dict returned by `preprocess` be exactly \"token_ids\" and \"padding_mask\"?",
+   "options": [],
+   "answer": "They are the names of the RoBERTa backbone's two input layers, and Keras routes dict inputs to model inputs by name.",
+   "explanation": "See the backbone summary on p.481.",
+   "page_refs": [
+    483,
+    481
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "math",
+   "question": "A review tokenizes to 200 subword tokens. After packing to 512, how many positions are padding, and what fraction of the padding_mask is True?",
+   "options": [],
+   "answer": "200 + 2 special tokens = 202 real positions; 512 − 202 = 310 padding positions; 202/512 ≈ 39.5% True.",
+   "explanation": "`<s>` and `</s>` count as real (unmasked) tokens.",
+   "page_refs": [
+    483
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you write `preprocess` from memory and explain each argument of `StartEndPacker`?",
+   "options": [],
+   "answer": "sequence_length (512), start_value/end_value/pad_value from the tokenizer, return_padding_mask=True; return ({token_ids, padding_mask}, label).",
+   "explanation": "If you can also explain the printed batch, you understand the input contract of the pretrained backbone.",
+   "page_refs": [
+    483
+   ]
+  }
+ ]
+}

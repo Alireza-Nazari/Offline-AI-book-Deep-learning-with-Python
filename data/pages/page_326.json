@@ -1,0 +1,389 @@
+{
+ "page_id": "page_326",
+ "pdf_page": 326,
+ "printed_page": "302",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:42:30Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. p326_e03 is the end of Listing 10.19 (begun on p.325). Listing 10.21 (PyTorch) starts here with two lines (p326_e12) and continues on p.327. Callouts were matched to code lines using the page image: 'Computes activations of the last conv layer and makes the tape watch it' points at tape.watch(...); 'Retrieves the activation channel corresponding to the top predicted class' points at top_class_channel = preds[:, top_pred_index]; 'Gets the gradient of the top predicted class with regard to the output feature map of the last convolutional layer' points at tape.gradient(...)."
+ },
+ "overview": {
+  "title": "Classifier submodel and top-class gradients in TensorFlow",
+  "chapter": "10 Interpreting what ConvNets learn",
+  "section": "10.3 Visualizing heatmaps of class activation",
+  "subsection": "10.3.2 Getting the gradient of the top class: PyTorch version",
+  "main_topic": "Finishing the classifier submodel by reapplying Xception's 'pooler' and 'predictions' layers, then computing the gradient of the top predicted class score with respect to the last convolutional feature map, first with TensorFlow's GradientTape (Listing 10.20, section 10.3.1) and then starting the PyTorch version (Listing 10.21, section 10.3.2).",
+  "central_idea": "With the model split in two, the class score is an explicit function of the last conv activations. A GradientTape that watches those activations records the classifier's forward pass, and tape.gradient returns d(top-class score)/d(feature map), a tensor with the same shape as the feature map. These gradients are the raw material for the channel importance weights.",
+  "importance": "Gradients are the 'Grad' in Grad-CAM. The page also shows the book's multi-backend pattern: Keras models are backend-agnostic, but computing gradients requires backend APIs, so the same function get_top_class_gradients is written three times (TensorFlow here, PyTorch and JAX on p.327).",
+  "learning_objectives": [
+   "Complete a Keras model that maps last-conv activations to class predictions by reapplying named layers.",
+   "Explain why gradient computation needs backend-specific APIs in a multi-backend Keras workflow.",
+   "Use tf.GradientTape with tape.watch on a non-variable tensor.",
+   "Select the top class's output with ops.argmax and preds[:, top_pred_index].",
+   "Describe the shape and meaning of the returned grads tensor and why it is converted to NumPy."
+  ],
+  "prerequisites": [
+   "Listings 10.18-10.19 start on p.325 (last_conv_layer_model, classifier_input)",
+   "GradientTape basics (p.91) and gradient ascent with TensorFlow in section 10.2.1 (p.318)",
+   "keras.ops as a backend-agnostic NumPy-like API",
+   "Partial derivatives and the chain rule (chapter 2)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "**End of Listing 10.19.** The classifier submodel is completed by looping over the layer names `\"pooler\"` and `\"predictions\"`, fetching each with `model.get_layer(layer_name)` and applying it to `x`. `classifier_model = keras.Model(classifier_input, x)` now maps last-conv activations to class probabilities.\n\n**Computing the gradient.** Next we need the gradient of the top predicted class for our input image with respect to the activations of the last convolution layer. \"Once again\" (as for filter visualization in section 10.2), computing gradients means using **backend APIs**.\n\n**10.3.1 TensorFlow version (Listing 10.20).** `get_top_class_gradients(img_array)`:\n\n1. computes `last_conv_layer_output = last_conv_layer_model(img_array)`;\n2. opens a `tf.GradientTape()` and calls `tape.watch(last_conv_layer_output)`, because this is a plain tensor, not a trainable variable;\n3. runs `preds = classifier_model(last_conv_layer_output)` inside the tape;\n4. finds `top_pred_index = ops.argmax(preds[0])` and slices `top_class_channel = preds[:, top_pred_index]`, the activation channel of the top predicted class;\n5. calls `tape.gradient(top_class_channel, last_conv_layer_output)` to get the gradient of that class with respect to the feature map, and returns it together with the feature map.\n\nThe function is called on the preprocessed `img_array`, and both results are converted with `ops.convert_to_numpy` so the heatmap can be computed with NumPy (p.328).\n\n**10.3.2 PyTorch version (Listing 10.21, begins).** The PyTorch version uses `.backward()` and `.grad`. The page shows only the first two lines: the function header and the computation of the last conv activations; the rest is on p.327.",
+ "paragraphs": [
+  {
+   "ref": "p326_e04",
+   "excerpt": "Then, we compute the gradient of the top predicted class for our input",
+   "what_it_says": "The next step is to compute the gradient of the top predicted class for the input image with respect to the activations of the last convolution layer. Because gradients are needed, backend APIs have to be used, as before.",
+   "what_it_means": "Keras's model building and inference (keras.Model, keras.ops) are backend-agnostic, but there is no single Keras function for 'give me the gradient of this with respect to that' in a custom computation; each backend has its own mechanism (GradientTape, autograd, jax.grad).",
+   "why_it_matters": "It defines the exact quantity: $\\partial y^{c^*} / \\partial A$, where $y^{c^*}$ is the top class output and $A$ is the last conv feature map. Each element tells how much the class score would change if that activation (at that location and channel) increased slightly.",
+   "technical_idea": "Beyond the book: the gradient is taken through the classifier head only (pooling and dense layer), so it is cheap to compute and depends on the head's weights for class 386.",
+   "terminology": [
+    {"term": "backend API", "meaning": "Framework-specific functions of TensorFlow, PyTorch or JAX, used when Keras's backend-agnostic API does not cover the task."},
+    {"term": "gradient of the top predicted class", "meaning": "Partial derivatives of the top class's output with respect to every element of the feature map."}
+   ],
+   "connections": [
+    "p.316: section 10.2 introduced writing the same gradient code for TensorFlow, PyTorch and JAX.",
+    "p.318: gradient ascent with GradientTape in TensorFlow."
+   ]
+  },
+  {
+   "ref": "p326_e06",
+   "excerpt": "Let’s start with the TensorFlow version, once again using `GradientTape`.",
+   "what_it_says": "The TensorFlow version uses GradientTape again.",
+   "what_it_means": "The tape records operations performed in its context so that gradients can be computed afterwards (reverse-mode autodiff).",
+   "why_it_matters": "Here the variable we differentiate with respect to is an intermediate activation, not a weight, which is why tape.watch is needed in Listing 10.20.",
+   "terminology": [
+    {"term": "GradientTape", "meaning": "TensorFlow's context manager that records operations to compute gradients."},
+    {"term": "tape.watch", "meaning": "Tells the tape to track a tensor that is not a trainable variable."}
+   ],
+   "connections": [
+    "p.91: GradientTape introduced in chapter 3.",
+    "p.318: Listing 10.11 used GradientTape for gradient ascent on the input image."
+   ]
+  },
+  {
+   "ref": "p326_e10",
+   "excerpt": "Next, here’s the PyTorch version, using `.backward()` and `.grad`.",
+   "what_it_says": "The PyTorch version uses .backward() and .grad.",
+   "what_it_means": "In PyTorch, tensors that require gradients accumulate them in their .grad attribute after calling .backward() on a scalar result.",
+   "why_it_matters": "The structure of the function is the same; only the gradient mechanism changes. The listing continues on p.327, where the feature map is cloned, detached and marked with requires_grad_(True).",
+   "terminology": [
+    {"term": ".backward()", "meaning": "PyTorch method that runs backpropagation from a tensor through the recorded graph."},
+    {"term": ".grad", "meaning": "Attribute where PyTorch stores the gradient of a leaf tensor that requires gradients."}
+   ],
+   "connections": [
+    "p.101: Listing 3.26 computes a gradient with .backward().",
+    "p.319: Listing 10.12 used loss.backward() and image.grad for gradient ascent."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "gradient_tape",
+   "name": "GradientTape",
+   "definition": "TensorFlow's mechanism for reverse-mode automatic differentiation: operations executed inside the tape context are recorded and can be differentiated with tape.gradient.",
+   "intuition": "A recorder that remembers the computation so it can be played backwards.",
+   "technical": "Variables are watched automatically; other tensors, such as last_conv_layer_output here, must be watched explicitly with tape.watch.",
+   "significance": "Provides the gradients Grad-CAM uses as channel importances.",
+   "example": "tape.gradient(top_class_channel, last_conv_layer_output)",
+   "misconception": "Computing last_conv_layer_output outside the tape is fine as long as it is watched before it is used inside the tape.",
+   "related": ["autodiff", "backpropagation"],
+   "source": "book"
+  },
+  {
+   "id": "grad_cam",
+   "name": "Grad-CAM gradients",
+   "definition": "The derivative of the chosen class's output with respect to each element of the last conv feature map.",
+   "intuition": "How much would 'African elephant' go up if this feature at this place got a bit stronger?",
+   "technical": "Shape equals the feature map's shape (batch, rows, cols, channels); pooled over spatial axes on p.328 to obtain one weight per channel.",
+   "significance": "Turns the head's knowledge of which features matter for the class into numbers.",
+   "example": "grads for class 386 of the elephant image.",
+   "misconception": "These are not gradients with respect to the input image (as in filter visualization, section 10.2) but with respect to an internal activation.",
+   "related": ["class_activation_map", "gradient_tape", "convolution"],
+   "source": "book"
+  },
+  {
+   "id": "multi_backend_keras",
+   "name": "Backend-specific gradient code in Keras 3",
+   "definition": "Keras models and keras.ops run on TensorFlow, PyTorch or JAX, but gradient computation in custom code uses each backend's own API.",
+   "intuition": "Same model, three different ways of asking for derivatives.",
+   "technical": "ops.argmax and ops.convert_to_numpy are backend-agnostic; tf.GradientTape, Tensor.backward() and jax.grad are not.",
+   "significance": "Explains why the book shows three versions of get_top_class_gradients.",
+   "example": "Listings 10.20, 10.21 and 10.22.",
+   "misconception": "You do not need to rebuild the model per backend; only the gradient function differs.",
+   "related": ["gradient_tape", "autodiff"],
+   "source": "book"
+  },
+  {
+   "id": "model_splitting",
+   "name": "Re-applying head layers to a new input",
+   "definition": "Building a model whose input is an intermediate tensor by calling the remaining layers of the original model on it.",
+   "intuition": "Plug the cut-off top of the network onto a new input socket.",
+   "technical": "for layer_name in [\"pooler\", \"predictions\"]: x = model.get_layer(layer_name)(x); classifier_model = keras.Model(classifier_input, x)",
+   "significance": "Completes the decomposition preds = classifier_model(last_conv_layer_model(img)).",
+   "example": "The Xception head: pooler (global pooling) and predictions (dense layer with softmax).",
+   "misconception": "Reapplying layers does not create new weights; the same layer objects are reused.",
+   "related": ["functional_api", "keras_model"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Gradient of the top class with respect to the last conv feature map",
+   "latex": "G^{k}_{ij} = \\frac{\\partial\\, y^{c^*}}{\\partial A^{k}_{ij}}, \\qquad c^* = \\arg\\max_c y^c",
+   "source_text": "grads = tape.gradient(top_class_channel, last_conv_layer_output)",
+   "variables": [
+    {"symbol": "A^{k}_{ij}", "meaning": "Activation of channel k at spatial position (i, j) of the last conv layer (last_conv_layer_output)."},
+    {"symbol": "y^{c}", "meaning": "Output of the classifier for class c (preds[:, c]); with activation=\"softmax\" this is a probability."},
+    {"symbol": "c^*", "meaning": "Top predicted class index (top_pred_index; 386 for the elephant image)."},
+    {"symbol": "G^{k}_{ij}", "meaning": "The gradient tensor grads, same shape as A."}
+   ],
+   "operations": "Reverse-mode differentiation of the scalar class output through the head (pooler, predictions) back to the feature map.",
+   "purpose": "Measures the sensitivity of the class score to every feature-map activation; pooled on p.328 to obtain per-channel weights.",
+   "interpretation": "Positive G means increasing that activation increases the African elephant score.",
+   "intuition": "A local 'importance' value for every channel at every location.",
+   "numerical_example": "Beyond the book: if the head were global average pooling followed by a dense layer with weight $w_{k,c}$ and no softmax, then $y^c = \\sum_k w_{k,c}\\,\\frac{1}{HW}\\sum_{ij}A^k_{ij}$, so $G^k_{ij} = w_{k,c}/(HW)$: the same value at every location, equal to the dense weight scaled by $1/(HW)$. With softmax, every gradient is additionally multiplied by $\\partial p_c/\\partial z_c$-type factors that depend on all logits.",
+   "source": "book",
+   "book_ref": "p.326"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "10.19",
+   "title": "Going from the last convolutional output to final predictions (end)",
+   "original_code": "for layer_name in [\"pooler\", \"predictions\"]:\n    x = model.get_layer(layer_name)(x)\nclassifier_model = keras.Model(classifier_input, x)",
+   "language": "python",
+   "what_it_does": "Applies the head layers 'pooler' and 'predictions' of the ImageClassifier to x (which starts as last_conv_layer.output, p.325) and wraps the result into classifier_model.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Retrieves each head layer by name from the task model and calls it on the running tensor x."},
+    {"lines": "3", "explanation": "Creates a functional model from the last conv activations to the class predictions."}
+   ],
+   "inputs_outputs": "Input: last conv activations. Output: class probabilities of shape (batch, 1000).",
+   "algorithm": "Functional re-wiring of existing layers.",
+   "theory_link": "Makes the class score an explicit function of the feature map.",
+   "parameters": [
+    {"name": "[\"pooler\", \"predictions\"]", "role": "Names of the layers after the backbone in the ImageClassifier: the pooling layer and the final dense classification layer."}
+   ],
+   "pitfalls": [
+    "If the task contained other layers between backbone and output (e.g. dropout), they would need to be included in the list; the book lists exactly these two.",
+    "The beginning of the listing (classifier_input, x) is on p.325."
+   ],
+   "illustrative_code": ""
+  },
+  {
+   "id": "c2",
+   "listing": "10.20",
+   "title": "Computing the top class gradients with TensorFlow",
+   "original_code": "import tensorflow as tf\ndef get_top_class_gradients(img_array):\n    last_conv_layer_output = last_conv_layer_model(img_array)\n    with tf.GradientTape() as tape:\n        tape.watch(last_conv_layer_output)\n        preds = classifier_model(last_conv_layer_output)\n        top_pred_index = ops.argmax(preds[0])\n        top_class_channel = preds[:, top_pred_index]\n    grads = tape.gradient(top_class_channel, last_conv_layer_output)\n    return grads, last_conv_layer_output\ngrads, last_conv_layer_output = get_top_class_gradients(img_array)\ngrads = ops.convert_to_numpy(grads)\nlast_conv_layer_output = ops.convert_to_numpy(last_conv_layer_output)",
+   "language": "python",
+   "what_it_does": "Computes the last conv feature map for the image and the gradient of the top predicted class's output with respect to that feature map, then converts both to NumPy arrays.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "TensorFlow is imported because GradientTape is a TensorFlow API (backend-specific)."},
+    {"lines": "3", "explanation": "Forward pass through the first submodel: the feature map A."},
+    {"lines": "4-5", "explanation": "Opens the tape and watches A (callout: computes activations of the last conv layer and makes the tape watch it). Watching is required because A is a tensor, not a tf.Variable."},
+    {"lines": "6", "explanation": "Forward pass through the classifier submodel, recorded by the tape."},
+    {"lines": "7-8", "explanation": "Index of the top class for the first image, then its column of preds (callout: retrieves the activation channel corresponding to the top predicted class). Shape (1,)."},
+    {"lines": "9", "explanation": "Gradient of the top class output with respect to A (callout: gets the gradient of the top predicted class with regard to the output feature map of the last convolutional layer)."},
+    {"lines": "10", "explanation": "Returns both the gradients and the feature map; both are needed to build the heatmap."},
+    {"lines": "11-13", "explanation": "Calls the function on the preprocessed img_array (p.325) and converts the results to NumPy for the post-processing in Listing 10.23 (p.328)."}
+   ],
+   "inputs_outputs": "Input: preprocessed image batch. Outputs: grads and last_conv_layer_output, both NumPy arrays of the same shape (1, rows, cols, channels).",
+   "algorithm": "Forward to feature map -> taped forward through head -> select top class -> reverse-mode gradient.",
+   "theory_link": "Implements $G = \\partial y^{c^*}/\\partial A$ (see math m1).",
+   "parameters": [
+    {"name": "img_array", "role": "The preprocessed image batch."},
+    {"name": "top_pred_index", "role": "Class whose evidence is explained; computed dynamically as the argmax (386 here)."}
+   ],
+   "pitfalls": [
+    "Without tape.watch, tape.gradient returns None because the tape does not track plain tensors.",
+    "preds[:, top_pred_index] has shape (1,); tape.gradient of a non-scalar target sums over it, which is fine for a batch of one.",
+    "This listing works only when Keras runs on the TensorFlow backend."
+   ],
+   "illustrative_code": "# AI-written variant (not from the book): explain a chosen class instead of the top one\ndef get_class_gradients(img_array, class_index):\n    A = last_conv_layer_model(img_array)\n    with tf.GradientTape() as tape:\n        tape.watch(A)\n        preds = classifier_model(A)\n        score = preds[:, class_index]\n    return tape.gradient(score, A), A\n# e.g. class_index=385 would target 'Indian elephant' in ImageNet"
+  },
+  {
+   "id": "c3",
+   "listing": "10.21",
+   "title": "Computing the top class gradients with PyTorch (first lines)",
+   "original_code": "def get_top_class_gradients(img_array):\n    last_conv_layer_output = last_conv_layer_model(img_array)",
+   "language": "python",
+   "what_it_does": "Begins the PyTorch version of the same function: computes the activations of the last conv layer (callout). The rest of the listing, which clones the tensor, enables gradients and calls .backward(), is on p.327.",
+   "line_explanations": [
+    {"lines": "1-2", "explanation": "Same signature and first step as the TensorFlow version: forward pass through last_conv_layer_model."}
+   ],
+   "inputs_outputs": "Input: preprocessed image batch. Output (on p.327): grads and last_conv_layer_output.",
+   "algorithm": "See p.327.",
+   "theory_link": "Same quantity as Listing 10.20, different autodiff mechanism.",
+   "parameters": [],
+   "pitfalls": ["Read together with the continuation on p.327."],
+   "illustrative_code": ""
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Why tape.watch is required here",
+   "kind": "step_by_step",
+   "body": "1. GradientTape automatically tracks trainable `tf.Variable`s, such as model weights.\n2. `last_conv_layer_output` is an ordinary tensor produced by a forward pass, so the tape ignores it unless told otherwise.\n3. `tape.watch(last_conv_layer_output)` adds it to the tracked set, so operations on it inside the context are recorded.\n4. `tape.gradient(target, last_conv_layer_output)` can then return a tensor instead of `None`.\n\nThe same situation appeared in section 10.2, where the input image (not a variable) was the thing being differentiated with respect to (p.318).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Softmax output vs raw score",
+   "kind": "alternative",
+   "body": "Beyond the book: the original Grad-CAM paper differentiates the class score *before* softmax ($y^c$ as a logit). Because the book created the classifier with `activation=\"softmax\"` (p.324), `preds` here are probabilities, so the gradient is that of $p_{c^*}$. When the model is very confident ($p \\approx 0.9$), softmax gradients shrink, but the *relative* channel weights usually give a similar heatmap, and the final normalization on p.328 removes the overall scale. Using the logit is a common alternative if gradients become too small (saturated softmax).",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "The head in two layers",
+   "kind": "breakdown",
+   "body": "- `pooler`: collapses the (rows, cols, channels) feature map to one vector of channel values (global pooling).\n- `predictions`: a dense layer mapping that vector to 1,000 class outputs, with the softmax activation chosen on p.324.\n\nBecause pooling averages over space, the gradient that flows back from `predictions` to each location of a channel is closely tied to that channel's dense weight for the class; this is why averaging the gradients per channel (p.328) gives a meaningful channel importance. (Interpretation, not stated on this page.)",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Forward and backward pass in Listing 10.20",
+   "why": "The listing records the classifier's forward pass on a watched feature map, then propagates the top-class output back to it.",
+   "mermaid": "flowchart LR\n  I[\"img_array<br/>(preprocessed)\"] --> F[\"last_conv_layer_model\"]\n  F --> A[\"last_conv_layer_output A<br/>tape.watch(A)\"]\n  subgraph tape[\"tf.GradientTape\"]\n    A --> P[\"pooler\"] --> D[\"predictions\"] --> Y[\"preds\"]\n    Y --> T[\"top_class_channel<br/>preds[:, argmax]\"]\n  end\n  T -. \"tape.gradient\" .-> G[\"grads = dT/dA<br/>same shape as A\"]"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "Gradients via the chain rule in a tiny graph",
+   "why": "tape.gradient applies the chain rule backward through the head layers; step through a small linear example to see how a gradient with respect to an intermediate value is formed.",
+   "widget": "backprop_graph",
+   "params": {"example": "two_layer_relu", "x": 1.5, "y": 1.0, "w": 0.8, "b": 0.1, "lr": 0.1}
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Grad-CAM uses the gradient of the class with respect to the input pixels.",
+   "correction": "It uses the gradient with respect to the last convolutional layer's output (callout on Listing 10.20)."
+  },
+  {
+   "claim": "Since Keras 3 is multi-backend, the gradient code can be written once.",
+   "correction": "The page notes that computing gradients requires backend APIs, hence separate TensorFlow, PyTorch and JAX versions."
+  },
+  {
+   "claim": "tape.watch is optional for any tensor computed before the tape.",
+   "correction": "Plain tensors must be explicitly watched; only trainable variables are tracked automatically."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 325, "note": "Start of Listing 10.19 and Listing 10.18 (last_conv_layer_model); img_array preprocessing."},
+   {"page": 324, "note": "The ImageClassifier with softmax activation, whose 'pooler' and 'predictions' layers are reused."},
+   {"page": 318, "note": "Gradient ascent with GradientTape in section 10.2.1."},
+   {"page": 91, "note": "GradientTape introduced in chapter 3."}
+  ],
+  "later": [
+   {"page": 327, "note": "PyTorch version continued and JAX version (Listing 10.22)."},
+   {"page": 328, "note": "The gradients are averaged per channel and used to weight the feature map."}
+  ],
+  "prerequisites": [
+   {"page": 91, "note": "Using GradientTape to differentiate any expression."},
+   {"page": 101, "note": "PyTorch .backward() and .grad."}
+  ],
+  "related_math": [
+   {"page": 328, "note": "Pooled gradients as channel weights."}
+  ],
+  "related_code": [
+   {"page": 318, "note": "TensorFlow gradient ascent loop for filter visualization."},
+   {"page": 319, "note": "PyTorch gradient ascent with loss.backward() and image.grad."}
+  ],
+  "related_figures": [
+   {"page": 328, "note": "Figure 10.8, the heatmap produced from these gradients."}
+  ]
+ },
+ "takeaways": [
+  "classifier_model reapplies the 'pooler' and 'predictions' layers to the last conv output.",
+  "Gradient computation needs backend APIs, so get_top_class_gradients is written for each backend.",
+  "In TensorFlow, watch the feature map with tape.watch, run the classifier inside the tape, select preds[:, top_pred_index], then call tape.gradient.",
+  "grads has the same shape as the feature map; both are converted to NumPy with ops.convert_to_numpy.",
+  "The PyTorch version uses .backward() and .grad; it starts here and continues on p.327."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why is tape.watch(last_conv_layer_output) needed in Listing 10.20?",
+   "options": [
+    "To freeze the weights of the last conv layer",
+    "Because the feature map is a plain tensor, not a trainable variable, so the tape would not track it otherwise",
+    "To convert the tensor to NumPy",
+    "To compute the argmax of the predictions"
+   ],
+   "answer": "Because the feature map is a plain tensor, not a trainable variable, so the tape would not track it otherwise",
+   "explanation": "GradientTape tracks variables automatically but other tensors only when watched; then tape.gradient can differentiate with respect to it. It does not freeze weights, convert types, or compute argmax.",
+   "page_refs": [326, 91]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Which two layers of the ImageClassifier make up classifier_model after the last conv layer?",
+   "options": [],
+   "answer": "\"pooler\" and \"predictions\".",
+   "explanation": "End of Listing 10.19 loops over [\"pooler\", \"predictions\"].",
+   "page_refs": [326]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "What does the tensor grads represent, and what is its shape relative to last_conv_layer_output?",
+   "options": [],
+   "answer": "The partial derivatives of the top predicted class's output with respect to every element of the last conv feature map; it has exactly the same shape as the feature map.",
+   "explanation": "The gradient of a scalar with respect to a tensor has that tensor's shape; the callout describes it as the gradient of the top class with regard to the output feature map.",
+   "page_refs": [326]
+  },
+  {
+   "id": "q4",
+   "type": "conceptual",
+   "question": "Why does the book need separate gradient code for TensorFlow, PyTorch and JAX, when the models themselves are shared?",
+   "options": [],
+   "answer": "Keras models and keras.ops are backend-agnostic, but computing gradients of a custom expression relies on each backend's autodiff API (GradientTape, .backward()/.grad, jax.grad).",
+   "explanation": "Stated on the page: 'having to compute gradients means we have to use backend APIs.'",
+   "page_refs": [326, 316]
+  },
+  {
+   "id": "q5",
+   "type": "math",
+   "question": "Suppose the head were global average pooling over a 10 x 10 grid followed by a dense layer without softmax, with weight w = 0.5 from channel k to the top class. What is the gradient of the class score with respect to each activation of channel k?",
+   "options": [],
+   "answer": "0.5 / 100 = 0.005 at every location.",
+   "explanation": "y = sum_k w_k * (1/100) * sum_ij A^k_ij, so dy/dA^k_ij = w_k / 100. This simplified head is an illustration; the book's head ends with softmax.",
+   "page_refs": [326]
+  },
+  {
+   "id": "q6",
+   "type": "mcq",
+   "question": "In Listing 10.20, what is top_class_channel?",
+   "options": [
+    "The feature map channel with the largest activation",
+    "The column of preds corresponding to the top predicted class",
+    "The gradient tensor",
+    "The index 386 as an integer"
+   ],
+   "answer": "The column of preds corresponding to the top predicted class",
+   "explanation": "top_class_channel = preds[:, top_pred_index]. The callout calls it the activation channel corresponding to the top predicted class; it is an output-layer value, not a conv channel, not a gradient, and not the index itself.",
+   "page_refs": [326]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Can you explain, without looking, the five steps of get_top_class_gradients in TensorFlow?",
+   "options": [],
+   "answer": "Compute the feature map; open a tape and watch it; run the classifier on it; select the top class output; take tape.gradient with respect to the feature map and return both.",
+   "explanation": "Compare with Listing 10.20.",
+   "page_refs": [326]
+  }
+ ]
+}

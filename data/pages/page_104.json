@@ -1,0 +1,342 @@
+{
+ "page_id": "page_104",
+ "pdf_page": 104,
+ "printed_page": "80",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:42:00Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Good. The page opens with the continuation of Listing 3.27 (started on p.103); the other five snippets are unnumbered. All code matches the page image. No callouts on this page."
+ },
+ "overview": {
+  "title": "LinearModel as a torch.nn.Module, the SGD optimizer, and a simplified training step",
+  "chapter": "3 Introduction to TensorFlow, PyTorch, JAX, and Keras",
+  "section": "3.4 Introduction to PyTorch",
+  "subsection": "3.4.2 An end-to-end example: A linear classifier in pure PyTorch",
+  "main_topic": "Completing the LinearModel Module (Parameters W and b, forward()), calling it via __call__(), creating torch.optim.SGD from model.parameters(), and the three-call training step backward() / optimizer.step() / model.zero_grad()",
+  "central_idea": "Once W and b are torch.nn.Parameter attributes of a Module, the model can be called directly on inputs, its parameters can be handed to an optimizer with model.parameters(), and the manual no_grad update is replaced by optimizer.step() — so the training step shrinks to forward pass, loss, loss.backward(), optimizer.step(), model.zero_grad().",
+  "importance": "This is the idiomatic shape of PyTorch training code that the reader will meet everywhere, and the same Module/optimizer API underlies Keras models on the PyTorch backend (p.241).",
+  "learning_objectives": [
+   "Complete a torch.nn.Module subclass with Parameters in __init__() and computation in forward()",
+   "Explain why you call model(inputs) rather than model.forward(inputs)",
+   "Create a torch.optim.SGD optimizer from model.parameters() and a learning rate",
+   "Write the simplified training step and map each line to the manual version on p.103",
+   "Explain what optimizer.step() replaces"
+  ],
+  "prerequisites": [
+   "The manual PyTorch training step on p.103 (backward, .grad, no_grad update, reset)",
+   "The torch.nn.Parameter class (p.100)",
+   "The linear model and MSE loss (p.102)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page finishes **Listing 3.27**. Inside `__init__()` (after `super().__init__()` on p.103) the model stores `self.W = torch.nn.Parameter(torch.rand(input_dim, output_dim))` and `self.b = torch.nn.Parameter(torch.zeros(output_dim))` — the same initial values as on p.102, but now wrapped as Parameters and held by the Module. `forward(self, inputs)` returns `torch.matmul(inputs, self.W) + self.b`.\n\nThe model is instantiated with `model = LinearModel()`. When using a `torch.nn.Module` instance you don't call `forward()` directly; you use `__call__()` — i.e., call the model object on the inputs — which redirects to `forward()` but adds a few framework hooks. The example converts the NumPy data first: `torch_inputs = torch.tensor(inputs)`, then `output = model(torch_inputs)`.\n\nNext comes an optimizer. To instantiate one you must give it the list of parameters it should update, which a Module exposes through `.parameters()`: `optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)`.\n\nWith the Module and the SGD optimizer, the training step becomes `training_step(inputs, targets)`: `predictions = model(inputs)`, `loss = mean_squared_error(targets, predictions)`, `loss.backward()`, `optimizer.step()`, `model.zero_grad()`, `return loss`. W and b are no longer passed as arguments, because the model owns them.\n\nThe page then contrasts the old update — `with torch.no_grad(): W -= grad_loss_wrt_W * learning_rate; b -= grad_loss_wrt_b * learning_rate` — with the new one: \"Now we can just do `optimizer.step()`.\" The matching explanation of `model.zero_grad()` (replacing the manual `.grad = None` resets) and the warning not to forget it are on p.105.",
+ "paragraphs": [
+  {
+   "ref": "p104_e04",
+   "excerpt": "We can now instantiate our LinearModel",
+   "what_it_says": "After the class definition ends (the forward() method at the top of the page), the model is created with `model = LinearModel()`.",
+   "what_it_means": "Instantiation runs `__init__()`: the Module base class is initialized and the two Parameters are created and registered — W with uniform random values of shape (2, 1), b with zeros of shape (1,). Note that `input_dim` and `output_dim` are read from the enclosing (global) scope defined on p.102, not passed to the constructor.",
+   "why_it_matters": "The name `model` now refers to an object rather than the function from p.102, which is why the simplified training step can call `model(inputs)` with a single argument.",
+   "terminology": [
+    {"term": "Instantiate", "meaning": "Create an object from a class, running its __init__ method."}
+   ],
+   "connections": ["p.103: start of Listing 3.27.", "p.102: the global input_dim = 2 and output_dim = 1."]
+  },
+  {
+   "ref": "p104_e06",
+   "excerpt": "When using an instance of torch.nn.Module, rather than calling the forward() method",
+   "what_it_says": "With a Module instance, you call the object itself on inputs (its `__call__()` method) rather than calling `forward()` directly; `__call__()` redirects to `forward()` but adds a few framework hooks. Example: `torch_inputs = torch.tensor(inputs)` and `output = model(torch_inputs)`.",
+   "what_it_means": "`model(x)` is the public entry point; `forward()` is where you write the computation. The hooks are extra behaviour the framework can run before or after forward (beyond the book: registered forward hooks, pre-hooks, and support used by tools such as torch.compile). The NumPy float32 `inputs` from p.94 must be turned into a torch tensor first.",
+   "why_it_matters": "Calling forward() directly would bypass those hooks and is considered a bug in PyTorch code. The same pattern exists in Keras, where you call a layer rather than its call() method (p.116).",
+   "technical_idea": "Beyond the book: torch.tensor copies the NumPy data and keeps its dtype (float32 here); torch.from_numpy would share memory instead.",
+   "terminology": [
+    {"term": "__call__()", "meaning": "Python's special method invoked when an object is called like a function; Module.__call__ runs hooks and forward()."},
+    {"term": "Framework hooks", "meaning": "Extra code the framework runs around forward()."}
+   ],
+   "connections": ["p.116: Keras layers are also called directly, with __call__ wrapping call().", "p.105: torch.compile() applied to a Module."]
+  },
+  {
+   "ref": "p104_e08",
+   "excerpt": "Now, let's get our hands on a PyTorch optimizer. To instantiate it,",
+   "what_it_says": "An optimizer must be given the list of parameters it will update; a Module provides it via `.parameters()`. Code: `optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)`.",
+   "what_it_means": "`model.parameters()` yields the registered Parameters — here W and b. The optimizer keeps references to them and, on each `step()`, applies its update rule using their `.grad`. With plain SGD and `lr=learning_rate` (0.1, defined on p.103) the rule is exactly the manual update from p.103.",
+   "why_it_matters": "This is how the optimizer becomes 'aware' of the model, one of the hidden links the book calls 'spooky action at a distance' on p.105. Forgetting to pass the parameters (or passing the wrong ones) means nothing gets trained.",
+   "terminology": [
+    {"term": ".parameters()", "meaning": "Module method returning an iterator over all Parameters registered on the module (and its submodules)."},
+    {"term": "lr", "meaning": "Keyword argument for the learning rate of a torch.optim optimizer."}
+   ],
+   "connections": ["p.103: torch.optim.SGD introduced as the equivalent of keras.optimizers.SGD.", "p.121: optimizers chosen in Keras's compile() step."]
+  },
+  {
+   "ref": "p104_e10",
+   "excerpt": "Using our Module instance and the PyTorch SGD optimizer, we can run",
+   "what_it_says": "Using the Module and the SGD optimizer, the training step simplifies to: forward pass, loss, `loss.backward()`, `optimizer.step()`, `model.zero_grad()`, `return loss`.",
+   "what_it_means": "The step no longer takes W and b as arguments or touches them directly. `loss.backward()` still fills W.grad and b.grad; `optimizer.step()` performs the update; `model.zero_grad()` clears the gradients of all the model's parameters.",
+   "why_it_matters": "These three calls are the 'incantation' the book asks readers to memorize on p.105. The structure scales unchanged from this 3-parameter model to models with billions of parameters.",
+   "terminology": [
+    {"term": "optimizer.step()", "meaning": "Applies one update to every parameter the optimizer manages, using their current .grad."},
+    {"term": "model.zero_grad()", "meaning": "Resets the gradients of all of the module's parameters."}
+   ],
+   "connections": ["p.105: explanation of model.zero_grad() and the warning about forgetting it.", "p.241: the same three calls in a Keras/PyTorch custom training step."]
+  },
+  {
+   "ref": "p104_e12",
+   "excerpt": "Previously, updating the model parameters looked like this",
+   "what_it_says": "The manual update from p.103 — two in-place subtractions inside `torch.no_grad()` — is shown again, followed by \"Now we can just do `optimizer.step()`.\"",
+   "what_it_means": "For SGD, `optimizer.step()` does precisely $p \\leftarrow p - \\eta\\,\\nabla_p\\mathcal{L}$ for each parameter p, and does it without gradient tracking internally — so the `no_grad` block disappears from user code too.",
+   "why_it_matters": "Swapping in a different optimizer (e.g. `torch.optim.Adam`) changes the update rule without changing the training step, which is the main benefit of the abstraction (beyond the book).",
+   "terminology": [],
+   "connections": ["p.103: the manual update this replaces.", "p.105: model.zero_grad() similarly replaces the manual .grad = None resets."]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "torch_module",
+   "name": "torch.nn.Module",
+   "definition": "PyTorch base class for models: Parameters are created in __init__(), the computation goes in forward(), and the instance is called directly on inputs.",
+   "intuition": "A self-contained model object that owns its weights.",
+   "technical": "LinearModel holds self.W (2, 1) and self.b (1,) as torch.nn.Parameter; forward returns torch.matmul(inputs, self.W) + self.b. model(x) goes through __call__, which runs hooks and then forward.",
+   "significance": "Lets an optimizer find all trainable state via model.parameters() and lets model.zero_grad() reset everything at once.",
+   "example": "model = LinearModel(); output = model(torch.tensor(inputs)) → shape (2000, 1).",
+   "misconception": "That model.forward(x) and model(x) are interchangeable; only model(x) runs the framework hooks.",
+   "related": ["keras_layer", "keras_model", "optimizer"],
+   "source": "book"
+  },
+  {
+   "id": "optimizer",
+   "name": "Optimizer (torch.optim.SGD)",
+   "definition": "An object that holds a list of parameters and updates them from their gradients according to an update rule.",
+   "intuition": "The part of training that 'takes the step' once the gradients are known.",
+   "technical": "torch.optim.SGD(model.parameters(), lr=learning_rate); optimizer.step() performs p -= lr * p.grad for each parameter, replacing the manual no_grad update.",
+   "significance": "Decouples the update rule from the training-step code.",
+   "example": "With lr = 0.1, W.grad = [[0.3], [-0.1]] turns W = [[0.5], [0.2]] into [[0.47], [0.21]].",
+   "misconception": "That optimizer.step() also computes the gradients or clears them; backward() computes them and zero_grad() clears them.",
+   "related": ["sgd", "learning_rate", "gradient_descent"],
+   "source": "book"
+  },
+  {
+   "id": "training_step",
+   "name": "Training step (Module + optimizer version)",
+   "definition": "Forward pass, loss, loss.backward(), optimizer.step(), model.zero_grad().",
+   "intuition": "Measure, differentiate, step, clean up.",
+   "technical": "Each line maps to the manual version on p.103: backward() is unchanged, step() replaces the no_grad update, zero_grad() replaces .grad = None.",
+   "significance": "The canonical PyTorch inner loop.",
+   "example": "training_step(torch_inputs, torch_targets) returns the scalar loss.",
+   "misconception": "That zero_grad() can be skipped because step() 'consumes' the gradients; it does not (p.105).",
+   "related": ["gradient_accumulation", "optimizer", "autodiff"],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "Update performed by optimizer.step() for plain SGD",
+   "latex": "p \\leftarrow p - \\eta\\,\\frac{\\partial\\mathcal{L}}{\\partial p}\\quad\\text{for each } p \\in \\{W, b\\},\\qquad \\eta = \\texttt{learning\\_rate}",
+   "source_text": "with torch.no_grad(): W -= grad_loss_wrt_W * learning_rate; b -= grad_loss_wrt_b * learning_rate  →  optimizer.step()",
+   "variables": [
+    {"symbol": "p", "meaning": "a parameter returned by model.parameters() (W or b)"},
+    {"symbol": "\\eta", "meaning": "lr passed to torch.optim.SGD (learning_rate = 0.1 from p.103)"},
+    {"symbol": "\\partial\\mathcal{L}/\\partial p", "meaning": "p.grad, populated by loss.backward()"}
+   ],
+   "operations": "Gradient-scaled in-place subtraction for every managed parameter.",
+   "purpose": "Shows that optimizer.step() is the same update the page shows being replaced.",
+   "interpretation": "The optimizer generalizes the two hand-written lines to any number of parameters.",
+   "intuition": "One downhill step for every weight at once.",
+   "numerical_example": "b = [0.0], b.grad = [0.4], η = 0.1 → b = [−0.04].",
+   "source": "book",
+   "book_ref": "p.104"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": "3.27",
+   "title": "Defining a torch.nn.Module (continued from p.103)",
+   "original_code": "        self.W = torch.nn.Parameter(torch.rand(input_dim, output_dim))\n        self.b = torch.nn.Parameter(torch.zeros(output_dim))\n\n    def forward(self, inputs):\n        return torch.matmul(inputs, self.W) + self.b",
+   "language": "python",
+   "what_it_does": "Second half of Listing 3.27: creates the two Parameters inside __init__() and defines the forward pass. The first three lines (class statement, def __init__(self), super().__init__()) are on p.103.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "W: random (2, 1) tensor wrapped in torch.nn.Parameter, which sets requires_grad=True and registers it on the module. No explicit requires_grad=True is needed, unlike p.102."},
+    {"lines": "2", "explanation": "b: zeros of shape (1,), also a Parameter."},
+    {"lines": "4-5", "explanation": "forward(): the same affine computation as the model function on p.102, but reading W and b from self."}
+   ],
+   "inputs_outputs": "forward takes inputs (N, 2) and returns (N, 1).",
+   "algorithm": "Affine transformation.",
+   "theory_link": "A dense layer without activation; compare Keras layers' weights + call() (p.116).",
+   "parameters": [
+    {"name": "input_dim, output_dim", "role": "Read from global scope (2 and 1, p.102)."}
+   ],
+   "pitfalls": [
+    "Assigning a plain tensor (not a Parameter) to self.W would not register it, so model.parameters() would not return it (beyond the book).",
+    "The class depends on global input_dim/output_dim; passing them to __init__ would make it reusable (beyond the book)."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Instantiating the model",
+   "original_code": "model = LinearModel()",
+   "language": "python",
+   "what_it_does": "Creates the Module, running __init__ and creating W and b.",
+   "line_explanations": [{"lines": "1", "explanation": "The name model now refers to a Module instance (it shadowed the function from p.102)."}],
+   "inputs_outputs": "Returns a LinearModel with two registered Parameters.",
+   "algorithm": "Object construction.",
+   "theory_link": "State is created once and reused across training steps.",
+   "parameters": [],
+   "pitfalls": ["Rebinding the name model shadows the earlier model function; the p.103 training step would now silently call the Module instead."]
+  },
+  {
+   "id": "c3",
+   "listing": null,
+   "title": "Calling the model on inputs",
+   "original_code": "torch_inputs = torch.tensor(inputs)\noutput = model(torch_inputs)",
+   "language": "python",
+   "what_it_does": "Converts the NumPy inputs to a torch tensor and runs the forward pass through __call__().",
+   "line_explanations": [
+    {"lines": "1", "explanation": "inputs is the (2000, 2) float32 NumPy array from p.94; torch.tensor copies it into a float32 tensor."},
+    {"lines": "2", "explanation": "Calling the instance invokes __call__(), which runs framework hooks and redirects to forward(); output has shape (2000, 1)."}
+   ],
+   "inputs_outputs": "(2000, 2) → (2000, 1).",
+   "algorithm": "Forward pass.",
+   "theory_link": "Same predictions as model(inputs, W, b) on p.102.",
+   "parameters": [],
+   "pitfalls": ["Calling model.forward(torch_inputs) directly skips the hooks.", "Passing the NumPy array without conversion fails in torch.matmul (beyond the book)."]
+  },
+  {
+   "id": "c4",
+   "listing": null,
+   "title": "Creating the SGD optimizer",
+   "original_code": "optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)",
+   "language": "python",
+   "what_it_does": "Creates a stochastic-gradient-descent optimizer that will update W and b with learning rate 0.1.",
+   "line_explanations": [{"lines": "1", "explanation": "model.parameters() supplies the parameters to update; lr is learning_rate from p.103."}],
+   "inputs_outputs": "An optimizer holding references to W and b.",
+   "algorithm": "SGD update rule p -= lr * p.grad.",
+   "theory_link": "Gradient descent from chapter 2; Keras equivalent keras.optimizers.SGD (p.103).",
+   "parameters": [{"name": "lr", "role": "Learning rate (0.1)."}],
+   "pitfalls": ["The optimizer must be created after the model so its parameters exist (beyond the book)."]
+  },
+  {
+   "id": "c5",
+   "listing": null,
+   "title": "The simplified training step",
+   "original_code": "def training_step(inputs, targets):\n    predictions = model(inputs)\n    loss = mean_squared_error(targets, predictions)\n    loss.backward()\n    optimizer.step()\n    model.zero_grad()\n    return loss",
+   "language": "python",
+   "what_it_does": "One gradient-descent step using the Module and optimizer.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "W and b are no longer arguments; the model owns them."},
+    {"lines": "2-3", "explanation": "Forward pass via __call__ and the MSE loss from p.102."},
+    {"lines": "4", "explanation": "Fills W.grad and b.grad."},
+    {"lines": "5", "explanation": "Replaces the no_grad update block."},
+    {"lines": "6", "explanation": "Replaces W.grad = None and b.grad = None (explained on p.105)."},
+    {"lines": "7", "explanation": "Returns the loss for logging."}
+   ],
+   "inputs_outputs": "inputs and targets as torch tensors (N, 2) and (N, 1); returns scalar loss; updates the model in place.",
+   "algorithm": "Batch gradient descent.",
+   "theory_link": "Same algorithm as p.103 and p.96.",
+   "parameters": [],
+   "pitfalls": ["Forgetting model.zero_grad() is a major and common bug (p.105).", "targets must also be converted with torch.tensor before calling (beyond the book; only inputs is converted on the page)."],
+   "illustrative_code": "# AI-written: a full loop with the Module version\nimport torch\ntorch_inputs = torch.tensor(inputs)\ntorch_targets = torch.tensor(targets)\nfor step in range(40):\n    loss = training_step(torch_inputs, torch_targets)\n    print(f\"Loss at step {step}: {loss.item():.4f}\")"
+  },
+  {
+   "id": "c6",
+   "listing": null,
+   "title": "The manual update being replaced",
+   "original_code": "with torch.no_grad():\n    W -= grad_loss_wrt_W * learning_rate\n    b -= grad_loss_wrt_b * learning_rate",
+   "language": "python",
+   "what_it_does": "Repeats the p.103 manual update to show what optimizer.step() now does.",
+   "line_explanations": [
+    {"lines": "1", "explanation": "Disable tracking for the update."},
+    {"lines": "2-3", "explanation": "In-place gradient-descent update of each parameter."}
+   ],
+   "inputs_outputs": "W, b updated in place.",
+   "algorithm": "SGD update.",
+   "theory_link": "The rule implemented by torch.optim.SGD.",
+   "parameters": [],
+   "pitfalls": []
+  }
+ ],
+ "deeper": [
+  {
+   "title": "Manual vs Module/optimizer step, side by side",
+   "kind": "breakdown",
+   "body": "| Manual (p.103) | Module + optimizer (p.104) |\n|---|---|\n| `training_step(inputs, targets, W, b)` | `training_step(inputs, targets)` |\n| `model(inputs, W, b)` (function) | `model(inputs)` (Module `__call__`) |\n| `loss.backward()` | `loss.backward()` |\n| `W.grad, b.grad` read by hand | read internally by the optimizer |\n| `with torch.no_grad(): W -= ...; b -= ...` | `optimizer.step()` |\n| `W.grad = None; b.grad = None` | `model.zero_grad()` |\n\n`loss.backward()` is the only line that is identical — gradient computation does not change; only bookkeeping is automated.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "How the three objects find each other",
+   "kind": "step_by_step",
+   "body": "Beyond the book, a look at the 'spooky action at a distance' mentioned on p.105:\n1. `torch.nn.Parameter` assignments in `__init__` are registered by `Module.__setattr__`, so `model.parameters()` can list W and b.\n2. The optimizer stores those same tensor objects (not copies).\n3. The forward pass uses those tensors, so the loss graph leads back to them.\n4. `loss.backward()` writes gradients onto the very tensors the optimizer holds; `optimizer.step()` reads `p.grad` from them; `model.zero_grad()` clears `p.grad` on the same objects.\nNothing is passed explicitly because all three share references to W and b.",
+   "source": "ai_explanation"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Who does what in the simplified training step",
+   "why": "The page wires a Module, its parameters and an SGD optimizer together; this shows the shared W and b that loss.backward(), optimizer.step() and model.zero_grad() all act on.",
+   "mermaid": "flowchart LR\n M[\"LinearModel\\n(self.W, self.b)\"] -- \"model.parameters()\" --> O[\"torch.optim.SGD(lr=0.1)\"]\n X[\"torch_inputs\"] --> M\n M -- \"predictions\" --> L[\"mean_squared_error → loss\"]\n L -- \"loss.backward() fills W.grad, b.grad\" --> M\n O -- \"optimizer.step(): p -= lr * p.grad\" --> M\n Z[\"model.zero_grad()\"] -- \"clears grads\" --> M"
+  },
+  {
+   "id": "v2",
+   "type": "widget",
+   "title": "The LinearModel as a layer",
+   "why": "LinearModel holds W of shape (input_dim, output_dim) = (2, 1) and b of shape (1,): a single dense unit with no activation on 2-D inputs, i.e. 2×1 + 1 = 3 parameters returned by model.parameters().",
+   "widget": "nn_architecture",
+   "params": {"layers": [{"name": "inputs", "type": "input", "shape": "(None, 2)"}, {"name": "LinearModel", "type": "dense", "units": 1, "activation": "linear"}]}
+  }
+ ],
+ "misconceptions": [
+  {"claim": "You should call model.forward(inputs) to run a Module.", "correction": "Call the instance, model(inputs): __call__() redirects to forward() but adds framework hooks."},
+  {"claim": "optimizer.step() computes the gradients.", "correction": "loss.backward() computes them; step() only applies the update using p.grad."},
+  {"claim": "Using an optimizer means you no longer need to clear gradients.", "correction": "You still must call model.zero_grad() each step (p.105)."},
+  {"claim": "torch.nn.Parameter needs requires_grad=True passed explicitly.", "correction": "Listing 3.27 creates Parameters without the flag; Parameters require gradients by default (beyond the book: this is PyTorch's default)."}
+ ],
+ "connections": {
+  "earlier": [
+   {"page": 103, "note": "Manual training step and the first lines of Listing 3.27."},
+   {"page": 102, "note": "The function versions of W, b, model and mean_squared_error."},
+   {"page": 100, "note": "torch.nn.Parameter introduced."},
+   {"page": 94, "note": "The NumPy inputs and targets arrays converted with torch.tensor."}
+  ],
+  "later": [
+   {"page": 105, "note": "model.zero_grad(), the backward–step–zero_grad incantation, and torch.compile()."},
+   {"page": 106, "note": "What makes the PyTorch approach unique."},
+   {"page": 116, "note": "Keras layers: state plus computation, called directly."},
+   {"page": 241, "note": "Keras models on the PyTorch backend are torch.nn.Modules and use the same three calls."}
+  ],
+  "prerequisites": [
+   {"page": 103, "note": "Why updates go in no_grad and why gradients are reset."}
+  ],
+  "related_math": [
+   {"page": 103, "note": "The gradient-descent update rule."}
+  ],
+  "related_code": [
+   {"page": 103, "note": "Manual training step."},
+   {"page": 96, "note": "TensorFlow training step."},
+   {"page": 113, "note": "JAX training step."}
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "A Module stores Parameters in __init__() (self.W, self.b) and computes in forward().",
+  "Call the module itself, model(x); __call__() runs hooks and then forward().",
+  "An optimizer is built from model.parameters() and a learning rate: torch.optim.SGD(model.parameters(), lr=learning_rate).",
+  "The training step reduces to loss.backward(), optimizer.step(), model.zero_grad().",
+  "optimizer.step() replaces the manual no_grad update; loss.backward() is unchanged."
+ ],
+ "questions": [
+  {"id": "q1", "type": "mcq", "question": "Which line replaces `with torch.no_grad(): W -= grad_loss_wrt_W * learning_rate ...` in the simplified training step?", "options": ["loss.backward()", "optimizer.step()", "model.zero_grad()", "model(inputs)"], "answer": "optimizer.step()", "explanation": "The page says 'Now we can just do optimizer.step()'. backward() computes gradients, zero_grad() clears them, and model(inputs) is the forward pass.", "page_refs": [104]},
+  {"id": "q2", "type": "short", "question": "Why does the book call the model with `model(torch_inputs)` instead of `model.forward(torch_inputs)`?", "options": [], "answer": "Because __call__() redirects to forward() but also adds a few framework hooks.", "explanation": "Stated in the paragraph after instantiation.", "page_refs": [104]},
+  {"id": "q3", "type": "conceptual", "question": "How does the SGD optimizer know which tensors to update?", "options": [], "answer": "It is given them at construction: torch.optim.SGD(model.parameters(), lr=learning_rate); model.parameters() returns the registered Parameters W and b.", "explanation": "The page states an optimizer needs the list of parameters it is intended to update, retrieved via .parameters().", "page_refs": [104]},
+  {"id": "q4", "type": "math", "question": "How many scalar values does model.parameters() contain for LinearModel with input_dim = 2 and output_dim = 1?", "options": [], "answer": "3 (W has 2×1 = 2 entries, b has 1).", "explanation": "W = Parameter(torch.rand(2, 1)), b = Parameter(torch.zeros(1)).", "page_refs": [102, 104]},
+  {"id": "q5", "type": "mcq", "question": "Why does the simplified training_step take only (inputs, targets)?", "options": ["Because W and b are no longer needed", "Because the model object owns W and b as Parameters", "Because optimizer.step() creates new weights", "Because the loss function stores W and b"], "answer": "Because the model object owns W and b as Parameters", "explanation": "Listing 3.27 stores self.W and self.b on the Module. They are still needed; the optimizer updates existing tensors in place rather than creating new ones; the loss function holds no state.", "page_refs": [104]},
+  {"id": "q6", "type": "short", "question": "Map each line of the simplified step to the manual step on p.103.", "options": [], "answer": "model(inputs) ↔ model(inputs, W, b); loss line unchanged; loss.backward() unchanged; optimizer.step() ↔ the no_grad update; model.zero_grad() ↔ W.grad = None, b.grad = None.", "explanation": "The page explicitly shows the old update replaced by optimizer.step(); p.105 explains zero_grad() replacing the manual resets.", "page_refs": [103, 104, 105]},
+  {"id": "q7", "type": "self", "question": "Could you rewrite LinearModel so input_dim and output_dim are constructor arguments, and still train it with the same training step?", "options": [], "answer": "Yes: def __init__(self, input_dim, output_dim): super().__init__(); self.W = ...; self.b = ...; then model = LinearModel(2, 1). The training step is unchanged.", "explanation": "Checks understanding that the step depends only on the Module/optimizer interface, not on how the Parameters are created.", "page_refs": [104]}
+ ]
+}
