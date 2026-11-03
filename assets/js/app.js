@@ -38,9 +38,9 @@
   function md(text) {
     if (!text) return '';
     // protect math from markdown
-    const holes = []; const prot = String(text).replace(/\$\$[\s\S]+?\$\$|\$[^\n$]+?\$/g, (m) => { holes.push(m); return `\u0000${holes.length - 1}\u0000`; });
+    const holes = []; const prot = String(text).replace(/\$\$[\s\S]+?\$\$|\$[^\n$]+?\$/g, (m) => { holes.push(m); return `KXMATH${holes.length - 1}XK`; });
     let html = DOMPurify.sanitize(marked.parse(prot));
-    html = html.replace(/\u0000(\d+)\u0000/g, (_, i) => esc(holes[+i]));
+    html = html.replace(/KXMATH(\d+)XK/g, (_, i) => esc(holes[+i]));
     return linkPageRefs(html);
   }
   function renderMath(root) {
@@ -189,7 +189,7 @@
       } else if (v.type === 'mermaid') {
         if (!mermaidReady) { mermaid.initialize({ startOnLoad: false, theme: isDark() ? 'dark' : 'default', securityLevel: 'strict', fontFamily: 'inherit' }); mermaidReady = true; }
         const d = el('div', { class: 'mermaid' }); box.append(d);
-        mermaid.render('mm' + Math.random().toString(36).slice(2), v.mermaid).then(({ svg }) => { d.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true }, ADD_TAGS: ['foreignObject'], ADD_ATTR: ['dominant-baseline'] }); }).catch((e) => { d.append(el('div', { class: 'viz-error' }, 'Diagram failed to render: ' + e.message)); d.append(el('pre', {}, v.mermaid)); });
+        mermaid.render('mm' + Math.random().toString(36).slice(2), v.mermaid).then(({ svg }) => { d.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true, html: true }, ADD_TAGS: ['foreignObject'], ADD_ATTR: ['dominant-baseline'] }); }).catch((e) => { d.append(el('div', { class: 'viz-error' }, 'Diagram failed to render: ' + e.message)); d.append(el('pre', {}, v.mermaid)); });
       } else if (v.type === 'chart') {
         const c = el('canvas'); box.append(c);
         const cfg = JSON.parse(JSON.stringify(v.chart)); cfg.options = cfg.options || {}; cfg.options.responsive = true; cfg.options.maintainAspectRatio = false;

@@ -6,6 +6,25 @@ notes, concepts, LaTeX math, code walkthroughs, interactive visualizations, misc
 connections, takeaways, review questions). All content was generated **in advance**; at runtime there is
 no AI model, no embedding model, no API, and no internet.
 
+## Screenshots
+
+Book page on the right, its precomputed companion on the left (PDF p.96: the training step and batch
+training loop of Listing 3.20–3.21):
+
+![Two-panel view: notes synced with the PDF page](docs/screenshots/overview.png)
+
+The visualizations generated for that page (each one is grounded in the page's own numbers):
+
+| Interactive gradient descent (lr 0.1, 40 steps as in the book) | Training loss over the 40 steps of Listing 3.21 |
+|---|---|
+| ![Gradient descent widget](docs/screenshots/viz_3.png) | ![Loss chart](docs/screenshots/viz_1.png) |
+
+![Mermaid diagram of one training step](docs/screenshots/viz_2.png)
+
+| Formula with variables, intuition and a worked example | Attention-score widget (PDF p.474) |
+|---|---|
+| ![Math explanation](docs/screenshots/math.png) | ![Attention widget](docs/screenshots/attention.png) |
+
 ## Open it
 
 ```bash

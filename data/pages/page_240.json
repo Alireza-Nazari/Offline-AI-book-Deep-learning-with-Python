@@ -1,381 +1,549 @@
 {
-  "page_id": "page_240",
-  "pdf_page": 240,
-  "printed_page": "216",
-  "book_id": "dlwp3",
-  "generation": {
-    "status": "complete",
-    "model": "claude-opus-5-5",
-    "generated_at": "2026-11-03T07:29:31Z",
-    "confidence": "high",
-    "review_flags": [],
-    "extraction_quality": "Clean extraction. The pseudocode block and its five callouts match the page image; the TensorFlow setup snippet at the bottom is the start of the TensorFlow example, which continues on p.241."
+ "page_id": "page_240",
+ "pdf_page": 240,
+ "printed_page": "216",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:29:31Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean extraction. The pseudocode block and its five callouts match the page image; the TensorFlow setup snippet at the bottom is the start of the TensorFlow example, which continues on p.241."
+ },
+ "overview": {
+  "title": "From pseudocode train_step() to a TensorFlow setup",
+  "chapter": "7 A deep dive on Keras",
+  "section": "7.4 Writing your own training and evaluation loops",
+  "subsection": "7.4.2 Writing custom training step functions",
+  "main_topic": "The generic shape of a supervised training step, and why the gradient-retrieval line has to be backend specific",
+  "central_idea": "Every supervised training step is: forward pass with training=True, compute the loss, get gradients of the loss with respect to the trainable weights only, and let the optimizer apply them. Only the gradient retrieval differs between TensorFlow, PyTorch and JAX.",
+  "importance": "This four-line pseudocode is the template that the rest of section 7.4 fills in three times (TensorFlow, PyTorch, JAX) and that later becomes the overridden Model.train_step() used with fit() (p.246). Understanding which line is backend specific explains the structure of everything that follows.",
+  "learning_objectives": [
+   "Explain why BatchNormalization is the only built-in Keras layer with non-trainable weights and what those weights track",
+   "Write the four steps of a supervised training step and justify the two details (training=True, trainable_weights) folded into it",
+   "Identify which line of the pseudocode cannot be written in backend-agnostic Keras and why",
+   "Set up the model, loss function and optimizer objects used by the TensorFlow training step"
+  ],
+  "prerequisites": [
+   "The three-step training loop recap and the training-vs-inference distinction (p.239)",
+   "Gradient tapes and autodiff in TensorFlow, PyTorch and JAX (chapter 3)",
+   "Feature normalization (chapters 4 and 6)",
+   "The get_mnist_model() helper defined earlier in chapter 7"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page opens by finishing the discussion of **non-trainable weights** started on p.239. Such weights are updated during the forward pass rather than by backpropagation (the book's example: a counter incremented at each batch). Among the built-in Keras layers, only `BatchNormalization` (introduced in chapter 9) has them: it keeps running estimates of the **mean and standard deviation** of the data passing through it, so it can do an *online approximation of feature normalization*.\n\nSection **7.4.2** then combines the two subtleties from section 7.4.1 into a pseudocode `train_step(inputs, targets)`:\n\n1. `predictions = model(inputs, training=True)`: forward pass in training mode, so layers like `Dropout` behave as they do in training.\n2. `loss = loss_fn(targets, predictions)`: loss for the current batch.\n3. `gradients = get_gradients_of(loss, wrt=model.trainable_weights)`: gradients only for the **trainable** weights.\n4. `optimizer.apply(gradients, model.trainable_weights)`: the optimizer updates those weights.\n\nThe authors say outright that this is pseudocode, because `get_gradients_of()` **does not exist**. How you get gradients depends on the backend (JAX, TensorFlow or PyTorch). The plan is to write a real `train_step()` for each framework using what chapter 3 taught. TensorFlow and PyTorch come first because they make this \"relatively easy\". JAX comes last because it is \"quite a bit more complex\" (its stateless design is explained on p.242).\n\nThe **TensorFlow** subsection says TF code looks almost exactly like the pseudocode. The only change is that the forward pass must run inside a `GradientTape` scope, and the `tape` then returns the gradients. The page ends with the setup: import TensorFlow, build the MNIST model with `get_mnist_model()`, and create a `SparseCategoricalCrossentropy` loss and an `Adam` optimizer. The `train_step` function itself is on p.241.",
+ "paragraphs": [
+  {
+   "ref": "p240_e03",
+   "excerpt": "stored in a non-trainable weight, and at each batch, your layer",
+   "what_it_says": "This finishes the p.239 example of a layer that counts batches: the counter would live in a non-trainable weight and go up by one at each batch.",
+   "what_it_means": "Some state in a layer changes because the layer was *run*, not because gradient descent updated it. A counter is the simplest case. No loss gradient ever touches it, and it still changes on every forward pass.",
+   "why_it_matters": "This explains why a training step can update two kinds of weight: trainable weights, which the optimizer changes, and non-trainable weights, which the forward pass changes. The JAX version (p.242) has to return the second kind explicitly.",
+   "technical_idea": "In Keras, a weight created with `trainable=False` goes into `layer.non_trainable_weights`. It is left out of `trainable_weights`, so it is never passed to the gradient computation or to the optimizer.",
+   "terminology": [
+    {
+     "term": "non-trainable weight",
+     "meaning": "A layer variable that backpropagation does not update. It may still change during the forward pass."
+    }
+   ],
+   "connections": [
+    "p.239: the batch-counter example and the first subtlety (training vs. inference) start on the previous page"
+   ]
   },
-  "overview": {
-    "title": "From pseudocode train_step() to a TensorFlow setup",
-    "chapter": "7 A deep dive on Keras",
-    "section": "7.4 Writing your own training and evaluation loops",
-    "subsection": "7.4.2 Writing custom training step functions",
-    "main_topic": "The generic shape of a supervised training step, and why the gradient-retrieval line has to be backend specific",
-    "central_idea": "Every supervised training step is: forward pass with training=True, compute the loss, get gradients of the loss with respect to the trainable weights only, and let the optimizer apply them. Only the gradient retrieval differs between TensorFlow, PyTorch and JAX.",
-    "importance": "This four-line pseudocode is the template that the rest of section 7.4 fills in three times (TensorFlow, PyTorch, JAX) and that later becomes the overridden Model.train_step() used with fit() (p.246). Understanding which line is backend specific explains the structure of everything that follows.",
-    "learning_objectives": [
-      "Explain why BatchNormalization is the only built-in Keras layer with non-trainable weights and what those weights track",
-      "Write the four steps of a supervised training step and justify the two details (training=True, trainable_weights) folded into it",
-      "Identify which line of the pseudocode cannot be written in backend-agnostic Keras and why",
-      "Set up the model, loss function and optimizer objects used by the TensorFlow training step"
-    ],
-    "prerequisites": [
-      "The three-step training loop recap and the training-vs-inference distinction (p.239)",
-      "Gradient tapes and autodiff in TensorFlow, PyTorch and JAX (chapter 3)",
-      "Feature normalization (chapters 4 and 6)",
-      "The get_mnist_model() helper defined earlier in chapter 7"
-    ],
-    "page_kind": "content"
+  {
+   "ref": "p240_e03",
+   "excerpt": "Among Keras built-in layers, the only layer that features non-trainable weights",
+   "what_it_says": "`BatchNormalization` is the only built-in Keras layer with non-trainable weights. It needs them to track the mean and standard deviation of the data passing through it, which gives an online approximation of feature normalization. The layer itself is covered in chapter 9.",
+   "what_it_means": "Feature normalization (chapters 4 and 6) centers data and scales it to unit variance using statistics from the whole dataset. Inside a network, the activations change as training goes on, so BatchNormalization keeps *running* (moving-average) estimates of those statistics. These are updated batch by batch during training and used directly at inference.",
+   "why_it_matters": "This is the real reason the distinction matters: if your custom loop ignores non-trainable weights, BatchNormalization's statistics will be wrong at inference. It also explains why `training=True` matters here: BatchNorm uses batch statistics and updates its moving averages only in training mode.",
+   "technical_idea": "Beyond the book: Keras BatchNormalization stores `moving_mean` and `moving_variance` and updates each one roughly as $\\mu_{\\text{moving}} \\leftarrow m\\,\\mu_{\\text{moving}} + (1-m)\\,\\mu_{\\text{batch}}$ with momentum $m$ (default 0.99).",
+   "terminology": [
+    {
+     "term": "BatchNormalization",
+     "meaning": "A layer that normalizes its inputs using batch statistics during training and running statistics at inference (chapter 9)."
+    },
+    {
+     "term": "online approximation",
+     "meaning": "Estimating a quantity bit by bit from a stream of batches instead of computing it from all the data at once."
+    },
+    {
+     "term": "feature normalization",
+     "meaning": "Rescaling features to zero mean and unit standard deviation."
+    }
+   ],
+   "connections": [
+    "p.239: definition of non-trainable weights as state updated during the forward pass",
+    "p.242: in JAX the forward pass must return updated non-trainable weights"
+   ]
   },
-  "summary": "The page opens by finishing the discussion of **non-trainable weights** started on p.239. Such weights are updated during the forward pass rather than by backpropagation (the book's example: a counter incremented at each batch). Among the built-in Keras layers, only `BatchNormalization` (introduced in chapter 9) has them: it keeps running estimates of the **mean and standard deviation** of the data passing through it, so it can do an *online approximation of feature normalization*.\n\nSection **7.4.2** then combines the two subtleties from section 7.4.1 into a pseudocode `train_step(inputs, targets)`:\n\n1. `predictions = model(inputs, training=True)`: forward pass in training mode, so layers like `Dropout` behave as they do in training.\n2. `loss = loss_fn(targets, predictions)`: loss for the current batch.\n3. `gradients = get_gradients_of(loss, wrt=model.trainable_weights)`: gradients only for the **trainable** weights.\n4. `optimizer.apply(gradients, model.trainable_weights)`: the optimizer updates those weights.\n\nThe authors say outright that this is pseudocode, because `get_gradients_of()` **does not exist**. How you get gradients depends on the backend (JAX, TensorFlow or PyTorch). The plan is to write a real `train_step()` for each framework using what chapter 3 taught. TensorFlow and PyTorch come first because they make this \"relatively easy\". JAX comes last because it is \"quite a bit more complex\" (its stateless design is explained on p.242).\n\nThe **TensorFlow** subsection says TF code looks almost exactly like the pseudocode. The only change is that the forward pass must run inside a `GradientTape` scope, and the `tape` then returns the gradients. The page ends with the setup: import TensorFlow, build the MNIST model with `get_mnist_model()`, and create a `SparseCategoricalCrossentropy` loss and an `Adam` optimizer. The `train_step` function itself is on p.241.",
-  "paragraphs": [
+  {
+   "ref": "p240_e06",
+   "excerpt": "Taking into account these two details, a supervised learning training step",
+   "what_it_says": "With both details in hand (the `training` flag and the trainable/non-trainable split), the authors give pseudocode for one supervised training step.",
+   "what_it_means": "The pseudocode applies the two subtleties from 7.4.1: (1) call the model with `training=True` so Dropout and BatchNorm run in training mode; (2) compute gradients for, and update, only `model.trainable_weights`, not every weight.",
+   "why_it_matters": "This is the template for every later custom loop in the chapter. Each concrete version on pp.240–244 is this pseudocode with the gradient line rewritten for one backend.",
+   "terminology": [
     {
-      "ref": "p240_e03",
-      "excerpt": "stored in a non-trainable weight, and at each batch, your layer",
-      "what_it_says": "This finishes the p.239 example of a layer that counts batches: the counter would live in a non-trainable weight and go up by one at each batch.",
-      "what_it_means": "Some state in a layer changes because the layer was *run*, not because gradient descent updated it. A counter is the simplest case. No loss gradient ever touches it, and it still changes on every forward pass.",
-      "why_it_matters": "This explains why a training step can update two kinds of weight: trainable weights, which the optimizer changes, and non-trainable weights, which the forward pass changes. The JAX version (p.242) has to return the second kind explicitly.",
-      "technical_idea": "In Keras, a weight created with `trainable=False` goes into `layer.non_trainable_weights`. It is left out of `trainable_weights`, so it is never passed to the gradient computation or to the optimizer.",
-      "terminology": [
-        {"term": "non-trainable weight", "meaning": "A layer variable that backpropagation does not update. It may still change during the forward pass."}
-      ],
-      "connections": ["p.239: the batch-counter example and the first subtlety (training vs. inference) start on the previous page"]
-    },
-    {
-      "ref": "p240_e03",
-      "excerpt": "Among Keras built-in layers, the only layer that features non-trainable weights",
-      "what_it_says": "`BatchNormalization` is the only built-in Keras layer with non-trainable weights. It needs them to track the mean and standard deviation of the data passing through it, which gives an online approximation of feature normalization. The layer itself is covered in chapter 9.",
-      "what_it_means": "Feature normalization (chapters 4 and 6) centers data and scales it to unit variance using statistics from the whole dataset. Inside a network, the activations change as training goes on, so BatchNormalization keeps *running* (moving-average) estimates of those statistics. These are updated batch by batch during training and used directly at inference.",
-      "why_it_matters": "This is the real reason the distinction matters: if your custom loop ignores non-trainable weights, BatchNormalization's statistics will be wrong at inference. It also explains why `training=True` matters here: BatchNorm uses batch statistics and updates its moving averages only in training mode.",
-      "technical_idea": "Beyond the book: Keras BatchNormalization stores `moving_mean` and `moving_variance` and updates each one roughly as $\\mu_{\\text{moving}} \\leftarrow m\\,\\mu_{\\text{moving}} + (1-m)\\,\\mu_{\\text{batch}}$ with momentum $m$ (default 0.99).",
-      "terminology": [
-        {"term": "BatchNormalization", "meaning": "A layer that normalizes its inputs using batch statistics during training and running statistics at inference (chapter 9)."},
-        {"term": "online approximation", "meaning": "Estimating a quantity bit by bit from a stream of batches instead of computing it from all the data at once."},
-        {"term": "feature normalization", "meaning": "Rescaling features to zero mean and unit standard deviation."}
-      ],
-      "connections": ["p.239: definition of non-trainable weights as state updated during the forward pass", "p.242: in JAX the forward pass must return updated non-trainable weights"]
-    },
-    {
-      "ref": "p240_e06",
-      "excerpt": "Taking into account these two details, a supervised learning training step",
-      "what_it_says": "With both details in hand (the `training` flag and the trainable/non-trainable split), the authors give pseudocode for one supervised training step.",
-      "what_it_means": "The pseudocode applies the two subtleties from 7.4.1: (1) call the model with `training=True` so Dropout and BatchNorm run in training mode; (2) compute gradients for, and update, only `model.trainable_weights`, not every weight.",
-      "why_it_matters": "This is the template for every later custom loop in the chapter. Each concrete version on pp.240–244 is this pseudocode with the gradient line rewritten for one backend.",
-      "terminology": [
-        {"term": "training step", "meaning": "One iteration of training on one batch: forward pass, loss, gradients, weight update."}
-      ],
-      "connections": ["p.239: the two subtleties being folded in", "p.246: the same logic becomes an overridden Model.train_step() used by fit()"]
-    },
-    {
-      "ref": "p240_e08",
-      "excerpt": "This snippet is pseudocode rather than real code because it includes an",
-      "what_it_says": "`get_gradients_of()` is imaginary. How you actually get gradients depends on the backend: JAX, TensorFlow or PyTorch.",
-      "what_it_means": "Keras gives you backend-agnostic layers, losses, metrics and optimizers, but differentiation is done by the backend's own autodiff engine, and the three engines have different interfaces: TensorFlow records operations on a tape, PyTorch builds a graph during the forward pass and gradients are pushed back with `.backward()`, and JAX transforms a pure function into its gradient function.",
-      "why_it_matters": "Once you leave `fit()` and write the gradient step yourself, your code is tied to one backend. The book comes back to this trade-off on p.540, where it recommends overriding `compute_loss()` when you want customization that stays backend agnostic.",
-      "terminology": [
-        {"term": "backend", "meaning": "The framework (TensorFlow, PyTorch or JAX) that Keras 3 runs its computations on."}
-      ],
-      "connections": ["p.239: the three backend gradient APIs (`tape.gradient`, `loss.backward()`, `jax.value_and_grad()`)", "p.540: compute_loss() as a backend-agnostic alternative to a custom train_step()"]
-    },
-    {
-      "ref": "p240_e09",
-      "excerpt": "Let’s use what you learned about each framework in chapter 3 to",
-      "what_it_says": "The plan: write a real `train_step()` for each backend. TensorFlow and PyTorch come first because they are relatively easy; JAX comes last because it is considerably more complex.",
-      "what_it_means": "TensorFlow and PyTorch are *stateful*: variables are mutable objects that the optimizer updates in place, which matches the pseudocode. JAX is functional: the gradient function has to be built from a pure loss function, and every piece of state has to be passed in and returned.",
-      "why_it_matters": "The ordering prepares you for the extra plumbing in JAX (`stateless_call()`, returning non-trainable variables) on p.242.",
-      "connections": ["p.113: the stateless JAX training step from chapter 3 had to return the updated W and b", "p.242: the JAX training step function"]
-    },
-    {
-      "ref": "p240_e11",
-      "excerpt": "TensorFlow lets you write code that looks pretty much like our pseudocode",
-      "what_it_says": "In TensorFlow the only change from the pseudocode is that the forward pass has to run inside a `GradientTape` scope. The `tape` object is then used to get the gradients.",
-      "what_it_means": "`tf.GradientTape` records the operations run inside its `with` block. Calling `tape.gradient(loss, weights)` afterwards replays that record backwards (reverse-mode autodiff) to get $\\partial \\text{loss}/\\partial w$ for each weight. The loss has to be computed inside the scope as well, so the whole path from weights to loss is recorded.",
-      "why_it_matters": "This is the most direct translation of the pseudocode, so it is a good first concrete example. The full function and a one-step run are on p.241.",
-      "terminology": [
-        {"term": "GradientTape", "meaning": "TensorFlow's context manager that records operations so gradients can be computed afterwards."}
-      ],
-      "connections": ["p.96: GradientTape used in the chapter 3 linear classifier training step (listing 3.20)", "p.241: the TensorFlow train_step code and a single-step run"]
+     "term": "training step",
+     "meaning": "One iteration of training on one batch: forward pass, loss, gradients, weight update."
     }
-  ],
-  "concepts": [
-    {
-      "id": "non_trainable_weights",
-      "name": "Non-trainable weights",
-      "definition": "Layer variables that the optimizer does not update. They may be updated during the forward pass.",
-      "intuition": "Bookkeeping the layer does for itself, such as counting batches or keeping running averages, as opposed to parameters that learning tunes.",
-      "technical": "Kept in `layer.non_trainable_weights`. They are left out of `trainable_weights`, so they are not differentiated or passed to `optimizer.apply`.",
-      "significance": "Custom loops have to keep them correct. In JAX they must be passed in and returned explicitly (p.242).",
-      "example": "BatchNormalization's moving mean and moving variance; the book's batch counter.",
-      "misconception": "Non-trainable does not mean constant. These weights can change at every batch.",
-      "related": ["batch_normalization", "keras_layer"],
-      "source": "book"
-    },
-    {
-      "id": "batch_normalization",
-      "name": "Batch normalization (preview)",
-      "definition": "A layer that normalizes activations. The book introduces it in chapter 9; here it is the one built-in layer with non-trainable weights.",
-      "intuition": "Feature normalization applied inside the network. Because the statistics keep changing during training, they are tracked as running estimates.",
-      "technical": "Tracks the mean and standard deviation of its inputs as an online approximation (p.240). Beyond the book: during training it normalizes with batch statistics; at inference it uses the moving averages.",
-      "significance": "Explains why `training=True` and non-trainable weights both matter in a custom loop.",
-      "example": "A conv block Conv2D → BatchNormalization → ReLU (chapter 9).",
-      "misconception": "Its moving statistics are not learned by gradient descent.",
-      "related": ["non_trainable_weights", "feature_normalization"],
-      "source": "book"
-    },
-    {
-      "id": "train_step",
-      "name": "Training step function",
-      "definition": "A function that runs one gradient-descent update on one batch: forward pass, loss, gradients, optimizer update.",
-      "intuition": "One heartbeat of training. `fit()` calls it once per batch.",
-      "technical": "`predictions = model(inputs, training=True)`; `loss = loss_fn(targets, predictions)`; gradients with respect to `model.trainable_weights`; `optimizer.apply(gradients, model.trainable_weights)`.",
-      "significance": "The unit you write when customizing training, either from scratch (pp.240–244) or by overriding `Model.train_step()` (p.246).",
-      "example": "The pseudocode on p.240.",
-      "misconception": "It is not the whole training loop. Iterating over batches and epochs happens outside it.",
-      "related": ["gradient_descent", "optimizer", "gradient_tape"],
-      "source": "book"
-    },
-    {
-      "id": "gradient_tape",
-      "name": "GradientTape",
-      "definition": "TensorFlow's mechanism for recording computations so it can differentiate them.",
-      "intuition": "A recorder: everything computed inside the `with` block is written down so it can be played back in reverse.",
-      "technical": "`with tf.GradientTape() as tape:` ... then `tape.gradient(loss, variables)` returns a list of gradients in the same order as the variables.",
-      "significance": "The concrete TensorFlow replacement for `get_gradients_of()`.",
-      "example": "Used in chapter 3's linear classifier (p.96) and in the TF train_step on p.241.",
-      "misconception": "Computations done outside the tape scope are not recorded, so their gradients come back as None.",
-      "related": ["autodiff", "backpropagation"],
-      "source": "book"
-    },
-    {
-      "id": "backend_specific_gradients",
-      "name": "Backend-specific gradient retrieval",
-      "definition": "Keras 3 has no backend-agnostic way to get gradients; each backend exposes its own autodiff API.",
-      "intuition": "Keras is a shared front end, but the engine that differentiates is different under each backend.",
-      "technical": "TF: `tape.gradient`; PyTorch: `loss.backward()` then `.grad`; JAX: `jax.grad` / `jax.value_and_grad` on a pure function (p.239).",
-      "significance": "Any custom training step is tied to one backend.",
-      "example": "The imaginary `get_gradients_of()` in the pseudocode.",
-      "misconception": "Writing a model in Keras 3 does not make every custom training loop portable.",
-      "related": ["autodiff", "gradient_tape"],
-      "source": "book"
-    }
-  ],
-  "math": [
-    {
-      "id": "m1",
-      "title": "The update performed by one training step",
-      "latex": "\\begin{aligned} \\hat{y} &= f_{\\theta}(x;\\ \\text{training}=\\text{True}) \\\\ L &= \\ell(y, \\hat{y}) \\\\ g &= \\nabla_{\\theta_{\\text{tr}}} L \\\\ \\theta_{\\text{tr}} &\\leftarrow \\operatorname{OptimizerUpdate}(\\theta_{\\text{tr}}, g) \\end{aligned}",
-      "source_text": "predictions = model(inputs, training=True); loss = loss_fn(targets, predictions); gradients = get_gradients_of(loss, wrt=model.trainable_weights); optimizer.apply(gradients, model.trainable_weights)",
-      "variables": [
-        {"symbol": "x, y", "meaning": "the batch of inputs and targets"},
-        {"symbol": "f_\\theta", "meaning": "the model with all its weights θ"},
-        {"symbol": "\\hat{y}", "meaning": "predictions"},
-        {"symbol": "\\ell", "meaning": "loss function (here sparse categorical crossentropy)"},
-        {"symbol": "\\theta_{\\text{tr}}", "meaning": "the trainable weights only"},
-        {"symbol": "g", "meaning": "gradient of the loss with respect to the trainable weights"}
-      ],
-      "operations": "Forward evaluation, loss, gradient, then an optimizer-specific update. For plain SGD the update is $\\theta \\leftarrow \\theta - \\eta g$; for Adam it uses running moment estimates.",
-      "purpose": "A mathematical restatement of the book's pseudocode. The book gives the code, not this notation.",
-      "interpretation": "Only $\\theta_{\\text{tr}}$ is differentiated. Non-trainable weights may change during the forward pass, but not here.",
-      "intuition": "Measure how wrong you are, find which direction lowers the error, and take a step that way.",
-      "numerical_example": "With plain SGD, $\\eta = 0.1$, weight $w = 0.5$ and gradient $g = 0.2$: $w \\leftarrow 0.5 - 0.1\\cdot 0.2 = 0.48$. Adam would rescale $g$ by its running estimate of the gradient's magnitude.",
-      "source": "ai_explanation",
-      "book_ref": "p.240"
-    }
-  ],
-  "code": [
-    {
-      "id": "c1",
-      "listing": null,
-      "title": "Pseudocode for a supervised training step",
-      "original_code": "def train_step(inputs, targets):\n    predictions = model(inputs, training=True)\n    loss = loss_fn(targets, predictions)\n    gradients = get_gradients_of(loss, wrt=model.trainable_weights)\n    optimizer.apply(gradients, model.trainable_weights)",
-      "language": "python",
-      "what_it_does": "Describes one training step for any backend. It cannot run because `get_gradients_of()` is imaginary.",
-      "line_explanations": [
-        {"lines": "1", "explanation": "One batch of inputs and targets goes in."},
-        {"lines": "2", "explanation": "Runs the forward pass. `training=True` puts Dropout and BatchNormalization into training mode."},
-        {"lines": "3", "explanation": "Computes the loss for the current batch (book callout)."},
-        {"lines": "4", "explanation": "Gets the gradients of the loss with respect to the model's trainable weights. The callout notes this function doesn't actually exist."},
-        {"lines": "5", "explanation": "Updates the trainable weights based on the gradients (book callout). `optimizer.apply` takes gradients and variables as two parallel lists."}
-      ],
-      "inputs_outputs": "Inputs: a batch of inputs and targets. Output: none here. The effect is that the weights are updated. (The real versions on p.241 return the loss.)",
-      "algorithm": "One iteration of mini-batch gradient descent.",
-      "theory_link": "This is the three-step loop recalled on p.239 (forward pass, gradients, update), rewritten to handle the training flag and the trainable/non-trainable split.",
-      "parameters": [
-        {"name": "training=True", "role": "Selects training-time behavior in layers such as Dropout"},
-        {"name": "model.trainable_weights", "role": "The only variables that get differentiated and updated"}
-      ],
-      "pitfalls": [
-        "Forgetting `training=True` leaves Dropout inactive and BatchNorm in inference mode during training.",
-        "Passing `model.weights` instead of `model.trainable_weights` tries to differentiate non-trainable variables (for example BatchNorm statistics)."
-      ]
-    },
-    {
-      "id": "c2",
-      "listing": null,
-      "title": "TensorFlow setup: model, loss and optimizer",
-      "original_code": "import tensorflow as tf\n\nmodel = get_mnist_model()\nloss_fn = keras.losses.SparseCategoricalCrossentropy()\noptimizer = keras.optimizers.Adam()",
-      "language": "python",
-      "what_it_does": "Creates the three objects the TensorFlow `train_step` will use. The function itself is defined at the top of p.241.",
-      "line_explanations": [
-        {"lines": "1", "explanation": "Imports TensorFlow to get `tf.GradientTape`. This assumes Keras is running on the TensorFlow backend."},
-        {"lines": "3", "explanation": "Builds the MNIST classifier from the `get_mnist_model()` helper defined earlier in the chapter."},
-        {"lines": "4", "explanation": "Loss for integer class labels against softmax probabilities."},
-        {"lines": "5", "explanation": "Adam optimizer with default settings. It owns its own state (moment estimates), which it updates in `apply`."}
-      ],
-      "inputs_outputs": "No inputs. Creates `model`, `loss_fn` and `optimizer` as globals used by the train_step.",
-      "algorithm": "Setup only.",
-      "theory_link": "These are the backend-agnostic Keras parts. Only the gradient retrieval will be TensorFlow specific.",
-      "parameters": [
-        {"name": "SparseCategoricalCrossentropy()", "role": "Loss for integer labels 0–9"},
-        {"name": "Adam()", "role": "Optimizer; default learning rate 0.001 (not stated on this page)"}
-      ],
-      "pitfalls": [
-        "Calling `tape.gradient` from `tf` only works when `KERAS_BACKEND` is set to tensorflow."
-      ]
-    }
-  ],
-  "deeper": [
-    {
-      "title": "The same pseudocode line in three backends",
-      "kind": "alternative",
-      "body": "What replaces `get_gradients_of(loss, wrt=model.trainable_weights)`:\n\n- **TensorFlow**: wrap the forward pass and loss in `with tf.GradientTape() as tape:` and call `tape.gradient(loss, model.trainable_weights)` (p.241).\n- **PyTorch**: call `loss.backward()`, read each `weight.value.grad`, and clear them with `model.zero_grad()` (p.241).\n- **JAX**: write a pure loss function that takes the weights as arguments, wrap it with `jax.value_and_grad`, and return the updated non-trainable weights as well (p.242).\n\nThe outline is the book's; this side-by-side summary is ours.",
-      "source": "ai_explanation"
-    },
-    {
-      "title": "Why trainable_weights and not weights",
-      "kind": "step_by_step",
-      "body": "1. `model.weights` = `trainable_weights` + `non_trainable_weights`.\n2. Non-trainable weights such as BatchNorm's moving statistics are updated by the forward pass with a moving-average rule, not by the loss gradient.\n3. If you passed them to the optimizer, it would try to apply gradients that are zero or `None`, or even change them in ways that ignore their bookkeeping role.\n4. So the pseudocode restricts both the gradient computation and the update to `trainable_weights`.",
-      "source": "ai_explanation"
-    },
-    {
-      "title": "Analogy: a thermostat versus a logbook",
-      "kind": "analogy",
-      "body": "Think of trainable weights as the thermostat dial you keep adjusting to reach a target temperature (the loss), and non-trainable weights as a logbook that records the average temperature each day. You never turn the logbook to hit your target. It just records what happened, and you consult it later (at inference).",
-      "source": "analogy"
-    }
-  ],
-  "visualizations": [
-    {
-      "id": "v1",
-      "type": "mermaid",
-      "title": "Anatomy of the pseudocode train_step()",
-      "why": "Shows the four lines of the pseudocode on this page and marks the one backend-specific line, get_gradients_of().",
-      "mermaid": "flowchart LR\n  A[inputs, targets] --> B[\"model(inputs, training=True)\"]\n  B --> C[\"loss_fn(targets, predictions)\"]\n  C --> D{\"get_gradients_of(loss)\\nbackend specific\"}\n  D -->|TF: GradientTape| E[gradients]\n  D -->|PyTorch: loss.backward| E\n  D -->|JAX: value_and_grad| E\n  E --> F[\"optimizer.apply(gradients, trainable_weights)\"]\n  B -.updates.-> G[(non-trainable weights\\ne.g. BatchNorm stats)]"
-    }
-  ],
-  "misconceptions": [
-    {"claim": "`get_gradients_of()` is a Keras utility you can import.", "correction": "The book says outright that it does not exist. It stands in for TensorFlow's GradientTape, PyTorch's `backward()` or JAX's `grad`."},
-    {"claim": "Non-trainable weights never change.", "correction": "They can change at every batch during the forward pass, as BatchNormalization's statistics and the book's counter example show. Only the optimizer leaves them alone."},
-    {"claim": "Many built-in Keras layers have non-trainable weights.", "correction": "According to the book, BatchNormalization is the only built-in layer that does."}
-  ],
-  "connections": {
-    "earlier": [
-      {"page": 239, "note": "Recap of the three-step training loop and the training-vs-inference subtlety, which this page folds into the pseudocode"},
-      {"page": 96, "note": "Chapter 3's TensorFlow training-step function using GradientTape (listing 3.20)"},
-      {"page": 113, "note": "Chapter 3's stateless JAX training step, a preview of why JAX is harder"}
-    ],
-    "later": [
-      {"page": 241, "note": "The TensorFlow train_step code, a one-step run, and the PyTorch version"},
-      {"page": 242, "note": "The JAX training step and stateless_call()"},
-      {"page": 246, "note": "Overriding Model.train_step() so fit() runs your custom step"},
-      {"page": 540, "note": "Using compute_loss() to customize training while staying backend agnostic"}
-    ],
-    "prerequisites": [
-      {"page": 239, "note": "Training vs. inference, and the trainable/non-trainable distinction"}
-    ],
-    "related_math": [],
-    "related_code": [
-      {"page": 241, "note": "The rest of the TensorFlow example"},
-      {"page": 96, "note": "Listing 3.20, an earlier GradientTape training step"}
-    ],
-    "related_figures": []
+   ],
+   "connections": [
+    "p.239: the two subtleties being folded in",
+    "p.246: the same logic becomes an overridden Model.train_step() used by fit()"
+   ]
   },
-  "takeaways": [
-    "A supervised training step is: forward pass (training=True) → loss → gradients with respect to trainable weights → optimizer.apply.",
-    "Only the gradient-retrieval line is backend specific. Keras has no universal get_gradients_of().",
-    "BatchNormalization is the only built-in Keras layer with non-trainable weights; they track running mean and standard deviation.",
-    "TensorFlow is closest to the pseudocode: the forward pass just goes inside a GradientTape scope.",
-    "The TensorFlow example uses get_mnist_model(), SparseCategoricalCrossentropy and Adam."
-  ],
-  "questions": [
+  {
+   "ref": "p240_e08",
+   "excerpt": "This snippet is pseudocode rather than real code because it includes an",
+   "what_it_says": "`get_gradients_of()` is imaginary. How you actually get gradients depends on the backend: JAX, TensorFlow or PyTorch.",
+   "what_it_means": "Keras gives you backend-agnostic layers, losses, metrics and optimizers, but differentiation is done by the backend's own autodiff engine, and the three engines have different interfaces: TensorFlow records operations on a tape, PyTorch builds a graph during the forward pass and gradients are pushed back with `.backward()`, and JAX transforms a pure function into its gradient function.",
+   "why_it_matters": "Once you leave `fit()` and write the gradient step yourself, your code is tied to one backend. The book comes back to this trade-off on p.540, where it recommends overriding `compute_loss()` when you want customization that stays backend agnostic.",
+   "terminology": [
     {
-      "id": "q1",
-      "type": "mcq",
-      "question": "Why is the train_step snippet on this page pseudocode rather than real code?",
-      "options": [
-        "It omits the training=True argument",
-        "It calls an imaginary function, get_gradients_of()",
-        "optimizer.apply() only exists in JAX",
-        "loss_fn must be called with predictions first"
-      ],
-      "answer": "It calls an imaginary function, get_gradients_of()",
-      "explanation": "The book says it is pseudocode because get_gradients_of() is imaginary; gradient retrieval depends on the backend. training=True is present, optimizer.apply is a real Keras optimizer method, and Keras losses take (targets, predictions) in that order.",
-      "page_refs": [240]
-    },
-    {
-      "id": "q2",
-      "type": "short",
-      "question": "Which built-in Keras layer has non-trainable weights, and what do they track?",
-      "options": [],
-      "answer": "BatchNormalization. They track the mean and standard deviation of the data passing through the layer, giving an online approximation of feature normalization.",
-      "explanation": "The page says this is the only built-in layer with non-trainable weights and gives that reason.",
-      "page_refs": [240]
-    },
-    {
-      "id": "q3",
-      "type": "conceptual",
-      "question": "The pseudocode includes two details from section 7.4.1. Name them and say what would go wrong if each were ignored.",
-      "options": [],
-      "answer": "(1) Calling the model with training=True: without it, Dropout would not drop activations and BatchNorm would run in inference mode, so you would not be training the model the way it was designed. (2) Differentiating and updating only model.trainable_weights: including non-trainable weights would try to apply gradients to state that the forward pass maintains, such as BatchNorm's statistics.",
-      "explanation": "These are the 'two details' the page refers to. The consequences are our explanation; the book states the rules.",
-      "page_refs": [239, 240]
-    },
-    {
-      "id": "q4",
-      "type": "mcq",
-      "question": "What is the only change TensorFlow requires relative to the pseudocode?",
-      "options": [
-        "Calling loss.backward() after the loss",
-        "Running the forward pass inside a GradientTape scope and using the tape to get gradients",
-        "Using stateless_call() instead of model()",
-        "Zeroing gradients with model.zero_grad()"
-      ],
-      "answer": "Running the forward pass inside a GradientTape scope and using the tape to get gradients",
-      "explanation": "The page says this directly. loss.backward() and zero_grad() are PyTorch (p.241); stateless_call() is JAX (p.242).",
-      "page_refs": [240, 241, 242]
-    },
-    {
-      "id": "q5",
-      "type": "short",
-      "question": "Why does the book leave JAX until last?",
-      "options": [],
-      "answer": "Because writing a training step in JAX is 'quite a bit more complex': JAX is fully stateless, so the loss function must take all variables as arguments and return any variables it updates.",
-      "explanation": "Page 240 gives the ordering and the reason; p.242 explains the stateless requirement.",
-      "page_refs": [240, 242]
-    },
-    {
-      "id": "q6",
-      "type": "conceptual",
-      "question": "In the TensorFlow setup, which objects are backend agnostic and which part of the step will be TensorFlow specific?",
-      "options": [],
-      "answer": "The model from get_mnist_model(), keras.losses.SparseCategoricalCrossentropy and keras.optimizers.Adam are all backend-agnostic Keras objects. Only the gradient retrieval (tf.GradientTape) is TensorFlow specific.",
-      "explanation": "The page says the gradient retrieval is the backend-specific part, and the setup uses only keras.* objects plus the tf import.",
-      "page_refs": [240]
-    },
-    {
-      "id": "q7",
-      "type": "self",
-      "question": "Without looking, write the four lines of the pseudocode train_step body and say which line each backend must replace.",
-      "options": [],
-      "answer": "predictions = model(inputs, training=True); loss = loss_fn(targets, predictions); gradients = get_gradients_of(loss, wrt=model.trainable_weights); optimizer.apply(gradients, model.trainable_weights). The third line is the one that changes per backend.",
-      "explanation": "Check yourself against the code block on the page.",
-      "page_refs": [240]
+     "term": "backend",
+     "meaning": "The framework (TensorFlow, PyTorch or JAX) that Keras 3 runs its computations on."
     }
-  ]
+   ],
+   "connections": [
+    "p.239: the three backend gradient APIs (`tape.gradient`, `loss.backward()`, `jax.value_and_grad()`)",
+    "p.540: compute_loss() as a backend-agnostic alternative to a custom train_step()"
+   ]
+  },
+  {
+   "ref": "p240_e09",
+   "excerpt": "Let’s use what you learned about each framework in chapter 3 to",
+   "what_it_says": "The plan: write a real `train_step()` for each backend. TensorFlow and PyTorch come first because they are relatively easy; JAX comes last because it is considerably more complex.",
+   "what_it_means": "TensorFlow and PyTorch are *stateful*: variables are mutable objects that the optimizer updates in place, which matches the pseudocode. JAX is functional: the gradient function has to be built from a pure loss function, and every piece of state has to be passed in and returned.",
+   "why_it_matters": "The ordering prepares you for the extra plumbing in JAX (`stateless_call()`, returning non-trainable variables) on p.242.",
+   "connections": [
+    "p.113: the stateless JAX training step from chapter 3 had to return the updated W and b",
+    "p.242: the JAX training step function"
+   ]
+  },
+  {
+   "ref": "p240_e11",
+   "excerpt": "TensorFlow lets you write code that looks pretty much like our pseudocode",
+   "what_it_says": "In TensorFlow the only change from the pseudocode is that the forward pass has to run inside a `GradientTape` scope. The `tape` object is then used to get the gradients.",
+   "what_it_means": "`tf.GradientTape` records the operations run inside its `with` block. Calling `tape.gradient(loss, weights)` afterwards replays that record backwards (reverse-mode autodiff) to get $\\partial \\text{loss}/\\partial w$ for each weight. The loss has to be computed inside the scope as well, so the whole path from weights to loss is recorded.",
+   "why_it_matters": "This is the most direct translation of the pseudocode, so it is a good first concrete example. The full function and a one-step run are on p.241.",
+   "terminology": [
+    {
+     "term": "GradientTape",
+     "meaning": "TensorFlow's context manager that records operations so gradients can be computed afterwards."
+    }
+   ],
+   "connections": [
+    "p.96: GradientTape used in the chapter 3 linear classifier training step (listing 3.20)",
+    "p.241: the TensorFlow train_step code and a single-step run"
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "non_trainable_weights",
+   "name": "Non-trainable weights",
+   "definition": "Layer variables that the optimizer does not update. They may be updated during the forward pass.",
+   "intuition": "Bookkeeping the layer does for itself, such as counting batches or keeping running averages, as opposed to parameters that learning tunes.",
+   "technical": "Kept in `layer.non_trainable_weights`. They are left out of `trainable_weights`, so they are not differentiated or passed to `optimizer.apply`.",
+   "significance": "Custom loops have to keep them correct. In JAX they must be passed in and returned explicitly (p.242).",
+   "example": "BatchNormalization's moving mean and moving variance; the book's batch counter.",
+   "misconception": "Non-trainable does not mean constant. These weights can change at every batch.",
+   "related": [
+    "batch_normalization",
+    "keras_layer"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "batch_normalization",
+   "name": "Batch normalization (preview)",
+   "definition": "A layer that normalizes activations. The book introduces it in chapter 9; here it is the one built-in layer with non-trainable weights.",
+   "intuition": "Feature normalization applied inside the network. Because the statistics keep changing during training, they are tracked as running estimates.",
+   "technical": "Tracks the mean and standard deviation of its inputs as an online approximation (p.240). Beyond the book: during training it normalizes with batch statistics; at inference it uses the moving averages.",
+   "significance": "Explains why `training=True` and non-trainable weights both matter in a custom loop.",
+   "example": "A conv block Conv2D → BatchNormalization → ReLU (chapter 9).",
+   "misconception": "Its moving statistics are not learned by gradient descent.",
+   "related": [
+    "non_trainable_weights",
+    "feature_normalization"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "train_step",
+   "name": "Training step function",
+   "definition": "A function that runs one gradient-descent update on one batch: forward pass, loss, gradients, optimizer update.",
+   "intuition": "One heartbeat of training. `fit()` calls it once per batch.",
+   "technical": "`predictions = model(inputs, training=True)`; `loss = loss_fn(targets, predictions)`; gradients with respect to `model.trainable_weights`; `optimizer.apply(gradients, model.trainable_weights)`.",
+   "significance": "The unit you write when customizing training, either from scratch (pp.240–244) or by overriding `Model.train_step()` (p.246).",
+   "example": "The pseudocode on p.240.",
+   "misconception": "It is not the whole training loop. Iterating over batches and epochs happens outside it.",
+   "related": [
+    "gradient_descent",
+    "optimizer",
+    "gradient_tape"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "gradient_tape",
+   "name": "GradientTape",
+   "definition": "TensorFlow's mechanism for recording computations so it can differentiate them.",
+   "intuition": "A recorder: everything computed inside the `with` block is written down so it can be played back in reverse.",
+   "technical": "`with tf.GradientTape() as tape:` ... then `tape.gradient(loss, variables)` returns a list of gradients in the same order as the variables.",
+   "significance": "The concrete TensorFlow replacement for `get_gradients_of()`.",
+   "example": "Used in chapter 3's linear classifier (p.96) and in the TF train_step on p.241.",
+   "misconception": "Computations done outside the tape scope are not recorded, so their gradients come back as None.",
+   "related": [
+    "autodiff",
+    "backpropagation"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "backend_specific_gradients",
+   "name": "Backend-specific gradient retrieval",
+   "definition": "Keras 3 has no backend-agnostic way to get gradients; each backend exposes its own autodiff API.",
+   "intuition": "Keras is a shared front end, but the engine that differentiates is different under each backend.",
+   "technical": "TF: `tape.gradient`; PyTorch: `loss.backward()` then `.grad`; JAX: `jax.grad` / `jax.value_and_grad` on a pure function (p.239).",
+   "significance": "Any custom training step is tied to one backend.",
+   "example": "The imaginary `get_gradients_of()` in the pseudocode.",
+   "misconception": "Writing a model in Keras 3 does not make every custom training loop portable.",
+   "related": [
+    "autodiff",
+    "gradient_tape"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [
+  {
+   "id": "m1",
+   "title": "The update performed by one training step",
+   "latex": "\\begin{aligned} \\hat{y} &= f_{\\theta}(x;\\ \\text{training}=\\text{True}) \\\\ L &= \\ell(y, \\hat{y}) \\\\ g &= \\nabla_{\\theta_{\\text{tr}}} L \\\\ \\theta_{\\text{tr}} &\\leftarrow \\operatorname{OptimizerUpdate}(\\theta_{\\text{tr}}, g) \\end{aligned}",
+   "source_text": "predictions = model(inputs, training=True); loss = loss_fn(targets, predictions); gradients = get_gradients_of(loss, wrt=model.trainable_weights); optimizer.apply(gradients, model.trainable_weights)",
+   "variables": [
+    {
+     "symbol": "x, y",
+     "meaning": "the batch of inputs and targets"
+    },
+    {
+     "symbol": "f_\\theta",
+     "meaning": "the model with all its weights θ"
+    },
+    {
+     "symbol": "\\hat{y}",
+     "meaning": "predictions"
+    },
+    {
+     "symbol": "\\ell",
+     "meaning": "loss function (here sparse categorical crossentropy)"
+    },
+    {
+     "symbol": "\\theta_{\\text{tr}}",
+     "meaning": "the trainable weights only"
+    },
+    {
+     "symbol": "g",
+     "meaning": "gradient of the loss with respect to the trainable weights"
+    }
+   ],
+   "operations": "Forward evaluation, loss, gradient, then an optimizer-specific update. For plain SGD the update is $\\theta \\leftarrow \\theta - \\eta g$; for Adam it uses running moment estimates.",
+   "purpose": "A mathematical restatement of the book's pseudocode. The book gives the code, not this notation.",
+   "interpretation": "Only $\\theta_{\\text{tr}}$ is differentiated. Non-trainable weights may change during the forward pass, but not here.",
+   "intuition": "Measure how wrong you are, find which direction lowers the error, and take a step that way.",
+   "numerical_example": "With plain SGD, $\\eta = 0.1$, weight $w = 0.5$ and gradient $g = 0.2$: $w \\leftarrow 0.5 - 0.1\\cdot 0.2 = 0.48$. Adam would rescale $g$ by its running estimate of the gradient's magnitude.",
+   "source": "ai_explanation",
+   "book_ref": "p.240"
+  }
+ ],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Pseudocode for a supervised training step",
+   "original_code": "def train_step(inputs, targets):\n    predictions = model(inputs, training=True)\n    loss = loss_fn(targets, predictions)\n    gradients = get_gradients_of(loss, wrt=model.trainable_weights)\n    optimizer.apply(gradients, model.trainable_weights)",
+   "language": "python",
+   "what_it_does": "Describes one training step for any backend. It cannot run because `get_gradients_of()` is imaginary.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "One batch of inputs and targets goes in."
+    },
+    {
+     "lines": "2",
+     "explanation": "Runs the forward pass. `training=True` puts Dropout and BatchNormalization into training mode."
+    },
+    {
+     "lines": "3",
+     "explanation": "Computes the loss for the current batch (book callout)."
+    },
+    {
+     "lines": "4",
+     "explanation": "Gets the gradients of the loss with respect to the model's trainable weights. The callout notes this function doesn't actually exist."
+    },
+    {
+     "lines": "5",
+     "explanation": "Updates the trainable weights based on the gradients (book callout). `optimizer.apply` takes gradients and variables as two parallel lists."
+    }
+   ],
+   "inputs_outputs": "Inputs: a batch of inputs and targets. Output: none here. The effect is that the weights are updated. (The real versions on p.241 return the loss.)",
+   "algorithm": "One iteration of mini-batch gradient descent.",
+   "theory_link": "This is the three-step loop recalled on p.239 (forward pass, gradients, update), rewritten to handle the training flag and the trainable/non-trainable split.",
+   "parameters": [
+    {
+     "name": "training=True",
+     "role": "Selects training-time behavior in layers such as Dropout"
+    },
+    {
+     "name": "model.trainable_weights",
+     "role": "The only variables that get differentiated and updated"
+    }
+   ],
+   "pitfalls": [
+    "Forgetting `training=True` leaves Dropout inactive and BatchNorm in inference mode during training.",
+    "Passing `model.weights` instead of `model.trainable_weights` tries to differentiate non-trainable variables (for example BatchNorm statistics)."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "TensorFlow setup: model, loss and optimizer",
+   "original_code": "import tensorflow as tf\n\nmodel = get_mnist_model()\nloss_fn = keras.losses.SparseCategoricalCrossentropy()\noptimizer = keras.optimizers.Adam()",
+   "language": "python",
+   "what_it_does": "Creates the three objects the TensorFlow `train_step` will use. The function itself is defined at the top of p.241.",
+   "line_explanations": [
+    {
+     "lines": "1",
+     "explanation": "Imports TensorFlow to get `tf.GradientTape`. This assumes Keras is running on the TensorFlow backend."
+    },
+    {
+     "lines": "3",
+     "explanation": "Builds the MNIST classifier from the `get_mnist_model()` helper defined earlier in the chapter."
+    },
+    {
+     "lines": "4",
+     "explanation": "Loss for integer class labels against softmax probabilities."
+    },
+    {
+     "lines": "5",
+     "explanation": "Adam optimizer with default settings. It owns its own state (moment estimates), which it updates in `apply`."
+    }
+   ],
+   "inputs_outputs": "No inputs. Creates `model`, `loss_fn` and `optimizer` as globals used by the train_step.",
+   "algorithm": "Setup only.",
+   "theory_link": "These are the backend-agnostic Keras parts. Only the gradient retrieval will be TensorFlow specific.",
+   "parameters": [
+    {
+     "name": "SparseCategoricalCrossentropy()",
+     "role": "Loss for integer labels 0–9"
+    },
+    {
+     "name": "Adam()",
+     "role": "Optimizer; default learning rate 0.001 (not stated on this page)"
+    }
+   ],
+   "pitfalls": [
+    "Calling `tape.gradient` from `tf` only works when `KERAS_BACKEND` is set to tensorflow."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "The same pseudocode line in three backends",
+   "kind": "alternative",
+   "body": "What replaces `get_gradients_of(loss, wrt=model.trainable_weights)`:\n\n- **TensorFlow**: wrap the forward pass and loss in `with tf.GradientTape() as tape:` and call `tape.gradient(loss, model.trainable_weights)` (p.241).\n- **PyTorch**: call `loss.backward()`, read each `weight.value.grad`, and clear them with `model.zero_grad()` (p.241).\n- **JAX**: write a pure loss function that takes the weights as arguments, wrap it with `jax.value_and_grad`, and return the updated non-trainable weights as well (p.242).\n\nThe outline is the book's; this side-by-side summary is ours.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why trainable_weights and not weights",
+   "kind": "step_by_step",
+   "body": "1. `model.weights` = `trainable_weights` + `non_trainable_weights`.\n2. Non-trainable weights such as BatchNorm's moving statistics are updated by the forward pass with a moving-average rule, not by the loss gradient.\n3. If you passed them to the optimizer, it would try to apply gradients that are zero or `None`, or even change them in ways that ignore their bookkeeping role.\n4. So the pseudocode restricts both the gradient computation and the update to `trainable_weights`.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Analogy: a thermostat versus a logbook",
+   "kind": "analogy",
+   "body": "Think of trainable weights as the thermostat dial you keep adjusting to reach a target temperature (the loss), and non-trainable weights as a logbook that records the average temperature each day. You never turn the logbook to hit your target. It just records what happened, and you consult it later (at inference).",
+   "source": "analogy"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "Anatomy of the pseudocode train_step()",
+   "why": "Shows the four lines of the pseudocode on this page and marks the one backend-specific line, get_gradients_of().",
+   "mermaid": "flowchart LR\n  A[inputs, targets] --> B[\"model(inputs, training=True)\"]\n  B --> C[\"loss_fn(targets, predictions)\"]\n  C --> D{\"get_gradients_of(loss)<br/>backend specific\"}\n  D -->|TF: GradientTape| E[gradients]\n  D -->|PyTorch: loss.backward| E\n  D -->|JAX: value_and_grad| E\n  E --> F[\"optimizer.apply(gradients, trainable_weights)\"]\n  B -.updates.-> G[(non-trainable weights<br/>e.g. BatchNorm stats)]"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "`get_gradients_of()` is a Keras utility you can import.",
+   "correction": "The book says outright that it does not exist. It stands in for TensorFlow's GradientTape, PyTorch's `backward()` or JAX's `grad`."
+  },
+  {
+   "claim": "Non-trainable weights never change.",
+   "correction": "They can change at every batch during the forward pass, as BatchNormalization's statistics and the book's counter example show. Only the optimizer leaves them alone."
+  },
+  {
+   "claim": "Many built-in Keras layers have non-trainable weights.",
+   "correction": "According to the book, BatchNormalization is the only built-in layer that does."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 239,
+    "note": "Recap of the three-step training loop and the training-vs-inference subtlety, which this page folds into the pseudocode"
+   },
+   {
+    "page": 96,
+    "note": "Chapter 3's TensorFlow training-step function using GradientTape (listing 3.20)"
+   },
+   {
+    "page": 113,
+    "note": "Chapter 3's stateless JAX training step, a preview of why JAX is harder"
+   }
+  ],
+  "later": [
+   {
+    "page": 241,
+    "note": "The TensorFlow train_step code, a one-step run, and the PyTorch version"
+   },
+   {
+    "page": 242,
+    "note": "The JAX training step and stateless_call()"
+   },
+   {
+    "page": 246,
+    "note": "Overriding Model.train_step() so fit() runs your custom step"
+   },
+   {
+    "page": 540,
+    "note": "Using compute_loss() to customize training while staying backend agnostic"
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 239,
+    "note": "Training vs. inference, and the trainable/non-trainable distinction"
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 241,
+    "note": "The rest of the TensorFlow example"
+   },
+   {
+    "page": 96,
+    "note": "Listing 3.20, an earlier GradientTape training step"
+   }
+  ],
+  "related_figures": []
+ },
+ "takeaways": [
+  "A supervised training step is: forward pass (training=True) → loss → gradients with respect to trainable weights → optimizer.apply.",
+  "Only the gradient-retrieval line is backend specific. Keras has no universal get_gradients_of().",
+  "BatchNormalization is the only built-in Keras layer with non-trainable weights; they track running mean and standard deviation.",
+  "TensorFlow is closest to the pseudocode: the forward pass just goes inside a GradientTape scope.",
+  "The TensorFlow example uses get_mnist_model(), SparseCategoricalCrossentropy and Adam."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "Why is the train_step snippet on this page pseudocode rather than real code?",
+   "options": [
+    "It omits the training=True argument",
+    "It calls an imaginary function, get_gradients_of()",
+    "optimizer.apply() only exists in JAX",
+    "loss_fn must be called with predictions first"
+   ],
+   "answer": "It calls an imaginary function, get_gradients_of()",
+   "explanation": "The book says it is pseudocode because get_gradients_of() is imaginary; gradient retrieval depends on the backend. training=True is present, optimizer.apply is a real Keras optimizer method, and Keras losses take (targets, predictions) in that order.",
+   "page_refs": [
+    240
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "Which built-in Keras layer has non-trainable weights, and what do they track?",
+   "options": [],
+   "answer": "BatchNormalization. They track the mean and standard deviation of the data passing through the layer, giving an online approximation of feature normalization.",
+   "explanation": "The page says this is the only built-in layer with non-trainable weights and gives that reason.",
+   "page_refs": [
+    240
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "The pseudocode includes two details from section 7.4.1. Name them and say what would go wrong if each were ignored.",
+   "options": [],
+   "answer": "(1) Calling the model with training=True: without it, Dropout would not drop activations and BatchNorm would run in inference mode, so you would not be training the model the way it was designed. (2) Differentiating and updating only model.trainable_weights: including non-trainable weights would try to apply gradients to state that the forward pass maintains, such as BatchNorm's statistics.",
+   "explanation": "These are the 'two details' the page refers to. The consequences are our explanation; the book states the rules.",
+   "page_refs": [
+    239,
+    240
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "What is the only change TensorFlow requires relative to the pseudocode?",
+   "options": [
+    "Calling loss.backward() after the loss",
+    "Running the forward pass inside a GradientTape scope and using the tape to get gradients",
+    "Using stateless_call() instead of model()",
+    "Zeroing gradients with model.zero_grad()"
+   ],
+   "answer": "Running the forward pass inside a GradientTape scope and using the tape to get gradients",
+   "explanation": "The page says this directly. loss.backward() and zero_grad() are PyTorch (p.241); stateless_call() is JAX (p.242).",
+   "page_refs": [
+    240,
+    241,
+    242
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "Why does the book leave JAX until last?",
+   "options": [],
+   "answer": "Because writing a training step in JAX is 'quite a bit more complex': JAX is fully stateless, so the loss function must take all variables as arguments and return any variables it updates.",
+   "explanation": "Page 240 gives the ordering and the reason; p.242 explains the stateless requirement.",
+   "page_refs": [
+    240,
+    242
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "conceptual",
+   "question": "In the TensorFlow setup, which objects are backend agnostic and which part of the step will be TensorFlow specific?",
+   "options": [],
+   "answer": "The model from get_mnist_model(), keras.losses.SparseCategoricalCrossentropy and keras.optimizers.Adam are all backend-agnostic Keras objects. Only the gradient retrieval (tf.GradientTape) is TensorFlow specific.",
+   "explanation": "The page says the gradient retrieval is the backend-specific part, and the setup uses only keras.* objects plus the tf import.",
+   "page_refs": [
+    240
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Without looking, write the four lines of the pseudocode train_step body and say which line each backend must replace.",
+   "options": [],
+   "answer": "predictions = model(inputs, training=True); loss = loss_fn(targets, predictions); gradients = get_gradients_of(loss, wrt=model.trainable_weights); optimizer.apply(gradients, model.trainable_weights). The third line is the one that changes per backend.",
+   "explanation": "Check yourself against the code block on the page.",
+   "page_refs": [
+    240
+   ]
+  }
+ ]
 }

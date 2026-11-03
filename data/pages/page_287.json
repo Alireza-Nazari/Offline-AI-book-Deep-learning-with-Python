@@ -1,340 +1,457 @@
 {
-  "page_id": "page_287",
-  "pdf_page": 287,
-  "printed_page": "263",
-  "book_id": "dlwp3",
-  "generation": {
-    "status": "complete",
-    "model": "claude-opus-5-5",
-    "generated_at": "2026-11-03T07:30:24Z",
-    "confidence": "high",
-    "review_flags": [],
-    "extraction_quality": "Clean. The first code block completes the model definition begun on p.286; figure 8.14 referenced here is printed on p.288."
+ "page_id": "page_287",
+ "pdf_page": 287,
+ "printed_page": "263",
+ "book_id": "dlwp3",
+ "generation": {
+  "status": "complete",
+  "model": "claude-opus-5-5",
+  "generated_at": "2026-11-03T07:30:24Z",
+  "confidence": "high",
+  "review_flags": [],
+  "extraction_quality": "Clean. The first code block completes the model definition begun on p.286; figure 8.14 referenced here is printed on p.288."
+ },
+ "overview": {
+  "title": "Training the frozen-base model with augmentation",
+  "chapter": "8 Image classification",
+  "section": "8.3 Using a pretrained model",
+  "subsection": "8.3.1 Feature extraction with a pretrained model",
+  "main_topic": "Compiling the end-to-end model with frozen Xception, the rule that trainability changes need a (re)compile, training 30 epochs on augmented data, GPU requirement, and test evaluation.",
+  "central_idea": "With the backbone frozen, only the four weight tensors of the two new Dense layers are trained; thanks to augmentation the model can train longer (30 epochs) before overfitting, reaching 98.2% validation accuracy, but the approach is so expensive that it needs a GPU.",
+  "importance": "Shows the practical mechanics and costs of end-to-end feature extraction, and a subtle Keras rule (trainability is fixed at compile time) that causes real bugs.",
+  "learning_objectives": [
+   "Count the trainable weight tensors in the frozen-base model and explain why there are four.",
+   "Explain why trainability changes require compiling or recompiling the model.",
+   "Explain why augmentation permits more epochs (30 vs 10).",
+   "Explain why this technique is intractable on CPU.",
+   "Evaluate the saved best checkpoint directly on the image test dataset."
+  ],
+  "prerequisites": [
+   "Freezing and the end-to-end model definition (p.286)",
+   "augmented_train_dataset from section 8.2.5 (p.276-278)",
+   "ModelCheckpoint (p.284)"
+  ],
+  "page_kind": "content"
+ },
+ "summary": "The page completes the code started on p.286: `model = keras.Model(inputs, outputs)` and `model.compile(loss=\"binary_crossentropy\", optimizer=\"adam\", metrics=[\"accuracy\"])`.\n\n**What gets trained.** Only the weights of the two added `Dense` layers are trained: **four weight tensors** in total, two per layer (the main weight matrix and the bias vector). Freezing only takes effect once the model is compiled; **if you change trainability after compilation, you must recompile**, or the change will be ignored.\n\n**Training.** The model is trained on the augmented dataset `augmented_train_dataset` from section 8.2. Because augmentation delays overfitting much longer, it can run more epochs: **30** (vs 10 for the cached-feature head). A `ModelCheckpoint` saves the lowest-`val_loss` model to `feature_extraction_with_data_augmentation.keras`, with validation on `validation_dataset`.\n\n**Cost.** A NOTE warns the technique is expensive enough that you should only attempt it with a GPU (such as Colab's free GPU); it is *intractable on CPU*. Without a GPU, the previous (cached-feature) technique is the way to go.\n\n**Results.** The curves (figure 8.14, printed on p.288) show **98.2% validation accuracy**. **Listing 8.30** reloads the best checkpoint and calls `evaluate(test_dataset)`: note that the test set is now raw images, since preprocessing and backbone are inside the model. The resulting test accuracy (98.4%, p.288) is no better than the 98.1% of plain feature extraction, which the authors find a bit disappointing.",
+ "paragraphs": [
+  {
+   "ref": "p287_e04",
+   "excerpt": "With this setup, only the weights from the two Dense layers that you added",
+   "what_it_says": "Only the two added Dense layers' weights will be trained: four weight tensors, two per layer (weight matrix and bias vector). For these changes to take effect you must first compile the model; if you modify trainability after compilation, recompile, or the changes are ignored.",
+   "what_it_means": "The Dense(256) layer contributes a (2048, 256) kernel and a (256,) bias; the Dense(1) layer a (256, 1) kernel and a (1,) bias. Everything else (preprocessor, Xception's 26 tensors, pooling, dropout) is untrainable. `compile()` is when Keras fixes which variables the training step updates, so toggling `trainable` afterwards has no effect until you compile again.",
+   "why_it_matters": "This rule becomes critical in fine-tuning (p.288 onward), where you unfreeze part of the base after initial training; forgetting to recompile would silently keep the base frozen.",
+   "technical_idea": "Trainable variable set is captured when the training function is built at compile time.",
+   "terminology": [
+    {
+     "term": "weight tensor",
+     "meaning": "A single variable array, e.g. a kernel matrix or a bias vector."
+    },
+    {
+     "term": "recompile",
+     "meaning": "Calling model.compile() again so Keras rebuilds training with the current trainable settings."
+    }
+   ],
+   "connections": [
+    "p.286: Listing 8.29 showed conv_base's trainable weights going from 26 to 0.",
+    "p.288: fine-tuning unfreezes the base after training the head."
+   ]
   },
-  "overview": {
-    "title": "Training the frozen-base model with augmentation",
-    "chapter": "8 Image classification",
-    "section": "8.3 Using a pretrained model",
-    "subsection": "8.3.1 Feature extraction with a pretrained model",
-    "main_topic": "Compiling the end-to-end model with frozen Xception, the rule that trainability changes need a (re)compile, training 30 epochs on augmented data, GPU requirement, and test evaluation.",
-    "central_idea": "With the backbone frozen, only the four weight tensors of the two new Dense layers are trained; thanks to augmentation the model can train longer (30 epochs) before overfitting, reaching 98.2% validation accuracy, but the approach is so expensive that it needs a GPU.",
-    "importance": "Shows the practical mechanics and costs of end-to-end feature extraction, and a subtle Keras rule (trainability is fixed at compile time) that causes real bugs.",
-    "learning_objectives": [
-      "Count the trainable weight tensors in the frozen-base model and explain why there are four.",
-      "Explain why trainability changes require compiling or recompiling the model.",
-      "Explain why augmentation permits more epochs (30 vs 10).",
-      "Explain why this technique is intractable on CPU.",
-      "Evaluate the saved best checkpoint directly on the image test dataset."
-    ],
-    "prerequisites": [
-      "Freezing and the end-to-end model definition (p.286)",
-      "augmented_train_dataset from section 8.2.5 (p.276-278)",
-      "ModelCheckpoint (p.284)"
-    ],
-    "page_kind": "content"
+  {
+   "ref": "p287_e05",
+   "excerpt": "Let’s train our model. We’ll reuse our augmented dataset augmented_train_dataset.",
+   "what_it_says": "Training reuses `augmented_train_dataset`. Thanks to augmentation, overfitting starts much later, so the model can train for 30 epochs.",
+   "what_it_means": "The augmented dataset applies random transformations in the data pipeline (section 8.2.5 describes applying augmentation layers to the Dataset via map()), so every epoch yields different versions of the 2,000 training images. Because each variant passes through the frozen Xception, the head sees new feature vectors and cannot simply memorize.",
+   "why_it_matters": "Directly addresses the 'overfitting almost from the start' of figure 8.13 (p.285).",
+   "terminology": [
+    {
+     "term": "augmented_train_dataset",
+     "meaning": "The training dataset with random augmentation applied, defined in section 8.2.5."
+    }
+   ],
+   "connections": [
+    "p.276: augmentation can be done inside the model or in the data pipeline via map().",
+    "p.278: the from-scratch augmented model was trained for 100 epochs, validated on non-augmented images.",
+    "p.285: plain feature extraction overfit almost immediately."
+   ]
   },
-  "summary": "The page completes the code started on p.286: `model = keras.Model(inputs, outputs)` and `model.compile(loss=\"binary_crossentropy\", optimizer=\"adam\", metrics=[\"accuracy\"])`.\n\n**What gets trained.** Only the weights of the two added `Dense` layers are trained: **four weight tensors** in total, two per layer (the main weight matrix and the bias vector). Freezing only takes effect once the model is compiled; **if you change trainability after compilation, you must recompile**, or the change will be ignored.\n\n**Training.** The model is trained on the augmented dataset `augmented_train_dataset` from section 8.2. Because augmentation delays overfitting much longer, it can run more epochs: **30** (vs 10 for the cached-feature head). A `ModelCheckpoint` saves the lowest-`val_loss` model to `feature_extraction_with_data_augmentation.keras`, with validation on `validation_dataset`.\n\n**Cost.** A NOTE warns the technique is expensive enough that you should only attempt it with a GPU (such as Colab's free GPU); it is *intractable on CPU*. Without a GPU, the previous (cached-feature) technique is the way to go.\n\n**Results.** The curves (figure 8.14, printed on p.288) show **98.2% validation accuracy**. **Listing 8.30** reloads the best checkpoint and calls `evaluate(test_dataset)`: note that the test set is now raw images, since preprocessing and backbone are inside the model. The resulting test accuracy (98.4%, p.288) is no better than the 98.1% of plain feature extraction, which the authors find a bit disappointing.",
-  "paragraphs": [
-    {
-      "ref": "p287_e04",
-      "excerpt": "With this setup, only the weights from the two Dense layers that you added",
-      "what_it_says": "Only the two added Dense layers' weights will be trained: four weight tensors, two per layer (weight matrix and bias vector). For these changes to take effect you must first compile the model; if you modify trainability after compilation, recompile, or the changes are ignored.",
-      "what_it_means": "The Dense(256) layer contributes a (2048, 256) kernel and a (256,) bias; the Dense(1) layer a (256, 1) kernel and a (1,) bias. Everything else (preprocessor, Xception's 26 tensors, pooling, dropout) is untrainable. `compile()` is when Keras fixes which variables the training step updates, so toggling `trainable` afterwards has no effect until you compile again.",
-      "why_it_matters": "This rule becomes critical in fine-tuning (p.288 onward), where you unfreeze part of the base after initial training; forgetting to recompile would silently keep the base frozen.",
-      "technical_idea": "Trainable variable set is captured when the training function is built at compile time.",
-      "terminology": [
-        {"term": "weight tensor", "meaning": "A single variable array, e.g. a kernel matrix or a bias vector."},
-        {"term": "recompile", "meaning": "Calling model.compile() again so Keras rebuilds training with the current trainable settings."}
-      ],
-      "connections": [
-        "p.286: Listing 8.29 showed conv_base's trainable weights going from 26 to 0.",
-        "p.288: fine-tuning unfreezes the base after training the head."
-      ]
-    },
-    {
-      "ref": "p287_e05",
-      "excerpt": "Let’s train our model. We’ll reuse our augmented dataset augmented_train_dataset.",
-      "what_it_says": "Training reuses `augmented_train_dataset`. Thanks to augmentation, overfitting starts much later, so the model can train for 30 epochs.",
-      "what_it_means": "The augmented dataset applies random transformations in the data pipeline (section 8.2.5 describes applying augmentation layers to the Dataset via map()), so every epoch yields different versions of the 2,000 training images. Because each variant passes through the frozen Xception, the head sees new feature vectors and cannot simply memorize.",
-      "why_it_matters": "Directly addresses the 'overfitting almost from the start' of figure 8.13 (p.285).",
-      "terminology": [
-        {"term": "augmented_train_dataset", "meaning": "The training dataset with random augmentation applied, defined in section 8.2.5."}
-      ],
-      "connections": [
-        "p.276: augmentation can be done inside the model or in the data pipeline via map().",
-        "p.278: the from-scratch augmented model was trained for 100 epochs, validated on non-augmented images.",
-        "p.285: plain feature extraction overfit almost immediately."
-      ]
-    },
-    {
-      "ref": "p287_e07",
-      "excerpt": "NOTE This technique is expensive enough that you should only attempt it",
-      "what_it_says": "Only attempt this technique with a GPU (e.g. Colab's free GPU); it is intractable on CPU. Without a GPU, use the previous technique.",
-      "what_it_means": "Each epoch now requires a full Xception forward pass for every training and validation image, 30 times over, whereas the cached approach ran Xception once per image and then trained in under a second per epoch on CPU (p.284).",
-      "why_it_matters": "Practical guidance on choosing between the two techniques based on available hardware.",
-      "terminology": [],
-      "connections": ["p.284: cached-feature training takes under 1 second per epoch on CPU.", "p.283: option 2 described as far more expensive."]
-    },
-    {
-      "ref": "p287_e08",
-      "excerpt": "Let’s plot the results again (see figure 8.14). This model reaches a validation accuracy",
-      "what_it_says": "The training curves (figure 8.14) show a validation accuracy of 98.2%; next comes the test accuracy check.",
-      "what_it_means": "Validation accuracy is essentially on par with plain feature extraction (slightly over 98%), suggesting that the frozen features, not the amount of overfitting in the head, are the limiting factor at this level.",
-      "why_it_matters": "Sets up the slightly disappointing test result on p.288 and the motivation for fine-tuning.",
-      "terminology": [],
-      "connections": ["p.288: figure 8.14 and the 98.4% test accuracy.", "p.285: plain feature extraction reached slightly over 98% validation accuracy."]
-    }
-  ],
-  "concepts": [
-    {
-      "id": "freezing_layers",
-      "name": "Freezing and compile-time trainability",
-      "definition": "Frozen weights are excluded from updates; Keras applies the trainable settings when the model is compiled.",
-      "intuition": "compile() takes a snapshot of which knobs are allowed to turn.",
-      "technical": "After freezing conv_base, the model's trainable weights are 4 tensors: Dense(256) kernel (2048x256) and bias (256), Dense(1) kernel (256x1) and bias (1). Changing `trainable` later requires recompiling.",
-      "significance": "Prevents silent bugs where layers you meant to unfreeze stay frozen (or vice versa).",
-      "example": "Compile after building the model with the frozen backbone.",
-      "misconception": "That setting `layer.trainable` is immediately effective in an already-compiled model.",
-      "related": ["fine_tuning", "transfer_learning"],
-      "source": "book"
-    },
-    {
-      "id": "data_augmentation",
-      "name": "Data augmentation",
-      "definition": "Random transformations of training images on every epoch.",
-      "intuition": "Each epoch the model sees 'new' cats and dogs.",
-      "technical": "Supplied by `augmented_train_dataset`; validation and test use unaugmented data.",
-      "significance": "Allows training for 30 epochs without early overfitting.",
-      "example": "`model.fit(augmented_train_dataset, epochs=30, ...)`.",
-      "misconception": "That augmentation must always improve test accuracy; here test accuracy barely changes (p.288).",
-      "related": ["overfitting", "freezing_layers"],
-      "source": "book"
-    },
-    {
-      "id": "transfer_learning",
-      "name": "Compute trade-off in transfer learning",
-      "definition": "Choosing between cached features (cheap) and end-to-end with frozen base (expensive, augmentation).",
-      "intuition": "Pay compute to buy regularization.",
-      "technical": "End-to-end runs Xception on every image every epoch; needs a GPU.",
-      "significance": "Hardware dictates the feasible option.",
-      "example": "The book's NOTE: intractable on CPU.",
-      "misconception": "That frozen means cheap; the forward pass through the frozen base still dominates cost.",
-      "related": ["feature_caching", "backbone"],
-      "source": "book"
-    }
-  ],
-  "math": [],
-  "code": [
-    {
-      "id": "c1",
-      "listing": null,
-      "title": "Building and compiling the frozen-base model (part 2)",
-      "original_code": "model = keras.Model(inputs, outputs)\nmodel.compile(\n    loss=\"binary_crossentropy\",\n    optimizer=\"adam\",\n    metrics=[\"accuracy\"],\n)",
-      "language": "python",
-      "what_it_does": "Completes the model whose layers were defined at the bottom of p.286 and compiles it; compilation is what makes the frozen state of conv_base take effect.",
-      "line_explanations": [
-        {"lines": "1", "explanation": "Creates the Functional model from the symbolic inputs/outputs defined on p.286."},
-        {"lines": "2-6", "explanation": "Same compile settings as Listing 8.26: binary crossentropy, Adam, accuracy."}
-      ],
-      "inputs_outputs": "Model input (None, 180, 180, 3) images; output (None, 1) probabilities.",
-      "algorithm": "Graph wrapping and compilation.",
-      "theory_link": "Trainability is fixed at compile time: only 4 tensors will be updated.",
-      "parameters": [
-        {"name": "optimizer=\"adam\"", "role": "Updates only the trainable (head) weights."}
-      ],
-      "pitfalls": ["If you later change `conv_base.trainable`, call compile again."]
-    },
-    {
-      "id": "c2",
-      "listing": null,
-      "title": "Training on the augmented dataset",
-      "original_code": "callbacks = [\n    keras.callbacks.ModelCheckpoint(\n        filepath=\"feature_extraction_with_data_augmentation.keras\",\n        save_best_only=True,\n        monitor=\"val_loss\",\n    )\n]\nhistory = model.fit(\n    augmented_train_dataset,\n    epochs=30,\n    validation_data=validation_dataset,\n    callbacks=callbacks,\n)",
-      "language": "python",
-      "what_it_does": "Trains the frozen-base model for 30 epochs on augmented images, validating on the unaugmented validation dataset and saving the best model by validation loss.",
-      "line_explanations": [
-        {"lines": "1-7", "explanation": "ModelCheckpoint saving the lowest-val_loss model to feature_extraction_with_data_augmentation.keras."},
-        {"lines": "8-9", "explanation": "fit on `augmented_train_dataset`, which yields (images, labels) batches; no separate labels argument is needed."},
-        {"lines": "10", "explanation": "30 epochs, three times the 10 used for the cached head, because augmentation delays overfitting."},
-        {"lines": "11", "explanation": "Validation on raw images from `validation_dataset`."},
-        {"lines": "12", "explanation": "Attaches the checkpoint callback."}
-      ],
-      "inputs_outputs": "Inputs: augmented training dataset and validation dataset. Outputs: history and best checkpoint file.",
-      "algorithm": "Each step: augmented batch -> preprocessor -> frozen Xception (forward only) -> head -> loss -> gradients/updates for the head only.",
-      "theory_link": "Option 2 of p.283: augmentation possible because the base runs on every image each time it is seen.",
-      "parameters": [
-        {"name": "epochs=30", "role": "Number of passes; larger thanks to augmentation."},
-        {"name": "monitor=\"val_loss\"", "role": "Criterion for the saved best model."}
-      ],
-      "pitfalls": [
-        "Intractable on CPU per the book's NOTE; use a GPU.",
-        "Backpropagation still passes through no base variables, but the base forward pass is the dominant cost."
-      ]
-    },
-    {
-      "id": "c3",
-      "listing": "8.30",
-      "title": "Evaluating the model on the test set",
-      "original_code": "test_model = keras.models.load_model(\n    \"feature_extraction_with_data_augmentation.keras\"\n)\ntest_loss, test_acc = test_model.evaluate(test_dataset)\nprint(f\"Test accuracy: {test_acc:.3f}\")",
-      "language": "python",
-      "what_it_does": "Reloads the best checkpoint and evaluates it on the test image dataset, printing the accuracy.",
-      "line_explanations": [
-        {"lines": "1-3", "explanation": "Loads the saved end-to-end model (preprocessor + frozen backbone + head)."},
-        {"lines": "4", "explanation": "Evaluates directly on `test_dataset` (images and labels), unlike p.285 where cached test_features were used."},
-        {"lines": "5", "explanation": "Prints test accuracy; p.288 reports 98.4%."}
-      ],
-      "inputs_outputs": "Input: test_dataset. Output: test loss and accuracy.",
-      "algorithm": "Forward pass and metric computation.",
-      "theory_link": "Final generalization estimate of the selected model.",
-      "parameters": [],
-      "pitfalls": ["The saved file contains the KerasHub backbone; loading it requires keras_hub to be installed/imported."]
-    }
-  ],
-  "deeper": [
-    {
-      "title": "The four trainable tensors, concretely",
-      "kind": "numerical",
-      "body": "With GlobalAveragePooling2D producing 2,048 features:\n\n| Tensor | Shape | Scalars |\n|---|---|---|\n| Dense(256) kernel | (2048, 256) | 524,288 |\n| Dense(256) bias | (256,) | 256 |\n| Dense(1) kernel | (256, 1) | 256 |\n| Dense(1) bias | (1,) | 1 |\n| **Total** | | **524,801** |\n\nThe book states the count of tensors (four); the shapes and scalar counts are derived here.",
-      "source": "ai_explanation"
-    },
-    {
-      "title": "Why compile-time matters",
-      "kind": "step_by_step",
-      "body": "Beyond the book:\n\n1. `compile()` configures the training step, including which variables the optimizer updates.\n2. If you set `conv_base.trainable = True` *after* compiling and call `fit`, the existing training configuration may still treat the base as frozen.\n3. Recompiling rebuilds it with the new trainable set.\n\nRule of thumb from the book: change trainability, then (re)compile, then fit.",
-      "source": "ai_explanation"
-    },
-    {
-      "title": "Rough cost comparison",
-      "kind": "numerical",
-      "body": "Beyond the book: cached extraction runs Xception once on each of the 2,000 training + 1,000 validation images. End-to-end with 30 epochs runs it on about $30 \\times 3{,}000 = 90{,}000$ images, i.e. ~30x more backbone compute, which is why a GPU is required. (Split sizes are assumptions based on the dataset used in section 8.2: train features shape (2000, ...) is shown on p.284.)",
-      "source": "inference"
-    }
-  ],
-  "visualizations": [
-    {
-      "id": "v1",
-      "type": "mermaid",
-      "title": "One training step of the frozen-base model",
-      "why": "Visualizes what happens per batch during `model.fit(augmented_train_dataset, epochs=30, ...)`: forward through everything, updates only for the four head tensors.",
-      "mermaid": "flowchart LR\n  A[augmented_train_dataset batch] --> P[preprocessor]\n  P --> X[Xception conv_base\\nfrozen: forward only]\n  X --> G[GlobalAveragePooling2D]\n  G --> D1[Dense 256\\nkernel+bias updated]\n  D1 --> DO[Dropout 0.25]\n  DO --> D2[Dense 1 sigmoid\\nkernel+bias updated]\n  D2 --> L[binary crossentropy]\n  L -. gradients .-> D2\n  L -. gradients .-> D1"
-    }
-  ],
-  "misconceptions": [
-    {
-      "claim": "Setting `trainable` takes effect immediately even if the model is already compiled.",
-      "correction": "You must compile (or recompile after changes) for trainability changes to take effect; otherwise they are ignored."
-    },
-    {
-      "claim": "Since the base is frozen, this model is as cheap to train as the cached-feature head.",
-      "correction": "The frozen base still runs a forward pass on every image each epoch; the book calls it intractable on CPU."
-    },
-    {
-      "claim": "Augmentation is applied to the validation and test sets as well.",
-      "correction": "Only the training data is augmented; `validation_dataset` and `test_dataset` are the plain datasets (augmentation is a training-time regularizer, p.278)."
-    }
-  ],
-  "connections": {
-    "earlier": [
-      {"page": 286, "note": "Freezing, Listing 8.28-8.29, and the first half of the model definition."},
-      {"page": 276, "note": "Data augmentation introduced; can be applied in the data pipeline via map()."},
-      {"page": 278, "note": "Augmentation is only applied at training time; the from-scratch augmented model trained for 100 epochs."},
-      {"page": 284, "note": "The cached-feature head trained 10 epochs in under a second each on CPU."}
-    ],
-    "later": [
-      {"page": 288, "note": "Figure 8.14 and the 98.4% test accuracy; introduction of fine-tuning."},
-      {"page": 290, "note": "Fine-tuning reaches 98.6% test accuracy."}
-    ],
-    "prerequisites": [
-      {"page": 286, "note": "Why and how to freeze the base."}
-    ],
-    "related_math": [],
-    "related_code": [
-      {"page": 285, "note": "Test evaluation of the cached-feature model (on test_features)."},
-      {"page": 279, "note": "Listing 8.22 evaluated the from-scratch augmented model on the test set."}
-    ],
-    "related_figures": [
-      {"page": 288, "note": "Figure 8.14: training and validation metrics for feature extraction with data augmentation."}
-    ]
+  {
+   "ref": "p287_e07",
+   "excerpt": "NOTE This technique is expensive enough that you should only attempt it",
+   "what_it_says": "Only attempt this technique with a GPU (e.g. Colab's free GPU); it is intractable on CPU. Without a GPU, use the previous technique.",
+   "what_it_means": "Each epoch now requires a full Xception forward pass for every training and validation image, 30 times over, whereas the cached approach ran Xception once per image and then trained in under a second per epoch on CPU (p.284).",
+   "why_it_matters": "Practical guidance on choosing between the two techniques based on available hardware.",
+   "terminology": [],
+   "connections": [
+    "p.284: cached-feature training takes under 1 second per epoch on CPU.",
+    "p.283: option 2 described as far more expensive."
+   ]
   },
-  "takeaways": [
-    "With the frozen base, only four weight tensors are trained: kernel and bias of each of the two Dense layers.",
-    "Trainability changes require compiling; if you change them after compiling, recompile.",
-    "Augmentation delays overfitting, so the model trains for 30 epochs on augmented_train_dataset.",
-    "This approach is intractable on CPU; use a GPU or fall back to cached features.",
-    "Validation accuracy reaches 98.2%; Listing 8.30 evaluates the best checkpoint directly on test_dataset."
-  ],
-  "questions": [
+  {
+   "ref": "p287_e08",
+   "excerpt": "Let’s plot the results again (see figure 8.14). This model reaches a validation accuracy",
+   "what_it_says": "The training curves (figure 8.14) show a validation accuracy of 98.2%; next comes the test accuracy check.",
+   "what_it_means": "Validation accuracy is essentially on par with plain feature extraction (slightly over 98%), suggesting that the frozen features, not the amount of overfitting in the head, are the limiting factor at this level.",
+   "why_it_matters": "Sets up the slightly disappointing test result on p.288 and the motivation for fine-tuning.",
+   "terminology": [],
+   "connections": [
+    "p.288: figure 8.14 and the 98.4% test accuracy.",
+    "p.285: plain feature extraction reached slightly over 98% validation accuracy."
+   ]
+  }
+ ],
+ "concepts": [
+  {
+   "id": "freezing_layers",
+   "name": "Freezing and compile-time trainability",
+   "definition": "Frozen weights are excluded from updates; Keras applies the trainable settings when the model is compiled.",
+   "intuition": "compile() takes a snapshot of which knobs are allowed to turn.",
+   "technical": "After freezing conv_base, the model's trainable weights are 4 tensors: Dense(256) kernel (2048x256) and bias (256), Dense(1) kernel (256x1) and bias (1). Changing `trainable` later requires recompiling.",
+   "significance": "Prevents silent bugs where layers you meant to unfreeze stay frozen (or vice versa).",
+   "example": "Compile after building the model with the frozen backbone.",
+   "misconception": "That setting `layer.trainable` is immediately effective in an already-compiled model.",
+   "related": [
+    "fine_tuning",
+    "transfer_learning"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "data_augmentation",
+   "name": "Data augmentation",
+   "definition": "Random transformations of training images on every epoch.",
+   "intuition": "Each epoch the model sees 'new' cats and dogs.",
+   "technical": "Supplied by `augmented_train_dataset`; validation and test use unaugmented data.",
+   "significance": "Allows training for 30 epochs without early overfitting.",
+   "example": "`model.fit(augmented_train_dataset, epochs=30, ...)`.",
+   "misconception": "That augmentation must always improve test accuracy; here test accuracy barely changes (p.288).",
+   "related": [
+    "overfitting",
+    "freezing_layers"
+   ],
+   "source": "book"
+  },
+  {
+   "id": "transfer_learning",
+   "name": "Compute trade-off in transfer learning",
+   "definition": "Choosing between cached features (cheap) and end-to-end with frozen base (expensive, augmentation).",
+   "intuition": "Pay compute to buy regularization.",
+   "technical": "End-to-end runs Xception on every image every epoch; needs a GPU.",
+   "significance": "Hardware dictates the feasible option.",
+   "example": "The book's NOTE: intractable on CPU.",
+   "misconception": "That frozen means cheap; the forward pass through the frozen base still dominates cost.",
+   "related": [
+    "feature_caching",
+    "backbone"
+   ],
+   "source": "book"
+  }
+ ],
+ "math": [],
+ "code": [
+  {
+   "id": "c1",
+   "listing": null,
+   "title": "Building and compiling the frozen-base model (part 2)",
+   "original_code": "model = keras.Model(inputs, outputs)\nmodel.compile(\n    loss=\"binary_crossentropy\",\n    optimizer=\"adam\",\n    metrics=[\"accuracy\"],\n)",
+   "language": "python",
+   "what_it_does": "Completes the model whose layers were defined at the bottom of p.286 and compiles it; compilation is what makes the frozen state of conv_base take effect.",
+   "line_explanations": [
     {
-      "id": "q1",
-      "type": "mcq",
-      "question": "How many weight tensors are trained in the frozen-base model, and why?",
-      "options": [
-        "26, the backbone's weights",
-        "4, a weight matrix and a bias vector for each of the two Dense layers",
-        "2, one per Dense layer",
-        "30, one per epoch"
-      ],
-      "answer": "4, a weight matrix and a bias vector for each of the two Dense layers",
-      "explanation": "The page says four weight tensors, two per layer. 26 is the backbone count before freezing (p.286), which is now 0; option 3 forgets biases; option 4 confuses tensors with epochs.",
-      "page_refs": [286, 287]
+     "lines": "1",
+     "explanation": "Creates the Functional model from the symbolic inputs/outputs defined on p.286."
     },
     {
-      "id": "q2",
-      "type": "short",
-      "question": "What must you do if you change a layer's trainable attribute after compiling the model?",
-      "options": [],
-      "answer": "Recompile the model; otherwise the change is ignored.",
-      "explanation": "Stated directly on the page.",
-      "page_refs": [287]
-    },
-    {
-      "id": "q3",
-      "type": "conceptual",
-      "question": "Why can this model be trained for 30 epochs while the cached-feature head was trained for only 10?",
-      "options": [],
-      "answer": "Data augmentation makes the model see different image variants each epoch, so overfitting starts much later; the cached head overfit almost immediately.",
-      "explanation": "The page attributes the longer training to augmentation delaying overfitting; p.285 showed early overfitting without it.",
-      "page_refs": [285, 287]
-    },
-    {
-      "id": "q4",
-      "type": "mcq",
-      "question": "Why does the book say this technique is intractable on CPU?",
-      "options": [
-        "Because Adam cannot run on CPU",
-        "Because every image passes through the large Xception base on every epoch",
-        "Because data augmentation is only implemented on GPU",
-        "Because the head has millions of parameters"
-      ],
-      "answer": "Because every image passes through the large Xception base on every epoch",
-      "explanation": "The cost comes from repeated forward passes of the convolutional base (p.283). Adam and augmentation run on CPU; the head has only about 525k parameters.",
-      "page_refs": [283, 287]
-    },
-    {
-      "id": "q5",
-      "type": "short",
-      "question": "In Listing 8.30, why is `evaluate` called on `test_dataset` rather than on `test_features`?",
-      "options": [],
-      "answer": "Because this model contains the preprocessor and the frozen backbone, so it takes raw images; the cached test_features were only needed for the standalone head of Listing 8.26.",
-      "explanation": "Contrasts this listing with the evaluation on p.285.",
-      "page_refs": [285, 287]
-    },
-    {
-      "id": "q6",
-      "type": "math",
-      "question": "List the shapes of the four trainable tensors and compute the total number of trainable scalars.",
-      "options": [],
-      "answer": "(2048, 256), (256,), (256, 1), (1,); total 524,288 + 256 + 256 + 1 = 524,801.",
-      "explanation": "Follows from the Dense layer sizes after GlobalAveragePooling2D outputs 2,048 features.",
-      "page_refs": [286, 287]
-    },
-    {
-      "id": "q7",
-      "type": "self",
-      "question": "Could you decide, given only a CPU laptop, which of the two feature-extraction techniques to use, and justify it with the book's arguments?",
-      "options": [],
-      "answer": "The cached-feature technique: the book says end-to-end with augmentation is intractable on CPU, while cached features train in under a second per epoch.",
-      "explanation": "Self-check combining the NOTE on this page with p.284.",
-      "page_refs": [284, 287]
+     "lines": "2-6",
+     "explanation": "Same compile settings as Listing 8.26: binary crossentropy, Adam, accuracy."
     }
+   ],
+   "inputs_outputs": "Model input (None, 180, 180, 3) images; output (None, 1) probabilities.",
+   "algorithm": "Graph wrapping and compilation.",
+   "theory_link": "Trainability is fixed at compile time: only 4 tensors will be updated.",
+   "parameters": [
+    {
+     "name": "optimizer=\"adam\"",
+     "role": "Updates only the trainable (head) weights."
+    }
+   ],
+   "pitfalls": [
+    "If you later change `conv_base.trainable`, call compile again."
+   ]
+  },
+  {
+   "id": "c2",
+   "listing": null,
+   "title": "Training on the augmented dataset",
+   "original_code": "callbacks = [\n    keras.callbacks.ModelCheckpoint(\n        filepath=\"feature_extraction_with_data_augmentation.keras\",\n        save_best_only=True,\n        monitor=\"val_loss\",\n    )\n]\nhistory = model.fit(\n    augmented_train_dataset,\n    epochs=30,\n    validation_data=validation_dataset,\n    callbacks=callbacks,\n)",
+   "language": "python",
+   "what_it_does": "Trains the frozen-base model for 30 epochs on augmented images, validating on the unaugmented validation dataset and saving the best model by validation loss.",
+   "line_explanations": [
+    {
+     "lines": "1-7",
+     "explanation": "ModelCheckpoint saving the lowest-val_loss model to feature_extraction_with_data_augmentation.keras."
+    },
+    {
+     "lines": "8-9",
+     "explanation": "fit on `augmented_train_dataset`, which yields (images, labels) batches; no separate labels argument is needed."
+    },
+    {
+     "lines": "10",
+     "explanation": "30 epochs, three times the 10 used for the cached head, because augmentation delays overfitting."
+    },
+    {
+     "lines": "11",
+     "explanation": "Validation on raw images from `validation_dataset`."
+    },
+    {
+     "lines": "12",
+     "explanation": "Attaches the checkpoint callback."
+    }
+   ],
+   "inputs_outputs": "Inputs: augmented training dataset and validation dataset. Outputs: history and best checkpoint file.",
+   "algorithm": "Each step: augmented batch -> preprocessor -> frozen Xception (forward only) -> head -> loss -> gradients/updates for the head only.",
+   "theory_link": "Option 2 of p.283: augmentation possible because the base runs on every image each time it is seen.",
+   "parameters": [
+    {
+     "name": "epochs=30",
+     "role": "Number of passes; larger thanks to augmentation."
+    },
+    {
+     "name": "monitor=\"val_loss\"",
+     "role": "Criterion for the saved best model."
+    }
+   ],
+   "pitfalls": [
+    "Intractable on CPU per the book's NOTE; use a GPU.",
+    "Backpropagation still passes through no base variables, but the base forward pass is the dominant cost."
+   ]
+  },
+  {
+   "id": "c3",
+   "listing": "8.30",
+   "title": "Evaluating the model on the test set",
+   "original_code": "test_model = keras.models.load_model(\n    \"feature_extraction_with_data_augmentation.keras\"\n)\ntest_loss, test_acc = test_model.evaluate(test_dataset)\nprint(f\"Test accuracy: {test_acc:.3f}\")",
+   "language": "python",
+   "what_it_does": "Reloads the best checkpoint and evaluates it on the test image dataset, printing the accuracy.",
+   "line_explanations": [
+    {
+     "lines": "1-3",
+     "explanation": "Loads the saved end-to-end model (preprocessor + frozen backbone + head)."
+    },
+    {
+     "lines": "4",
+     "explanation": "Evaluates directly on `test_dataset` (images and labels), unlike p.285 where cached test_features were used."
+    },
+    {
+     "lines": "5",
+     "explanation": "Prints test accuracy; p.288 reports 98.4%."
+    }
+   ],
+   "inputs_outputs": "Input: test_dataset. Output: test loss and accuracy.",
+   "algorithm": "Forward pass and metric computation.",
+   "theory_link": "Final generalization estimate of the selected model.",
+   "parameters": [],
+   "pitfalls": [
+    "The saved file contains the KerasHub backbone; loading it requires keras_hub to be installed/imported."
+   ]
+  }
+ ],
+ "deeper": [
+  {
+   "title": "The four trainable tensors, concretely",
+   "kind": "numerical",
+   "body": "With GlobalAveragePooling2D producing 2,048 features:\n\n| Tensor | Shape | Scalars |\n|---|---|---|\n| Dense(256) kernel | (2048, 256) | 524,288 |\n| Dense(256) bias | (256,) | 256 |\n| Dense(1) kernel | (256, 1) | 256 |\n| Dense(1) bias | (1,) | 1 |\n| **Total** | | **524,801** |\n\nThe book states the count of tensors (four); the shapes and scalar counts are derived here.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Why compile-time matters",
+   "kind": "step_by_step",
+   "body": "Beyond the book:\n\n1. `compile()` configures the training step, including which variables the optimizer updates.\n2. If you set `conv_base.trainable = True` *after* compiling and call `fit`, the existing training configuration may still treat the base as frozen.\n3. Recompiling rebuilds it with the new trainable set.\n\nRule of thumb from the book: change trainability, then (re)compile, then fit.",
+   "source": "ai_explanation"
+  },
+  {
+   "title": "Rough cost comparison",
+   "kind": "numerical",
+   "body": "Beyond the book: cached extraction runs Xception once on each of the 2,000 training + 1,000 validation images. End-to-end with 30 epochs runs it on about $30 \\times 3{,}000 = 90{,}000$ images, i.e. ~30x more backbone compute, which is why a GPU is required. (Split sizes are assumptions based on the dataset used in section 8.2: train features shape (2000, ...) is shown on p.284.)",
+   "source": "inference"
+  }
+ ],
+ "visualizations": [
+  {
+   "id": "v1",
+   "type": "mermaid",
+   "title": "One training step of the frozen-base model",
+   "why": "Visualizes what happens per batch during `model.fit(augmented_train_dataset, epochs=30, ...)`: forward through everything, updates only for the four head tensors.",
+   "mermaid": "flowchart LR\n  A[augmented_train_dataset batch] --> P[preprocessor]\n  P --> X[Xception conv_base<br/>frozen: forward only]\n  X --> G[GlobalAveragePooling2D]\n  G --> D1[Dense 256<br/>kernel+bias updated]\n  D1 --> DO[Dropout 0.25]\n  DO --> D2[Dense 1 sigmoid<br/>kernel+bias updated]\n  D2 --> L[binary crossentropy]\n  L -. gradients .-> D2\n  L -. gradients .-> D1"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "Setting `trainable` takes effect immediately even if the model is already compiled.",
+   "correction": "You must compile (or recompile after changes) for trainability changes to take effect; otherwise they are ignored."
+  },
+  {
+   "claim": "Since the base is frozen, this model is as cheap to train as the cached-feature head.",
+   "correction": "The frozen base still runs a forward pass on every image each epoch; the book calls it intractable on CPU."
+  },
+  {
+   "claim": "Augmentation is applied to the validation and test sets as well.",
+   "correction": "Only the training data is augmented; `validation_dataset` and `test_dataset` are the plain datasets (augmentation is a training-time regularizer, p.278)."
+  }
+ ],
+ "connections": {
+  "earlier": [
+   {
+    "page": 286,
+    "note": "Freezing, Listing 8.28-8.29, and the first half of the model definition."
+   },
+   {
+    "page": 276,
+    "note": "Data augmentation introduced; can be applied in the data pipeline via map()."
+   },
+   {
+    "page": 278,
+    "note": "Augmentation is only applied at training time; the from-scratch augmented model trained for 100 epochs."
+   },
+   {
+    "page": 284,
+    "note": "The cached-feature head trained 10 epochs in under a second each on CPU."
+   }
+  ],
+  "later": [
+   {
+    "page": 288,
+    "note": "Figure 8.14 and the 98.4% test accuracy; introduction of fine-tuning."
+   },
+   {
+    "page": 290,
+    "note": "Fine-tuning reaches 98.6% test accuracy."
+   }
+  ],
+  "prerequisites": [
+   {
+    "page": 286,
+    "note": "Why and how to freeze the base."
+   }
+  ],
+  "related_math": [],
+  "related_code": [
+   {
+    "page": 285,
+    "note": "Test evaluation of the cached-feature model (on test_features)."
+   },
+   {
+    "page": 279,
+    "note": "Listing 8.22 evaluated the from-scratch augmented model on the test set."
+   }
+  ],
+  "related_figures": [
+   {
+    "page": 288,
+    "note": "Figure 8.14: training and validation metrics for feature extraction with data augmentation."
+   }
   ]
+ },
+ "takeaways": [
+  "With the frozen base, only four weight tensors are trained: kernel and bias of each of the two Dense layers.",
+  "Trainability changes require compiling; if you change them after compiling, recompile.",
+  "Augmentation delays overfitting, so the model trains for 30 epochs on augmented_train_dataset.",
+  "This approach is intractable on CPU; use a GPU or fall back to cached features.",
+  "Validation accuracy reaches 98.2%; Listing 8.30 evaluates the best checkpoint directly on test_dataset."
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "type": "mcq",
+   "question": "How many weight tensors are trained in the frozen-base model, and why?",
+   "options": [
+    "26, the backbone's weights",
+    "4, a weight matrix and a bias vector for each of the two Dense layers",
+    "2, one per Dense layer",
+    "30, one per epoch"
+   ],
+   "answer": "4, a weight matrix and a bias vector for each of the two Dense layers",
+   "explanation": "The page says four weight tensors, two per layer. 26 is the backbone count before freezing (p.286), which is now 0; option 3 forgets biases; option 4 confuses tensors with epochs.",
+   "page_refs": [
+    286,
+    287
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "short",
+   "question": "What must you do if you change a layer's trainable attribute after compiling the model?",
+   "options": [],
+   "answer": "Recompile the model; otherwise the change is ignored.",
+   "explanation": "Stated directly on the page.",
+   "page_refs": [
+    287
+   ]
+  },
+  {
+   "id": "q3",
+   "type": "conceptual",
+   "question": "Why can this model be trained for 30 epochs while the cached-feature head was trained for only 10?",
+   "options": [],
+   "answer": "Data augmentation makes the model see different image variants each epoch, so overfitting starts much later; the cached head overfit almost immediately.",
+   "explanation": "The page attributes the longer training to augmentation delaying overfitting; p.285 showed early overfitting without it.",
+   "page_refs": [
+    285,
+    287
+   ]
+  },
+  {
+   "id": "q4",
+   "type": "mcq",
+   "question": "Why does the book say this technique is intractable on CPU?",
+   "options": [
+    "Because Adam cannot run on CPU",
+    "Because every image passes through the large Xception base on every epoch",
+    "Because data augmentation is only implemented on GPU",
+    "Because the head has millions of parameters"
+   ],
+   "answer": "Because every image passes through the large Xception base on every epoch",
+   "explanation": "The cost comes from repeated forward passes of the convolutional base (p.283). Adam and augmentation run on CPU; the head has only about 525k parameters.",
+   "page_refs": [
+    283,
+    287
+   ]
+  },
+  {
+   "id": "q5",
+   "type": "short",
+   "question": "In Listing 8.30, why is `evaluate` called on `test_dataset` rather than on `test_features`?",
+   "options": [],
+   "answer": "Because this model contains the preprocessor and the frozen backbone, so it takes raw images; the cached test_features were only needed for the standalone head of Listing 8.26.",
+   "explanation": "Contrasts this listing with the evaluation on p.285.",
+   "page_refs": [
+    285,
+    287
+   ]
+  },
+  {
+   "id": "q6",
+   "type": "math",
+   "question": "List the shapes of the four trainable tensors and compute the total number of trainable scalars.",
+   "options": [],
+   "answer": "(2048, 256), (256,), (256, 1), (1,); total 524,288 + 256 + 256 + 1 = 524,801.",
+   "explanation": "Follows from the Dense layer sizes after GlobalAveragePooling2D outputs 2,048 features.",
+   "page_refs": [
+    286,
+    287
+   ]
+  },
+  {
+   "id": "q7",
+   "type": "self",
+   "question": "Could you decide, given only a CPU laptop, which of the two feature-extraction techniques to use, and justify it with the book's arguments?",
+   "options": [],
+   "answer": "The cached-feature technique: the book says end-to-end with augmentation is intractable on CPU, while cached features train in under a second per epoch.",
+   "explanation": "Self-check combining the NOTE on this page with p.284.",
+   "page_refs": [
+    284,
+    287
+   ]
+  }
+ ]
 }
