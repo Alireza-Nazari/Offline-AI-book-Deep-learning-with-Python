@@ -27,7 +27,41 @@ python3 serve.py          # opens http://127.0.0.1:8765/  (stdlib only, loopback
 The local server exists because browsers block `fetch()` of local JSON/PDF files from `file://` URLs.
 It serves files only; it does no inference and needs no network.
 
-Keys: `←/→` page · `+/-` zoom · `f` full screen · `/` search · `g` knowledge graph · `q` quiz · `t` thumbnails.
+`python3 serve.py 8766` uses another port if 8765 is taken.
+
+### Highlights & personal notes
+
+- **Highlight text** on the book page *or* in the companion notes: select it and pick one of five colours
+  from the toolbar that appears; **✎ Note** highlights and opens a note at once.
+- **Click a highlight** to write/edit its note (Markdown and `$math$` work), change its colour, or delete it.
+- **Pin a note anywhere** on a page — figures, margins, code: press **✎ Note** in the viewer toolbar (or `n`)
+  and click the spot. Pins can be dragged; shift-click keeps note mode on for several pins.
+- **My notes** (`a`) lists everything by page, with filters (text, colour, book/notes, only-with-note),
+  *Go to*, *Edit*, *Delete*, **Export** and **Import** (JSON, merged by id). Your notes also show up in global search.
+- Book highlights are stored in page-relative coordinates, so they stay in place at any zoom. Notes-panel
+  highlights are anchored by quoted text plus context; if a page's notes are regenerated and the text is
+  gone, the app says so and the item stays in *My notes*.
+- **Storage:** saved instantly in the browser and, through `serve.py`, in `data/user/annotations.json`
+  (atomic writes; the endpoint only accepts same-origin JSON on 127.0.0.1). Commit that file to back up
+  your notes with git.
+
+### Review & progress (learn it, then keep it)
+
+- **Spaced-repetition review** (`Review`, key `r`): flashcards built from the book's own generated
+  questions and concepts. A page joins your deck after ~45 s of study, when you mark it, or with
+  *Add chapter to review*. Rate each card Again / Hard / Good / Easy (keys `1`–`4`, `Space` shows the
+  answer); intervals grow for what you know and shrink for what you miss (SM-2 style). New cards per
+  day is adjustable (default 20).
+- **Page status**: `✓ Understood` / `? Confusing` buttons at the top of every page's notes, with the time
+  you spent on the page. Open questions in the notes and quizzes get *I got it / I missed it* buttons so
+  every answer counts.
+- **Progress** (key `p`): pages studied, study time, accuracy, review streak and mature cards; a map of
+  all pages coloured by status; a per-chapter table; your confusing pages and weakest pages.
+- **Weak-spots quiz** (in Progress and in Quiz): questions mixed across chapters, weighted toward what you
+  got wrong, forgot in review, or marked confusing.
+- Saved in the browser and, through `serve.py`, in `data/user/study.json`.
+
+Keys: `←/→` page · `+/-` zoom · `f` full screen · `/` search · `g` knowledge graph · `q` quiz · `t` thumbnails · `n` pin a note · `a` my notes · `r` review · `p` progress.
 
 ## Architecture
 
@@ -96,6 +130,8 @@ index.html  serve.py  README.md
 assets/  css/ js/(app.js, widgets/) pdfjs/ math/(KaTeX+fonts) vendor/(marked, DOMPurify, MiniSearch, Chart.js, D3, Mermaid)
 book/original_book.pdf          read-only copy of the original
 data/pages/page_NNN.json        one educational package per PDF page
+data/user/annotations.json      your highlights & notes (created on first save)
+data/user/study.json            your review deck, page status and quiz history
 data/{book_metadata.json, chapters/, concepts/, diagrams/, quizzes/, knowledge_graph/, search/}
 indexes/{metadata.db, keyword_index/bm25.pkl, vector_index/chunks.npy}
 scripts/                        the pipeline (above) + GENERATION_GUIDE.md

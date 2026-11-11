@@ -96,6 +96,7 @@
       g.confidence !== 'high' ? el('span', { class: `badge ${g.confidence === 'low' ? 'low' : 'warn'}` }, `confidence: ${g.confidence}`) : '',
       ...(g.review_flags || []).map((f) => el('span', { class: 'badge warn', title: f }, '⚑ review: ' + f.slice(0, 60))));
     head.append(badges);
+    if (window.Study) head.append(window.Study.pageBar(n));
     const o = pkg.overview;
     box.append(section('overview', 'Page overview', null, [
       el('p', {}, el('b', {}, 'Main topic: '), o.main_topic),
@@ -143,11 +144,12 @@
     const connCount = connKeys.reduce((a, [k]) => a + (C[k]?.length || 0), 0);
     if (connCount) box.append(section('connections', 'Connections to other pages', connCount, connKeys.filter(([k]) => C[k]?.length).map(([k, t]) => el('div', {}, el('h5', {}, t), el('ul', { class: 'conn-list' }, ...C[k].map((l) => el('li', {}, pageLink(l.page, `p.${l.page}${S.meta.page_map[l.page]?.printed ? ' (printed ' + S.meta.page_map[l.page].printed + ')' : ''}`), ' — ', el('span', { html: md(l.note).replace(/^<p>|<\/p>$/g, '') }))))))));
     if (pkg.takeaways?.length) box.append(section('takeaways', 'Key takeaways', pkg.takeaways.length, el('ul', { class: 'takeaways' }, ...pkg.takeaways.map((t) => el('li', { html: md(t) })))));
-    if (pkg.questions?.length) box.append(section('questions', 'Review questions', pkg.questions.length, pkg.questions.map((q) => questionCard(q)), false));
+    if (pkg.questions?.length) box.append(section('questions', 'Review questions', pkg.questions.length, pkg.questions.map((q) => questionCard({ ...q, page: n })), false));
     renderMath(box);
     buildNav(pkg);
     applyNoteSearch();
     box.scrollTop = 0;
+    window.Anno?.notesRendered(n);
   }
   function questionCard(q, showPage = false) {
     const card = el('div', { class: 'question' }, el('div', { class: 'qtype' }, { short: 'short answer', conceptual: 'conceptual', math: 'mathematical', mcq: 'multiple choice', self: 'self-assessment' }[q.type] || q.type, showPage && q.page_refs?.[0] ? [' · ', pageLink(q.page_refs[0])] : ''), el('div', { class: 'md', html: md(q.question) }));
@@ -155,9 +157,13 @@
     if (q.type === 'mcq' && q.options?.length) {
       const opts = el('div', { class: 'opts' });
       q.options.forEach((o) => { const lab = el('label', {}, el('input', { type: 'radio', name: 'q-' + q.id + Math.random() }), ' ', el('span', { html: md(o).replace(/^<p>|<\/p>$/g, '') }));
-        lab.addEventListener('click', () => { $$('label', opts).forEach((l) => l.classList.remove('correct', 'wrong')); lab.classList.add(o === q.answer ? 'correct' : 'wrong'); $$('label', opts).find((l) => l._o === q.answer)?.classList.add('correct'); ans.hidden = false; card._res = o === q.answer; card.dispatchEvent(new CustomEvent('answered', { bubbles: true, detail: o === q.answer })); }); lab._o = o; opts.append(lab); });
+        lab.addEventListener('click', () => { $$('label', opts).forEach((l) => l.classList.remove('correct', 'wrong')); if (card._res !== undefined) return; lab.classList.add(o === q.answer ? 'correct' : 'wrong'); $$('label', opts).find((l) => l._o === q.answer)?.classList.add('correct'); ans.hidden = false; card._res = o === q.answer; card.dispatchEvent(new CustomEvent('answered', { bubbles: true, detail: { ok: o === q.answer, q } })); }); lab._o = o; opts.append(lab); });
       card.append(opts);
-    } else card.append(el('button', { onclick: (e) => { ans.hidden = !ans.hidden; e.target.textContent = ans.hidden ? 'Show answer' : 'Hide answer'; } }, 'Show answer'));
+    } else {
+      const selfRate = el('div', { class: 'self-rate', hidden: true }, el('span', { class: 'meta' }, 'Did you get it? '),
+        ...[[true, '✓ I got it'], [false, '✗ I missed it']].map(([ok, t]) => el('button', { onclick: () => { if (card._res !== undefined) return; card._res = ok; selfRate.replaceChildren(el('span', { class: 'meta' }, ok ? '✓ recorded as correct' : '✗ recorded as missed — it will come up more in the weak-spots quiz')); card.dispatchEvent(new CustomEvent('answered', { bubbles: true, detail: { ok, q } })); } }, t)));
+      card.append(el('button', { onclick: (e) => { ans.hidden = !ans.hidden; selfRate.hidden = ans.hidden && card._res === undefined; e.target.textContent = ans.hidden ? 'Show answer' : 'Hide answer'; } }, 'Show answer'), selfRate);
+    }
     card.append(ans); renderMath(card); return card;
   }
   function buildNav(pkg) {
@@ -221,6 +227,8 @@
     activeIO = new IntersectionObserver((ents) => { ents.forEach((e) => visible.set(+e.target.dataset.page, e.intersectionRatio)); updateActive(); }, { root: viewer, threshold: [0, .1, .25, .5, .75, 1] });
     $$('.pdfpage').forEach((d) => { io.observe(d); activeIO.observe(d); });
     applyZoom();
+    try { await window.Anno?.init(); } catch (e) { console.warn('annotations', e); }
+    try { await window.Study?.init(); } catch (e) { console.warn('study', e); }
   }
   function scaleFor() {
     const w = viewer.clientWidth - 40, h = viewer.clientHeight - 30;
@@ -257,6 +265,7 @@
     const tc = await getText(n);
     try { await pdfjsLib.renderTextLayer({ textContentSource: tc, container: tl, viewport: vp, textDivs: [] }).promise; } catch (e) { /* older API */ }
     highlightMatches(n);
+    window.Anno?.pageRendered(n);
   }
   function unrenderPage(n, force = false) {
     const d = $(`.pdfpage[data-page="${n}"]`); if (!d) return;
@@ -360,7 +369,7 @@
     body.append(el('h2', {}, 'Search'), el('p', { class: 'meta' }, 'Loading index…'));
     await ensureSearch();
     const input = el('input', { type: 'search', value: q || '', placeholder: 'concepts, formulas, code, chapters, page numbers…', style: 'width:100%;font-size:16px' });
-    const kinds = ['page', 'concept', 'math', 'code', 'question', 'book', 'chapter'];
+    const kinds = ['page', 'concept', 'math', 'code', 'question', 'book', 'chapter', 'my notes'];
     const kindSel = el('select', {}, el('option', { value: '' }, 'all types'), ...kinds.map((k) => el('option', { value: k }, k)));
     const chSel = el('select', {}, el('option', { value: '' }, 'all chapters'), ...S.meta.chapters.map((c) => el('option', { value: c.title }, c.title)));
     const res = el('div', { class: 'results' });
@@ -368,6 +377,8 @@
     const run = () => {
       const qq = input.value.trim(); res.replaceChildren(); if (!qq) return;
       const pm = qq.match(/^(?:p\.?\s*|page\s*)?(\d{1,3})$/i); if (pm) res.append(el('div', { class: 'r', onclick: () => { closeModal(); gotoPage(+pm[1]); } }, el('span', { class: 'kind' }, 'page'), `Go to PDF page ${pm[1]}`));
+      if (window.Anno && (!kindSel.value || kindSel.value === 'my notes')) window.Anno.search(qq).filter((a) => !chSel.value || S.meta.page_map[a.page]?.chapter === chSel.value).forEach((a) => res.append(el('div', { class: 'r', onclick: () => window.Anno.goTo(a) },
+        el('div', {}, el('span', { class: 'kind' }, 'my note'), el('b', {}, (a.note || a.text || '').slice(0, 90))), el('div', { class: 'meta' }, `${S.meta.page_map[a.page]?.chapter || ''} · PDF p.${a.page} · ${a.target === 'pdf' ? 'on the book page' : 'in the companion notes'}`), a.text && a.note ? el('div', {}, '“' + a.text.slice(0, 160) + '”') : '')));
       let hits = S.search.search(qq, { filter: (d) => (!kindSel.value || d.kind === kindSel.value) && (!chSel.value || d.chapter === chSel.value) });
       if (!hits.length) hits = S.search.search(qq, { combineWith: 'OR', filter: (d) => (!kindSel.value || d.kind === kindSel.value) && (!chSel.value || d.chapter === chSel.value) });
       hits.slice(0, 80).forEach((h) => res.append(el('div', { class: 'r', onclick: () => { closeModal(); gotoPage(h.page); if (h.anchor) setTimeout(() => { const t = $(`#${h.anchor}`); if (t) { t.closest('details')?.setAttribute('open', ''); t.scrollIntoView({ block: 'start', behavior: 'smooth' }); } }, 700); } },
@@ -406,14 +417,14 @@
     const nSel = el('select', {}, ...[5, 10, 20, 40].map((n) => el('option', { value: n }, `${n} questions`)));
     const curOnly = el('label', {}, el('input', { type: 'checkbox' }), ' current page only');
     const area = el('div'); const scoreEl = el('div', { class: 'score' });
-    body.append(el('h2', {}, 'Quiz'), el('div', { class: 'quiz-opts' }, chSel, nSel, curOnly, el('button', { class: 'primary', onclick: start }, 'Start')), scoreEl, area);
+    body.append(el('h2', {}, 'Quiz'), el('div', { class: 'quiz-opts' }, chSel, nSel, curOnly, el('button', { class: 'primary', onclick: start }, 'Start'), el('button', { title: 'Mixed chapters, weighted toward what you got wrong or marked confusing', onclick: () => window.Study?.weakQuiz(area, +nSel.value, scoreEl) }, 'Weak-spots quiz')), scoreEl, area);
     async function start() {
       area.replaceChildren(); scoreEl.textContent = '';
       let qs;
       if ($('input', curOnly).checked) { qs = (S.pkg?.questions || []).map((q) => ({ ...q, page: S.pkgPage })); if (!qs.length) { area.append(el('p', {}, 'No questions for the current page.')); return; } }
       else { const data = await fetchJSON('data/quizzes/' + chSel.value); qs = data.questions.slice(); for (let i = qs.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [qs[i], qs[j]] = [qs[j], qs[i]]; } qs = qs.slice(0, +nSel.value); }
       let right = 0, answered = 0;
-      qs.forEach((q, i) => { const c = questionCard({ ...q, page_refs: q.page_refs?.length ? q.page_refs : [q.page] }, true); c.prepend(el('div', { class: 'meta' }, `Question ${i + 1} of ${qs.length}`)); c.addEventListener('answered', (e) => { answered++; if (e.detail) right++; scoreEl.textContent = `Score: ${right}/${answered} multiple-choice answered correctly`; }); area.append(c); });
+      qs.forEach((q, i) => { const c = questionCard({ ...q, page_refs: q.page_refs?.length ? q.page_refs : [q.page] }, true); c.prepend(el('div', { class: 'meta' }, `Question ${i + 1} of ${qs.length}`)); c.addEventListener('answered', (e) => { answered++; if (e.detail?.ok) right++; scoreEl.textContent = `Score: ${right}/${answered} answered correctly`; }); area.append(c); });
     }
     const curCh = S.meta.page_map[S.page]?.chapter; const cur = idx.chapters.find((c) => c.title === curCh);
     const pick = (cur && cur.count) ? cur : idx.chapters.find((c) => c.count > 0); if (pick) chSel.value = pick.file;
@@ -430,7 +441,13 @@
 
 **Right panel** — the original book (PDF.js). Scroll, zoom, fit width/page, thumbnails, find in book, full screen. The two panels stay in sync unless you untick *sync panels*.
 
-**Keyboard**: \`←\` / \`→\` previous/next page · \`+\` / \`-\` zoom · \`f\` full screen · \`/\` search · \`g\` knowledge graph · \`q\` quiz · \`t\` thumbnails · \`Esc\` close.
+**Highlights & notes** — select text on a book page *or* in these notes and pick a colour; **✎ Note** highlights and opens a note. Click a highlight to edit its note, colour, or delete it. To pin a note anywhere on a page (figures, margins, code), press **✎ Note** in the viewer toolbar (or \`n\`) and click the spot; drag pins to move them. **My notes** (\`a\`) lists everything, with filters, export and import. Your notes also appear in global search. They are saved in this browser and, when served by \`serve.py\`, in \`data/user/annotations.json\`.
+
+**Review** (\`r\`) — spaced repetition built from this book's questions and concepts. Pages join your deck after ~45 s of study, when you mark them, or via *Add chapter*. Rate each card Again / Hard / Good / Easy (keys 1–4); what you know comes back rarely, what you miss comes back soon.
+
+**Progress** (\`p\`) — time per page, ✓ understood / ? confusing marks (buttons at the top of each page's notes), quiz accuracy by chapter, a map of every page, your weakest pages, and a **weak-spots quiz** that mixes chapters and focuses on what you got wrong. Saved in this browser and in \`data/user/study.json\`.
+
+**Keyboard**: \`←\` / \`→\` previous/next page · \`+\` / \`-\` zoom · \`f\` full screen · \`/\` search · \`g\` knowledge graph · \`q\` quiz · \`t\` thumbnails · \`n\` pin a note · \`a\` my notes · \`r\` review · \`p\` progress · \`Esc\` close.
 
 **Offline**: everything (PDF renderer, math, diagrams, search index, all notes) is bundled locally. No AI model, no network. Page numbers in notes are **PDF page numbers**; printed page numbers are shown alongside.
 `) })));
@@ -460,6 +477,7 @@
     $('#global-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') { openSearch(e.target.value); e.target.value = ''; } });
     $('#global-search').addEventListener('focus', (e) => { openSearch(e.target.value); e.target.blur(); });
     $('#btn-graph').addEventListener('click', () => openGraph()); $('#btn-quiz').addEventListener('click', openQuiz); $('#btn-chapters').addEventListener('click', openChapters); $('#btn-help').addEventListener('click', openHelp);
+    $('#btn-annos').addEventListener('click', () => window.Anno?.openPanel()); $('#btn-review').addEventListener('click', () => window.Study?.openReview()); $('#btn-progress').addEventListener('click', () => window.Study?.openProgress()); $('#btn-pin').addEventListener('click', () => window.Anno?.setPinMode(!window.Anno.pinMode));
     $('#btn-theme').addEventListener('click', () => { const cur = document.documentElement.dataset.theme; const next = cur === 'dark' ? 'light' : cur === 'light' ? 'auto' : 'dark'; document.documentElement.dataset.theme = next; store.set('theme', next); toast('Theme: ' + next); mermaidReady = false; });
     $('#modal-close').addEventListener('click', closeModal); $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
     document.addEventListener('click', (e) => { const a = e.target.closest('a.pageref[data-page]'); if (a) { e.preventDefault(); if (a.closest('#modal')) closeModal(); gotoPage(+a.dataset.page); } });
@@ -469,7 +487,7 @@
       if (k === 'ArrowLeft') gotoPage(S.page - 1); else if (k === 'ArrowRight') gotoPage(S.page + 1);
       else if (k === '+' || k === '=') $('#btn-zoom-in').click(); else if (k === '-') $('#btn-zoom-out').click();
       else if (k === 'f') $('#btn-fullscreen').click(); else if (k === '/') { e.preventDefault(); openSearch(''); }
-      else if (k === 'g') openGraph(); else if (k === 'q') openQuiz(); else if (k === 't') toggleThumbs(); else if (k === 'Escape') closeModal(); else return;
+      else if (k === 'g') openGraph(); else if (k === 'q') openQuiz(); else if (k === 't') toggleThumbs(); else if (k === 'n') window.Anno?.setPinMode(!window.Anno.pinMode); else if (k === 'a') { e.preventDefault(); window.Anno?.openPanel(); } else if (k === 'r') { e.preventDefault(); window.Study?.openReview(); } else if (k === 'p') { e.preventDefault(); window.Study?.openProgress(); } else if (k === 'Escape') closeModal(); else return;
     });
     // resizable divider
     const div = $('#divider'), left = $('#left'); const savedW = store.get('leftw'); if (savedW) left.style.flexBasis = savedW;
@@ -483,5 +501,5 @@
     window.addEventListener('hashchange', () => { const m = location.hash.match(/p=(\d+)/); if (m && +m[1] !== S.page) gotoPage(+m[1]); });
   }
   boot().catch((e) => { $('#notes').innerHTML = `<div class="placeholder">Failed to start: ${esc(e.message)}.<br>Open this app through the local server (<code>python3 serve.py</code>) — browsers block <code>file://</code> data loading.</div>`; console.error(e); });
-  window.BC = { gotoPage, openGraph, openSearch, S };
+  window.BC = { gotoPage, openGraph, openSearch, S, el, md, esc, toast, renderMath, openModal, closeModal, loadNotes, fetchJSON, questionCard, pageLink };
 })();
